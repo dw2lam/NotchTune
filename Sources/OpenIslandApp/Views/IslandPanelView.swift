@@ -648,12 +648,7 @@ struct IslandPanelView: View {
                 sessionPanelChip("\(model.liveRunningCount) running", tint: IslandDesignPalette.Status.running)
             }
 
-            Spacer(minLength: 8)
-
-            Text("⌃⌥ Space")
-                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                .foregroundStyle(V6Palette.paper.opacity(0.34))
-                .lineLimit(1)
+            Spacer(minLength: 0)
         }
         .padding(.leading, sessionListSideInset)
         .padding(.trailing, sessionListSideInset)

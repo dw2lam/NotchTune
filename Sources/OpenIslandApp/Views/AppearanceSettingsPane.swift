@@ -1046,18 +1046,8 @@ private struct SessionListPanelPreview: View {
     }
 
     private var panelFoot: some View {
-        HStack {
-            Text("\(items.count) sessions · \(waitingCount) waiting")
-            Spacer(minLength: 0)
-            Text("⌃⌥ Space")
-                .opacity(0.45)
-        }
-        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-        .foregroundStyle(V6Palette.paper.opacity(0.42))
-        .padding(.leading, sideInset)
-        .padding(.trailing, sideInset)
-        .padding(.top, 9)
-        .padding(.bottom, 14)
+        Color.clear
+            .frame(height: 10)
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(.white.opacity(0.05))
