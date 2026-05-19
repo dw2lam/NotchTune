@@ -16,14 +16,7 @@ struct MusicPanelView: View {
             MusicAlbumArtView(playerManager: playerManager, imageSize: 180)
 
             VStack(spacing: 16) {
-                HStack(alignment: .firstTextBaseline) {
-                    PlayerTrackDetailsView(playerManager: playerManager)
-                    
-                    Image(systemName: playerManager.isPlaying ? "play.fill" : "pause.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(playerManager.track.avgAlbumColor)
-                        .frame(width: 20, height: 20)
-                }
+                PlayerTrackDetailsView(playerManager: playerManager)
 
                 MusicPlaybackButtonsView(playerManager: playerManager, buttonSize: 22, spacing: 20)
 
