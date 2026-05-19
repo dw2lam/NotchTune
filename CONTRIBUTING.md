@@ -1,4 +1,4 @@
-s# Contributing to Open Island (this readme is from original developer)
+# Contributing to Open Island
 
 <a href="CONTRIBUTING.zh-CN.md">中文</a> | <strong>English</strong>
 

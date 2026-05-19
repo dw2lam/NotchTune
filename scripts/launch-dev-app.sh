@@ -139,6 +139,11 @@ else
     echo
 fi
 
-codesign --force --deep --sign "$sign_identity" "$bundle_dir" 2>/dev/null || true
+entitlements_file="$repo_root/config/packaging/OpenIslandApp.entitlements"
+if [ -f "$entitlements_file" ]; then
+    codesign --force --deep --sign "$sign_identity" --entitlements "$entitlements_file" "$bundle_dir" 2>/dev/null || true
+else
+    codesign --force --deep --sign "$sign_identity" "$bundle_dir" 2>/dev/null || true
+fi
 
 open -na "$bundle_dir"

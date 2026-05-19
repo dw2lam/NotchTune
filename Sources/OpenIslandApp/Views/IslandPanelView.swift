@@ -108,6 +108,9 @@ struct IslandPanelView: View {
     @State private var showingQuitConfirmation = false
     @State private var keepsOpenedSurfaceMounted = false
     @State private var openedSurfaceMountGeneration: UInt64 = 0
+    @State private var activeTab: IslandTab = .agents
+
+    private enum IslandTab { case agents, music }
 
     private var isOpened: Bool {
         model.notchStatus == .opened
@@ -415,6 +418,53 @@ struct IslandPanelView: View {
     }
 
     private var openedContent: some View {
+        VStack(spacing: 0) {
+            islandTabBar
+                .padding(.horizontal, 16)
+                .padding(.top, 6)
+                .padding(.bottom, 4)
+
+            switch activeTab {
+            case .agents:
+                agentsContent
+            case .music:
+                MusicPanelView(playerManager: model.playerManager)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: activeTab)
+    }
+
+    private var islandTabBar: some View {
+        HStack(spacing: 4) {
+            tabButton(label: "Agents", systemImage: "terminal", tab: .agents)
+            tabButton(label: "Music", systemImage: "music.note", tab: .music)
+            Spacer()
+        }
+    }
+
+    private func tabButton(label: String, systemImage: String, tab: IslandTab) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { activeTab = tab }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundStyle(activeTab == tab ? .white : .white.opacity(0.4))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                activeTab == tab ? Color.white.opacity(0.12) : Color.clear,
+                in: Capsule()
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var agentsContent: some View {
         VStack(spacing: 8) {
             if !model.hasAnyInstalledAgent {
                 installHooksHint
@@ -435,6 +485,7 @@ struct IslandPanelView: View {
             }
         }
         .padding(.bottom, 0)
+        .transition(.opacity)
     }
 
     /// Persistent hint at the top of the expanded island while no agent
