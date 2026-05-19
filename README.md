@@ -1,4 +1,4 @@
-🎵 Open Island (Music Edition)
+### 🎵 Open Island (Music Edition)
 
 ### Why switch contexts when you can vibe in one spot?
 
