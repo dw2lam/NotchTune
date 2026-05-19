@@ -635,6 +635,21 @@ final class AppModel {
             }
         }
 
+        playerManager.onPlaybackStateChange = { [weak self] isPlaying in
+            guard let self, self.isOverlayVisible == false else { return }
+            // Trigger the "pop up" (notification pill) when pausing.
+            // We can also trigger it on play if desired, but user specifically asked for pause.
+            if !isPlaying {
+                self.musicNotificationTrack = self.playerManager.track
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2))
+                    if self.musicNotificationTrack == self.playerManager.track {
+                        self.musicNotificationTrack = nil
+                    }
+                }
+            }
+        }
+
         overlay.appModel = self
         overlay.restoreDisplayPreference()
         overlay.onStatusMessage = { [weak self] message in
@@ -863,23 +878,7 @@ final class AppModel {
         let sessions = surfacedSessions
         if sessions.contains(where: { $0.phase.requiresAttention }) { return .waiting }
         if sessions.contains(where: { $0.phase == .running })       { return .running }
-        
-        if playerManager.isPlaying {
-            return .music(isPlaying: true)
-        }
-        
-        if !playerManager.track.isEmpty() {
-            return .music(isPlaying: false)
-        }
-        
         return .idle
-    }
-
-    var islandClosedTint: Color? {
-        if case .music = islandClosedMode {
-            return playerManager.track.avgAlbumColor
-        }
-        return nil
     }
 
     /// The spotlight session powering the center label (if any). Attention
@@ -894,28 +893,23 @@ final class AppModel {
     /// Text to show in the closed island's center label. Respects the
     /// `islandCenterLabel` user preference.
     func islandClosedLabel() -> String? {
-        guard islandCenterLabel != .off else { return nil }
-        
-        if let session = islandClosedSpotlight {
-            switch islandCenterLabel {
-            case .off:
-                return nil
-            case .sessionName:
-                let workspace = session.jumpTarget?.workspaceName ?? ""
-                if !workspace.isEmpty { return workspace }
-                return session.title.isEmpty ? session.tool.displayName : session.title
-            case .agentAction:
-                let action = session.displayCurrentToolName
-                if let action, !action.isEmpty {
-                    return "\(session.tool.displayName) · \(action)"
-                }
-                return session.tool.displayName
-            }
-        } else if !playerManager.track.isEmpty() {
-            return playerManager.track.title
-        }
+        guard islandCenterLabel != .off,
+              let session = islandClosedSpotlight else { return nil }
 
-        return nil
+        switch islandCenterLabel {
+        case .off:
+            return nil
+        case .sessionName:
+            let workspace = session.jumpTarget?.workspaceName ?? ""
+            if !workspace.isEmpty { return workspace }
+            return session.title.isEmpty ? session.tool.displayName : session.title
+        case .agentAction:
+            let action = session.displayCurrentToolName
+            if let action, !action.isEmpty {
+                return "\(session.tool.displayName) · \(action)"
+            }
+            return session.tool.displayName
+        }
     }
 
     /// Right-slot payload derived from the user's `islandRightSlot`

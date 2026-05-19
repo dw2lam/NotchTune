@@ -214,7 +214,6 @@ struct V6ClosedPill: View {
     var rightSlot: IslandRightSlotContent?
     var layout: V6ClosedLayout
     var height: CGFloat = 32
-    var tint: Color?
 
     /// MacBook mode only — width of the physical notch cutout to wrap.
     var physicalNotchWidth: CGFloat = 0
@@ -239,10 +238,6 @@ struct V6ClosedPill: View {
     // label) and the right-slot content so they never touch at small widths.
     private static let innerGap: CGFloat = 6
 
-    private var defaultTint: Color {
-        Color(red: 0xf1 / 255.0, green: 0xea / 255.0, blue: 0xd9 / 255.0)
-    }
-
     // MARK: External (fluid)
 
     private var externalBody: some View {
@@ -260,7 +255,7 @@ struct V6ClosedPill: View {
                 .fill(V6Palette.ink)
 
             HStack(spacing: 0) {
-                UnifiedBars(mode: mode, size: 24, tint: tint ?? defaultTint)
+                UnifiedBars(mode: mode, size: 24)
                     .frame(width: glyphW, height: 24)
 
                 if let label {
@@ -300,7 +295,7 @@ struct V6ClosedPill: View {
                 .fill(V6Palette.ink)
 
             HStack(spacing: 0) {
-                UnifiedBars(mode: mode, size: 24, tint: tint ?? defaultTint)
+                UnifiedBars(mode: mode, size: 24)
                     .frame(width: 24, height: 24)
 
                 Spacer(minLength: 0)

@@ -48,6 +48,9 @@ final class MusicPlayerManager {
     // Connected app name for display
     var connectedAppName: String { musicApp.appName }
 
+    var onTrackChange: ((PlayerTrack) -> Void)?
+    var onPlaybackStateChange: ((Bool) -> Void)?
+
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var timerCancellable: AnyCancellable?
     @ObservationIgnored private var userDefaultsObserver: (any NSObjectProtocol)?
@@ -97,8 +100,13 @@ final class MusicPlayerManager {
     }
 
     private func handleConnectedAppChange() {
-        let currentApp = UserDefaults.standard.string(forKey: musicConnectedAppDefaultsKey) ?? "appleMusic"
-        let newAppName = currentApp == "spotify" ? "Spotify" : "Apple Music"
+        let currentApp = UserDefaults.standard.string(forKey: musicConnectedAppDefaultsKey) ?? "none"
+        let newAppName: String
+        switch currentApp {
+        case "spotify":    newAppName = "Spotify"
+        case "appleMusic": newAppName = "Apple Music"
+        default:           newAppName = "None"
+        }
         guard newAppName != connectedAppName else { return }
         setupMusicApp()
         playStateOrTrackDidChange(nil)
@@ -125,6 +133,7 @@ final class MusicPlayerManager {
 
         getPlaybackSettingInfo()
         getNewSongInfo()
+        onTrackChange?(track)
         _ = isRunningFromNotification
     }
 
@@ -174,6 +183,7 @@ final class MusicPlayerManager {
     func togglePlayPause() {
         isPlaying = !isPlaying
         musicApp.playPause()
+        onPlaybackStateChange?(isPlaying)
     }
 
     func previousTrack() {
@@ -240,13 +250,17 @@ final class MusicPlayerManager {
     private func pollForTrackChanges() {
         guard musicApp.isRunning() else { return }
         let current = musicApp.isPlaying
-        if current != isPlaying { isPlaying = current }
+        if current != isPlaying {
+            isPlaying = current
+            onPlaybackStateChange?(isPlaying)
+        }
         let polled = musicApp.getTrackInfo()
         guard polled.title != track.title || polled.artist != track.artist ||
               polled.album != track.album || polled.duration != track.duration else { return }
         withAnimation(MusicConstants.mainAnimation) {
             track = polled
         }
+        onTrackChange?(polled)
         updateFormattedDuration()
         fetchAlbumArt()
     }
@@ -293,6 +307,8 @@ final class MusicPlayerManager {
     func switchToSpotify() {
         UserDefaults.standard.set("spotify", forKey: Self.connectedAppKey)
     }
+
+    var isMusicEnabled: Bool { connectedAppName != "None" }
 
     var isSpotifyAvailable: Bool {
         FileManager.default.fileExists(atPath: "/Applications/Spotify.app")

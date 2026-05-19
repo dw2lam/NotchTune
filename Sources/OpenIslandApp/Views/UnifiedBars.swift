@@ -11,7 +11,6 @@ struct UnifiedBars: View {
         case idle       // rest — 3 short bars, middle breathes
         case running    // wave — heights 4→12→4, stagger 0.15s
         case waiting    // pause — outer bars tall, middle hidden, cross-pulse
-        case music(isPlaying: Bool) // music — wave when playing, static when paused
     }
 
     var mode: Mode
@@ -27,12 +26,6 @@ struct UnifiedBars: View {
         Column(x: 5.25,  idleH: 3, waveCycle: [4, 12, 4], waveDelay: 0.00, waitH: 10),
         Column(x: 10.75, idleH: 5, waveCycle: [6, 14, 6], waveDelay: 0.15, waitH: 0),
         Column(x: 16.25, idleH: 3, waveCycle: [4, 10, 4], waveDelay: 0.30, waitH: 10),
-    ]
-
-    private static let musicColumns: [Column] = [
-        Column(x: 5.25,  idleH: 6, waveCycle: [6, 14, 6], waveDelay: 0.00, waitH: 8),
-        Column(x: 10.75, idleH: 10, waveCycle: [10, 18, 10], waveDelay: 0.20, waitH: 12),
-        Column(x: 16.25, idleH: 8, waveCycle: [8, 16, 8], waveDelay: 0.40, waitH: 10),
     ]
 
     var body: some View {
@@ -64,8 +57,7 @@ struct UnifiedBars: View {
     }
 
     private func drawBars(context: GraphicsContext, time: TimeInterval) {
-        let cols = if case .music = mode { Self.musicColumns } else { Self.columns }
-        for column in cols {
+        for column in Self.columns {
             let (height, y, opacity) = barGeometry(for: column, time: time)
             guard opacity > 0, height > 0 else { continue }
             let rect = CGRect(
@@ -120,26 +112,6 @@ struct UnifiedBars: View {
             let wave = 0.5 - 0.5 * cos(progress * 2 * .pi)
             let opacity = 0.55 + 0.45 * wave
             return (h, Self.center - h / 2, opacity)
-        case .music(let isPlaying):
-            if isPlaying {
-                let cycle = column.waveCycle
-                let period: TimeInterval = 0.8
-                let raw = (time - column.waveDelay)
-                    .truncatingRemainder(dividingBy: period) / period
-                let phase = raw < 0 ? raw + 1 : raw
-                let h: CGFloat
-                if phase < 0.5 {
-                    let t = phase / 0.5
-                    h = cycle[0] + (cycle[1] - cycle[0]) * t
-                } else {
-                    let t = (phase - 0.5) / 0.5
-                    h = cycle[1] + (cycle[2] - cycle[1]) * t
-                }
-                return (h, Self.center - h / 2, 1.0)
-            } else {
-                let h = column.idleH
-                return (h, Self.center - h / 2, 0.7)
-            }
         }
     }
 

@@ -577,7 +577,6 @@ struct AppearanceSettingsPane: View {
         case .idle:    return lang.t("settings.appearance.state.idle")
         case .running: return lang.t("settings.appearance.state.running")
         case .waiting: return lang.t("settings.appearance.state.waiting")
-        case .music(let isPlaying): return isPlaying ? "Music Playing" : "Music Paused"
         }
     }
 
@@ -645,7 +644,6 @@ struct AppearanceSettingsPane: View {
         case (.running, .agentAction): return lang.t("settings.appearance.preview.agentEditing")
         case (.running, .sessionName): return "open-island"
         case (.running, .off):         return nil
-        case (.music(let isPlaying), _): return isPlaying ? "Music Playing" : "Music Paused"
         }
     }
 
