@@ -67,7 +67,6 @@ final class AppModel {
     let discovery = SessionDiscoveryCoordinator()
     let monitoring = ProcessMonitoringCoordinator()
     let codexAppServer = CodexAppServerCoordinator()
-    let updateChecker = UpdateChecker()
     let playerManager = MusicPlayerManager()
 
     var notchStatus: NotchStatus {
@@ -1081,8 +1080,6 @@ final class AppModel {
                 hooks.refreshCodexUsageState()
                 hooks.startCodexUsageMonitoringIfNeeded()
             }
-            updateChecker.startIfNeeded()
-
         } else {
             isResolvingInitialLiveSessions = false
         }

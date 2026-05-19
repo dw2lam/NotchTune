@@ -57,12 +57,6 @@ if [ -d "$resource_bundle" ]; then
     command cp -R "$resource_bundle" "$bundle_dir/"
 fi
 
-# Copy Sparkle.framework for auto-update support.
-sparkle_framework="$repo_root/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
-if [ -d "$sparkle_framework" ]; then
-    rm -rf "$bundle_dir/Contents/Frameworks/Sparkle.framework"
-    command cp -R "$sparkle_framework" "$bundle_dir/Contents/Frameworks/"
-fi
 
 cat > "$plist_path" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -95,10 +89,6 @@ cat > "$plist_path" <<EOF
     <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
-    <key>SUFeedURL</key>
-    <string>https://raw.githubusercontent.com/Octane0411/open-vibe-island/main/appcast.xml</string>
-    <key>SUPublicEDKey</key>
-    <string>3IF8txq9RRNanzE2FNhyGRcwhslTucCcJHpTkpxcgBQ=</string>
 </dict>
 </plist>
 EOF
