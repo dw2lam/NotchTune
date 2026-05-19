@@ -4,8 +4,8 @@
 
 Open Island — native macOS companion for AI coding agents. Sits in the notch / top bar, monitors local sessions, surfaces permission and question events, and jumps back to the right terminal/IDE. Local-first, no server.
 
-- **Target product** (closed-source baseline): https://vibeisland.app/
-- **OSS reference** (design ideas only, not a spec): https://github.com/farouqaldori/claude-island
+- **Fork repo**: https://github.com/dw2lam/open-vibe-island-music
+- **Music integration**: Agents tab + Music tab (Spotify & Apple Music via ScriptingBridge)
 
 ## Architecture
 

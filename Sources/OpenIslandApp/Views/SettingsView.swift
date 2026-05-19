@@ -156,13 +156,6 @@ struct SettingsView: View {
                 AboutSettingsPane(model: model)
             }
 
-            if model.updateChecker.hasUpdate, let version = model.updateChecker.latestVersion {
-                UpdateBanner(version: version, lang: lang) {
-                    model.updateChecker.checkForUpdates()
-                }
-                .padding(.top, 8)
-                .padding(.trailing, 16)
-            }
         }
     }
 }
@@ -344,20 +337,6 @@ struct AboutSettingsPane: View {
             Divider()
 
             Form {
-                Section {
-                    aboutActionRow(
-                        title: lang.t("settings.about.checkForUpdates"),
-                        systemImage: "arrow.triangle.2.circlepath",
-                        tint: primaryInk,
-                        action: {
-                            model.updateChecker.checkForUpdates()
-                        }
-                    )
-                    .disabled(!model.updateChecker.canCheckForUpdates)
-                    .opacity(model.updateChecker.canCheckForUpdates ? 1 : 0.55)
-                    .accessibilityIdentifier("settings.about.checkForUpdates")
-                }
-
                 Section {
                     aboutActionRow(
                         title: lang.t("settings.about.quitApp"),
@@ -1221,32 +1200,3 @@ struct RemoteConnectionSection: View {
     }
 }
 
-// MARK: - Update Banner
-
-struct UpdateBanner: View {
-    let version: String
-    let lang: LanguageManager
-    var onUpdate: () -> Void
-
-    var body: some View {
-        Button(action: onUpdate) {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                Text(lang.t("settings.update.available", version))
-                    .font(.system(size: 12, weight: .medium))
-                Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 10, weight: .bold))
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(Color.blue)
-            )
-        }
-        .buttonStyle(.plain)
-        .shadow(color: .blue.opacity(0.3), radius: 4, y: 2)
-    }
-}
