@@ -1,5 +1,47 @@
 import SwiftUI
 
+// MARK: - Morphing expand/collapse shape (from Top Notch)
+//
+// Clip mask that interpolates from the compact pill (progress=0) to the
+// fully expanded panel (progress=1). The frame is always the expanded size;
+// at progress=0 only the compact-pill rect at the top-centre is visible.
+
+struct GrowingNotchShape: Shape {
+    var progress: CGFloat
+    var compactW: CGFloat
+    var compactH: CGFloat
+    var expandedW: CGFloat
+    var expandedH: CGFloat
+    var compactR: CGFloat = 6
+    var expandedR: CGFloat = 22
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let w = compactW + (expandedW - compactW) * progress
+        let h = compactH + (expandedH - compactH) * progress
+        let r = compactR + (expandedR - compactR) * progress
+        let x = (rect.width - w) / 2
+
+        return Path { p in
+            p.move(to: CGPoint(x: x, y: 0))
+            p.addLine(to: CGPoint(x: x + w, y: 0))
+            p.addLine(to: CGPoint(x: x + w, y: h - r))
+            p.addArc(center: CGPoint(x: x + w - r, y: h - r),
+                     radius: r, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+            p.addLine(to: CGPoint(x: x + r, y: h))
+            p.addArc(center: CGPoint(x: x + r, y: h - r),
+                     radius: r, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+            p.closeSubpath()
+        }
+    }
+}
+
+// MARK: -
+
 struct NotchShape: Shape {
     var topCornerRadius: CGFloat
     var bottomCornerRadius: CGFloat

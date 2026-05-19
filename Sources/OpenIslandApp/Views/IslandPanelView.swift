@@ -73,9 +73,9 @@ extension AgentSession {
 
 // MARK: - Animations
 
-private let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
-private let closeAnimation = Animation.smooth(duration: 0.3)
-private let popAnimation = Animation.spring(response: 0.3, dampingFraction: 0.5)
+private let openAnimation  = Animation.spring(response: 0.36, dampingFraction: 0.66)
+private let closeAnimation = Animation.spring(response: 0.26, dampingFraction: 0.92)
+private let popAnimation   = Animation.spring(response: 0.3,  dampingFraction: 0.5)
 private let openedSurfaceUnmountDelay: TimeInterval = 0.36
 
 private struct ConditionalDrawingGroup: ViewModifier {
@@ -109,6 +109,7 @@ struct IslandPanelView: View {
     @State private var keepsOpenedSurfaceMounted = false
     @State private var openedSurfaceMountGeneration: UInt64 = 0
     @State private var activeTab: IslandTab = .agents
+    @State private var morphProgress: CGFloat = 0
 
     private enum IslandTab { case agents, music }
 
@@ -192,9 +193,16 @@ struct IslandPanelView: View {
         }
         .onAppear {
             syncOpenedSurfaceMount(with: model.notchStatus, immediate: true)
+            morphProgress = model.notchStatus == .opened ? 1 : 0
         }
         .onChange(of: model.notchStatus) { _, status in
             syncOpenedSurfaceMount(with: status)
+            switch status {
+            case .opened:
+                withAnimation(openAnimation) { morphProgress = 1 }
+            case .closed, .popping:
+                withAnimation(closeAnimation) { morphProgress = 0 }
+            }
         }
     }
 
@@ -216,19 +224,38 @@ struct IslandPanelView: View {
                 if shouldRenderOpenedSurface {
                     openedSurface(width: openedWidth, height: openedHeight)
                         .opacity(usesOpenedVisualState ? 1 : 0)
+                        .animation(
+                            usesOpenedVisualState
+                                ? .easeIn(duration: 0.14).delay(0.13)
+                                : .easeOut(duration: 0.05),
+                            value: usesOpenedVisualState
+                        )
                         .allowsHitTesting(usesOpenedVisualState)
                 }
 
                 v6ClosedSurface()
                     .opacity(usesOpenedVisualState ? 0 : 1)
+                    .animation(
+                        usesOpenedVisualState
+                            ? .easeOut(duration: 0.05)
+                            : .easeIn(duration: 0.1).delay(0.08),
+                        value: usesOpenedVisualState
+                    )
                     .allowsHitTesting(!usesOpenedVisualState)
             }
             .frame(maxWidth: .infinity, alignment: .top)
+            .clipShape(GrowingNotchShape(
+                progress: morphProgress,
+                compactW: closedNotchWidth,
+                compactH: closedNotchHeight,
+                expandedW: openedWidth,
+                expandedH: openedHeight
+            ))
         }
         .scaleEffect(usesOpenedVisualState ? 1 : (isHovering ? IslandChromeMetrics.closedHoverScale : 1), anchor: .top)
+        .animation(.spring(response: 0.38, dampingFraction: 0.8), value: isHovering)
         .padding(.horizontal, panelShadowHorizontalInset)
         .padding(.bottom, panelShadowBottomInset)
-        .animation(notchTransitionAnimation, value: model.notchStatus)
         .contentShape(Rectangle())
         .onHover { hovering in
             withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) {
