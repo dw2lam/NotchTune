@@ -638,12 +638,14 @@ final class AppModel {
         playerManager.onPlaybackStateChange = { [weak self] isPlaying in
             guard let self, self.isOverlayVisible == false else { return }
             // Trigger the "pop up" (notification pill) when pausing.
-            // We can also trigger it on play if desired, but user specifically asked for pause.
             if !isPlaying {
-                self.musicNotificationTrack = self.playerManager.track
+                let trackSnapshot = self.playerManager.track
+                guard !trackSnapshot.isEmpty() else { return }
+                
+                self.musicNotificationTrack = trackSnapshot
                 Task { @MainActor in
                     try? await Task.sleep(for: .seconds(2))
-                    if self.musicNotificationTrack == self.playerManager.track {
+                    if self.musicNotificationTrack == trackSnapshot {
                         self.musicNotificationTrack = nil
                     }
                 }

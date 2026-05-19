@@ -139,7 +139,13 @@ final class MusicPlayerManager {
 
     // MARK: - Media & Playback
 
-    private func getPlayState() { isPlaying = musicApp.isPlaying }
+    private func getPlayState() {
+        let current = musicApp.isPlaying
+        if current != isPlaying {
+            isPlaying = current
+            onPlaybackStateChange?(isPlaying)
+        }
+    }
 
     func getPlaybackSettingInfo() {
         shuffleIsOn = musicApp.shuffleIsOn
