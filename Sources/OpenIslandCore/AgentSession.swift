@@ -11,6 +11,7 @@ public enum AgentTool: String, CaseIterable, Codable, Sendable {
     case codebuddy
     case cursor
     case kimiCLI
+    case antigravity
 
     public var displayName: String {
         switch self {
@@ -34,6 +35,8 @@ public enum AgentTool: String, CaseIterable, Codable, Sendable {
             "Cursor"
         case .kimiCLI:
             "Kimi CLI"
+        case .antigravity:
+            "Antigravity"
         }
     }
 
@@ -59,6 +62,8 @@ public enum AgentTool: String, CaseIterable, Codable, Sendable {
             "CURSOR"
         case .kimiCLI:
             "KIMI"
+        case .antigravity:
+            "ANTIGRAVITY"
         }
     }
 
@@ -87,6 +92,7 @@ public enum AgentTool: String, CaseIterable, Codable, Sendable {
         case .factory:    "#6e9fff"
         case .codebuddy:  "#fca5a5"
         case .kimiCLI:    "#fde047"
+        case .antigravity: "#9333ea"
         }
     }
 }
@@ -373,6 +379,7 @@ public struct AgentSession: Equatable, Identifiable, Codable, Sendable {
     public var geminiMetadata: GeminiSessionMetadata?
     public var openCodeMetadata: OpenCodeSessionMetadata?
     public var cursorMetadata: CursorSessionMetadata?
+    public var antigravityMetadata: AntigravitySessionMetadata?
 
     /// Whether this session originates from a remote (SSH) connection.
     public var isRemote: Bool = false
@@ -418,7 +425,8 @@ public struct AgentSession: Equatable, Identifiable, Codable, Sendable {
         claudeMetadata: ClaudeSessionMetadata? = nil,
         geminiMetadata: GeminiSessionMetadata? = nil,
         openCodeMetadata: OpenCodeSessionMetadata? = nil,
-        cursorMetadata: CursorSessionMetadata? = nil
+        cursorMetadata: CursorSessionMetadata? = nil,
+        antigravityMetadata: AntigravitySessionMetadata? = nil
     ) {
         self.id = id
         self.title = title
@@ -437,6 +445,7 @@ public struct AgentSession: Equatable, Identifiable, Codable, Sendable {
         self.geminiMetadata = geminiMetadata
         self.openCodeMetadata = openCodeMetadata
         self.cursorMetadata = cursorMetadata
+        self.antigravityMetadata = antigravityMetadata
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -457,6 +466,7 @@ public struct AgentSession: Equatable, Identifiable, Codable, Sendable {
         case geminiMetadata
         case openCodeMetadata
         case cursorMetadata
+        case antigravityMetadata
     }
 
     public init(from decoder: any Decoder) throws {
@@ -478,6 +488,7 @@ public struct AgentSession: Equatable, Identifiable, Codable, Sendable {
         geminiMetadata = try container.decodeIfPresent(GeminiSessionMetadata.self, forKey: .geminiMetadata)
         openCodeMetadata = try container.decodeIfPresent(OpenCodeSessionMetadata.self, forKey: .openCodeMetadata)
         cursorMetadata = try container.decodeIfPresent(CursorSessionMetadata.self, forKey: .cursorMetadata)
+        antigravityMetadata = try container.decodeIfPresent(AntigravitySessionMetadata.self, forKey: .antigravityMetadata)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -499,6 +510,7 @@ public struct AgentSession: Equatable, Identifiable, Codable, Sendable {
         try container.encodeIfPresent(geminiMetadata, forKey: .geminiMetadata)
         try container.encodeIfPresent(openCodeMetadata, forKey: .openCodeMetadata)
         try container.encodeIfPresent(cursorMetadata, forKey: .cursorMetadata)
+        try container.encodeIfPresent(antigravityMetadata, forKey: .antigravityMetadata)
     }
 }
 
@@ -508,7 +520,7 @@ public extension AgentSession {
     }
 
     var isTrackedLiveSession: Bool {
-        !isDemoSession && (tool == .codex || tool == .claudeCode || tool == .geminiCLI || tool == .openCode || tool == .qoder || tool == .qwenCode || tool == .factory || tool == .codebuddy || tool == .cursor || tool == .kimiCLI)
+        !isDemoSession && (tool == .codex || tool == .claudeCode || tool == .geminiCLI || tool == .openCode || tool == .qoder || tool == .qwenCode || tool == .factory || tool == .codebuddy || tool == .cursor || tool == .kimiCLI || tool == .antigravity)
     }
 
     var isTrackedLiveCodexSession: Bool {
@@ -535,11 +547,11 @@ public extension AgentSession {
     }
 
     var currentToolName: String? {
-        codexMetadata?.currentTool ?? claudeMetadata?.currentTool ?? openCodeMetadata?.currentTool ?? cursorMetadata?.currentTool
+        codexMetadata?.currentTool ?? claudeMetadata?.currentTool ?? openCodeMetadata?.currentTool ?? cursorMetadata?.currentTool ?? antigravityMetadata?.currentTool
     }
 
     var lastAssistantMessageText: String? {
-        codexMetadata?.lastAssistantMessage ?? claudeMetadata?.lastAssistantMessage ?? geminiMetadata?.lastAssistantMessage ?? openCodeMetadata?.lastAssistantMessage ?? cursorMetadata?.lastAssistantMessage
+        codexMetadata?.lastAssistantMessage ?? claudeMetadata?.lastAssistantMessage ?? geminiMetadata?.lastAssistantMessage ?? openCodeMetadata?.lastAssistantMessage ?? cursorMetadata?.lastAssistantMessage ?? antigravityMetadata?.lastAssistantMessage
     }
 
     var completionAssistantMessageText: String? {
@@ -553,19 +565,29 @@ public extension AgentSession {
             }
             return gemini.lastAssistantMessage
         }
+        if let antigravity = antigravityMetadata {
+            if let body = antigravity.lastAssistantMessageBody?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+               !body.isEmpty {
+                if let extractedBody = Self.extractGeminiCompletionBody(from: body) {
+                    return extractedBody
+                }
+            }
+            return antigravity.lastAssistantMessage
+        }
         return lastAssistantMessageText
     }
 
     var trackingTranscriptPath: String? {
-        codexMetadata?.transcriptPath ?? claudeMetadata?.transcriptPath ?? geminiMetadata?.transcriptPath
+        codexMetadata?.transcriptPath ?? claudeMetadata?.transcriptPath ?? geminiMetadata?.transcriptPath ?? antigravityMetadata?.transcriptPath
     }
 
     var latestUserPromptText: String? {
-        codexMetadata?.lastUserPrompt ?? claudeMetadata?.lastUserPrompt ?? geminiMetadata?.lastUserPrompt ?? openCodeMetadata?.lastUserPrompt ?? cursorMetadata?.lastUserPrompt
+        codexMetadata?.lastUserPrompt ?? claudeMetadata?.lastUserPrompt ?? geminiMetadata?.lastUserPrompt ?? openCodeMetadata?.lastUserPrompt ?? cursorMetadata?.lastUserPrompt ?? antigravityMetadata?.lastUserPrompt
     }
 
     var initialUserPromptText: String? {
-        codexMetadata?.initialUserPrompt ?? claudeMetadata?.initialUserPrompt ?? geminiMetadata?.initialUserPrompt ?? openCodeMetadata?.initialUserPrompt ?? cursorMetadata?.initialUserPrompt
+        codexMetadata?.initialUserPrompt ?? claudeMetadata?.initialUserPrompt ?? geminiMetadata?.initialUserPrompt ?? openCodeMetadata?.initialUserPrompt ?? cursorMetadata?.initialUserPrompt ?? antigravityMetadata?.initialUserPrompt
     }
 
     var currentCommandPreviewText: String? {

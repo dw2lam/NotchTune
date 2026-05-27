@@ -247,9 +247,13 @@ final class ProcessMonitoringCoordinator {
             payload.sessionID
         case let .geminiSessionMetadataUpdated(payload):
             payload.sessionID
+        case let .antigravitySessionMetadataUpdated(payload):
+            payload.sessionID
         case let .openCodeSessionMetadataUpdated(payload):
             payload.sessionID
         case let .cursorSessionMetadataUpdated(payload):
+            payload.sessionID
+        case let .jumpTargetSynchronized(payload):
             payload.sessionID
         case let .actionableStateResolved(payload):
             payload.sessionID
@@ -384,6 +388,13 @@ final class ProcessMonitoringCoordinator {
         let hasKimiProcess = activeProcesses.contains { $0.tool == .kimiCLI }
         if hasKimiProcess {
             for session in sessions where session.tool == .kimiCLI && !session.isDemoSession {
+                aliveIDs.insert(session.id)
+            }
+        }
+
+        let hasAntigravityProcess = activeProcesses.contains { $0.tool == .antigravity }
+        if hasAntigravityProcess {
+            for session in sessions where session.tool == .antigravity && !session.isDemoSession {
                 aliveIDs.insert(session.id)
             }
         }
@@ -1015,6 +1026,8 @@ final class ProcessMonitoringCoordinator {
             return "Cursor \(session.id.prefix(8))"
         case .kimiCLI:
             return "Kimi \(session.id.prefix(8))"
+        case .antigravity:
+            return "Antigravity \(session.id.prefix(8))"
         }
     }
 }

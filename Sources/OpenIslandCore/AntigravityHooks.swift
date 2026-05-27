@@ -1,6 +1,6 @@
 import Foundation
 
-public enum GeminiHookEventName: String, Codable, Sendable {
+public enum AntigravityHookEventName: String, Codable, Sendable {
     case sessionStart = "SessionStart"
     case sessionEnd = "SessionEnd"
     case beforeAgent = "BeforeAgent"
@@ -8,9 +8,9 @@ public enum GeminiHookEventName: String, Codable, Sendable {
     case notification = "Notification"
 }
 
-public struct GeminiHookPayload: Equatable, Codable, Sendable {
+public struct AntigravityHookPayload: Equatable, Codable, Sendable {
     public var cwd: String
-    public var hookEventName: GeminiHookEventName
+    public var hookEventName: AntigravityHookEventName
     public var sessionID: String
     public var transcriptPath: String?
     public var timestamp: String?
@@ -51,7 +51,7 @@ public struct GeminiHookPayload: Equatable, Codable, Sendable {
 
     public init(
         cwd: String,
-        hookEventName: GeminiHookEventName,
+        hookEventName: AntigravityHookEventName,
         sessionID: String,
         transcriptPath: String? = nil,
         timestamp: String? = nil,
@@ -90,25 +90,28 @@ public struct GeminiHookPayload: Equatable, Codable, Sendable {
     }
 }
 
-public struct GeminiSessionMetadata: Equatable, Codable, Sendable {
+public struct AntigravitySessionMetadata: Equatable, Codable, Sendable {
     public var transcriptPath: String?
     public var initialUserPrompt: String?
     public var lastUserPrompt: String?
     public var lastAssistantMessage: String?
     public var lastAssistantMessageBody: String?
+    public var currentTool: String?
 
     public init(
         transcriptPath: String? = nil,
         initialUserPrompt: String? = nil,
         lastUserPrompt: String? = nil,
         lastAssistantMessage: String? = nil,
-        lastAssistantMessageBody: String? = nil
+        lastAssistantMessageBody: String? = nil,
+        currentTool: String? = nil
     ) {
         self.transcriptPath = transcriptPath
         self.initialUserPrompt = initialUserPrompt
         self.lastUserPrompt = lastUserPrompt
         self.lastAssistantMessage = lastAssistantMessage
         self.lastAssistantMessageBody = lastAssistantMessageBody
+        self.currentTool = currentTool
     }
 
     public var isEmpty: Bool {
@@ -117,36 +120,38 @@ public struct GeminiSessionMetadata: Equatable, Codable, Sendable {
             && lastUserPrompt == nil
             && lastAssistantMessage == nil
             && lastAssistantMessageBody == nil
+            && currentTool == nil
     }
 }
 
-public extension GeminiHookPayload {
+public extension AntigravityHookPayload {
     var workspaceName: String {
         WorkspaceNameResolver.workspaceName(for: cwd)
     }
 
     var sessionTitle: String {
-        "Gemini CLI · \(workspaceName)"
+        "Antigravity · \(workspaceName)"
     }
 
     var defaultJumpTarget: JumpTarget {
         JumpTarget(
             terminalApp: terminalApp ?? "Terminal",
             workspaceName: workspaceName,
-            paneTitle: terminalTitle ?? "Gemini \(sessionID.prefix(8))",
+            paneTitle: terminalTitle ?? "Antigravity \(sessionID.prefix(8))",
             workingDirectory: cwd,
             terminalSessionID: terminalSessionID,
             terminalTTY: terminalTTY
         )
     }
 
-    var defaultGeminiMetadata: GeminiSessionMetadata {
-        GeminiSessionMetadata(
+    var defaultAntigravityMetadata: AntigravitySessionMetadata {
+        AntigravitySessionMetadata(
             transcriptPath: transcriptPath,
             initialUserPrompt: prompt ?? promptPreview,
             lastUserPrompt: prompt ?? promptPreview,
             lastAssistantMessage: promptResponsePreview ?? promptResponse,
-            lastAssistantMessageBody: preserveNewlinesClipped(promptResponse, limit: 8000)
+            lastAssistantMessageBody: preserveNewlinesClipped(promptResponse, limit: 8000),
+            currentTool: hookEventName == .beforeAgent ? promptPreview : nil
         )
     }
 
@@ -168,18 +173,18 @@ public extension GeminiHookPayload {
         case .sessionStart:
             switch source?.lowercased() {
             case "resume":
-                return "Resumed Gemini CLI session in \(workspaceName)."
+                return "Resumed Antigravity session in \(workspaceName)."
             case "clear":
-                return "Cleared Gemini CLI session in \(workspaceName)."
+                return "Cleared Antigravity session in \(workspaceName)."
             default:
-                return "Started Gemini CLI session in \(workspaceName)."
+                return "Started Antigravity session in \(workspaceName)."
             }
         case .sessionEnd:
-            return "Gemini CLI session ended in \(workspaceName)."
+            return "Antigravity session ended in \(workspaceName)."
         case .beforeAgent:
-            return promptPreview.map { "Prompt: \($0)" } ?? "Gemini CLI started a new turn in \(workspaceName)."
+            return promptPreview.map { "Prompt: \($0)" } ?? "Antigravity started a new turn in \(workspaceName)."
         case .afterAgent:
-            return promptResponsePreview ?? "Gemini CLI completed a turn in \(workspaceName)."
+            return promptResponsePreview ?? "Antigravity completed a turn in \(workspaceName)."
         case .notification:
             return notificationSummary
         }
@@ -194,7 +199,7 @@ public extension GeminiHookPayload {
     }
 
     var notificationSummary: String {
-        clipped(message) ?? "Gemini CLI sent a notification."
+        clipped(message) ?? "Antigravity sent a notification."
     }
 
     var renderedDetails: String? {
@@ -205,7 +210,7 @@ public extension GeminiHookPayload {
         return clipped(stringValue(for: details), limit: 160)
     }
 
-    func withRuntimeContext(environment: [String: String]) -> GeminiHookPayload {
+    func withRuntimeContext(environment: [String: String]) -> AntigravityHookPayload {
         withRuntimeContext(
             environment: environment,
             currentTTYProvider: { currentTTY() },
@@ -217,7 +222,7 @@ public extension GeminiHookPayload {
         environment: [String: String],
         currentTTYProvider: () -> String?,
         terminalLocatorProvider: (String) -> (sessionID: String?, tty: String?, title: String?)
-    ) -> GeminiHookPayload {
+    ) -> AntigravityHookPayload {
         var payload = self
 
         if payload.terminalApp == nil {

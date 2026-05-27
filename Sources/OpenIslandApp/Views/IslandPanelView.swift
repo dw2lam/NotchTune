@@ -241,6 +241,7 @@ struct IslandPanelView: View {
                         value: usesOpenedVisualState
                     )
                     .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.isPeeking)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.shouldAutoHideIsland)
                     .allowsHitTesting(!usesOpenedVisualState)
             }
             .frame(maxWidth: .infinity, alignment: .top)
@@ -356,19 +357,19 @@ struct IslandPanelView: View {
             GeometryReader { geo in
                 Color.clear
                     .onAppear {
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             musicNotificationWidth = geo.size.width
                         }
                     }
                     .onChange(of: geo.size.width) { _, newWidth in
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             musicNotificationWidth = newWidth
                         }
                     }
             }
         )
         .transition(.asymmetric(
-            insertion: .move(edge: .top).combined(with: .opacity).animation(.spring(response: 0.45, dampingFraction: 0.8)),
+            insertion: .move(edge: .top).combined(with: .opacity).animation(.spring(response: 0.35, dampingFraction: 0.85)),
             removal: .opacity.animation(.easeOut(duration: 0.2))
         ))
     }
@@ -389,6 +390,16 @@ struct IslandPanelView: View {
             surfaceShape
                 .fill(V6Palette.ink)
                 .frame(width: surfaceWidth, height: surfaceHeight)
+                .overlay {
+                    if model.islandActiveTab == .music && model.playerManager.isRunning && !model.playerManager.track.isEmpty() {
+                        Image(nsImage: model.playerManager.track.nsAlbumArt)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .opacity(0.12)
+                            .blur(radius: 20)
+                            .clipShape(surfaceShape)
+                    }
+                }
 
             VStack(spacing: 0) {
                 openedHeaderContent

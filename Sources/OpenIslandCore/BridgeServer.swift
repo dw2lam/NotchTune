@@ -442,6 +442,9 @@ public final class BridgeServer: @unchecked Sendable {
 
         case let .processGeminiHook(payload):
             handleGeminiHook(payload, from: clientID)
+
+        case let .processAntigravityHook(payload):
+            handleAntigravityHook(payload, from: clientID)
         }
     }
 
@@ -1236,6 +1239,14 @@ public final class BridgeServer: @unchecked Sendable {
     }
 
     private func handleGeminiHook(_ payload: GeminiHookPayload, from clientID: UUID) {
+        if let details = payload.details,
+           case let .object(obj) = details,
+           let usage = obj["usage"] {
+            // Write Gemini usage to cache file for the app to read.
+            // This allows the Gemini CLI to report its quota/usage.
+            writeGeminiUsageCache(usage)
+        }
+
         switch payload.hookEventName {
         case .sessionStart:
             emit(
@@ -1322,6 +1333,172 @@ public final class BridgeServer: @unchecked Sendable {
 
             send(.response(.acknowledged), to: clientID)
         }
+    }
+
+    private func writeGeminiUsageCache(_ usage: CodexHookJSONValue) {
+        do {
+            let data = try JSONEncoder().encode(usage)
+            // Validate that it matches the GeminiUsageSnapshot format
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let snapshot = try decoder.decode(GeminiUsageSnapshot.self, from: data)
+            
+            let encodedData = try JSONEncoder().encode(snapshot)
+            try encodedData.write(to: GeminiUsageLoader.defaultCacheURL, options: .atomic)
+        } catch {
+            // Ignore usage write errors
+        }
+    }
+
+    private func handleAntigravityHook(_ payload: AntigravityHookPayload, from clientID: UUID) {
+        switch payload.hookEventName {
+        case .sessionStart:
+            emit(
+                .sessionStarted(
+                    SessionStarted(
+                        sessionID: payload.sessionID,
+                        title: payload.sessionTitle,
+                        tool: .antigravity,
+                        origin: .live,
+                        initialPhase: .completed,
+                        summary: payload.implicitSummary,
+                        timestamp: .now,
+                        jumpTarget: payload.defaultJumpTarget,
+                        antigravityMetadata: payload.defaultAntigravityMetadata.isEmpty ? nil : payload.defaultAntigravityMetadata
+                    )
+                )
+            )
+            send(.response(.acknowledged), to: clientID)
+
+        case .beforeAgent:
+            ensureAntigravitySessionExists(for: payload)
+            synchronizeAntigravityJumpTarget(for: payload)
+            synchronizeAntigravityMetadata(for: payload)
+            emit(
+                .activityUpdated(
+                    SessionActivityUpdated(
+                        sessionID: payload.sessionID,
+                        summary: payload.implicitSummary,
+                        phase: .running,
+                        timestamp: .now
+                    )
+                )
+            )
+            send(.response(.acknowledged), to: clientID)
+
+        case .afterAgent:
+            ensureAntigravitySessionExists(for: payload)
+            synchronizeAntigravityJumpTarget(for: payload)
+            synchronizeAntigravityMetadata(for: payload)
+            emit(
+                .sessionCompleted(
+                    SessionCompleted(
+                        sessionID: payload.sessionID,
+                        summary: payload.implicitSummary,
+                        timestamp: .now
+                    )
+                )
+            )
+            send(.response(.acknowledged), to: clientID)
+
+        case .sessionEnd:
+            ensureAntigravitySessionExists(for: payload)
+            synchronizeAntigravityJumpTarget(for: payload)
+            synchronizeAntigravityMetadata(for: payload)
+            emit(
+                .sessionCompleted(
+                    SessionCompleted(
+                        sessionID: payload.sessionID,
+                        summary: payload.reason.map { "Antigravity session ended: \($0)." } ?? payload.implicitSummary,
+                        timestamp: .now,
+                        isInterrupt: true,
+                        isSessionEnd: true
+                    )
+                )
+            )
+            send(.response(.acknowledged), to: clientID)
+
+        case .notification:
+            ensureAntigravitySessionExists(for: payload)
+            synchronizeAntigravityJumpTarget(for: payload)
+            synchronizeAntigravityMetadata(for: payload)
+
+            var currentPhase = localState.session(id: payload.sessionID)?.phase ?? .completed
+            if let type = payload.notificationType {
+                switch type {
+                case "thinking", "working":
+                    currentPhase = .running
+                case "permission_request", "attention":
+                    currentPhase = .waitingForApproval
+                default:
+                    break
+                }
+            }
+
+            emit(
+                .activityUpdated(
+                    SessionActivityUpdated(
+                        sessionID: payload.sessionID,
+                        summary: payload.notificationSummary,
+                        phase: currentPhase,
+                        timestamp: .now
+                    )
+                )
+            )
+
+            send(.response(.acknowledged), to: clientID)
+        }
+    }
+
+    private func ensureAntigravitySessionExists(for payload: AntigravityHookPayload) {
+        guard !hasSession(id: payload.sessionID) else {
+            return
+        }
+
+        emit(
+            .sessionStarted(
+                SessionStarted(
+                    sessionID: payload.sessionID,
+                    title: payload.sessionTitle,
+                    tool: .antigravity,
+                    origin: .live,
+                    initialPhase: .running,
+                    summary: "Session resumed.",
+                    timestamp: .now,
+                    jumpTarget: payload.defaultJumpTarget,
+                    antigravityMetadata: payload.defaultAntigravityMetadata
+                )
+            )
+        )
+    }
+
+    private func synchronizeAntigravityJumpTarget(for payload: AntigravityHookPayload) {
+        emit(
+            .jumpTargetSynchronized(
+                JumpTargetSynchronized(
+                    sessionID: payload.sessionID,
+                    jumpTarget: payload.defaultJumpTarget,
+                    timestamp: Date()
+                )
+            )
+        )
+    }
+
+    private func synchronizeAntigravityMetadata(for payload: AntigravityHookPayload) {
+        let metadata = payload.defaultAntigravityMetadata
+        guard !metadata.isEmpty else {
+            return
+        }
+
+        emit(
+            .antigravitySessionMetadataUpdated(
+                AntigravitySessionMetadataUpdated(
+                    sessionID: payload.sessionID,
+                    antigravityMetadata: metadata,
+                    timestamp: .now
+                )
+            )
+        )
     }
 
     private func ensureGeminiSessionExists(for payload: GeminiHookPayload) {

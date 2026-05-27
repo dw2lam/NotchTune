@@ -169,6 +169,23 @@ struct ActiveAgentProcessDiscovery {
                 continue
             }
 
+            if isAntigravityProcess(command: process.command) {
+                let claimKey = "antigravity:\(process.pid)"
+                guard claimedKeys.insert(claimKey).inserted else {
+                    continue
+                }
+
+                let lsofOutput = lsofOutput(pid: process.pid)
+                snapshots.append(ProcessSnapshot(
+                    tool: .antigravity,
+                    sessionID: nil,
+                    workingDirectory: lsofOutput.flatMap(workingDirectory(from:)),
+                    terminalTTY: process.terminalTTY,
+                    terminalApp: terminalApp(for: process, processesByPID: processesByPID)
+                ))
+                continue
+            }
+
             if isKimiProcess(command: process.command) {
                 let claimKey = "kimi:\(process.pid)"
                 guard claimedKeys.insert(claimKey).inserted else {
@@ -656,6 +673,22 @@ struct ActiveAgentProcessDiscovery {
             || lowered.contains("/bin/gemini")
             || lowered.contains("/google/gemini-cli")
             || lowered.contains("/@google/gemini-cli")
+    }
+
+    private func isAntigravityProcess(command: String) -> Bool {
+        let lowered = command.lowercased()
+        guard let firstToken = lowered.split(separator: " ").first.map(String.init) else {
+            return false
+        }
+
+        let binaryName = (firstToken as NSString).lastPathComponent
+        return binaryName == "agy"
+            || binaryName == "antigravity"
+            || firstToken == "antigravity"
+            || firstToken.hasSuffix("/antigravity")
+            || lowered.contains("/google/antigravity")
+            || lowered.contains("/google/antigravity-cli")
+            || lowered.contains("/antigravity-cli")
     }
 
     /// Matches the `kimi` CLI (Moonshot) entry-point. `kimi-info` / `kimi-mcp` /

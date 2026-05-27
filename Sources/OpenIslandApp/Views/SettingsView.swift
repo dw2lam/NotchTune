@@ -9,8 +9,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case setup
     case display
     case sound
+    case music
     case appearance
-    case watch
     case shortcuts
     case lab
     case about
@@ -24,7 +24,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .appearance: lang.t("settings.tab.appearance")
         case .display:    lang.t("settings.tab.display")
         case .sound:      lang.t("settings.tab.sound")
-        case .watch:      "Watch"
+        case .music:      "Music"
         case .shortcuts:  lang.t("settings.tab.shortcuts")
         case .lab:        lang.t("settings.tab.lab")
         case .about:      lang.t("settings.tab.about")
@@ -38,7 +38,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .appearance: "paintbrush.fill"
         case .display:    "textformat.size"
         case .sound:      "speaker.wave.2.fill"
-        case .watch:      "applewatch"
+        case .music:      "music.note"
         case .shortcuts:  "keyboard.fill"
         case .lab:        "flask.fill"
         case .about:      "info.circle.fill"
@@ -52,7 +52,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .appearance: .purple
         case .display:    .blue
         case .sound:      .green
-        case .watch:      .cyan
+        case .music:      .pink
         case .shortcuts:  .gray
         case .lab:        .pink
         case .about:      .blue
@@ -61,9 +61,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var section: SettingsSection {
         switch self {
-        case .general, .setup, .display, .sound, .appearance, .watch: .system
-        case .shortcuts, .lab:                                        .advanced
-        case .about:                                                  .app
+        case .general, .setup, .display, .sound, .music, .appearance: .system
+        case .shortcuts, .lab:                                                 .advanced
+        case .about:                                                           .app
         }
     }
 }
@@ -146,8 +146,8 @@ struct SettingsView: View {
                 DisplaySettingsPane(model: model)
             case .sound:
                 SoundSettingsPane(model: model)
-            case .watch:
-                WatchSettingsPane(model: model)
+            case .music:
+                MusicSettingsPane(model: model)
             case .shortcuts:
                 PlaceholderSettingsPane(model: model, titleKey: "settings.tab.shortcuts", subtitleKey: "settings.shortcuts.comingSoon")
             case .lab:
@@ -200,9 +200,9 @@ struct GeneralSettingsPane: View {
 
             Section(lang.t("settings.general.behavior")) {
                 Toggle(lang.t("settings.general.autoCollapse"), isOn: .constant(true))
-                Toggle(lang.t("settings.general.showDockIcon"), isOn: Binding(
-                    get: { model.showDockIcon },
-                    set: { model.showDockIcon = $0 }
+                Toggle(lang.t("settings.general.hideDockIcon"), isOn: Binding(
+                    get: { !model.showDockIcon },
+                    set: { model.showDockIcon = !$0 }
                 ))
                 Toggle(lang.t("settings.general.hapticFeedback"), isOn: Binding(
                     get: { model.hapticFeedbackEnabled },
@@ -397,6 +397,7 @@ struct SetupSettingsPane: View {
     @State private var confirmingUninstallCursor = false
     @State private var confirmingUninstallGemini = false
     @State private var confirmingUninstallKimi = false
+    @State private var confirmingUninstallAntigravity = false
     @State private var confirmingUninstallClaudeUsage = false
 
     private var lang: LanguageManager { model.lang }
@@ -581,6 +582,23 @@ struct SetupSettingsPane: View {
                 } message: {
                     Text("This will remove Open Island hooks from ~/.kimi/config.toml.")
                 }
+
+                hookRow(
+                    name: "Antigravity CLI",
+                    installed: model.antigravityHooksInstalled,
+                    busy: model.isAntigravityHookSetupBusy,
+                    configLocationURL: antigravityHookConfigURL,
+                    installAction: { model.installAntigravityHooks() },
+                    uninstallAction: { confirmingUninstallAntigravity = true }
+                )
+                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallAntigravity) {
+                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                        model.uninstallAntigravityHooks()
+                    }
+                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
+                } message: {
+                    Text("This will remove Open Island hooks from ~/.antigravity/settings.json.")
+                }
             }
 
             Section {
@@ -658,6 +676,7 @@ struct SetupSettingsPane: View {
                     if !model.cursorHooksInstalled { model.installCursorHooks() }
                     if !model.geminiHooksInstalled { model.installGeminiHooks() }
                     if !model.kimiHooksInstalled { model.installKimiHooks() }
+                    if !model.antigravityHooksInstalled { model.installAntigravityHooks() }
                     if !model.claudeUsageInstalled { model.installClaudeUsageBridge() }
                 }
                 .disabled(model.hooksBinaryURL == nil || allReady)
@@ -719,7 +738,7 @@ struct SetupSettingsPane: View {
     private var allReady: Bool {
         model.claudeHooksInstalled && model.codexHooksInstalled && model.openCodePluginInstalled
             && model.qoderHooksInstalled && model.qwenCodeHooksInstalled && model.factoryHooksInstalled && model.codebuddyHooksInstalled
-            && model.cursorHooksInstalled && model.geminiHooksInstalled && model.kimiHooksInstalled && model.claudeUsageInstalled
+            && model.cursorHooksInstalled && model.geminiHooksInstalled && model.kimiHooksInstalled && model.antigravityHooksInstalled && model.claudeUsageInstalled
     }
 
     @ViewBuilder
@@ -756,6 +775,11 @@ struct SetupSettingsPane: View {
     private var geminiHookConfigURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".gemini/settings.json")
+    }
+
+    private var antigravityHookConfigURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".antigravity/settings.json")
     }
 
     private var hasErrors: Bool {
@@ -940,82 +964,34 @@ struct SetupSettingsPane: View {
     }
 }
 
-// MARK: - Watch
+// MARK: - Music
 
-struct WatchSettingsPane: View {
+struct MusicSettingsPane: View {
     var model: AppModel
-
-    @State private var pairingCode: String = "----"
+    @AppStorage("music.connectedApp") private var connectedApp: String = "none"
 
     var body: some View {
         Form {
             Section {
-                Toggle("Watch Notifications", isOn: Binding(
-                    get: { model.watchNotificationEnabled },
-                    set: { model.watchNotificationEnabled = $0 }
-                ))
-
-                if model.watchNotificationEnabled {
-                    Text("When enabled, the macOS app broadcasts a Bonjour service that your iPhone can discover on the same WiFi network.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                Picker("Player", selection: $connectedApp) {
+                    Text("None").tag("none")
+                    Text("Apple Music").tag("appleMusic")
+                    if FileManager.default.fileExists(atPath: "/Applications/Spotify.app") {
+                        Text("Spotify").tag("spotify")
+                    }
                 }
+                .pickerStyle(.inline)
+                .labelsHidden()
             } header: {
-                Text("General")
-            }
-
-            if model.watchNotificationEnabled {
-                Section("Pairing") {
-                    HStack {
-                        Text("Pairing Code")
-                        Spacer()
-                        Text(pairingCode)
-                            .font(.system(size: 24, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.blue)
-                    }
-
-                    Text("Enter this code on your iPhone app to pair. Code expires after 2 minutes.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Button("Refresh Code") {
-                        model.watchRelay?.endpoint.regeneratePairingCode()
-                        pairingCode = model.watchPairingCode
-                    }
-                }
-
-                Section("Paired Devices") {
-                    if model.watchConnectedDevices > 0 {
-                        HStack {
-                            Label("iPhone", systemImage: "iphone")
-                            Spacer()
-                            HStack(spacing: 4) {
-                                Circle()
-                                    .fill(.green)
-                                    .frame(width: 7, height: 7)
-                                Text("Connected")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    } else {
-                        HStack {
-                            Label("No devices paired", systemImage: "iphone.slash")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Button("Revoke All Pairings", role: .destructive) {
-                        model.watchRelay?.endpoint.revokeAllTokens()
-                    }
-                }
+                Text("Music Player")
+            } footer: {
+                Text("Open Island will only connect to the selected app. Choose None to disable music controls entirely.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Watch")
-        .onAppear {
-            pairingCode = model.watchPairingCode
-        }
+        .navigationTitle("Music")
     }
 }
 

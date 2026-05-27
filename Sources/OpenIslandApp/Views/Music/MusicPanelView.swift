@@ -13,7 +13,7 @@ struct MusicPanelView: View {
 
     private var musicControls: some View {
         HStack(spacing: 20) {
-            MusicAlbumArtView(playerManager: playerManager, imageSize: 180)
+            MusicAlbumArtView(playerManager: playerManager, imageSize: 150)
 
             VStack(spacing: 16) {
                 PlayerTrackDetailsView(playerManager: playerManager)

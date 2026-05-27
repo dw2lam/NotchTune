@@ -12,6 +12,7 @@ public struct SessionStarted: Equatable, Codable, Sendable {
     public var codexMetadata: CodexSessionMetadata?
     public var claudeMetadata: ClaudeSessionMetadata?
     public var geminiMetadata: GeminiSessionMetadata?
+    public var antigravityMetadata: AntigravitySessionMetadata?
     public var openCodeMetadata: OpenCodeSessionMetadata?
     public var cursorMetadata: CursorSessionMetadata?
     public var isRemote: Bool
@@ -28,6 +29,7 @@ public struct SessionStarted: Equatable, Codable, Sendable {
         codexMetadata: CodexSessionMetadata? = nil,
         claudeMetadata: ClaudeSessionMetadata? = nil,
         geminiMetadata: GeminiSessionMetadata? = nil,
+        antigravityMetadata: AntigravitySessionMetadata? = nil,
         openCodeMetadata: OpenCodeSessionMetadata? = nil,
         cursorMetadata: CursorSessionMetadata? = nil,
         isRemote: Bool = false
@@ -43,6 +45,7 @@ public struct SessionStarted: Equatable, Codable, Sendable {
         self.codexMetadata = codexMetadata
         self.claudeMetadata = claudeMetadata
         self.geminiMetadata = geminiMetadata
+        self.antigravityMetadata = antigravityMetadata
         self.openCodeMetadata = openCodeMetadata
         self.cursorMetadata = cursorMetadata
         self.isRemote = isRemote
@@ -158,6 +161,22 @@ public struct SessionMetadataUpdated: Equatable, Codable, Sendable {
     }
 }
 
+public struct JumpTargetSynchronized: Equatable, Codable, Sendable {
+    public var sessionID: String
+    public var jumpTarget: JumpTarget
+    public var timestamp: Date
+
+    public init(
+        sessionID: String,
+        jumpTarget: JumpTarget,
+        timestamp: Date
+    ) {
+        self.sessionID = sessionID
+        self.jumpTarget = jumpTarget
+        self.timestamp = timestamp
+    }
+}
+
 public struct ClaudeSessionMetadataUpdated: Equatable, Codable, Sendable {
     public var sessionID: String
     public var claudeMetadata: ClaudeSessionMetadata
@@ -222,6 +241,22 @@ public struct CursorSessionMetadataUpdated: Equatable, Codable, Sendable {
     }
 }
 
+public struct AntigravitySessionMetadataUpdated: Equatable, Codable, Sendable {
+    public var sessionID: String
+    public var antigravityMetadata: AntigravitySessionMetadata
+    public var timestamp: Date
+
+    public init(
+        sessionID: String,
+        antigravityMetadata: AntigravitySessionMetadata,
+        timestamp: Date
+    ) {
+        self.sessionID = sessionID
+        self.antigravityMetadata = antigravityMetadata
+        self.timestamp = timestamp
+    }
+}
+
 public struct ActionableStateResolved: Equatable, Codable, Sendable {
     public var sessionID: String
     public var summary: String
@@ -248,8 +283,10 @@ public enum AgentEvent: Equatable, Codable, Sendable {
     case sessionMetadataUpdated(SessionMetadataUpdated)
     case claudeSessionMetadataUpdated(ClaudeSessionMetadataUpdated)
     case geminiSessionMetadataUpdated(GeminiSessionMetadataUpdated)
+    case antigravitySessionMetadataUpdated(AntigravitySessionMetadataUpdated)
     case openCodeSessionMetadataUpdated(OpenCodeSessionMetadataUpdated)
     case cursorSessionMetadataUpdated(CursorSessionMetadataUpdated)
+    case jumpTargetSynchronized(JumpTargetSynchronized)
     case actionableStateResolved(ActionableStateResolved)
 
     private enum CodingKeys: String, CodingKey {
@@ -263,8 +300,10 @@ public enum AgentEvent: Equatable, Codable, Sendable {
         case sessionMetadataUpdated
         case claudeSessionMetadataUpdated
         case geminiSessionMetadataUpdated
+        case antigravitySessionMetadataUpdated
         case openCodeSessionMetadataUpdated
         case cursorSessionMetadataUpdated
+        case jumpTargetSynchronized
         case actionableStateResolved
     }
 
@@ -278,8 +317,10 @@ public enum AgentEvent: Equatable, Codable, Sendable {
         case sessionMetadataUpdated
         case claudeSessionMetadataUpdated
         case geminiSessionMetadataUpdated
+        case antigravitySessionMetadataUpdated
         case openCodeSessionMetadataUpdated
         case cursorSessionMetadataUpdated
+        case jumpTargetSynchronized
         case actionableStateResolved
     }
 
@@ -310,14 +351,18 @@ public enum AgentEvent: Equatable, Codable, Sendable {
             self = .geminiSessionMetadataUpdated(
                 try container.decode(GeminiSessionMetadataUpdated.self, forKey: .geminiSessionMetadataUpdated)
             )
+        case .antigravitySessionMetadataUpdated:
+            self = .antigravitySessionMetadataUpdated(
+                try container.decode(AntigravitySessionMetadataUpdated.self, forKey: .antigravitySessionMetadataUpdated)
+            )
         case .openCodeSessionMetadataUpdated:
             self = .openCodeSessionMetadataUpdated(
                 try container.decode(OpenCodeSessionMetadataUpdated.self, forKey: .openCodeSessionMetadataUpdated)
             )
         case .cursorSessionMetadataUpdated:
-            self = .cursorSessionMetadataUpdated(
-                try container.decode(CursorSessionMetadataUpdated.self, forKey: .cursorSessionMetadataUpdated)
-            )
+            self = .cursorSessionMetadataUpdated(try container.decode(CursorSessionMetadataUpdated.self, forKey: .cursorSessionMetadataUpdated))
+        case .jumpTargetSynchronized:
+            self = .jumpTargetSynchronized(try container.decode(JumpTargetSynchronized.self, forKey: .jumpTargetSynchronized))
         case .actionableStateResolved:
             self = .actionableStateResolved(
                 try container.decode(ActionableStateResolved.self, forKey: .actionableStateResolved)
@@ -356,12 +401,18 @@ public enum AgentEvent: Equatable, Codable, Sendable {
         case let .geminiSessionMetadataUpdated(payload):
             try container.encode(EventType.geminiSessionMetadataUpdated, forKey: .type)
             try container.encode(payload, forKey: .geminiSessionMetadataUpdated)
+        case let .antigravitySessionMetadataUpdated(payload):
+            try container.encode(EventType.antigravitySessionMetadataUpdated, forKey: .type)
+            try container.encode(payload, forKey: .antigravitySessionMetadataUpdated)
         case let .openCodeSessionMetadataUpdated(payload):
             try container.encode(EventType.openCodeSessionMetadataUpdated, forKey: .type)
             try container.encode(payload, forKey: .openCodeSessionMetadataUpdated)
         case let .cursorSessionMetadataUpdated(payload):
             try container.encode(EventType.cursorSessionMetadataUpdated, forKey: .type)
             try container.encode(payload, forKey: .cursorSessionMetadataUpdated)
+        case let .jumpTargetSynchronized(payload):
+            try container.encode(EventType.jumpTargetSynchronized, forKey: .type)
+            try container.encode(payload, forKey: .jumpTargetSynchronized)
         case let .actionableStateResolved(payload):
             try container.encode(EventType.actionableStateResolved, forKey: .type)
             try container.encode(payload, forKey: .actionableStateResolved)

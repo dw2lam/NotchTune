@@ -9,10 +9,14 @@ class MusicPlayerAppProvider {
     }
 
     func getPlayerApp() -> any MusicPlayerProtocol {
-        let raw = UserDefaults.standard.string(forKey: musicConnectedAppDefaultsKey) ?? "appleMusic"
-        if raw == "spotify" {
+        let raw = UserDefaults.standard.string(forKey: musicConnectedAppDefaultsKey) ?? "none"
+        switch raw {
+        case "spotify":
             return MusicSpotifyManager(notificationSubject: notificationSubject)
+        case "appleMusic":
+            return MusicAppleMusicManager(notificationSubject: notificationSubject)
+        default:
+            return MusicNoneManager(notificationSubject: notificationSubject)
         }
-        return MusicAppleMusicManager(notificationSubject: notificationSubject)
     }
 }

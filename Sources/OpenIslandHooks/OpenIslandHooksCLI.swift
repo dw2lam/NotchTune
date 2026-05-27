@@ -16,18 +16,32 @@ struct OpenIslandHooksCLI {
         case cursor
         case gemini
         case kimi
+        case antigravity
 
         var isClaudeFormat: Bool {
             switch self {
             case .claude, .qoder, .qwen, .factory, .droid, .codebuddy, .kimi:
                 return true
-            case .codex, .cursor, .gemini:
+            case .codex, .cursor, .gemini, .antigravity:
                 return false
             }
         }
     }
 
     static func main() {
+        fputs("[OpenIslandHooks] HOOK CALLED\n", stderr)
+        let logURL = URL(fileURLWithPath: "/tmp/open-island-hooks.log")
+        let startLog = "[OpenIslandHooks] main() started, args: \(CommandLine.arguments.joined(separator: " "))\n"
+        if let data = startLog.data(using: .utf8) {
+            if let handle = try? FileHandle(forWritingTo: logURL) {
+                handle.seekToEndOfFile()
+                handle.write(data)
+                handle.closeFile()
+            } else {
+                try? data.write(to: logURL, options: .atomic)
+            }
+        }
+
         do {
             // Allow wrappers to delegate one child process away from Open Island without changing global hook installation.
             // 允许外部控制器只让当前子进程跳过 Open Island hook，不影响全局安装状态。
@@ -43,6 +57,8 @@ struct OpenIslandHooksCLI {
             let arguments = Array(CommandLine.arguments.dropFirst())
             let source = hookSource(arguments: arguments)
             let sourceString = rawSourceString(arguments: arguments)
+            let logURL = URL(fileURLWithPath: "/tmp/open-island-hooks.log")
+            try? "[OpenIslandHooks] VERIFY BINARY source: \(sourceString ?? "nil"), input size: \(input.count)\n".data(using: .utf8)?.write(to: logURL, options: .atomic)
             let decoder = JSONDecoder()
             let client = BridgeCommandClient(socketURL: BridgeSocketLocation.currentURL())
 
@@ -100,11 +116,47 @@ struct OpenIslandHooksCLI {
                     .decode(GeminiHookPayload.self, from: input)
                     .withRuntimeContext(environment: ProcessInfo.processInfo.environment)
 
+                if let usage = payload.usage {
+                    writeGeminiUsageCache(usage)
+                } else if let details = payload.details,
+                          case let .object(obj) = details,
+                          let usage = obj["usage"] {
+                    writeGeminiUsageCache(usage)
+                }
+
                 _ = try? client.send(.processGeminiHook(payload), timeout: 45)
+            case .antigravity:
+                let payload = try decoder
+                    .decode(AntigravityHookPayload.self, from: input)
+                    .withRuntimeContext(environment: ProcessInfo.processInfo.environment)
+
+                if let logFile = try? FileHandle(forWritingTo: URL(fileURLWithPath: "/tmp/open-island-hooks.log")) {
+                    logFile.seekToEndOfFile()
+                    let log = "[OpenIslandHooks] antigravity payload: \(payload.hookEventName.rawValue), type: \(payload.notificationType ?? "none")\n"
+                    logFile.write(Data(log.utf8))
+                    logFile.closeFile()
+                }
+
+                _ = try? client.send(.processAntigravityHook(payload), timeout: 45)
             }
         } catch {
             // Hooks should fail open so the CLI continues working even if the bridge is unavailable.
             logStderr("hook failed: \(error)")
+        }
+    }
+
+    private static func writeGeminiUsageCache(_ usage: CodexHookJSONValue) {
+        do {
+            let data = try JSONEncoder().encode(usage)
+            // Validate that it matches the GeminiUsageSnapshot format
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            _ = try decoder.decode(GeminiUsageSnapshot.self, from: data)
+            
+            // Re-encode to ensure clean JSON without extra fields
+            try data.write(to: URL(fileURLWithPath: "/tmp/open-island-gemini-usage.json"), options: .atomic)
+        } catch {
+            // Ignore usage write errors
         }
     }
 

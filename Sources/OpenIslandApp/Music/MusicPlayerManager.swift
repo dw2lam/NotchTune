@@ -154,9 +154,15 @@ final class MusicPlayerManager {
     }
 
     func getNewSongInfo() {
+        let polled = musicApp.getTrackInfo()
+        var updatedPolled = polled
+        updatedPolled.albumArt = track.albumArt
+        updatedPolled.nsAlbumArt = track.nsAlbumArt
+        updatedPolled.avgAlbumColor = track.avgAlbumColor
+        
         withAnimation(MusicConstants.mainAnimation) {
             getCurrentSeekerPosition()
-            track = musicApp.getTrackInfo()
+            track = updatedPolled
         }
         fetchAlbumArt()
         updateFormattedDuration()
@@ -263,10 +269,16 @@ final class MusicPlayerManager {
         let polled = musicApp.getTrackInfo()
         guard polled.title != track.title || polled.artist != track.artist ||
               polled.album != track.album || polled.duration != track.duration else { return }
+        
+        var updatedPolled = polled
+        updatedPolled.albumArt = track.albumArt
+        updatedPolled.nsAlbumArt = track.nsAlbumArt
+        updatedPolled.avgAlbumColor = track.avgAlbumColor
+        
         withAnimation(MusicConstants.mainAnimation) {
-            track = polled
+            track = updatedPolled
         }
-        onTrackChange?(polled)
+        onTrackChange?(updatedPolled)
         updateFormattedDuration()
         fetchAlbumArt()
     }

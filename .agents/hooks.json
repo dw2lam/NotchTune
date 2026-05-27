@@ -1,0 +1,114 @@
+{
+  "pre_invocation_hooks": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "sh -c 'cat > /tmp/agy-pre-invocation.json'",
+          "name": "Open Island Debug"
+        }
+      ]
+    }
+  ],
+  "post_invocation_hooks": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "sh -c 'cat > /tmp/agy-post-invocation.json'",
+          "name": "Open Island Debug"
+        }
+      ]
+    }
+  ],
+  "pre_tool_hooks": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "sh -c 'cat > /tmp/agy-pre-tool.json'",
+          "name": "Open Island Debug"
+        }
+      ]
+    }
+  ],
+  "post_tool_hooks": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "sh -c 'cat > /tmp/agy-post-tool.json'",
+          "name": "Open Island Debug"
+        }
+      ]
+    }
+  ],
+  "stop_hooks": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "sh -c 'cat > /tmp/agy-stop.json'",
+          "name": "Open Island Debug"
+        }
+      ]
+    }
+  ],
+  "hooks": {
+    "pre_invocation_hooks": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'cat > /tmp/agy-pre-invocation.json'",
+            "name": "Open Island Debug"
+          }
+        ]
+      }
+    ],
+    "post_invocation_hooks": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'cat > /tmp/agy-post-invocation.json'",
+            "name": "Open Island Debug"
+          }
+        ]
+      }
+    ],
+    "pre_tool_hooks": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'cat > /tmp/agy-pre-tool.json'",
+            "name": "Open Island Debug"
+          }
+        ]
+      }
+    ],
+    "post_tool_hooks": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'cat > /tmp/agy-post-tool.json'",
+            "name": "Open Island Debug"
+          }
+        ]
+      }
+    ],
+    "stop_hooks": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'cat > /tmp/agy-stop.json'",
+            "name": "Open Island Debug"
+          }
+        ]
+      }
+    ]
+  }
+}

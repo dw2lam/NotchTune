@@ -19,6 +19,6 @@ enum MusicConstants {
     }
 
     static var mainAnimation: Animation {
-        .spring(response: 0.55, dampingFraction: 0.85)
+        .spring(response: 0.35, dampingFraction: 0.85)
     }
 }

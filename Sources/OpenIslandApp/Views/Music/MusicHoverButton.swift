@@ -21,14 +21,14 @@ struct MusicHoverButton: View {
                             Image(systemName: icon)
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: iconSize, height: iconSize)
+                                .frame(width: isHovering ? iconSize * 1.15 : iconSize, height: isHovering ? iconSize * 1.15 : iconSize)
                                 .contentTransition(.symbolEffect)
                         }
                 }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MusicPressButtonStyle())
         .onHover { hovering in
-            withAnimation(.smooth(duration: 0.3)) { isHovering = hovering }
+            withAnimation(.smooth(duration: 0.25)) { isHovering = hovering }
         }
     }
 }

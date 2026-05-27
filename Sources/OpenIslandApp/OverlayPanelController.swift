@@ -518,8 +518,8 @@ final class OverlayPanelController {
     private func openedContentHeight(for model: AppModel) -> CGFloat {
         if model.islandActiveTab == .music {
             // Estimated height for music content:
-            // 180 (image) + 16 (top) + 10 (bottom) + 28 (tab bar).
-            return 180 + 16 + 10 + 28
+            // 150 (image) + 16 (top) + 10 (bottom) + 28 (tab bar).
+            return 150 + 16 + 10 + 28
         }
 
         let now = Date.now

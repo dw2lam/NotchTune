@@ -28,12 +28,16 @@ private struct SetupCommand {
         case installKimi
         case uninstallKimi
         case statusKimi
+        case installAntigravity
+        case uninstallAntigravity
+        case statusAntigravity
     }
 
     let action: Action
     let codexDirectory: URL
     let claudeDirectory: URL
     let kimiDirectory: URL
+    let antigravityDirectory: URL
     let hooksBinary: URL?
 
     init(arguments: [String]) throws {
@@ -48,6 +52,7 @@ private struct SetupCommand {
         var codexDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex", isDirectory: true)
         var claudeDirectory = ClaudeConfigDirectory.resolved()
         var kimiDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".kimi", isDirectory: true)
+        var antigravityDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".gemini", isDirectory: true).appendingPathComponent("config", isDirectory: true)
 
         var index = 1
         while index < arguments.count {
@@ -73,12 +78,12 @@ private struct SetupCommand {
                 }
                 claudeDirectory = URL(fileURLWithPath: arguments[index]).standardizedFileURL
 
-            case "--kimi-dir":
+            case "--antigravity-dir":
                 index += 1
                 guard index < arguments.count else {
-                    throw SetupError.missingValue("--kimi-dir")
+                    throw SetupError.missingValue("--antigravity-dir")
                 }
-                kimiDirectory = URL(fileURLWithPath: arguments[index]).standardizedFileURL
+                antigravityDirectory = URL(fileURLWithPath: arguments[index]).standardizedFileURL
 
             default:
                 throw SetupError.unexpectedArgument(arguments[index])
@@ -87,13 +92,14 @@ private struct SetupCommand {
             index += 1
         }
 
-        if (action == .install || action == .installClaude || action == .installKimi), hooksBinary == nil {
+        if (action == .install || action == .installClaude || action == .installKimi || action == .installAntigravity), hooksBinary == nil {
             hooksBinary = HooksBinaryLocator.locate()
         }
 
         self.codexDirectory = codexDirectory
         self.claudeDirectory = claudeDirectory
         self.kimiDirectory = kimiDirectory
+        self.antigravityDirectory = antigravityDirectory
         self.hooksBinary = hooksBinary
     }
 
@@ -117,6 +123,12 @@ private struct SetupCommand {
             try uninstallKimi()
         case .statusKimi:
             try statusKimi()
+        case .installAntigravity:
+            try installAntigravity()
+        case .uninstallAntigravity:
+            try uninstallAntigravity()
+        case .statusAntigravity:
+            try statusAntigravity()
         }
     }
 
@@ -252,6 +264,44 @@ private struct SetupCommand {
             print("Manifest: missing")
         }
     }
+
+    private func installAntigravity() throws {
+        guard let hooksBinary else {
+            throw SetupError.usage
+        }
+
+        let manager = AntigravityHookInstallationManager(antigravityDirectory: antigravityDirectory)
+        let status = try manager.install(hooksBinaryURL: hooksBinary)
+
+        print("Installed Open Island Antigravity hooks.")
+        print("Antigravity dir: \(status.antigravityDirectory.path)")
+        print("Hooks binary: \(hooksBinary.path)")
+    }
+
+    private func uninstallAntigravity() throws {
+        let manager = AntigravityHookInstallationManager(antigravityDirectory: antigravityDirectory)
+        let status = try manager.uninstall()
+
+        print("Removed Open Island Antigravity hooks.")
+        print("Antigravity dir: \(status.antigravityDirectory.path)")
+    }
+
+    private func statusAntigravity() throws {
+        let manager = AntigravityHookInstallationManager(antigravityDirectory: antigravityDirectory)
+        let status = try manager.status(hooksBinaryURL: hooksBinary)
+
+        print("Antigravity dir: \(status.antigravityDirectory.path)")
+        print("Managed hooks present: \(status.managedHooksPresent ? "yes" : "no")")
+        if let hooksBinary {
+            print("Hooks binary: \(hooksBinary.path)")
+        }
+        if let manifest = status.manifest {
+            print("Manifest: present")
+            print("Hook command: \(manifest.hookCommand)")
+        } else {
+            print("Manifest: missing")
+        }
+    }
 }
 
 private enum SetupError: Error, LocalizedError {
@@ -273,6 +323,9 @@ private enum SetupError: Error, LocalizedError {
               swift run OpenIslandSetup installKimi [--hooks-binary /abs/path/to/OpenIslandHooks] [--kimi-dir /abs/path/to/.kimi]
               swift run OpenIslandSetup uninstallKimi [--kimi-dir /abs/path/to/.kimi]
               swift run OpenIslandSetup statusKimi [--hooks-binary /abs/path/to/OpenIslandHooks] [--kimi-dir /abs/path/to/.kimi]
+              swift run OpenIslandSetup installAntigravity [--hooks-binary /abs/path/to/OpenIslandHooks] [--antigravity-dir /abs/path/to/.antigravity]
+              swift run OpenIslandSetup uninstallAntigravity [--antigravity-dir /abs/path/to/.antigravity]
+              swift run OpenIslandSetup statusAntigravity [--hooks-binary /abs/path/to/OpenIslandHooks] [--antigravity-dir /abs/path/to/.antigravity]
             """
         case let .missingValue(flag):
             "Missing value for \(flag)"

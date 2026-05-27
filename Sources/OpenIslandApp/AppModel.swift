@@ -140,6 +140,11 @@ final class AppModel {
     var geminiHookStatus: GeminiHookInstallationStatus? { hooks.geminiHookStatus }
     var geminiHookStatusTitle: String { hooks.geminiHookStatusTitle }
     var geminiHookStatusSummary: String { hooks.geminiHookStatusSummary }
+    var antigravityHooksInstalled: Bool { hooks.antigravityHooksInstalled }
+    var isAntigravityHookSetupBusy: Bool { hooks.isAntigravityHookSetupBusy }
+    var antigravityHookStatus: AntigravityHookInstallationStatus? { hooks.antigravityHookStatus }
+    var antigravityHookStatusTitle: String { hooks.antigravityHookStatusTitle }
+    var antigravityHookStatusSummary: String { hooks.antigravityHookStatusSummary }
     var kimiHooksInstalled: Bool { hooks.kimiHooksInstalled }
     var isKimiHookSetupBusy: Bool { hooks.isKimiHookSetupBusy }
     var kimiHookStatus: KimiHookInstallationStatus? { hooks.kimiHookStatus }
@@ -195,9 +200,11 @@ final class AppModel {
     func uninstallOpenCodePlugin() { hooks.uninstallOpenCodePlugin() }
     func installCursorHooks() { hooks.installCursorHooks() }
     func uninstallCursorHooks() { hooks.uninstallCursorHooks() }
-    func refreshGeminiHookStatus() { hooks.refreshGeminiHookStatus() }
     func installGeminiHooks() { hooks.installGeminiHooks() }
     func uninstallGeminiHooks() { hooks.uninstallGeminiHooks() }
+    func refreshAntigravityHookStatus() { hooks.refreshAntigravityHookStatus() }
+    func installAntigravityHooks() { hooks.installAntigravityHooks() }
+    func uninstallAntigravityHooks() { hooks.uninstallAntigravityHooks() }
     func refreshKimiHookStatus() { hooks.refreshKimiHookStatus() }
     func installKimiHooks() { hooks.installKimiHooks() }
     func uninstallKimiHooks() { hooks.uninstallKimiHooks() }
@@ -1610,8 +1617,10 @@ final class AppModel {
                 case let .sessionMetadataUpdated(p): return p.sessionID
                 case let .claudeSessionMetadataUpdated(p): return p.sessionID
                 case let .geminiSessionMetadataUpdated(p): return p.sessionID
+                case let .antigravitySessionMetadataUpdated(p): return p.sessionID
                 case let .openCodeSessionMetadataUpdated(p): return p.sessionID
                 case let .cursorSessionMetadataUpdated(p): return p.sessionID
+                case let .jumpTargetSynchronized(p): return p.sessionID
                 case let .actionableStateResolved(p): return p.sessionID
                 }
             }()
@@ -1877,6 +1886,12 @@ final class AppModel {
             return payload.claudeMetadata.lastAssistantMessage ?? "Claude session metadata updated."
         case let .geminiSessionMetadataUpdated(payload):
             return payload.geminiMetadata.lastAssistantMessage ?? "Gemini session metadata updated."
+        case let .antigravitySessionMetadataUpdated(payload):
+            if let currentTool = payload.antigravityMetadata.currentTool {
+                return "Antigravity is running \(currentTool)."
+            }
+
+            return payload.antigravityMetadata.lastAssistantMessage ?? "Antigravity session metadata updated."
         case let .openCodeSessionMetadataUpdated(payload):
             if let currentTool = payload.openCodeMetadata.currentTool {
                 return "OpenCode is running \(currentTool)."
@@ -1889,6 +1904,8 @@ final class AppModel {
             }
 
             return payload.cursorMetadata.lastAssistantMessage ?? "Cursor session metadata updated."
+        case let .jumpTargetSynchronized(payload):
+            return "Jump target synchronized to \(payload.jumpTarget.terminalApp)."
         case let .actionableStateResolved(payload):
             return "Actionable state resolved for session \(payload.sessionID)."
         }

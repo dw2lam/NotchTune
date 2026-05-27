@@ -55,49 +55,59 @@ struct NotchShape: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        let topR = min(topCornerRadius, rect.width / 4, rect.height / 4)
-        let botR = min(bottomCornerRadius, rect.width / 4, rect.height / 2)
+        let f: CGFloat = 8 // top fillet radius
+        let topR = min(topCornerRadius, (rect.width - 2 * f) / 4, rect.height / 4)
+        let botR = min(bottomCornerRadius, (rect.width - 2 * f) / 4, rect.height / 2)
 
         var path = Path()
 
-        // Start at top-left, after the inward curve
+        // Start at top-left, at the very edge
         path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+
+        // Top-left outward concave curve
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX + f, y: rect.minY + f),
+            control: CGPoint(x: rect.minX + f, y: rect.minY)
+        )
 
         // Top-left inward curve (concave, mimics notch edge)
         path.addQuadCurve(
-            to: CGPoint(x: rect.minX + topR, y: rect.minY + topR),
-            control: CGPoint(x: rect.minX + topR, y: rect.minY)
+            to: CGPoint(x: rect.minX + f + topR, y: rect.minY + f + topR),
+            control: CGPoint(x: rect.minX + f + topR, y: rect.minY + f)
         )
 
         // Left edge down to bottom-left corner
-        path.addLine(to: CGPoint(x: rect.minX + topR, y: rect.maxY - botR))
+        path.addLine(to: CGPoint(x: rect.minX + f + topR, y: rect.maxY - botR))
 
         // Bottom-left rounded corner
         path.addQuadCurve(
-            to: CGPoint(x: rect.minX + topR + botR, y: rect.maxY),
-            control: CGPoint(x: rect.minX + topR, y: rect.maxY)
+            to: CGPoint(x: rect.minX + f + topR + botR, y: rect.maxY),
+            control: CGPoint(x: rect.minX + f + topR, y: rect.maxY)
         )
 
         // Bottom edge
-        path.addLine(to: CGPoint(x: rect.maxX - topR - botR, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX - f - topR - botR, y: rect.maxY))
 
         // Bottom-right rounded corner
         path.addQuadCurve(
-            to: CGPoint(x: rect.maxX - topR, y: rect.maxY - botR),
-            control: CGPoint(x: rect.maxX - topR, y: rect.maxY)
+            to: CGPoint(x: rect.maxX - f - topR, y: rect.maxY - botR),
+            control: CGPoint(x: rect.maxX - f - topR, y: rect.maxY)
         )
 
         // Right edge up to top-right inward curve
-        path.addLine(to: CGPoint(x: rect.maxX - topR, y: rect.minY + topR))
+        path.addLine(to: CGPoint(x: rect.maxX - f - topR, y: rect.minY + f + topR))
 
         // Top-right inward curve (concave)
         path.addQuadCurve(
-            to: CGPoint(x: rect.maxX, y: rect.minY),
-            control: CGPoint(x: rect.maxX - topR, y: rect.minY)
+            to: CGPoint(x: rect.maxX - f, y: rect.minY + f),
+            control: CGPoint(x: rect.maxX - f - topR, y: rect.minY + f)
         )
 
-        // Top edge back to start
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        // Top-right outward concave curve
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY),
+            control: CGPoint(x: rect.maxX - f, y: rect.minY)
+        )
 
         path.closeSubpath()
         return path
