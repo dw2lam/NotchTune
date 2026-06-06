@@ -98,6 +98,8 @@ struct IslandPanelView: View {
     private static let headerHorizontalPadding: CGFloat = 18
     private static let headerTopPadding: CGFloat = 2
     private static let notchHeaderHorizontalPadding: CGFloat = 16
+    private static let openedTabBarTopPadding: CGFloat = 10
+    private static let openedTabBarBottomPadding: CGFloat = 8
     private static let notchLaneSafetyInset: CGFloat = 12
     private static let minimumRightUsageLaneWidth: CGFloat = 58
 
@@ -567,8 +569,8 @@ struct IslandPanelView: View {
         VStack(alignment: .leading, spacing: 0) {
             islandTabBar
                 .padding(.horizontal, sessionListSideInset)
-                .padding(.top, 2)
-                .padding(.bottom, 2)
+                .padding(.top, Self.openedTabBarTopPadding)
+                .padding(.bottom, Self.openedTabBarBottomPadding)
 
             switch model.islandActiveTab {
             case .agents:

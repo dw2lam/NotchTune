@@ -538,8 +538,8 @@ final class OverlayPanelController {
 
         if model.islandActiveTab == .music {
             // Estimated height for music content:
-            // 150 (image) + 16 (top) + 10 (bottom) + 28 (tab bar) + 8 (spacing) + 8 (margin).
-            return 150 + 16 + 10 + 28 + 8 + 8
+            // 150 (image) + 16 (top) + 10 (bottom) + 42 (tab bar + breathing room) + 8 (spacing) + 8 (margin).
+            return 150 + 16 + 10 + 42 + 8 + 8
         }
 
         let now = Date.now
