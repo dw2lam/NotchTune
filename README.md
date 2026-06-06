@@ -1,48 +1,74 @@
-### 🎵 Open Island (Music Edition)
+# NotchTune
 
-### Why switch contexts when you can vibe in one spot?
+Why switch contexts when your notch can keep the flow together?
 
-**Open Island (Music Edition)** is a native macOS companion that brings the best of open-source playback management and terminal-native AI tracking directly to your Mac's notch or menu bar. By blending the core capabilities of [Tuneful](https://github.com/martinfekete10/Tuneful) and [Open Island](https://github.com/Octane0411/open-vibe-island), this unified version eliminates desktop clutter and keeps you entirely in your flow.
+**NotchTune** is a native macOS companion that turns your Mac's notch, or a compact top bar on external displays, into a live control surface for music and terminal-native AI agents. It combines playback controls, agent monitoring, approvals, questions, and session jump-back in one lightweight local app.
 
----
+## Highlights
 
-### 🚀 Key Features
+- **Dynamic notch switching**: NotchTune moves between Music and Agents automatically, so the island can show the thing that matters now: current playback, active agent work, permission prompts, questions, or recently completed sessions.
+- **Music controls**: Control Spotify or Apple Music from the notch, including playback, track details, artwork, progress, shuffle, repeat, love, volume, and quick open actions.
+- **Agent monitoring**: Track local coding-agent sessions from the menu bar or notch, including running state, waiting approvals, questions, completions, subagents, and usage summaries.
+- **Character personalization**: Choose the island character that fits your setup, including dino, cat, and dog appearances.
+- **Notch-aware layouts**: Runs as a real notch surface on MacBook displays and falls back to a clean top-center bar on external or non-notch screens.
+- **Local and native**: Built with SwiftUI and AppKit. No Electron shell, no telemetry, and no remote server dependency.
 
-* **Integrated Music Controls:** Enjoy your favorite music services seamlessly. Control playback, view tracks, and manage your audio from Spotify or Apple Music without leaving your active window.
-* **Live Claude Instance Tracking:** Keep tabs on your active `claude-code` sessions, terminal-native AI agents, and permission prompts in real-time right from your notch.
-* **100% Local & Native:** Built using SwiftUI and AppKit. No heavy Electron wrappers, no telemetry, and no external server dependencies—just smooth, fluid animations that feel right at home on macOS.
+## Supported Integrations
 
----
+NotchTune currently supports Spotify and Apple Music for playback.
 
-### 🤝 Acknowledgments & Credits
+For coding agents, it supports Claude Code, Codex, OpenCode, Gemini CLI, Kimi CLI, Qoder, Qwen Code, Factory, and CodeBuddy through local hooks, transcript discovery, and process matching where available.
 
-This project stands on the shoulders of incredible open-source utilities. Huge credits to the original developers:
+Supported terminal jump-back includes Terminal.app, Ghostty, cmux, Kaku, WezTerm, iTerm2, and tmux. Warp support is planned.
 
-* **[Tuneful](https://github.com/martinfekete10/Tuneful)** — Originally developed by **[Martin Fekete](https://github.com/martinfekete10)**, providing the beautiful, native macOS playback controls and interface architecture.
-* **[Open Island](https://github.com/Octane0411/open-vibe-island)** — Originally developed by **[Octane0411](https://github.com/Octane0411)**, providing the groundwork for the dynamic notch integration and terminal-native AI tracking hooks.
+## Quick Start
 
----
+Clone and run the app locally:
 
-### 🔌 What's Next?
-
-We are just getting started. **More connectors and plugins are coming soon** to expand your control surface to even more development tools, AI agents, and media services.
-
----
-
-### 🛠️ Quick Start
-
-To compile and run your custom version locally:
-
-1. Clone your unified fork:
 ```bash
 git clone https://github.com/dw2lam/open-vibe-island-music.git
 cd open-vibe-island-music
-
+swift run OpenIslandApp
 ```
 
+Or open the package in Xcode:
 
-2. Open the package in Xcode and hit **Run**:
 ```bash
 open Package.swift
-
 ```
+
+Build the hook helper when you want NotchTune to receive local agent events:
+
+```bash
+swift build -c release --product OpenIslandHooks
+```
+
+Then open NotchTune settings and install hooks for the agents you use.
+
+## Development
+
+This repository is a Swift package with four main products:
+
+- `OpenIslandApp`: the native SwiftUI/AppKit app
+- `OpenIslandCore`: models, bridge transport, hook installers, and session state
+- `OpenIslandHooks`: the CLI called by agent hooks
+- `OpenIslandSetup`: setup utilities for managed hook installation
+
+Useful commands:
+
+```bash
+swift build
+swift test
+swift run OpenIslandApp
+```
+
+## Credits
+
+NotchTune builds on work from:
+
+- [Tuneful](https://github.com/martinfekete10/Tuneful), originally developed by [Martin Fekete](https://github.com/martinfekete10), for native macOS playback controls and interface ideas.
+- [Open Island](https://github.com/Octane0411/open-vibe-island), originally developed by [Octane0411](https://github.com/Octane0411), for dynamic notch integration and terminal-native AI tracking foundations.
+
+## What's Next
+
+More connectors, personalization options, and deeper agent workflows are planned as NotchTune continues to grow into a local-first control surface for music and coding agents.

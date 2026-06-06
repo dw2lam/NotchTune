@@ -5,7 +5,7 @@ import OpenIslandCore
 
 @MainActor
 final class OverlayPanelController {
-    private static let preferredNotchOpenedPanelWidth: CGFloat = 540
+    private static let preferredNotchOpenedPanelWidth: CGFloat = 430
     private static let preferredTopBarOpenedPanelWidth: CGFloat = 520
     private static let preferredNotificationPanelWidth: CGFloat = 620
     private static let openedContentWidthPadding: CGFloat = 0
@@ -47,15 +47,17 @@ final class OverlayPanelController {
         OverlayDisplayResolver.availableDisplayOptions()
     }
 
-    func ensurePanel(model: AppModel, preferredScreenID: String?) {
+    @discardableResult
+    func ensurePanel(model: AppModel, preferredScreenID: String?) -> OverlayPlacementDiagnostics? {
         self.model = model
         let panel = self.panel ?? makePanel(model: model)
         self.panel = panel
-        positionPanel(panel, preferredScreenID: preferredScreenID, animated: false)
+        let diagnostics = positionPanel(panel, preferredScreenID: preferredScreenID, animated: false)
         panel.orderFrontRegardless()
         panel.ignoresMouseEvents = true
         panel.acceptsMouseMovedEvents = false
         startEventMonitoring()
+        return diagnostics
     }
 
     func show(model: AppModel, preferredScreenID: String?) -> OverlayPlacementDiagnostics? {
@@ -104,7 +106,7 @@ final class OverlayPanelController {
     // MARK: - Panel creation
 
     private func makePanel(model: AppModel) -> NotchPanel {
-        let screen = resolveTargetScreen() ?? NSScreen.main
+        let screen = resolveTargetScreen() ?? NSScreen.screens.first
         let windowFrame = screen.map { panelFrame(for: model, on: $0) } ?? .zero
 
         let panel = NotchPanel(
@@ -202,10 +204,6 @@ final class OverlayPanelController {
         if let preferredScreenID,
            let screen = screens.first(where: { screenID(for: $0) == preferredScreenID }) {
             return screen
-        }
-
-        if let notchScreen = screens.first(where: { $0.safeAreaInsets.top > 0 }) {
-            return notchScreen
         }
 
         return NSScreen.main ?? screens[0]
@@ -445,7 +443,7 @@ final class OverlayPanelController {
     ) -> CGFloat {
         let popBonus: CGFloat = notchStatus == .popping ? 18 : 0
         if isNotchedDisplay {
-            return notchWidth + 88 + popBonus
+            return notchWidth + (IslandChromeMetrics.notchedClosedWingReserve() * 2) + popBonus
         }
         return 360 + popBonus
     }
@@ -507,7 +505,7 @@ final class OverlayPanelController {
 
     private func closedPanelWidth(for model: AppModel, on screen: NSScreen) -> CGFloat {
         let notchWidth = screen.notchSize.width
-        let isNotched = screen.safeAreaInsets.top > 0
+        let isNotched = screen.isNotchedScreen
         return Self.closedPanelWidth(
             notchWidth: notchWidth,
             isNotchedDisplay: isNotched,
@@ -516,26 +514,14 @@ final class OverlayPanelController {
     }
 
     private func openedContentHeight(for model: AppModel) -> CGFloat {
-        if model.islandActiveTab == .music {
-            // Estimated height for music content:
-            // 150 (image) + 16 (top) + 10 (bottom) + 28 (tab bar).
-            return 150 + 16 + 10 + 28
-        }
-
-        let now = Date.now
-        let visibleSessions = model.islandListSessions
-
-        if visibleSessions.isEmpty {
-            return Self.openedEmptyStateHeight
-        }
-
         let actionableID = model.islandSurface.sessionID
         let isNotificationMode = model.notchOpenReason == .notification && actionableID != nil
 
         if isNotificationMode {
+            let tabBarHeight: CGFloat = 36
             // Use SwiftUI-measured height when available (accurate after first render).
             if model.measuredNotificationContentHeight > 0 {
-                return model.measuredNotificationContentHeight + Self.notificationMeasuredContentPadding
+                return model.measuredNotificationContentHeight + Self.notificationMeasuredContentPadding + tabBarHeight
             }
             // First render: estimate from the actionable session's content so the
             // initial window is close to the final size. This avoids a large blank
@@ -543,11 +529,24 @@ final class OverlayPanelController {
             // a measurement→reposition cycle.
             if let actionableID,
                let session = model.state.session(id: actionableID) {
-                let rowHeight = session.estimatedIslandRowHeight(at: now)
+                let rowHeight = session.estimatedIslandRowHeight(at: Date.now)
                 let bodyHeight = actionableBodyHeight(for: session, model: model)
-                return rowHeight + bodyHeight + Self.notificationEstimatedVerticalInsets
+                return rowHeight + bodyHeight + Self.notificationEstimatedVerticalInsets + tabBarHeight
             }
-            return 300
+            return 300 + tabBarHeight
+        }
+
+        if model.islandActiveTab == .music {
+            // Estimated height for music content:
+            // 150 (image) + 16 (top) + 10 (bottom) + 28 (tab bar) + 8 (spacing) + 8 (margin).
+            return 150 + 16 + 10 + 28 + 8 + 8
+        }
+
+        let now = Date.now
+        let visibleSessions = model.islandListSessions
+
+        if visibleSessions.isEmpty {
+            return Self.openedEmptyStateHeight
         }
 
         if model.islandActiveTab == .agents, model.measuredAgentsContentHeight > 0 {
@@ -681,7 +680,7 @@ final class OverlayPanelController {
     // MARK: - Event reposting
 
     private func repostMouseDown(at screenPoint: NSPoint) {
-        let flippedY = NSScreen.main.map { $0.frame.height - screenPoint.y } ?? screenPoint.y
+        let flippedY = NSScreen.screens.first.map { $0.frame.height - screenPoint.y } ?? screenPoint.y
 
         guard let event = CGEvent(
             mouseEventSource: nil,
@@ -861,6 +860,12 @@ final class NotchEventMonitors {
 // MARK: - NSScreen notch size helper
 
 extension NSScreen {
+    var isNotchedScreen: Bool {
+        safeAreaInsets.top > 0
+            || auxiliaryTopLeftArea?.isEmpty == false
+            || auxiliaryTopRightArea?.isEmpty == false
+    }
+
     /// Simulated notch width used on non-notch (external) displays.
     /// Sized close to a real MacBook notch (~200pt) so the closed island
     /// doesn't feel disproportionately wide when the black rectangle is
@@ -869,14 +874,14 @@ extension NSScreen {
     static let externalDisplayNotchHeight: CGFloat = 38
 
     var notchSize: CGSize {
-        guard safeAreaInsets.top > 0 else {
+        guard isNotchedScreen else {
             return CGSize(
                 width: Self.externalDisplayNotchWidth,
                 height: Self.externalDisplayNotchHeight
             )
         }
 
-        let notchHeight = safeAreaInsets.top
+        let notchHeight = islandClosedHeight
         let leftPadding = auxiliaryTopLeftArea?.width ?? 0
         let rightPadding = auxiliaryTopRightArea?.width ?? 0
         let notchWidth = frame.width - leftPadding - rightPadding + 4

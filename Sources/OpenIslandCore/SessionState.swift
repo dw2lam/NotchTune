@@ -269,9 +269,9 @@ public struct SessionState: Equatable, Sendable {
             session.phase = .completed
             switch session.tool {
             case .claudeCode, .geminiCLI, .antigravity, .qoder, .qwenCode, .factory, .codebuddy, .kimiCLI:
-                session.summary = "Permission denied in Open Island."
+                session.summary = "Permission denied in NotchTune."
             case .openCode:
-                session.summary = "Permission denied in Open Island."
+                session.summary = "Permission denied in NotchTune."
             default:
                 session.summary = "Permission denied. Tool execution stopped."
             }

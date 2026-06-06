@@ -44,10 +44,9 @@ APP_ICON_SPECS = [
     ("icon_512x512@2x.png", "512x512", "2x", 1024),
 ]
 
-# Apple's macOS icon grid (Big Sur+): the art occupies an 824×824 region
-# centered in a 1024×1024 canvas, leaving a transparent safe zone so our
-# squircle visually matches stock macOS icons in Finder/Launchpad/Dock.
-MACOS_ICON_CONTENT_RATIO = 824 / 1024
+# App icon artwork is already composed with its intended crop and padding in
+# the master bitmap, so generated package icons should fill each output slot.
+APP_ICON_CONTENT_RATIO = 1.0
 
 
 def main() -> None:
@@ -301,7 +300,7 @@ def write_app_icons() -> None:
     src = Image.open(source_path).convert("RGBA")
     for filename, _, _, pixel_size in APP_ICON_SPECS:
         canvas = Image.new("RGBA", (pixel_size, pixel_size), (0, 0, 0, 0))
-        content_size = max(1, round(pixel_size * MACOS_ICON_CONTENT_RATIO))
+        content_size = max(1, round(pixel_size * APP_ICON_CONTENT_RATIO))
         offset = (pixel_size - content_size) // 2
         resized = src.resize((content_size, content_size), Image.Resampling.LANCZOS)
         canvas.alpha_composite(resized, (offset, offset))

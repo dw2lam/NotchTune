@@ -210,6 +210,7 @@ struct V6CenterLabelView: View {
 /// live settings preview and the real island.
 struct V6ClosedPill: View {
     var mode: UnifiedBars.Mode
+    var character: IslandCharacter = .dino
     var label: String?          // suppressed automatically in MacBook layout
     var rightSlot: IslandRightSlotContent?
     var layout: V6ClosedLayout
@@ -251,11 +252,11 @@ struct V6ClosedPill: View {
         let width = max(minWidth, intrinsic)
 
         return ZStack {
-            V6ClosedPillShape()
+            V6ClosedPillShape(topFilletRadius: 0)
                 .fill(V6Palette.ink)
 
             HStack(spacing: 0) {
-                UnifiedBars(mode: mode, size: 24)
+                UnifiedBars(mode: mode, size: 24, character: character)
                     .frame(width: glyphW, height: 24)
 
                 if let label {
@@ -280,6 +281,7 @@ struct V6ClosedPill: View {
                 AnyHashable(label ?? ""),
                 AnyHashable(rightSlot.map(RightSlotKey.init) ?? .none),
                 AnyHashable(mode),
+                AnyHashable(character),
             ])
         )
     }
@@ -287,24 +289,38 @@ struct V6ClosedPill: View {
     // MARK: MacBook (outer width locked)
 
     private var macbookBody: some View {
-        let halfReserve: CGFloat = 44
-        let outer = halfReserve + physicalNotchWidth + halfReserve
+        let rightWidth = rightSlot.map { V6RightSlotView.intrinsicWidth(of: $0) } ?? 0
+        let wingReserve = IslandChromeMetrics.notchedClosedWingReserve(rightSlotWidth: rightWidth)
+        let outer = wingReserve + physicalNotchWidth + wingReserve
 
         return ZStack {
-            V6ClosedPillShape()
+            V6ClosedPillShape(topFilletRadius: 0)
                 .fill(V6Palette.ink)
 
             HStack(spacing: 0) {
-                UnifiedBars(mode: mode, size: 24)
-                    .frame(width: 24, height: 24)
+                HStack {
+                    UnifiedBars(mode: mode, size: 24, character: character)
+                        .frame(width: 24, height: 24)
+                    Spacer(minLength: 0)
+                }
+                .padding(.leading, IslandChromeMetrics.notchedClosedHorizontalPadding)
+                .frame(width: wingReserve)
 
-                Spacer(minLength: 0)
+                Color.clear
+                    .frame(width: physicalNotchWidth)
 
                 if let rightSlot {
-                    V6RightSlotView(content: rightSlot)
+                    HStack {
+                        Spacer(minLength: 0)
+                        V6RightSlotView(content: rightSlot)
+                    }
+                    .padding(.trailing, IslandChromeMetrics.notchedClosedHorizontalPadding)
+                    .frame(width: wingReserve)
+                } else {
+                    Color.clear
+                        .frame(width: wingReserve)
                 }
             }
-            .padding(.horizontal, pad)
         }
         .frame(width: outer, height: height)
     }
@@ -333,6 +349,7 @@ private enum RightSlotKey: Hashable {
 /// preview stage. Parameters match what the tab exposes.
 struct IslandPreviewPill: View {
     let mode: UnifiedBars.Mode
+    let character: IslandCharacter
     let label: String?
     let rightSlot: IslandRightSlotContent?
     let layout: V6ClosedLayout
@@ -342,6 +359,7 @@ struct IslandPreviewPill: View {
     var body: some View {
         V6ClosedPill(
             mode: mode,
+            character: character,
             label: label,
             rightSlot: rightSlot,
             layout: layout,

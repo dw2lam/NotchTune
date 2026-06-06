@@ -216,7 +216,7 @@ def main() -> None:
     elif scenario == "approvalCard":
         if notch_status != "opened":
             fail(f"expected opened notch for approvalCard, got {notch_status!r}")
-        if not island_surface.startswith("approvalCard:"):
+        if not island_surface.startswith("sessionList:actionable"):
             fail(f"expected approvalCard surface, got {island_surface!r}")
         require_frame_between(
             overlay_frame,
@@ -232,7 +232,7 @@ def main() -> None:
     elif scenario == "questionCard":
         if notch_status != "opened":
             fail(f"expected opened notch for questionCard, got {notch_status!r}")
-        if not island_surface.startswith("questionCard:"):
+        if not island_surface.startswith("sessionList:actionable"):
             fail(f"expected questionCard surface, got {island_surface!r}")
         require_frame_between(
             overlay_frame,
@@ -245,7 +245,7 @@ def main() -> None:
     elif scenario == "completionCard":
         if notch_status != "opened":
             fail(f"expected opened notch for completionCard, got {notch_status!r}")
-        if not island_surface.startswith("completionCard:"):
+        if not island_surface.startswith("sessionList:actionable"):
             fail(f"expected completionCard surface, got {island_surface!r}")
         require_frame_between(
             overlay_frame,
@@ -259,7 +259,7 @@ def main() -> None:
     elif scenario == "longCompletionCard":
         if notch_status != "opened":
             fail(f"expected opened notch for longCompletionCard, got {notch_status!r}")
-        if not island_surface.startswith("completionCard:"):
+        if not island_surface.startswith("sessionList:actionable"):
             fail(f"expected longCompletionCard to remain on completionCard surface, got {island_surface!r}")
         require_frame_between(
             overlay_frame,

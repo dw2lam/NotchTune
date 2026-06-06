@@ -56,12 +56,21 @@ enum IslandAppearanceDisplayProfile: String, CaseIterable, Identifiable, Sendabl
 struct IslandAppearancePreferences: Equatable, Sendable {
     var rightSlot: IslandRightSlot = .count
     var centerLabel: IslandCenterLabel = .agentAction
+    var character: IslandCharacter = .dino
     var autoHideWhenInactive: Bool = false
     var usageDisplay: IslandUsageDisplay = .compact
     var sessionStateIndicator: IslandSessionStateIndicator = .animatedDot
     var sessionGroup: IslandSessionGroup = .none
     var sessionSort: IslandSessionSort = .attention
     var completedStaleThreshold: IslandCompletedStaleThreshold = .fiveMinutes
+}
+
+enum IslandCharacter: String, CaseIterable, Identifiable, Sendable {
+    case dino
+    case cat
+    case dog
+
+    var id: String { rawValue }
 }
 
 enum IslandUsageDisplay: String, CaseIterable, Identifiable, Sendable {

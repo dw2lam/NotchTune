@@ -4,6 +4,8 @@ import OpenIslandCore
 @main
 struct OpenIslandHooksCLI {
     private static let interactiveClaudeHookTimeout: TimeInterval = 24 * 60 * 60
+    private static let interactiveCodexHookTimeout =
+        TimeInterval(CodexHookInstaller.managedInteractiveTimeout)
 
     private enum HookSource: String {
         case codex
@@ -16,13 +18,12 @@ struct OpenIslandHooksCLI {
         case cursor
         case gemini
         case kimi
-        case antigravity
 
         var isClaudeFormat: Bool {
             switch self {
             case .claude, .qoder, .qwen, .factory, .droid, .codebuddy, .kimi:
                 return true
-            case .codex, .cursor, .gemini, .antigravity:
+            case .codex, .cursor, .gemini:
                 return false
             }
         }
@@ -53,10 +54,14 @@ struct OpenIslandHooksCLI {
             guard !input.isEmpty else {
                 return
             }
+            try? input.write(to: URL(fileURLWithPath: "/tmp/open-island-input.json"), options: .atomic)
 
             let arguments = Array(CommandLine.arguments.dropFirst())
-            let source = hookSource(arguments: arguments)
             let sourceString = rawSourceString(arguments: arguments)
+            guard let source = hookSource(arguments: arguments) else {
+                logStderr("unsupported hook source: \(sourceString ?? "nil")")
+                return
+            }
             let logURL = URL(fileURLWithPath: "/tmp/open-island-hooks.log")
             try? "[OpenIslandHooks] VERIFY BINARY source: \(sourceString ?? "nil"), input size: \(input.count)\n".data(using: .utf8)?.write(to: logURL, options: .atomic)
             let decoder = JSONDecoder()
@@ -68,8 +73,12 @@ struct OpenIslandHooksCLI {
                     .decode(CodexHookPayload.self, from: input)
                     .withRuntimeContext(environment: ProcessInfo.processInfo.environment)
 
-                guard let response = try? client.send(.processCodexHook(payload)) else {
-                    logStderr("bridge unavailable for codex hook")
+                let timeout = payload.hookEventName == .permissionRequest
+                    ? interactiveCodexHookTimeout
+                    : 45
+
+                guard let response = try? client.send(.processCodexHook(payload), timeout: timeout) else {
+                    logStderr("bridge unavailable for codex hook (\(payload.hookEventName.rawValue))")
                     return
                 }
 
@@ -125,19 +134,6 @@ struct OpenIslandHooksCLI {
                 }
 
                 _ = try? client.send(.processGeminiHook(payload), timeout: 45)
-            case .antigravity:
-                let payload = try decoder
-                    .decode(AntigravityHookPayload.self, from: input)
-                    .withRuntimeContext(environment: ProcessInfo.processInfo.environment)
-
-                if let logFile = try? FileHandle(forWritingTo: URL(fileURLWithPath: "/tmp/open-island-hooks.log")) {
-                    logFile.seekToEndOfFile()
-                    let log = "[OpenIslandHooks] antigravity payload: \(payload.hookEventName.rawValue), type: \(payload.notificationType ?? "none")\n"
-                    logFile.write(Data(log.utf8))
-                    logFile.closeFile()
-                }
-
-                _ = try? client.send(.processAntigravityHook(payload), timeout: 45)
             }
         } catch {
             // Hooks should fail open so the CLI continues working even if the bridge is unavailable.
@@ -165,11 +161,11 @@ struct OpenIslandHooksCLI {
         FileHandle.standardError.write(data)
     }
 
-    private static func hookSource(arguments: [String]) -> HookSource {
+    private static func hookSource(arguments: [String]) -> HookSource? {
         var index = 0
         while index < arguments.count {
             if arguments[index] == "--source", index + 1 < arguments.count {
-                return HookSource(rawValue: arguments[index + 1]) ?? .codex
+                return HookSource(rawValue: arguments[index + 1])
             }
 
             index += 1

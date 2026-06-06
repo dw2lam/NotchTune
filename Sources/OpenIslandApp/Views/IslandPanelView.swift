@@ -97,16 +97,17 @@ struct IslandPanelView: View {
     private static let headerControlSpacing: CGFloat = 8
     private static let headerHorizontalPadding: CGFloat = 18
     private static let headerTopPadding: CGFloat = 2
-    private static let notchHeaderHorizontalPadding: CGFloat = 46
+    private static let notchHeaderHorizontalPadding: CGFloat = 16
     private static let notchLaneSafetyInset: CGFloat = 12
     private static let minimumRightUsageLaneWidth: CGFloat = 58
 
     var model: AppModel
+    @Environment(\.openWindow) private var openWindow
     private var lang: LanguageManager { model.lang }
 
     @State private var isHovering = false
     @State private var showingQuitConfirmation = false
-    @State private var musicNotificationWidth: CGFloat = 0
+    @State private var closedPillWidth: CGFloat = 0
     @State private var keepsOpenedSurfaceMounted = false
     @State private var openedSurfaceMountGeneration: UInt64 = 0
     @State private var morphProgress: CGFloat = 0
@@ -137,28 +138,32 @@ struct IslandPanelView: View {
     }
 
     private var targetOverlayScreen: NSScreen? {
-        if let targetScreenID = model.overlayPlacementDiagnostics?.targetScreenID,
+        if let targetScreenID = model.overlay.overlayPlacementDiagnostics?.targetScreenID,
            let screen = NSScreen.screens.first(where: { screenID(for: $0) == targetScreenID }) {
             return screen
         }
 
-        return NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main
+        return NSScreen.main ?? NSScreen.screens.first
+    }
+
+    private var isShowingMusic: Bool {
+        model.musicNotificationTrack != nil || (model.islandActiveTab == .music && model.playerManager.isRunning && !model.playerManager.track.isEmpty())
     }
 
     private var usesNotchAwareOpenedHeader: Bool {
-        model.overlayPlacementDiagnostics?.mode == .notch
-            || targetOverlayScreen?.safeAreaInsets.top ?? 0 > 0
+        model.overlay.overlayPlacementDiagnostics?.mode == .notch
+            || targetOverlayScreen?.isNotchedScreen ?? false
     }
 
     /// True when the closed island sits on an external (non-notched) display.
     /// The central black rectangle is otherwise aligned with the physical
     /// notch, so center content is only useful here.
     private var isExternalDisplayPlacement: Bool {
-        if let mode = model.overlayPlacementDiagnostics?.mode {
+        if let mode = model.overlay.overlayPlacementDiagnostics?.mode {
             return mode == .topBar
         }
         // Fallback when diagnostics haven't been populated yet.
-        return (targetOverlayScreen?.safeAreaInsets.top ?? 0) == 0
+        return !(targetOverlayScreen?.isNotchedScreen ?? false)
     }
 
     private var openedHeaderButtonsWidth: CGFloat {
@@ -192,6 +197,10 @@ struct IslandPanelView: View {
         .onAppear {
             syncOpenedSurfaceMount(with: model.notchStatus, immediate: true)
             morphProgress = model.notchStatus == .opened ? 1 : 0
+            
+            model.openSettingsWindow = { [openWindow] in
+                openWindow(id: "settings")
+            }
         }
         .onChange(of: model.notchStatus) { _, status in
             syncOpenedSurfaceMount(with: status)
@@ -247,10 +256,11 @@ struct IslandPanelView: View {
             .frame(maxWidth: .infinity, alignment: .top)
             .clipShape(GrowingNotchShape(
                 progress: morphProgress,
-                compactW: (model.musicNotificationTrack != nil && musicNotificationWidth > 0) ? musicNotificationWidth : closedNotchWidth,
+                compactW: (closedPillWidth > 0) ? closedPillWidth : closedNotchWidth,
                 compactH: closedNotchHeight,
                 expandedW: openedWidth,
-                expandedH: openedHeight
+                expandedH: openedHeight,
+                compactR: closedNotchHeight / 2
             ))
         }
         .scaleEffect(usesOpenedVisualState ? 1 : (isHovering ? IslandChromeMetrics.closedHoverScale : 1), anchor: .top)
@@ -302,76 +312,123 @@ struct IslandPanelView: View {
     /// TimelineView internally for bar animation.
     @ViewBuilder
     private func v6ClosedSurface() -> some View {
-        if model.musicNotificationTrack != nil {
-            musicNotificationPill(track: model.playerManager.track)
-        } else {
-            let layout: V6ClosedLayout = isExternalDisplayPlacement ? .external : .macbook
-            let physicalNotchWidth: CGFloat = targetOverlayScreen?.notchSize.width ?? 180
-            V6ClosedPill(
-                mode: model.islandClosedMode,
-                label: layout == .external ? model.islandClosedLabel() : nil,
-                rightSlot: model.islandClosedRightSlotContent(),
-                layout: layout,
-                height: closedNotchHeight,
-                physicalNotchWidth: layout == .macbook ? physicalNotchWidth : 0,
-                minWidth: 70
-            )
-            .scaleEffect(isPopping ? 1.04 : 1, anchor: .top)
-            .animation(popAnimation, value: isPopping)
-        }
-    }
-
-    private func musicNotificationPill(track: PlayerTrack) -> some View {
-        HStack(spacing: 0) {
-            HStack(spacing: 10) {
-                track.albumArt
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 22, height: 22)
-                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(track.title.uppercased())
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundStyle(V6Palette.paper)
-                        .lineLimit(1)
-
-                    Text(track.artist)
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(V6Palette.paper.opacity(0.5))
-                        .lineLimit(1)
-                }
+        Group {
+            if isShowingMusic {
+                musicNotificationPill(track: model.playerManager.track)
+            } else {
+                let layout: V6ClosedLayout = isExternalDisplayPlacement ? .external : .macbook
+                let physicalNotchWidth: CGFloat = targetOverlayScreen?.notchSize.width ?? 180
+                V6ClosedPill(
+                    mode: model.islandClosedMode,
+                    character: model.islandCharacter,
+                    label: layout == .external ? model.islandClosedLabel() : nil,
+                    rightSlot: model.islandClosedRightSlotContent(),
+                    layout: layout,
+                    height: closedNotchHeight,
+                    physicalNotchWidth: layout == .macbook ? physicalNotchWidth : 0,
+                    minWidth: 70
+                )
+                .scaleEffect(isPopping ? 1.04 : 1, anchor: .top)
+                .animation(popAnimation, value: isPopping)
             }
-            .padding(.horizontal, 12)
-            
-            Image(systemName: model.playerManager.isPlaying ? "play.fill" : "pause.fill")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(track.avgAlbumColor)
-                .frame(width: 24, height: 24)
         }
-        .padding(.horizontal, 16) // Room for fillets (8 * 2)
-        .frame(height: closedNotchHeight)
-        .fixedSize(horizontal: true, vertical: true)
-        .background(V6Palette.ink, in: V6ClosedPillShape())
         .background(
             GeometryReader { geo in
                 Color.clear
                     .onAppear {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                            musicNotificationWidth = geo.size.width
+                        let w = geo.size.width
+                        if w > 0 {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                closedPillWidth = w
+                            }
                         }
                     }
                     .onChange(of: geo.size.width) { _, newWidth in
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                            musicNotificationWidth = newWidth
+                        if newWidth > 0 {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                closedPillWidth = newWidth
+                            }
                         }
                     }
             }
         )
-        .transition(.asymmetric(
-            insertion: .move(edge: .top).combined(with: .opacity).animation(.spring(response: 0.35, dampingFraction: 0.85)),
-            removal: .opacity.animation(.easeOut(duration: 0.2))
-        ))
+    }
+
+    @ViewBuilder
+    private func musicNotificationPill(track: PlayerTrack) -> some View {
+        if isExternalDisplayPlacement {
+            HStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    track.albumArt
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 22, height: 22)
+                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(track.title.uppercased())
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundStyle(V6Palette.paper)
+                            .lineLimit(1)
+
+                        Text(track.artist)
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(V6Palette.paper.opacity(0.5))
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, 12)
+                
+                Image(systemName: model.playerManager.isPlaying ? "play.fill" : "pause.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(track.avgAlbumColor)
+                    .frame(width: 24, height: 24)
+            }
+            .padding(.horizontal, 16) // Room for fillets (8 * 2)
+            .frame(height: closedNotchHeight)
+            .fixedSize(horizontal: true, vertical: true)
+            .background(V6Palette.ink, in: V6ClosedPillShape(topFilletRadius: 0))
+            .transition(.asymmetric(
+                insertion: .move(edge: .top).combined(with: .opacity).animation(.spring(response: 0.35, dampingFraction: 0.85)),
+                removal: .opacity.animation(.easeOut(duration: 0.2))
+            ))
+        } else {
+            let physicalNotchWidth = targetOverlayScreen?.notchSize.width ?? 180
+            let halfReserve: CGFloat = 44
+            let totalWidth = halfReserve + physicalNotchWidth + halfReserve
+
+            HStack(spacing: 0) {
+                // Left wing: Album cover
+                HStack {
+                    Spacer()
+                    track.albumArt
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 22, height: 22)
+                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    Spacer()
+                }
+                .frame(width: halfReserve)
+
+                // Middle: Spacer covering physical notch
+                Color.clear
+                    .frame(width: physicalNotchWidth)
+
+                // Right wing: Waveform visualizer
+                HStack {
+                    Spacer()
+                    MusicWaveformView(isPlaying: model.playerManager.isPlaying, color: track.avgAlbumColor)
+                    Spacer()
+                }
+                .frame(width: halfReserve)
+            }
+            .frame(width: totalWidth, height: closedNotchHeight)
+            .background(V6Palette.ink, in: V6ClosedPillShape(topFilletRadius: 0))
+            .transition(.asymmetric(
+                insertion: .move(edge: .top).combined(with: .opacity).animation(.spring(response: 0.35, dampingFraction: 0.85)),
+                removal: .opacity.animation(.easeOut(duration: 0.2))
+            ))
+        }
     }
 
     // MARK: - Opened surface
@@ -410,6 +467,7 @@ struct IslandPanelView: View {
                     .frame(maxHeight: max(0, openedHeight - closedNotchHeight), alignment: .top)
                     .clipped()
             }
+            .id(usesNotchAwareOpenedHeader)
             .frame(width: openedWidth, height: openedHeight, alignment: .top)
             .padding(.horizontal, horizontalInset)
             .padding(.bottom, bottomInset)
@@ -425,11 +483,11 @@ struct IslandPanelView: View {
     // MARK: - Closed state
 
     private var closedNotchWidth: CGFloat {
-        (targetOverlayScreen ?? NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }))?.notchSize.width ?? NSScreen.externalDisplayNotchWidth
+        (targetOverlayScreen ?? NSScreen.screens.first(where: { $0.isNotchedScreen }))?.notchSize.width ?? NSScreen.externalDisplayNotchWidth
     }
 
     private var closedNotchHeight: CGFloat {
-        (targetOverlayScreen ?? NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }))?.islandClosedHeight ?? 24
+        (targetOverlayScreen ?? NSScreen.screens.first(where: { $0.isNotchedScreen }))?.islandClosedHeight ?? 24
     }
 
     @ViewBuilder
@@ -508,7 +566,7 @@ struct IslandPanelView: View {
     private var openedContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             islandTabBar
-                .padding(.horizontal, 16)
+                .padding(.horizontal, sessionListSideInset)
                 .padding(.top, 2)
                 .padding(.bottom, 2)
 
@@ -517,9 +575,12 @@ struct IslandPanelView: View {
                 agentsContent
                     .frame(maxWidth: .infinity)
             case .music:
-                MusicPanelView(playerManager: model.playerManager)
-                    .transition(.opacity)
-                    .frame(maxWidth: .infinity)
+                MusicPanelView(
+                    playerManager: model.playerManager,
+                    horizontalPadding: usesNotchAwareOpenedHeader ? Self.notchHeaderHorizontalPadding : 24
+                )
+                .transition(.opacity)
+                .frame(maxWidth: .infinity)
             }
         }
         .animation(.smooth(duration: 0.35, extraBounce: 0.1), value: model.islandActiveTab)
@@ -559,17 +620,17 @@ struct IslandPanelView: View {
         VStack(spacing: 8) {
             if !model.hasAnyInstalledAgent {
                 installHooksHint
-                    .padding(.horizontal, 18)
+                    .padding(.horizontal, sessionListSideInset)
                     .padding(.top, 8)
             }
 
             if model.shouldShowSessionBootstrapPlaceholder {
                 sessionBootstrapPlaceholder
-                    .padding(.horizontal, 18)
+                    .padding(.horizontal, sessionListSideInset)
                     .padding(.top, 8)
             } else if model.islandListSessions.isEmpty {
                 emptyState
-                    .padding(.horizontal, 18)
+                    .padding(.horizontal, sessionListSideInset)
                     .padding(.top, 8)
             } else {
                 sessionList
@@ -662,7 +723,7 @@ struct IslandPanelView: View {
     private static let maxSessionListHeight: CGFloat = 560
 
     private var sessionListSideInset: CGFloat {
-        usesNotchAwareOpenedHeader ? 46 : 16
+        usesNotchAwareOpenedHeader ? Self.notchHeaderHorizontalPadding : 16
     }
 
     private var sessionList: some View {
@@ -755,7 +816,7 @@ struct IslandPanelView: View {
                 )
                 .id(notificationCardIdentity(for: session))
 
-                if model.allSessions.count > 1 {
+                if model.allSessions.count >= 1 {
                     Button {
                         let isCompletion = session.phase == .completed
                         model.expandNotificationToSessionList(clearExpansion: isCompletion)
@@ -2915,5 +2976,60 @@ private struct DismissButton: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+    }
+}
+
+private struct MusicWaveformView: View {
+    let isPlaying: Bool
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<4) { index in
+                WaveBar(index: index, isPlaying: isPlaying, color: color)
+            }
+        }
+        .frame(width: 20, height: 14)
+    }
+}
+
+private struct WaveBar: View {
+    let index: Int
+    let isPlaying: Bool
+    let color: Color
+    
+    @State private var scale: CGFloat = 0.3
+    
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1)
+            .fill(color)
+            .frame(width: 2.2)
+            .scaleEffect(y: scale, anchor: .center)
+            .onAppear {
+                startAnimation()
+            }
+            .onChange(of: isPlaying) { _, _ in
+                startAnimation()
+            }
+    }
+    
+    private func startAnimation() {
+        if isPlaying {
+            let durations: [Double] = [1.05, 0.82, 0.82, 1.05]
+            let delays: [Double] = [0.16, 0, 0, 0.16]
+            let duration = durations[index % durations.count]
+            let delay = delays[index % delays.count]
+            withAnimation(
+                .linear(duration: duration)
+                    .delay(delay)
+                    .repeatForever(autoreverses: true)
+            ) {
+                scale = 1.0
+            }
+        } else {
+            withAnimation(.easeOut(duration: 0.2)) {
+                scale = 0.3
+            }
+        }
     }
 }

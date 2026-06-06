@@ -13,7 +13,7 @@ done
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 brand_script="$repo_root/scripts/generate_brand_icons.py"
 brand_icon="$repo_root/Assets/Brand/OpenIsland.icns"
-bundle_dir="$HOME/Applications/Open Island Dev.app"
+bundle_dir="$HOME/Applications/NotchTune Dev.app"
 plist_path="$bundle_dir/Contents/Info.plist"
 bundle_binary="$bundle_dir/Contents/MacOS/OpenIslandApp"
 
@@ -31,13 +31,16 @@ setup_binary="$build_root/OpenIslandSetup"
 python3 "$brand_script"
 if [ "$skip_setup" = false ]; then
   "$setup_binary" install --hooks-binary "$hooks_binary"
-  "$setup_binary" installAntigravity --hooks-binary "$hooks_binary"
 fi
 
 mkdir -p "$bundle_dir/Contents/MacOS" "$bundle_dir/Contents/Helpers" "$bundle_dir/Contents/Resources" "$bundle_dir/Contents/Frameworks"
 
 # Kill any running instance before copying so the binary isn't locked.
+osascript -e 'tell application "NotchTune Dev" to quit' 2>/dev/null || true
+osascript -e 'tell application "Notch Tune Dev" to quit' 2>/dev/null || true
 osascript -e 'tell application "Open Island Dev" to quit' 2>/dev/null || true
+pkill -9 -f "NotchTune Dev" 2>/dev/null || true
+pkill -9 -f "Notch Tune Dev" 2>/dev/null || true
 pkill -9 -f "Open Island Dev" 2>/dev/null || true
 sleep 2
 
@@ -75,7 +78,7 @@ cat > "$plist_path" <<EOF
     <key>CFBundleIconFile</key>
     <string>OpenIsland</string>
     <key>CFBundleName</key>
-    <string>Open Island Dev</string>
+    <string>NotchTune Dev</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -85,7 +88,7 @@ cat > "$plist_path" <<EOF
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>Open Island needs automation access to focus Terminal and iTerm sessions for jump-back.</string>
+    <string>NotchTune needs automation access to focus Terminal and iTerm sessions for jump-back.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSPrincipalClass</key>
@@ -119,9 +122,10 @@ fi
 # scripts/setup-dev-signing.sh for a one-time setup that creates this
 # identity locally with zero Apple Developer Program involvement.
 sign_identity="-"
-if security find-identity -p codesigning -v "$HOME/Library/Keychains/login.keychain-db" 2>/dev/null \
-       | grep -q '"Open Island Dev Local"'; then
-    sign_identity="Open Island Dev Local"
+local_identity_sha=$(security find-identity -p codesigning -v "$HOME/Library/Keychains/login.keychain-db" 2>/dev/null \
+       | grep '"Open Island Dev Local"' | head -n 1 | awk '{print $2}')
+if [[ -n "$local_identity_sha" ]]; then
+    sign_identity="$local_identity_sha"
 else
     echo
     echo "⚠ Using ad-hoc signing. macOS TCC grants (Accessibility, Automation)"
@@ -132,9 +136,9 @@ fi
 
 entitlements_file="$repo_root/config/packaging/OpenIslandApp.entitlements"
 if [ -f "$entitlements_file" ]; then
-    codesign --force --deep --sign "$sign_identity" --entitlements "$entitlements_file" "$bundle_dir" 2>/dev/null || true
+    codesign --force --deep --sign "$sign_identity" --entitlements "$entitlements_file" "$bundle_dir"
 else
-    codesign --force --deep --sign "$sign_identity" "$bundle_dir" 2>/dev/null || true
+    codesign --force --deep --sign "$sign_identity" "$bundle_dir"
 fi
 
 open -na "$bundle_dir"

@@ -47,13 +47,21 @@ struct OverlayPanelControllerTests {
 
     @Test
     func notchedDisplayClosedWidthWrapsPhysicalNotchWithFixedReserve() {
-        // v6 MacBook layout: outer width = 44 + physical notch + 44.
+        // v6 MacBook layout: outer width = wing + physical notch + wing.
+        // The wing is large enough to keep the right-side tile grid outside the notch cutout.
         let width = OverlayPanelController.closedPanelWidth(
             notchWidth: 224,
             isNotchedDisplay: true,
             notchStatus: .closed
         )
-        #expect(width == CGFloat(224 + 88))
+        #expect(width == CGFloat(224 + (IslandChromeMetrics.notchedClosedWingReserve() * 2)))
+    }
+
+    @Test
+    func notchedWingReserveGrowsForDenseAgentTiles() {
+        let reserve = IslandChromeMetrics.notchedClosedWingReserve(rightSlotWidth: 38)
+        #expect(reserve > IslandChromeMetrics.notchedClosedMinimumWingReserve)
+        #expect(reserve == 60)
     }
 
     @Test
@@ -76,7 +84,7 @@ struct OverlayPanelControllerTests {
             isNotchedDisplay: true,
             notchStatus: .popping
         )
-        #expect(width == CGFloat(224 + 88 + 18))
+        #expect(width == CGFloat(224 + (IslandChromeMetrics.notchedClosedWingReserve() * 2) + 18))
     }
 
     @Test

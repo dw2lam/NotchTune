@@ -65,7 +65,9 @@ final class AppModel {
     var islandActiveTab: IslandTab = .agents {
         didSet {
             if islandActiveTab != oldValue {
-                refreshOverlayPlacementIfVisible()
+                DispatchQueue.main.async { [weak self] in
+                    self?.refreshOverlayPlacementIfVisible()
+                }
             }
         }
     }
@@ -140,11 +142,6 @@ final class AppModel {
     var geminiHookStatus: GeminiHookInstallationStatus? { hooks.geminiHookStatus }
     var geminiHookStatusTitle: String { hooks.geminiHookStatusTitle }
     var geminiHookStatusSummary: String { hooks.geminiHookStatusSummary }
-    var antigravityHooksInstalled: Bool { hooks.antigravityHooksInstalled }
-    var isAntigravityHookSetupBusy: Bool { hooks.isAntigravityHookSetupBusy }
-    var antigravityHookStatus: AntigravityHookInstallationStatus? { hooks.antigravityHookStatus }
-    var antigravityHookStatusTitle: String { hooks.antigravityHookStatusTitle }
-    var antigravityHookStatusSummary: String { hooks.antigravityHookStatusSummary }
     var kimiHooksInstalled: Bool { hooks.kimiHooksInstalled }
     var isKimiHookSetupBusy: Bool { hooks.isKimiHookSetupBusy }
     var kimiHookStatus: KimiHookInstallationStatus? { hooks.kimiHookStatus }
@@ -202,9 +199,6 @@ final class AppModel {
     func uninstallCursorHooks() { hooks.uninstallCursorHooks() }
     func installGeminiHooks() { hooks.installGeminiHooks() }
     func uninstallGeminiHooks() { hooks.uninstallGeminiHooks() }
-    func refreshAntigravityHookStatus() { hooks.refreshAntigravityHookStatus() }
-    func installAntigravityHooks() { hooks.installAntigravityHooks() }
-    func uninstallAntigravityHooks() { hooks.uninstallAntigravityHooks() }
     func refreshKimiHookStatus() { hooks.refreshKimiHookStatus() }
     func installKimiHooks() { hooks.installKimiHooks() }
     func uninstallKimiHooks() { hooks.uninstallKimiHooks() }
@@ -367,6 +361,11 @@ final class AppModel {
         set { updateAppearancePreferences(for: activeAppearanceProfile) { $0.centerLabel = newValue } }
     }
 
+    var islandCharacter: IslandCharacter {
+        get { appearancePreferences(for: activeAppearanceProfile).character }
+        set { updateAppearancePreferences(for: activeAppearanceProfile) { $0.character = newValue } }
+    }
+
     var islandUsageDisplay: IslandUsageDisplay {
         get { appearancePreferences(for: activeAppearanceProfile).usageDisplay }
         set { updateAppearancePreferences(for: activeAppearanceProfile) { $0.usageDisplay = newValue } }
@@ -436,6 +435,7 @@ final class AppModel {
         let defaults = UserDefaults.standard
         defaults.set(preferences.rightSlot.rawValue, forKey: Self.appearanceDefaultsKey(profile, "rightSlot"))
         defaults.set(preferences.centerLabel.rawValue, forKey: Self.appearanceDefaultsKey(profile, "centerLabel"))
+        defaults.set(preferences.character.rawValue, forKey: Self.appearanceDefaultsKey(profile, "character"))
         defaults.set(preferences.autoHideWhenInactive, forKey: Self.appearanceDefaultsKey(profile, "autoHideWhenInactive"))
         defaults.set(preferences.usageDisplay.rawValue, forKey: Self.appearanceDefaultsKey(profile, "usageDisplay"))
         defaults.set(preferences.sessionStateIndicator.rawValue, forKey: Self.appearanceDefaultsKey(profile, "stateIndicator"))
@@ -539,7 +539,11 @@ final class AppModel {
 
 
     @ObservationIgnored
-    var harnessRuntimeMonitor: HarnessRuntimeMonitor?
+    var harnessRuntimeMonitor: HarnessRuntimeMonitor? {
+        didSet {
+            overlay.harnessRuntimeMonitor = harnessRuntimeMonitor
+        }
+    }
 
 
     @ObservationIgnored
@@ -565,6 +569,10 @@ final class AppModel {
                     ?? defaults.string(forKey: islandCenterLabelDefaultsKey)
                     ?? ""
             ) ?? .agentAction,
+            character: IslandCharacter(
+                rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "character"))
+                    ?? ""
+            ) ?? .dino,
             autoHideWhenInactive: defaults.bool(forKey: appearanceDefaultsKey(profile, "autoHideWhenInactive")),
             usageDisplay: IslandUsageDisplay(
                 rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "usageDisplay"))
@@ -783,7 +791,9 @@ final class AppModel {
         didSet {
             let delta = abs(measuredNotificationContentHeight - oldValue)
             if delta >= 2, measuredNotificationContentHeight > 0 {
-                overlay.refreshOverlayPlacementIfVisible()
+                DispatchQueue.main.async { [weak self] in
+                    self?.overlay.refreshOverlayPlacementIfVisible()
+                }
             }
         }
     }
@@ -793,7 +803,9 @@ final class AppModel {
         didSet {
             let delta = abs(measuredAgentsContentHeight - oldValue)
             if delta >= 2, measuredAgentsContentHeight > 0 {
-                overlay.refreshOverlayPlacementIfVisible()
+                DispatchQueue.main.async { [weak self] in
+                    self?.overlay.refreshOverlayPlacementIfVisible()
+                }
             }
         }
     }
@@ -1339,7 +1351,7 @@ final class AppModel {
             // the `CommandGroup(.appSettings)` button that opens the window.
             NSApp.sendAction(NSSelectorFromString("showSettingsWindow:"), to: nil, from: nil)
         }
-        if let window = NSApp.windows.first(where: { $0.title == "Open Island Settings" }) {
+        if let window = NSApp.windows.first(where: { $0.title == "NotchTune Settings" }) {
             window.orderFrontRegardless()
             window.makeKey()
         }
@@ -1463,7 +1475,7 @@ final class AppModel {
 
         switch action {
         case .deny:
-            resolution = .deny(message: "Permission denied in Open Island.", interrupt: false)
+            resolution = .deny(message: "Permission denied in NotchTune.", interrupt: false)
             message = "Denying permission for \(session.title)."
         case .allowOnce:
             resolution = .allowOnce()
@@ -1546,7 +1558,7 @@ final class AppModel {
             return .allowOnce()
         }
 
-        return .deny(message: "Permission denied in Open Island.", interrupt: false)
+        return .deny(message: "Permission denied in NotchTune.", interrupt: false)
     }
 
     func applyTrackedEvent(
@@ -1577,9 +1589,9 @@ final class AppModel {
         state.apply(event)
         reconcileIslandSurfaceAfterStateChange()
         
-        if case let .sessionCompleted(payload) = event, !wasAlreadyCompleted {
+        if case let .sessionCompleted(payload) = event, !wasAlreadyCompleted, payload.isInterrupt != true, payload.isSessionEnd != true {
             completionFlashSessionID = payload.sessionID
-            if notchStatus == .closed {
+            if notchStatus == .closed, (ingress == .bridge || !isResolvingInitialLiveSessions) {
                 notchOpen(reason: .notification, surface: .sessionList(actionableSessionID: payload.sessionID))
             }
             

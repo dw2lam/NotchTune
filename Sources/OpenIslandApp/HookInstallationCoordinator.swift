@@ -21,7 +21,6 @@ final class HookInstallationCoordinator {
     var openCodePluginStatus: OpenCodePluginInstallationStatus?
     var cursorHookStatus: CursorHookInstallationStatus?
     var geminiHookStatus: GeminiHookInstallationStatus?
-    var antigravityHookStatus: AntigravityHookInstallationStatus?
     var kimiHookStatus: KimiHookInstallationStatus?
     var claudeStatusLineStatus: ClaudeStatusLineInstallationStatus?
     var claudeUsageSnapshot: ClaudeUsageSnapshot?
@@ -37,7 +36,6 @@ final class HookInstallationCoordinator {
     var isOpenCodeSetupBusy = false
     var isCursorHookSetupBusy = false
     var isGeminiHookSetupBusy = false
-    var isAntigravityHookSetupBusy = false
     var isKimiHookSetupBusy = false
     var isClaudeUsageSetupBusy = false
 
@@ -84,9 +82,6 @@ final class HookInstallationCoordinator {
 
     @ObservationIgnored
     private let geminiHookInstallationManager = GeminiHookInstallationManager()
-
-    @ObservationIgnored
-    private let antigravityHookInstallationManager = AntigravityHookInstallationManager()
 
     @ObservationIgnored
     private let kimiHookInstallationManager = KimiHookInstallationManager()
@@ -148,10 +143,6 @@ final class HookInstallationCoordinator {
 
     var geminiHooksInstalled: Bool {
         geminiHookStatus?.managedHooksPresent == true
-    }
-
-    var antigravityHooksInstalled: Bool {
-        antigravityHookStatus?.managedHooksPresent == true
     }
 
     var kimiHooksInstalled: Bool {
@@ -230,11 +221,11 @@ final class HookInstallationCoordinator {
         }
 
         if status.managedStatusLineNeedsRepair {
-            return "Open Island detected a missing managed Claude status line script and will repair it automatically."
+            return "NotchTune detected a missing managed Claude status line script and will repair it automatically."
         }
 
         if status.hasConflictingStatusLine {
-            return "Open Island will not overwrite an existing Claude status line automatically."
+            return "NotchTune will not overwrite an existing Claude status line automatically."
         }
 
         return "Install a managed Claude status line to cache 5h and 7d usage locally."
@@ -363,23 +354,6 @@ final class HookInstallationCoordinator {
         return status.managedHooksPresent ? "managed hooks present" : "no managed Gemini hooks"
     }
 
-    var antigravityHookStatusTitle: String {
-        guard let status = antigravityHookStatus else { return "Antigravity hooks loading" }
-        return status.managedHooksPresent ? "Antigravity hooks installed" : "Antigravity hooks not installed"
-    }
-
-    var antigravityHookStatusSummary: String {
-        guard let status = antigravityHookStatus else {
-            return "Reading ~/.gemini/config/hooks.json."
-        }
-
-        if hooksBinaryURL == nil {
-            return "Build OpenIslandHooks before installing."
-        }
-
-        return status.managedHooksPresent ? "managed hooks present" : "no managed Antigravity hooks"
-    }
-
     var kimiHookStatusTitle: String {
         if kimiHooksInstalled {
             return "Kimi hooks installed"
@@ -481,7 +455,6 @@ final class HookInstallationCoordinator {
                     self.refreshClaudeHookStatus()
                     self.refreshCursorHookStatus()
                     self.refreshGeminiHookStatus()
-                    self.refreshAntigravityHookStatus()
                 }
             } catch {
                 self.onStatusMessage?("Failed to update hooks binary: \(error.localizedDescription)")
@@ -715,16 +688,6 @@ final class HookInstallationCoordinator {
             group.addTask { @MainActor [weak self] in
                 guard let self else { return }
                 do {
-                    let status = try self.antigravityHookInstallationManager.status(hooksBinaryURL: self.hooksBinaryURL)
-                    self.antigravityHookStatus = status
-                } catch {
-                    self.onStatusMessage?("Failed to read Antigravity hook status: \(error.localizedDescription)")
-                }
-            }
-
-            group.addTask { @MainActor [weak self] in
-                guard let self else { return }
-                do {
                     let status = try self.kimiHookInstallationManager.status(hooksBinaryURL: self.hooksBinaryURL)
                     self.kimiHookStatus = status
                 } catch {
@@ -774,19 +737,6 @@ final class HookInstallationCoordinator {
                 self.geminiHookStatus = status
             } catch {
                 self.onStatusMessage?("Failed to read Gemini hook status: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    func refreshAntigravityHookStatus() {
-        Task { [weak self] in
-            guard let self else { return }
-
-            do {
-                let status = try self.antigravityHookInstallationManager.status(hooksBinaryURL: self.hooksBinaryURL)
-                self.antigravityHookStatus = status
-            } catch {
-                self.onStatusMessage?("Failed to read Antigravity hook status: \(error.localizedDescription)")
             }
         }
     }
@@ -889,7 +839,7 @@ final class HookInstallationCoordinator {
         case .openCode: return !openCodePluginInstalled
         case .gemini: return !geminiHooksInstalled
         case .kimi: return !kimiHooksInstalled
-        case .antigravity: return !antigravityHooksInstalled
+        case .antigravity: return false
         case .claudeUsageBridge: return !claudeUsageInstalled
         }
     }
@@ -914,7 +864,7 @@ final class HookInstallationCoordinator {
             case .openCode: return openCodePluginInstalled
             case .gemini: return geminiHooksInstalled
             case .kimi: return kimiHooksInstalled
-            case .antigravity: return antigravityHooksInstalled
+            case .antigravity: return false
             case .claudeUsageBridge: return claudeUsageInstalled
             }
         }
@@ -1105,23 +1055,6 @@ final class HookInstallationCoordinator {
 
     func uninstallGeminiHooks() {
         updateGeminiHooks(userMessage: "Removing Gemini hooks.", intent: .uninstalled) { manager in
-            try manager.uninstall()
-        }
-    }
-
-    func installAntigravityHooks() {
-        guard let hooksBinaryURL else {
-            onStatusMessage?("Could not find a local OpenIslandHooks binary. Build the package first.")
-            return
-        }
-
-        updateAntigravityHooks(userMessage: "Installing Antigravity hooks.", intent: .installed) { manager in
-            try manager.install(hooksBinaryURL: hooksBinaryURL)
-        }
-    }
-
-    func uninstallAntigravityHooks() {
-        updateAntigravityHooks(userMessage: "Removing Antigravity hooks.", intent: .uninstalled) { manager in
             try manager.uninstall()
         }
     }
@@ -1337,35 +1270,6 @@ final class HookInstallationCoordinator {
                 }
             } catch {
                 self.onStatusMessage?("Gemini hook update failed: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    private func updateAntigravityHooks(
-        userMessage: String,
-        intent: AgentHookIntent,
-        action: @escaping (AntigravityHookInstallationManager) throws -> AntigravityHookInstallationStatus
-    ) {
-        isAntigravityHookSetupBusy = true
-        onStatusMessage?(userMessage)
-
-        let manager = antigravityHookInstallationManager
-        Task { [weak self] in
-            guard let self else { return }
-
-            defer { self.isAntigravityHookSetupBusy = false }
-
-            do {
-                let status = try action(manager)
-                self.antigravityHookStatus = status
-                self.intentStore.setIntent(intent, for: .antigravity)
-                if status.managedHooksPresent {
-                    self.onStatusMessage?("Antigravity hooks are installed and ready.")
-                } else {
-                    self.onStatusMessage?("Antigravity hooks are not installed.")
-                }
-            } catch {
-                self.onStatusMessage?("Antigravity hook update failed: \(error.localizedDescription)")
             }
         }
     }

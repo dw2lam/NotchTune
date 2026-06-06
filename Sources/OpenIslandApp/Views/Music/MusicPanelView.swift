@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MusicPanelView: View {
     @Bindable var playerManager: MusicPlayerManager
+    var horizontalPadding: CGFloat = 24
 
     var body: some View {
         if playerManager.isMusicEnabled {
@@ -27,7 +28,7 @@ struct MusicPanelView: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, horizontalPadding)
         .padding(.top, 16)
         .padding(.bottom, 10)
         .onAppear {
@@ -55,6 +56,6 @@ struct MusicPanelView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, horizontalPadding)
     }
 }

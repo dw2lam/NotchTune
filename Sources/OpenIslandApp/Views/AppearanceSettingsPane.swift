@@ -30,6 +30,7 @@ struct AppearanceSettingsPane: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
                 displayProfilePart
+                characterPart
                 notchPersonalizationPart
                 sessionListPersonalizationPart
             }
@@ -118,6 +119,32 @@ struct AppearanceSettingsPane: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Character
+
+    @ViewBuilder
+    private var characterPart: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(
+                title: "Character",
+                note: "Choose the pixel character shown in the closed island."
+            )
+
+            HStack(spacing: 12) {
+                ForEach(IslandCharacter.allCases) { option in
+                    optionCard(
+                        selected: editingPreferences.character == option,
+                        title: title(for: option)
+                    ) {
+                        model.updateAppearancePreferences(for: editingProfile) { $0.character = option }
+                    } icon: {
+                        UnifiedBars(mode: .idle, size: 28, character: option)
+                            .frame(width: 32, height: 32)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Notch part
 
     private var notchPersonalizationPart: some View {
@@ -198,6 +225,7 @@ struct AppearanceSettingsPane: View {
             TimelineView(.periodic(from: .now, by: 0.25)) { context in
                 IslandPreviewPill(
                     mode: previewMode,
+                    character: editingPreferences.character,
                     label: previewLabel,
                     rightSlot: previewRightContent,
                     layout: previewLayout,
@@ -600,6 +628,14 @@ struct AppearanceSettingsPane: View {
         case .idle:    return lang.t("settings.appearance.state.idle")
         case .running: return lang.t("settings.appearance.state.running")
         case .waiting: return lang.t("settings.appearance.state.waiting")
+        }
+    }
+
+    private func title(for character: IslandCharacter) -> String {
+        switch character {
+        case .dino: return "Dino"
+        case .cat:  return "Cat"
+        case .dog:  return "Dog"
         }
     }
 
@@ -1316,9 +1352,7 @@ private struct SessionListLivePreviewRow: View {
     private var glyphView: some View {
         switch item.phase {
         case .idle:
-            Circle()
-                .fill(V6Palette.paper.opacity(0.3))
-                .frame(width: 4, height: 4)
+            UnifiedBars(mode: .idle, size: 16, tint: tint)
         case .running:
             UnifiedBars(mode: .running, size: 16, tint: tint)
         case .approval, .answer:

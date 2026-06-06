@@ -11,8 +11,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case sound
     case music
     case appearance
-    case shortcuts
-    case lab
     case about
 
     var id: String { rawValue }
@@ -25,8 +23,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .display:    lang.t("settings.tab.display")
         case .sound:      lang.t("settings.tab.sound")
         case .music:      "Music"
-        case .shortcuts:  lang.t("settings.tab.shortcuts")
-        case .lab:        lang.t("settings.tab.lab")
         case .about:      lang.t("settings.tab.about")
         }
     }
@@ -39,8 +35,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .display:    "textformat.size"
         case .sound:      "speaker.wave.2.fill"
         case .music:      "music.note"
-        case .shortcuts:  "keyboard.fill"
-        case .lab:        "flask.fill"
         case .about:      "info.circle.fill"
         }
     }
@@ -53,8 +47,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .display:    .blue
         case .sound:      .green
         case .music:      .pink
-        case .shortcuts:  .gray
-        case .lab:        .pink
         case .about:      .blue
         }
     }
@@ -62,7 +54,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var section: SettingsSection {
         switch self {
         case .general, .setup, .display, .sound, .music, .appearance: .system
-        case .shortcuts, .lab:                                                 .advanced
         case .about:                                                           .app
         }
     }
@@ -70,14 +61,12 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
 enum SettingsSection: String, CaseIterable {
     case system
-    case advanced
     case app
 
     func header(_ lang: LanguageManager) -> String {
         switch self {
         case .system:   lang.t("settings.section.system")
-        case .advanced: lang.t("settings.section.advanced")
-        case .app:      "Open Island"
+        case .app:      "NotchTune"
         }
     }
 
@@ -148,10 +137,6 @@ struct SettingsView: View {
                 SoundSettingsPane(model: model)
             case .music:
                 MusicSettingsPane(model: model)
-            case .shortcuts:
-                PlaceholderSettingsPane(model: model, titleKey: "settings.tab.shortcuts", subtitleKey: "settings.shortcuts.comingSoon")
-            case .lab:
-                PlaceholderSettingsPane(model: model, titleKey: "settings.tab.lab", subtitleKey: "settings.lab.comingSoon")
             case .about:
                 AboutSettingsPane(model: model)
             }
@@ -245,7 +230,7 @@ struct DisplaySettingsPane: View {
                 }
             }
 
-            if let diag = model.overlayPlacementDiagnostics {
+            if let diag = model.overlay.overlayPlacementDiagnostics {
                 Section(lang.t("settings.display.diagnostics")) {
                     LabeledContent(lang.t("settings.display.currentScreen"), value: diag.targetScreenName)
                     LabeledContent(lang.t("settings.display.layoutMode"), value: diag.modeDescription)
@@ -322,6 +307,10 @@ struct AboutSettingsPane: View {
                 Text(lang.t("app.name"))
                     .font(.title.bold())
 
+                Text("(originally Open Island)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Text(lang.t("app.description"))
                     .foregroundStyle(.secondary)
 
@@ -337,6 +326,26 @@ struct AboutSettingsPane: View {
             Divider()
 
             Form {
+                Section("Credits") {
+                    creditLinkRow(
+                        title: "Forked from Open Vibe Island",
+                        subtitle: "Octane0411/open-vibe-island",
+                        url: "https://github.com/Octane0411/open-vibe-island"
+                    )
+
+                    creditLinkRow(
+                        title: "Music foundation from Tuneful",
+                        subtitle: "martinfekete10/Tuneful",
+                        url: "https://github.com/martinfekete10/Tuneful"
+                    )
+
+                    creditLinkRow(
+                        title: "Created by David",
+                        subtitle: "dw2lam",
+                        url: "https://github.com/dw2lam"
+                    )
+                }
+
                 Section {
                     aboutActionRow(
                         title: lang.t("settings.about.quitApp"),
@@ -355,6 +364,38 @@ struct AboutSettingsPane: View {
         }
         .frame(maxWidth: .infinity)
         .navigationTitle(lang.t("settings.tab.about"))
+    }
+
+    private func creditLinkRow(
+        title: String,
+        subtitle: String,
+        url: String
+    ) -> some View {
+        Link(destination: URL(string: url)!) {
+            HStack(spacing: 10) {
+                Image(systemName: "link")
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 18, alignment: .leading)
+                    .foregroundStyle(.blue)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(primaryInk)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
     }
 
     private func aboutActionRow(
@@ -397,7 +438,6 @@ struct SetupSettingsPane: View {
     @State private var confirmingUninstallCursor = false
     @State private var confirmingUninstallGemini = false
     @State private var confirmingUninstallKimi = false
-    @State private var confirmingUninstallAntigravity = false
     @State private var confirmingUninstallClaudeUsage = false
 
     private var lang: LanguageManager { model.lang }
@@ -460,7 +500,7 @@ struct SetupSettingsPane: View {
                     }
                     Button(lang.t("settings.general.cancel"), role: .cancel) {}
                 } message: {
-                    Text("This will remove the Open Island plugin from ~/.config/opencode/plugins/.")
+                    Text("This will remove the NotchTune plugin from ~/.config/opencode/plugins/.")
                 }
 
                 hookRow(
@@ -477,7 +517,7 @@ struct SetupSettingsPane: View {
                     }
                     Button(lang.t("settings.general.cancel"), role: .cancel) {}
                 } message: {
-                    Text("This will remove Open Island hooks from ~/.qoder/settings.json.")
+                    Text("This will remove NotchTune hooks from ~/.qoder/settings.json.")
                 }
 
                 hookRow(
@@ -494,7 +534,7 @@ struct SetupSettingsPane: View {
                     }
                     Button(lang.t("settings.general.cancel"), role: .cancel) {}
                 } message: {
-                    Text("This will remove Open Island hooks from ~/.qwen/settings.json.")
+                    Text("This will remove NotchTune hooks from ~/.qwen/settings.json.")
                 }
 
                 hookRow(
@@ -511,7 +551,7 @@ struct SetupSettingsPane: View {
                     }
                     Button(lang.t("settings.general.cancel"), role: .cancel) {}
                 } message: {
-                    Text("This will remove Open Island hooks from ~/.factory/settings.json.")
+                    Text("This will remove NotchTune hooks from ~/.factory/settings.json.")
                 }
 
                 hookRow(
@@ -528,7 +568,7 @@ struct SetupSettingsPane: View {
                     }
                     Button(lang.t("settings.general.cancel"), role: .cancel) {}
                 } message: {
-                    Text("This will remove Open Island hooks from ~/.codebuddy/settings.json.")
+                    Text("This will remove NotchTune hooks from ~/.codebuddy/settings.json.")
                 }
 
                 hookRow(
@@ -546,7 +586,7 @@ struct SetupSettingsPane: View {
                     }
                     Button(lang.t("settings.general.cancel"), role: .cancel) {}
                 } message: {
-                    Text("This will remove the Open Island hooks from ~/.cursor/hooks.json.")
+                    Text("This will remove the NotchTune hooks from ~/.cursor/hooks.json.")
                 }
 
                 hookRow(
@@ -563,7 +603,7 @@ struct SetupSettingsPane: View {
                     }
                     Button(lang.t("settings.general.cancel"), role: .cancel) {}
                 } message: {
-                    Text("This will remove Open Island hooks from ~/.gemini/settings.json.")
+                    Text("This will remove NotchTune hooks from ~/.gemini/settings.json.")
                 }
 
                 hookRow(
@@ -580,25 +620,9 @@ struct SetupSettingsPane: View {
                     }
                     Button(lang.t("settings.general.cancel"), role: .cancel) {}
                 } message: {
-                    Text("This will remove Open Island hooks from ~/.kimi/config.toml.")
+                    Text("This will remove NotchTune hooks from ~/.kimi/config.toml.")
                 }
 
-                hookRow(
-                    name: "Antigravity CLI",
-                    installed: model.antigravityHooksInstalled,
-                    busy: model.isAntigravityHookSetupBusy,
-                    configLocationURL: antigravityHookConfigURL,
-                    installAction: { model.installAntigravityHooks() },
-                    uninstallAction: { confirmingUninstallAntigravity = true }
-                )
-                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallAntigravity) {
-                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
-                        model.uninstallAntigravityHooks()
-                    }
-                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
-                } message: {
-                    Text("This will remove Open Island hooks from ~/.antigravity/settings.json.")
-                }
             }
 
             Section {
@@ -676,7 +700,6 @@ struct SetupSettingsPane: View {
                     if !model.cursorHooksInstalled { model.installCursorHooks() }
                     if !model.geminiHooksInstalled { model.installGeminiHooks() }
                     if !model.kimiHooksInstalled { model.installKimiHooks() }
-                    if !model.antigravityHooksInstalled { model.installAntigravityHooks() }
                     if !model.claudeUsageInstalled { model.installClaudeUsageBridge() }
                 }
                 .disabled(model.hooksBinaryURL == nil || allReady)
@@ -738,7 +761,7 @@ struct SetupSettingsPane: View {
     private var allReady: Bool {
         model.claudeHooksInstalled && model.codexHooksInstalled && model.openCodePluginInstalled
             && model.qoderHooksInstalled && model.qwenCodeHooksInstalled && model.factoryHooksInstalled && model.codebuddyHooksInstalled
-            && model.cursorHooksInstalled && model.geminiHooksInstalled && model.kimiHooksInstalled && model.antigravityHooksInstalled && model.claudeUsageInstalled
+            && model.cursorHooksInstalled && model.geminiHooksInstalled && model.kimiHooksInstalled && model.claudeUsageInstalled
     }
 
     @ViewBuilder
@@ -775,11 +798,6 @@ struct SetupSettingsPane: View {
     private var geminiHookConfigURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".gemini/settings.json")
-    }
-
-    private var antigravityHookConfigURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".antigravity/settings.json")
     }
 
     private var hasErrors: Bool {
@@ -985,7 +1003,7 @@ struct MusicSettingsPane: View {
             } header: {
                 Text("Music Player")
             } footer: {
-                Text("Open Island will only connect to the selected app. Choose None to disable music controls entirely.")
+                Text("NotchTune will only connect to the selected app. Choose None to disable music controls entirely.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -1077,7 +1095,7 @@ struct RemoteConnectionSection: View {
                 remoteSetupStep(
                     number: "1",
                     title: "Deploy hooks to remote server",
-                    description: "Run from the Open Island repo directory:",
+                    description: "Run from the NotchTune repo directory:",
                     command: setupCommand
                 )
 

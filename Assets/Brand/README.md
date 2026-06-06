@@ -1,6 +1,6 @@
 # Brand Assets
 
-This directory contains the current `Scout` mascot icon assets for macOS app packaging and internal product surfaces.
+This directory contains the current NotchTune icon assets for macOS app packaging and internal product surfaces.
 
 Structure:
 
@@ -20,7 +20,7 @@ Generation workflow:
 
 Current raw source assets:
 
-- `Source/logo.png`: original 1280x1280 logo source image
+- `Source/notchtune.jpg`: original NotchTune icon source image
 
 macOS app icon sizes included:
 
@@ -42,6 +42,5 @@ Why both formats exist:
 
 Current design direction:
 
-- shell: black glass face with a cool metallic rim
-- mark: white `Scout` mascot with the three-square punctuation column from the chosen icon reference
-- internal surfaces: simplified mascot-only versions without punctuation when space is tight
+- app icon: NotchTune landscape mark with the dino inside the notch shape
+- internal surfaces: simplified generated marks for small in-app surfaces

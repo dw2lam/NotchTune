@@ -54,6 +54,9 @@ final class OverlayUICoordinator {
     @ObservationIgnored
     private var notificationAutoCollapseTask: Task<Void, Never>?
 
+    @ObservationIgnored
+    private var screenParametersChangeTask: Task<Void, Never>?
+
     var hasPendingNotificationAutoCollapse: Bool {
         notificationAutoCollapseTask != nil
     }
@@ -87,6 +90,32 @@ final class OverlayUICoordinator {
     }
 
     // MARK: - Initialization
+
+    init() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleScreenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func handleScreenParametersChanged() {
+        screenParametersChangeTask?.cancel()
+        screenParametersChangeTask = Task { @MainActor in
+            // Refresh at multiple intervals to handle slow display reconfigurations (e.g. clamshell mode transitions)
+            // where safeAreaInsets might be temporarily reported as 0 by macOS.
+            for delayMs in [200, 800, 2000] {
+                try? await Task.sleep(for: .milliseconds(delayMs))
+                guard !Task.isCancelled else { return }
+                self.refreshOverlayDisplayConfiguration()
+            }
+        }
+    }
 
     func restoreDisplayPreference() {
         overlayDisplaySelectionID = UserDefaults.standard.string(
@@ -206,7 +235,7 @@ final class OverlayUICoordinator {
 
     func ensureOverlayPanel() {
         guard let appModel else { return }
-        overlayPanelController.ensurePanel(model: appModel, preferredScreenID: preferredOverlayScreenID)
+        overlayPlacementDiagnostics = overlayPanelController.ensurePanel(model: appModel, preferredScreenID: preferredOverlayScreenID)
     }
 
     // Legacy compatibility
@@ -233,7 +262,7 @@ final class OverlayUICoordinator {
         overlayDisplayOptions = overlayPanelController.availableDisplayOptions()
 
         let validSelectionIDs = Set(overlayDisplayOptions.map(\.id))
-        if !validSelectionIDs.contains(overlayDisplaySelectionID) {
+        if overlayDisplaySelectionID != OverlayDisplayOption.automaticID && !validSelectionIDs.contains(overlayDisplaySelectionID) {
             overlayDisplaySelectionID = OverlayDisplayOption.automaticID
             return
         }

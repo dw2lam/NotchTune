@@ -49,6 +49,21 @@ public struct AntigravityHookPayload: Equatable, Codable, Sendable {
         case terminalTitle = "terminal_title"
     }
 
+    private enum AntigravityCLIKeys: String, CodingKey {
+        case conversationId
+        case workspacePaths
+        case transcriptPath
+        case toolCall
+    }
+
+    private enum ToolCallKeys: String, CodingKey {
+        case args
+    }
+
+    private enum ToolCallArgsKeys: String, CodingKey {
+        case cwd = "Cwd"
+    }
+
     public init(
         cwd: String,
         hookEventName: AntigravityHookEventName,
@@ -87,6 +102,108 @@ public struct AntigravityHookPayload: Equatable, Codable, Sendable {
         self.terminalSessionID = terminalSessionID
         self.terminalTTY = terminalTTY
         self.terminalTitle = terminalTitle
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        let standardCwd = try? container.decode(String.self, forKey: .cwd)
+        let standardSessionID = try? container.decode(String.self, forKey: .sessionID)
+        let standardHookEventName = try? container.decode(AntigravityHookEventName.self, forKey: .hookEventName)
+
+        self.transcriptPath = try? container.decode(String.self, forKey: .transcriptPath)
+        self.timestamp = try? container.decode(String.self, forKey: .timestamp)
+        self.prompt = try? container.decode(String.self, forKey: .prompt)
+        self.promptResponse = try? container.decode(String.self, forKey: .promptResponse)
+        self.source = try? container.decode(String.self, forKey: .source)
+        self.reason = try? container.decode(String.self, forKey: .reason)
+        self.notificationType = try? container.decode(String.self, forKey: .notificationType)
+        self.message = try? container.decode(String.self, forKey: .message)
+        self.usage = try? container.decode(CodexHookJSONValue.self, forKey: .usage)
+        self.details = try? container.decode(CodexHookJSONValue.self, forKey: .details)
+        self.stopHookActive = try? container.decode(Bool.self, forKey: .stopHookActive)
+        self.terminalApp = try? container.decode(String.self, forKey: .terminalApp)
+        self.terminalSessionID = try? container.decode(String.self, forKey: .terminalSessionID)
+        self.terminalTTY = try? container.decode(String.self, forKey: .terminalTTY)
+        self.terminalTitle = try? container.decode(String.self, forKey: .terminalTitle)
+
+        // Resolve hookEventName
+        if let eventName = standardHookEventName {
+            self.hookEventName = eventName
+        } else if let cliEvent = Self.parseEventName() {
+            self.hookEventName = cliEvent
+        } else {
+            self.hookEventName = .sessionStart
+        }
+
+        // Resolve sessionID
+        if let session = standardSessionID {
+            self.sessionID = session
+        } else {
+            let cliContainer = try decoder.container(keyedBy: AntigravityCLIKeys.self)
+            if let conversationId = try? cliContainer.decode(String.self, forKey: .conversationId) {
+                self.sessionID = conversationId
+            } else {
+                throw DecodingError.keyNotFound(CodingKeys.sessionID, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "session_id / conversationId not found"))
+            }
+        }
+
+        // Resolve cwd
+        if let cwdVal = standardCwd {
+            self.cwd = cwdVal
+        } else {
+            let cliContainer = try decoder.container(keyedBy: AntigravityCLIKeys.self)
+            var resolvedCwd: String? = nil
+
+            if let toolCallContainer = try? cliContainer.nestedContainer(keyedBy: ToolCallKeys.self, forKey: .toolCall),
+               let argsContainer = try? toolCallContainer.nestedContainer(keyedBy: ToolCallArgsKeys.self, forKey: .args) {
+                resolvedCwd = try? argsContainer.decode(String.self, forKey: .cwd)
+            }
+
+            if resolvedCwd == nil,
+               let paths = try? cliContainer.decode([String].self, forKey: .workspacePaths),
+               let firstPath = paths.first {
+                resolvedCwd = firstPath
+            }
+
+            self.cwd = resolvedCwd ?? FileManager.default.currentDirectoryPath
+        }
+
+        // Additional CLI metadata mapping:
+        if self.transcriptPath == nil {
+            let cliContainer = try decoder.container(keyedBy: AntigravityCLIKeys.self)
+            self.transcriptPath = try? cliContainer.decode(String.self, forKey: .transcriptPath)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(cwd, forKey: .cwd)
+        try container.encode(hookEventName, forKey: .hookEventName)
+        try container.encode(sessionID, forKey: .sessionID)
+        try container.encodeIfPresent(transcriptPath, forKey: .transcriptPath)
+        try container.encodeIfPresent(timestamp, forKey: .timestamp)
+        try container.encodeIfPresent(prompt, forKey: .prompt)
+        try container.encodeIfPresent(promptResponse, forKey: .promptResponse)
+        try container.encodeIfPresent(source, forKey: .source)
+        try container.encodeIfPresent(reason, forKey: .reason)
+        try container.encodeIfPresent(notificationType, forKey: .notificationType)
+        try container.encodeIfPresent(message, forKey: .message)
+        try container.encodeIfPresent(usage, forKey: .usage)
+        try container.encodeIfPresent(details, forKey: .details)
+        try container.encodeIfPresent(stopHookActive, forKey: .stopHookActive)
+        try container.encodeIfPresent(terminalApp, forKey: .terminalApp)
+        try container.encodeIfPresent(terminalSessionID, forKey: .terminalSessionID)
+        try container.encodeIfPresent(terminalTTY, forKey: .terminalTTY)
+        try container.encodeIfPresent(terminalTitle, forKey: .terminalTitle)
+    }
+
+    private static func parseEventName() -> AntigravityHookEventName? {
+        let args = CommandLine.arguments
+        if let index = args.firstIndex(of: "--event"), index + 1 < args.count {
+            return AntigravityHookEventName(rawValue: args[index + 1])
+        }
+        return nil
     }
 }
 

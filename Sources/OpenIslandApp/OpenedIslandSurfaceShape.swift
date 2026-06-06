@@ -17,13 +17,10 @@ struct OpenedIslandSurfaceShape: Shape {
     func path(in rect: CGRect) -> Path {
         switch topProfile {
         case .notch:
-            return NotchShape(
-                topCornerRadius: NotchShape.openedTopRadius,
-                bottomCornerRadius: bottomCornerRadius
-            )
-            .path(in: rect)
+            return V6ClosedPillShape(cornerRadius: bottomCornerRadius, topFilletRadius: 0)
+                .path(in: rect)
         case .topBar:
-            return V6ClosedPillShape(cornerRadius: bottomCornerRadius)
+            return V6ClosedPillShape(cornerRadius: bottomCornerRadius, topFilletRadius: 0)
                 .path(in: rect)
         }
     }
