@@ -14,6 +14,7 @@ enum NotchOpenReason: Equatable {
     case hover
     case notification
     case boot
+    case musicPeek
 }
 
 enum TrackedEventIngress {

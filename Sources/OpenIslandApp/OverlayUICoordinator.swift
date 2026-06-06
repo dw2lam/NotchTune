@@ -8,6 +8,7 @@ import OpenIslandCore
 final class OverlayUICoordinator {
 
     private static let notificationSurfaceAutoCollapseDelay: TimeInterval = 10
+    private static let musicTrackPeekDuration: TimeInterval = 2.5
 
     var notchStatus: NotchStatus = .closed
     var notchOpenReason: NotchOpenReason?
@@ -53,6 +54,12 @@ final class OverlayUICoordinator {
 
     @ObservationIgnored
     private var notificationAutoCollapseTask: Task<Void, Never>?
+
+    @ObservationIgnored
+    private var musicPeekTask: Task<Void, Never>?
+
+    @ObservationIgnored
+    private var musicPeekPreviousTab: IslandTab?
 
     @ObservationIgnored
     private var screenParametersChangeTask: Task<Void, Never>?
@@ -154,6 +161,7 @@ final class OverlayUICoordinator {
     }
 
     func notchClose() {
+        let wasMusicPeek = notchOpenReason == .musicPeek
         transitionOverlay(
             to: .closed,
             reason: nil,
@@ -162,11 +170,15 @@ final class OverlayUICoordinator {
             beforeTransition: { [weak self] in
                 self?.notificationAutoCollapseTask?.cancel()
                 self?.notificationAutoCollapseTask = nil
+                self?.cancelMusicTrackPeekScheduling()
             },
             afterStateChange: { [weak self] in
                 self?.autoCollapseSurfaceHasBeenEntered = false
                 self?.isPointerInsideIslandSurface = false
                 self?.appModel?.measuredNotificationContentHeight = 0
+                if wasMusicPeek {
+                    self?.restoreMusicPeekTabIfNeeded()
+                }
             }
         )
     }
@@ -220,6 +232,61 @@ final class OverlayUICoordinator {
             guard self?.notchStatus == .popping else { return }
             self?.notchStatus = .closed
         }
+    }
+
+    func presentMusicTrackPeek() {
+        guard let appModel,
+              appModel.playerManager.isMusicEnabled,
+              !appModel.playerManager.track.isEmpty() else {
+            return
+        }
+
+        if notchStatus == .opened {
+            guard notchOpenReason == .musicPeek else { return }
+            appModel.islandActiveTab = .music
+            scheduleMusicTrackPeekDismiss()
+            return
+        }
+
+        guard notchStatus == .closed else { return }
+
+        cancelMusicTrackPeekScheduling()
+        musicPeekPreviousTab = appModel.islandActiveTab
+        appModel.islandActiveTab = .music
+        appModel.musicNotificationTrack = nil
+        notchOpen(reason: .musicPeek)
+        scheduleMusicTrackPeekDismiss()
+    }
+
+    private func scheduleMusicTrackPeekDismiss() {
+        musicPeekTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(Self.musicTrackPeekDuration))
+            } catch {
+                return
+            }
+
+            guard let self,
+                  self.notchStatus == .opened,
+                  self.notchOpenReason == .musicPeek else {
+                return
+            }
+
+            self.notchClose()
+        }
+    }
+
+    private func cancelMusicTrackPeekScheduling() {
+        musicPeekTask?.cancel()
+        musicPeekTask = nil
+    }
+
+    private func restoreMusicPeekTabIfNeeded() {
+        cancelMusicTrackPeekScheduling()
+        if let previous = musicPeekPreviousTab {
+            appModel?.islandActiveTab = previous
+        }
+        musicPeekPreviousTab = nil
     }
 
     func performBootAnimation() {

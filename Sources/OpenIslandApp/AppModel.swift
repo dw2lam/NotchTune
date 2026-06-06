@@ -641,15 +641,9 @@ final class AppModel {
             startWatchRelay()
         }
 
-        playerManager.onTrackChange = { [weak self] track in
-            guard let self, self.isOverlayVisible == false else { return }
-            self.musicNotificationTrack = track
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(2))
-                if self.musicNotificationTrack == track {
-                    self.musicNotificationTrack = nil
-                }
-            }
+        playerManager.onTrackChange = { [weak self] _ in
+            guard let self else { return }
+            self.presentMusicTrackPeek()
         }
 
         playerManager.onPlaybackStateChange = { [weak self] isPlaying in
@@ -1304,6 +1298,7 @@ final class AppModel {
     func notchOpen(reason: NotchOpenReason, surface: IslandSurface = .sessionList()) { overlay.notchOpen(reason: reason, surface: surface) }
     func notchClose() { overlay.notchClose() }
     func notchPop() { overlay.notchPop() }
+    func presentMusicTrackPeek() { overlay.presentMusicTrackPeek() }
     func performBootAnimation() { overlay.performBootAnimation() }
     func ensureOverlayPanel() { overlay.ensureOverlayPanel() }
     func showOverlay() { overlay.showOverlay() }
