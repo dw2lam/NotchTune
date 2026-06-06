@@ -1,7 +1,7 @@
 # NotchTune
 <img width="1024" height="1024" alt="app-icon-v6" src="https://github.com/user-attachments/assets/593c9462-70fb-44d1-9967-e8ad9aeef3b1" />
 
-Why switch contexts when your notch can keep the flow together?
+Monitor your agents and music all in one place.
 
 **NotchTune** is a native macOS companion that turns your Mac's notch, or a compact top bar on external displays, into a live control surface for music and terminal-native AI agents. It combines playback controls, agent monitoring, approvals, questions, and session jump-back in one lightweight local app.
 
@@ -24,12 +24,28 @@ Supported terminal jump-back includes Terminal.app, Ghostty, cmux, Kaku, WezTerm
 
 ## Quick Start
 
-Clone and run the app locally:
+### Install The App
+
+Download the latest `NotchTune.dmg` from [Releases](https://github.com/dw2lam/NotchTune/releases), open it, and drag `NotchTune.app` into Applications.
+
+This release is currently unsigned. If macOS blocks the first launch, right-click `NotchTune.app`, choose **Open**, then confirm the Gatekeeper prompt.
+
+Open NotchTune, go to **Settings → Setup**, and install hooks for the coding agents you use. Grant Accessibility permission if macOS asks; NotchTune uses it to detect terminal windows and jump back to active sessions.
+
+### Run From Source
+
+Clone the repo and run the app locally:
 
 ```bash
-git clone https://github.com/dw2lam/open-vibe-island-music.git
-cd open-vibe-island-music
+git clone https://github.com/dw2lam/NotchTune.git
+cd NotchTune
 swift run OpenIslandApp
+```
+
+To build the hook helper used by agent integrations:
+
+```bash
+swift build -c release --product OpenIslandHooks
 ```
 
 Or open the package in Xcode:
@@ -37,14 +53,6 @@ Or open the package in Xcode:
 ```bash
 open Package.swift
 ```
-
-Build the hook helper when you want NotchTune to receive local agent events:
-
-```bash
-swift build -c release --product OpenIslandHooks
-```
-
-Then open NotchTune settings and install hooks for the agents you use.
 
 ## Development
 
