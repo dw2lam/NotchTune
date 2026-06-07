@@ -67,9 +67,10 @@ struct IslandAppearancePreferences: Equatable, Sendable {
 
 enum IslandCharacter: String, CaseIterable, Identifiable, Sendable {
     case dino
-    case cat
-    case dog
-    case pikachu
+    case ghost
+    case crab
+    case duck
+    case claude
 
     var id: String { rawValue }
 }

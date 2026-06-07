@@ -634,9 +634,10 @@ struct AppearanceSettingsPane: View {
     private func title(for character: IslandCharacter) -> String {
         switch character {
         case .dino: return "Dino"
-        case .cat:  return "Cat"
-        case .dog:  return "Dog"
-        case .pikachu: return "Pikachu"
+        case .ghost: return "Ghost"
+        case .crab: return "Crab"
+        case .duck: return "Duck"
+        case .claude: return "Claude"
         }
     }
 
