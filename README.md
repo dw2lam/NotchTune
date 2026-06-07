@@ -56,7 +56,7 @@ open Package.swift
 
 ## Development
 
-This repository is a Swift package with native app, core bridge, hook helper, and setup targets.
+This repository is a Swift package with native app, core bridge, hook helper, and setup targets. For more details on the project architecture, read the [documentation index](docs/index.md).
 
 The helper scripts are the recommended way to exercise app-bundle behavior locally because they refresh the generated assets, helper binaries, and local dev bundle.
 
@@ -65,6 +65,7 @@ Useful commands:
 ```bash
 swift build
 swift test
+zsh scripts/harness.sh
 zsh scripts/launch-dev-app.sh
 zsh scripts/package-app.sh
 ```
