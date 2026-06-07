@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import OpenIslandCore
+import UniformTypeIdentifiers
 
 // MARK: - Settings tabs
 
@@ -246,6 +247,7 @@ struct DisplaySettingsPane: View {
 
 struct SoundSettingsPane: View {
     var model: AppModel
+    @State private var customSounds: [String] = []
 
     private var lang: LanguageManager { model.lang }
 
@@ -263,29 +265,123 @@ struct SoundSettingsPane: View {
             }
 
             Section(lang.t("settings.sound.selectSound")) {
-                List(availableSounds, id: \.self) { name in
-                    Button {
-                        model.selectedSoundName = name
-                        NotificationSoundService.play(name)
-                    } label: {
-                        HStack {
-                            Text(name)
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            if name == model.selectedSoundName {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.blue)
-                                    .fontWeight(.semibold)
+                List {
+                    Section(header: Text(lang.t("settings.sound.systemSounds"))) {
+                        ForEach(availableSounds, id: \.self) { name in
+                            Button {
+                                model.selectedSoundName = name
+                                NotificationSoundService.play(name)
+                            } label: {
+                                HStack {
+                                    Text(name)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    if name == model.selectedSoundName {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(.blue)
+                                            .fontWeight(.semibold)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    Section(header: Text(lang.t("settings.sound.customSounds"))) {
+                        if customSounds.isEmpty {
+                            Text(lang.t("settings.sound.noCustomSounds"))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .italic()
+                                .padding(.vertical, 4)
+                        } else {
+                            ForEach(customSounds, id: \.self) { filename in
+                                HStack {
+                                    Button {
+                                        model.selectedSoundName = filename
+                                        NotificationSoundService.play(filename)
+                                    } label: {
+                                        HStack {
+                                            Text(cleanFilename(filename))
+                                                .foregroundStyle(.primary)
+                                            Spacer()
+                                            if filename == model.selectedSoundName {
+                                                Image(systemName: "checkmark")
+                                                    .foregroundStyle(.blue)
+                                                    .fontWeight(.semibold)
+                                            }
+                                        }
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    Button {
+                                        deleteSound(filename)
+                                    } label: {
+                                        Image(systemName: "trash")
+                                            .foregroundStyle(.red)
+                                    }
+                                    .buttonStyle(.borderless)
+                                }
                             }
                         }
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                }
+                .frame(minHeight: 300)
+            }
+
+            Section {
+                Button(action: selectCustomSoundFile) {
+                    Label(lang.t("settings.sound.addCustomSound"), systemImage: "plus")
                 }
             }
         }
         .formStyle(.grouped)
         .navigationTitle(lang.t("settings.tab.sound"))
+        .onAppear {
+            loadCustomSounds()
+        }
+    }
+
+    private func cleanFilename(_ filename: String) -> String {
+        return (filename as NSString).deletingPathExtension
+    }
+
+    private func loadCustomSounds() {
+        customSounds = NotificationSoundService.availableCustomSounds()
+    }
+
+    private func selectCustomSoundFile() {
+        let openPanel = NSOpenPanel()
+        openPanel.title = lang.t("settings.sound.chooseCustomSound")
+        openPanel.allowedContentTypes = [.audio, .quickTimeMovie]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+
+        if openPanel.runModal() == .OK, let url = openPanel.url {
+            do {
+                let filename = try NotificationSoundService.addCustomSound(from: url)
+                loadCustomSounds()
+                model.selectedSoundName = filename
+                NotificationSoundService.play(filename)
+            } catch {
+                print("Failed to copy custom sound: \(error)")
+            }
+        }
+    }
+
+    private func deleteSound(_ filename: String) {
+        do {
+            try NotificationSoundService.deleteCustomSound(filename)
+            loadCustomSounds()
+            if model.selectedSoundName == filename {
+                model.selectedSoundName = NotificationSoundService.defaultSoundName
+            }
+        } catch {
+            print("Failed to delete custom sound: \(error)")
+        }
     }
 }
 

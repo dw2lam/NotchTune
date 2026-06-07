@@ -128,6 +128,12 @@
 "settings.sound.notifications" = "通知音效";
 "settings.sound.mute" = "静音";
 "settings.sound.selectSound" = "选择音效";
+"settings.sound.systemSounds" = "系统声音";
+"settings.sound.customSounds" = "自定义声音";
+"settings.sound.addCustomSound" = "添加自定义声音…";
+"settings.sound.chooseCustomSound" = "选择自定义声音";
+"settings.sound.noCustomSounds" = "尚未添加自定义声音。";
+
 
 /* Settings - Setup */
 "settings.tab.setup" = "安装引导";

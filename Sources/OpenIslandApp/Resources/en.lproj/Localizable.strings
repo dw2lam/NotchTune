@@ -128,6 +128,12 @@
 "settings.sound.notifications" = "Notification Sounds";
 "settings.sound.mute" = "Mute";
 "settings.sound.selectSound" = "Select Sound";
+"settings.sound.systemSounds" = "System Sounds";
+"settings.sound.customSounds" = "Custom Sounds";
+"settings.sound.addCustomSound" = "Add Custom Sound…";
+"settings.sound.chooseCustomSound" = "Choose Custom Sound";
+"settings.sound.noCustomSounds" = "No custom sounds added yet.";
+
 
 /* Settings - Setup */
 "settings.tab.setup" = "Setup";
