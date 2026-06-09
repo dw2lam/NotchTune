@@ -14,7 +14,7 @@ struct MusicPanelView: View {
 
     private var musicControls: some View {
         HStack(spacing: 20) {
-            MusicAlbumArtView(playerManager: playerManager, imageSize: 150)
+            MusicAlbumArtView(playerManager: playerManager, imageSize: 166)
 
             VStack(spacing: 16) {
                 PlayerTrackDetailsView(playerManager: playerManager)
@@ -30,7 +30,7 @@ struct MusicPanelView: View {
         }
         .padding(.horizontal, horizontalPadding)
         .padding(.top, 16)
-        .padding(.bottom, 10)
+        .padding(.bottom, 6)
         .onAppear {
             playerManager.startTimer()
             playerManager.getVolume()

@@ -703,7 +703,7 @@ struct IslandPanelView: View {
             case .music:
                 MusicPanelView(
                     playerManager: model.playerManager,
-                    horizontalPadding: usesNotchAwareOpenedHeader ? Self.notchHeaderHorizontalPadding : 24
+                    horizontalPadding: usesNotchAwareOpenedHeader ? Self.notchHeaderHorizontalPadding : 18
                 )
                 .transition(.opacity)
                 .frame(maxWidth: .infinity)
