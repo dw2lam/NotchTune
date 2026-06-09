@@ -196,6 +196,7 @@ final class MusicPlayerManager {
             track.avgAlbumColor = Color(nsColor: newAlbumArt.nsImage.musicAverageColor ?? .gray)
             track.nsAlbumArt = newAlbumArt.nsImage
             track.albumArt = newAlbumArt.image
+            track.artworkVersion &+= 1
         }
         onAlbumArtUpdated?(track)
     }
