@@ -29,6 +29,7 @@ final class AppModel {
     private static let legacyCompletedStaleThresholdDefaultsKey = "appearance.island.v8.completedStaleThreshold"
     private static let appearanceProfileSettingsDefaultsKey = "appearance.island.v8.settingsProfile"
     private static let glassEnabledKey = "appearance.glass.enabled"
+    private static let glassStyleKey = "appearance.glass.style"
     private static let glassTintRedKey = "appearance.glass.tint.r"
     private static let glassTintGreenKey = "appearance.glass.tint.g"
     private static let glassTintBlueKey = "appearance.glass.tint.b"
@@ -621,6 +622,7 @@ final class AppModel {
     private func persistGlassSettings(_ s: LiquidGlassSettings) {
         let d = UserDefaults.standard
         d.set(s.isEnabled, forKey: Self.glassEnabledKey)
+        d.set(s.style.rawValue, forKey: Self.glassStyleKey)
         d.set(s.tintRed, forKey: Self.glassTintRedKey)
         d.set(s.tintGreen, forKey: Self.glassTintGreenKey)
         d.set(s.tintBlue, forKey: Self.glassTintBlueKey)
@@ -633,6 +635,7 @@ final class AppModel {
         let d = UserDefaults.standard
         var s = LiquidGlassSettings()
         if d.object(forKey: glassEnabledKey) != nil { s.isEnabled = d.bool(forKey: glassEnabledKey) }
+        if let raw = d.string(forKey: glassStyleKey), let style = GlassStyle(rawValue: raw) { s.style = style }
         if d.object(forKey: glassTintRedKey) != nil { s.tintRed = d.double(forKey: glassTintRedKey) }
         if d.object(forKey: glassTintGreenKey) != nil { s.tintGreen = d.double(forKey: glassTintGreenKey) }
         if d.object(forKey: glassTintBlueKey) != nil { s.tintBlue = d.double(forKey: glassTintBlueKey) }

@@ -616,6 +616,30 @@ struct AppearanceSettingsPane: View {
             .font(.system(size: 12))
             .foregroundStyle(.white.opacity(0.85))
 
+            // Material variant
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Material")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.85))
+                HStack(spacing: 8) {
+                    ForEach(GlassStyle.allCases) { style in
+                        monoChip(
+                            title: title(for: style),
+                            selected: model.glassSettings.style == style
+                        ) {
+                            model.glassSettings.style = style
+                        }
+                    }
+                }
+                Text(model.glassSettings.style == .clear
+                    ? "Transparent, light-bending glass — the most 'liquid' look."
+                    : "Frosted, more opaque glass with stronger contrast.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.38))
+            }
+            .disabled(glassControlsDisabled)
+            .opacity(glassControlsDisabled ? 0.4 : 1)
+
             // Tint hue + strength
             VStack(alignment: .leading, spacing: 10) {
                 ColorPicker(selection: Binding(
@@ -703,6 +727,13 @@ struct AppearanceSettingsPane: View {
         case .off: "Off"
         case .externalOnly: "External only"
         case .always: "Always"
+        }
+    }
+
+    private func title(for style: GlassStyle) -> String {
+        switch style {
+        case .clear: "Clear"
+        case .regular: "Frosted"
         }
     }
 

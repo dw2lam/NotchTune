@@ -224,8 +224,8 @@ struct V6ClosedPill: View {
     /// width that fits just the glyph.
     var minWidth: CGFloat = 70
 
-    /// Liquid Glass tint for the pill background. `nil` renders solid ink.
-    var glassTint: Color? = nil
+    /// Liquid Glass material for the pill background. `nil` renders solid ink.
+    var glass: ResolvedGlass? = nil
 
     var body: some View {
         switch layout {
@@ -258,7 +258,7 @@ struct V6ClosedPill: View {
         return ZStack {
             IslandSurfaceBackground(
                 shape: V6ClosedPillShape(topFilletRadius: 0),
-                glassTint: glassTint
+                glass: glass
             )
 
             HStack(spacing: 0) {
@@ -302,7 +302,7 @@ struct V6ClosedPill: View {
         return ZStack {
             IslandSurfaceBackground(
                 shape: V6ClosedPillShape(topFilletRadius: 0),
-                glassTint: glassTint
+                glass: glass
             )
 
             HStack(spacing: 0) {
@@ -547,8 +547,8 @@ struct V6ClosedMusicSurface: View {
     var physicalNotchWidth: CGFloat = 0
     var panelContentWidth: CGFloat = .greatestFiniteMagnitude
 
-    /// Liquid Glass tint for the surface background. `nil` renders solid ink.
-    var glassTint: Color? = nil
+    /// Liquid Glass material for the surface background. `nil` renders solid ink.
+    var glass: ResolvedGlass? = nil
 
     private var isNotification: Bool { phase == .notification }
 
@@ -587,7 +587,7 @@ struct V6ClosedMusicSurface: View {
         return ZStack(alignment: .topLeading) {
             IslandSurfaceBackground(
                 shape: V6ClosedPillShape(topFilletRadius: 0),
-                glassTint: glassTint
+                glass: glass
             )
 
             HStack(spacing: 0) {
@@ -736,7 +736,7 @@ struct V6ClosedMusicSurface: View {
         .background {
             IslandSurfaceBackground(
                 shape: V6ClosedPillShape(topFilletRadius: 0),
-                glassTint: glassTint
+                glass: glass
             )
         }
         .background(externalClipReporter)

@@ -10,20 +10,38 @@ enum GlassClosedScope: String, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
 }
 
+/// The Liquid Glass material variant. `clear` is the transparent, light-bending
+/// glass (most "liquid"); `regular` is the frosted, more opaque control material.
+enum GlassStyle: String, CaseIterable, Identifiable, Sendable {
+    case clear
+    case regular
+
+    var id: String { rawValue }
+}
+
+/// A fully resolved glass instruction for one surface: the material variant plus
+/// the tint to apply. `nil` (at the call site) means render solid ink instead.
+struct ResolvedGlass: Equatable {
+    var style: GlassStyle
+    var tint: Color
+}
+
 /// User-configurable Liquid Glass appearance. Stored globally (not per display
 /// profile) since it is a cross-cutting material choice. Persisted by `AppModel`.
 ///
-/// The default matches the curated look: dark-tinted glass on the open panel
-/// and on closed pills on external displays, leaving the notched-Mac closed
-/// pill solid so it still merges with the physical notch.
+/// Defaults to the curated look: clear, lightly dark-tinted glass on the open
+/// panel and on closed pills on external displays, leaving the notched-Mac
+/// closed pill solid so it still merges with the physical notch.
 struct LiquidGlassSettings: Equatable, Sendable {
     var isEnabled: Bool = true
+    var style: GlassStyle = .clear
     /// Tint hue, sRGB components 0...1. Default black keeps the dark "ink" identity.
     var tintRed: Double = 0
     var tintGreen: Double = 0
     var tintBlue: Double = 0
-    /// How strongly the tint colors / darkens the glass (0 = clear, 1 = opaque tint).
-    var tintStrength: Double = 0.5
+    /// How strongly the tint colors / darkens the glass (0 = pure glass, 1 = opaque tint).
+    /// Kept low by default so the material's lensing/specular still reads.
+    var tintStrength: Double = 0.22
     /// Apply glass to the expanded / open panel.
     var openView: Bool = true
     /// Where the closed / compact pill adopts glass.
@@ -33,20 +51,25 @@ struct LiquidGlassSettings: Equatable, Sendable {
         Color(.sRGB, red: tintRed, green: tintGreen, blue: tintBlue, opacity: 1)
     }
 
-    /// The tint actually fed to `.glassEffect(.regular.tint(_:))` — hue with the
-    /// configured strength baked in as opacity.
-    var effectiveTint: Color { tintColor.opacity(tintStrength) }
+    /// The tint actually fed to `Glass.tint(_:)` — hue with the configured
+    /// strength baked in as opacity. Strength 0 → no tint at all (pure glass).
+    var effectiveTint: Color {
+        tintStrength <= 0 ? .clear : tintColor.opacity(tintStrength)
+    }
 
-    /// Resolved glass tint for the open panel. `nil` means render the solid ink fill.
-    var openTint: Color? { (isEnabled && openView) ? effectiveTint : nil }
+    /// Resolved glass for the open panel. `nil` means render the solid ink fill.
+    var openGlass: ResolvedGlass? {
+        (isEnabled && openView) ? ResolvedGlass(style: style, tint: effectiveTint) : nil
+    }
 
-    /// Resolved glass tint for a closed pill on the given layout. `nil` = solid ink.
-    func closedTint(layout: V6ClosedLayout) -> Color? {
+    /// Resolved glass for a closed pill on the given layout. `nil` = solid ink.
+    func closedGlass(layout: V6ClosedLayout) -> ResolvedGlass? {
         guard isEnabled else { return nil }
+        let resolved = ResolvedGlass(style: style, tint: effectiveTint)
         switch closedScope {
         case .off:          return nil
-        case .externalOnly: return layout == .external ? effectiveTint : nil
-        case .always:       return effectiveTint
+        case .externalOnly: return layout == .external ? resolved : nil
+        case .always:       return resolved
         }
     }
 }
@@ -61,21 +84,17 @@ enum LiquidGlass {
 }
 
 /// Background fill for an island surface: real Liquid Glass (macOS 26+, when a
-/// tint is supplied) clipped to `shape`, otherwise the solid ink fill. Drop in
-/// wherever a surface previously used `shape.fill(V6Palette.ink)`.
+/// glass instruction is supplied) clipped to `shape`, otherwise the solid ink
+/// fill. Drop in wherever a surface previously used `shape.fill(V6Palette.ink)`.
 struct IslandSurfaceBackground<S: Shape>: View {
     var shape: S
-    /// `nil` → solid ink. Non-nil → Liquid Glass tinted with this color (the
-    /// color already carries the strength as its opacity).
-    var glassTint: Color?
+    /// `nil` → solid ink. Non-nil → Liquid Glass with the given material + tint.
+    var glass: ResolvedGlass?
 
     var body: some View {
-        if let glassTint {
-            if #available(macOS 26.0, *) {
-                Color.clear.glassEffect(.regular.tint(glassTint), in: shape)
-            } else {
-                shape.fill(V6Palette.ink)
-            }
+        if let glass, #available(macOS 26.0, *) {
+            let base: Glass = glass.style == .regular ? .regular : .clear
+            Color.clear.glassEffect(base.tint(glass.tint), in: shape)
         } else {
             shape.fill(V6Palette.ink)
         }
