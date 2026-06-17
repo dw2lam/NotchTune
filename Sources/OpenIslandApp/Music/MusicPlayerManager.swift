@@ -258,10 +258,15 @@ final class MusicPlayerManager {
         timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
-                self?.getVolume()
-                self?.getCurrentSeekerPosition()
-                self?.getPlaybackSettingInfo()
-                self?.pollForTrackChanges()
+                guard let self else { return }
+                // Always poll track / play-state (drives resume + the album-art
+                // flip). While paused the seeker/volume/settings are frozen, so
+                // skip those Apple Events — they'd return identical values.
+                self.pollForTrackChanges()
+                guard self.isPlaying else { return }
+                self.getVolume()
+                self.getCurrentSeekerPosition()
+                self.getPlaybackSettingInfo()
             }
     }
 
