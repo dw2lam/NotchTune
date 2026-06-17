@@ -94,7 +94,14 @@ struct IslandSurfaceBackground<S: Shape>: View {
     var body: some View {
         if let glass, #available(macOS 26.0, *) {
             let base: Glass = glass.style == .regular ? .regular : .clear
-            Color.clear.glassEffect(base.tint(glass.tint), in: shape)
+            // Wrap in a GlassEffectContainer so the material renders against the
+            // live backdrop from the first frame. Without it, a bare glassEffect
+            // inside the opacity/clip transition used to open the island renders
+            // the frosted fallback and only resolves to the true variant on the
+            // next render pass (i.e. after the user interacts).
+            GlassEffectContainer {
+                Color.clear.glassEffect(base.tint(glass.tint), in: shape)
+            }
         } else {
             shape.fill(V6Palette.ink)
         }

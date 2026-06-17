@@ -74,7 +74,9 @@ extension AgentSession {
 // MARK: - Animations
 
 private let openAnimation  = Animation.spring(response: 0.48, dampingFraction: 0.82)
-private let closeAnimation = Animation.spring(response: 0.40, dampingFraction: 0.90)
+// Mirror the open's pace (response 0.48) so the island eases back into place
+// instead of snapping shut; a touch more damping avoids overshoot on collapse.
+private let closeAnimation = Animation.spring(response: 0.48, dampingFraction: 0.85)
 private let popAnimation   = Animation.spring(response: 0.35, dampingFraction: 0.65)
 private let openedSurfaceUnmountDelay: TimeInterval = 0.42
 
