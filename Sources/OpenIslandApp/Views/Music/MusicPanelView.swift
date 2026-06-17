@@ -29,8 +29,8 @@ struct MusicPanelView: View {
             .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, horizontalPadding)
-        .padding(.top, 16)
-        .padding(.bottom, 6)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
         .onAppear {
             playerManager.startTimer()
             playerManager.getVolume()
