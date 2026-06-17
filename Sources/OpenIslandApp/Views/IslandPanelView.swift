@@ -78,7 +78,7 @@ private let openAnimation  = Animation.spring(response: 0.48, dampingFraction: 0
 // instead of snapping shut; a touch more damping avoids overshoot on collapse.
 private let closeAnimation = Animation.spring(response: 0.48, dampingFraction: 0.85)
 private let popAnimation   = Animation.spring(response: 0.35, dampingFraction: 0.65)
-private let openedSurfaceUnmountDelay: TimeInterval = 0.42
+private let openedSurfaceUnmountDelay: TimeInterval = 0.55
 
 private struct ConditionalDrawingGroup: ViewModifier {
     let enabled: Bool
@@ -385,7 +385,10 @@ struct IslandPanelView: View {
                         .animation(
                             usesOpenedVisualState
                                 ? .easeIn(duration: 0.14).delay(0.13)
-                                : .easeOut(duration: 0.14).delay(0.13),
+                                // Close: linger, then fade out gradually across
+                                // the collapse so the panel eases back into the
+                                // pill instead of dropping out before the morph.
+                                : .easeInOut(duration: 0.42),
                             value: usesOpenedVisualState
                         )
                         .allowsHitTesting(usesOpenedVisualState)
@@ -401,7 +404,9 @@ struct IslandPanelView: View {
                     .animation(
                         usesOpenedVisualState
                             ? .easeOut(duration: 0.05)
-                            : .easeIn(duration: 0.1).delay(0.08),
+                            // Close: bring the pill in toward the end of the
+                            // collapse so it doesn't pop in over the panel.
+                            : .easeIn(duration: 0.18).delay(0.26),
                         value: usesOpenedVisualState
                     )
                     .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.isPeeking)
