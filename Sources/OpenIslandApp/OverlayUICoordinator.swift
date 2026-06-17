@@ -168,7 +168,10 @@ final class OverlayUICoordinator {
         fullscreenPollTask?.cancel()
         fullscreenPollTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(400))
+                // Coarse backstop only — activeSpaceDidChange / didActivateApplication
+                // observers drive the perceptible fullscreen transitions; this just
+                // covers edge cases, so 2s is plenty and far fewer wakeups than 400ms.
+                try? await Task.sleep(for: .seconds(2))
                 guard !Task.isCancelled else { return }
                 self?.refreshFullscreenState()
             }
@@ -363,11 +366,11 @@ final class OverlayUICoordinator {
         let fullscreen = FullscreenDisplayDetection.isOverlayScreenInFullscreen(
             preferredScreenID: preferredOverlayScreenID
         )
-        let changed = appModel.isOverlayDisplayFullscreen != fullscreen
+        // Only write when it actually changed — assigning an @Observable
+        // property re-notifies SwiftUI every time, even with the same value.
+        guard appModel.isOverlayDisplayFullscreen != fullscreen else { return }
         appModel.isOverlayDisplayFullscreen = fullscreen
-        if changed {
-            reconcileOverlayVisibility()
-        }
+        reconcileOverlayVisibility()
     }
 
     private func reconcileOverlayVisibility() {
