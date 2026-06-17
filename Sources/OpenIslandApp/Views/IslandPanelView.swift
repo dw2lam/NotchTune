@@ -74,11 +74,11 @@ extension AgentSession {
 // MARK: - Animations
 
 private let openAnimation  = Animation.spring(response: 0.48, dampingFraction: 0.82)
-// Mirror the open's pace (response 0.48) so the island eases back into place
-// instead of snapping shut; a touch more damping avoids overshoot on collapse.
-private let closeAnimation = Animation.spring(response: 0.48, dampingFraction: 0.85)
+// Eased but prompt: a smooth collapse that still clears quickly so the
+// translucent glass panel doesn't appear to linger open.
+private let closeAnimation = Animation.spring(response: 0.38, dampingFraction: 0.86)
 private let popAnimation   = Animation.spring(response: 0.35, dampingFraction: 0.65)
-private let openedSurfaceUnmountDelay: TimeInterval = 0.55
+private let openedSurfaceUnmountDelay: TimeInterval = 0.42
 
 private struct ConditionalDrawingGroup: ViewModifier {
     let enabled: Bool
@@ -385,10 +385,10 @@ struct IslandPanelView: View {
                         .animation(
                             usesOpenedVisualState
                                 ? .easeIn(duration: 0.14).delay(0.13)
-                                // Close: linger, then fade out gradually across
-                                // the collapse so the panel eases back into the
-                                // pill instead of dropping out before the morph.
-                                : .easeInOut(duration: 0.42),
+                                // Close: fade out smoothly across the collapse so
+                                // the panel eases back into the pill — but quickly
+                                // enough that the glass doesn't appear to linger.
+                                : .easeInOut(duration: 0.24),
                             value: usesOpenedVisualState
                         )
                         .allowsHitTesting(usesOpenedVisualState)
@@ -404,9 +404,9 @@ struct IslandPanelView: View {
                     .animation(
                         usesOpenedVisualState
                             ? .easeOut(duration: 0.05)
-                            // Close: bring the pill in toward the end of the
-                            // collapse so it doesn't pop in over the panel.
-                            : .easeIn(duration: 0.18).delay(0.26),
+                            // Close: bring the pill in as the panel finishes
+                            // easing back, without popping in over it.
+                            : .easeIn(duration: 0.14).delay(0.16),
                         value: usesOpenedVisualState
                     )
                     .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.isPeeking)
