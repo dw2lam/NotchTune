@@ -227,6 +227,9 @@ struct V6ClosedPill: View {
     /// Liquid Glass material for the pill background. `nil` renders solid ink.
     var glass: ResolvedGlass? = nil
 
+    /// Freeze the animated glyph when the pill is hidden/off-screen.
+    var glyphPaused: Bool = false
+
     var body: some View {
         switch layout {
         case .external: externalBody
@@ -262,7 +265,7 @@ struct V6ClosedPill: View {
             )
 
             HStack(spacing: 0) {
-                UnifiedBars(mode: mode, size: 24, character: character)
+                UnifiedBars(mode: mode, size: 24, character: character, paused: glyphPaused)
                     .frame(width: glyphW, height: 24)
 
                 if let label {
@@ -307,7 +310,7 @@ struct V6ClosedPill: View {
 
             HStack(spacing: 0) {
                 HStack {
-                    UnifiedBars(mode: mode, size: 24, character: character)
+                    UnifiedBars(mode: mode, size: 24, character: character, paused: glyphPaused)
                         .frame(width: 24, height: 24)
                     Spacer(minLength: 0)
                 }
@@ -365,10 +368,20 @@ private struct MusicNotificationMarqueeText: View {
     let foregroundStyle: Color
     let lineHeight: CGFloat
     let maxWidth: CGFloat
+    /// Measured once at init — the text/font are immutable, so there's no reason
+    /// to re-run Core Text measurement inside the per-frame scroll timeline.
+    private let intrinsicWidth: CGFloat
 
-    private var intrinsicWidth: CGFloat {
-        guard !text.isEmpty else { return 0 }
-        return ceil((text as NSString).size(withAttributes: [.font: nsFont]).width)
+    init(text: String, font: Font, nsFont: NSFont, foregroundStyle: Color, lineHeight: CGFloat, maxWidth: CGFloat) {
+        self.text = text
+        self.font = font
+        self.nsFont = nsFont
+        self.foregroundStyle = foregroundStyle
+        self.lineHeight = lineHeight
+        self.maxWidth = maxWidth
+        self.intrinsicWidth = text.isEmpty
+            ? 0
+            : ceil((text as NSString).size(withAttributes: [.font: nsFont]).width)
     }
 
     private var shouldScroll: Bool {
@@ -531,7 +544,6 @@ private struct MusicClosedAlbumArtThumbnail: View {
         .clipShape(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         )
-        .id(nsImage.tiffRepresentation?.hashValue ?? 0)
     }
 }
 
@@ -659,7 +671,7 @@ struct V6ClosedMusicSurface: View {
             .opacity(isNotification ? 1 : 0)
 
             HStack(spacing: 0) {
-                MusicWaveformView(isPlaying: isPlaying, color: track.avgAlbumColor)
+                MusicWaveformView(isPlaying: isPlaying && !isNotification, color: track.avgAlbumColor)
                 Spacer(minLength: 0)
                 musicTrailingInset
             }
@@ -725,7 +737,7 @@ struct V6ClosedMusicSurface: View {
             ZStack {
                 playStateIcon
                     .opacity(isNotification ? 1 : 0)
-                MusicWaveformView(isPlaying: isPlaying, color: track.avgAlbumColor)
+                MusicWaveformView(isPlaying: isPlaying && !isNotification, color: track.avgAlbumColor)
                     .opacity(isNotification ? 0 : 1)
             }
 

@@ -130,6 +130,13 @@ struct IslandPanelView: View {
         usesOpenedVisualState || keepsOpenedSurfaceMounted
     }
 
+    /// The closed-pill glyph isn't visible while the island is opened or while
+    /// the pill is collapsed/hidden (fullscreen, auto-hidden) and not peeking.
+    /// Freeze its per-frame animation in those states.
+    private var closedGlyphPaused: Bool {
+        usesOpenedVisualState || (model.shouldCollapseClosedNotch && !model.isPeeking)
+    }
+
     private var isPopping: Bool {
         model.notchStatus == .popping
     }
@@ -489,7 +496,7 @@ struct IslandPanelView: View {
                     panelContentWidth: panelContentWidth,
                     glass: model.glassSettings.closedGlass(layout: layout)
                 )
-                .id("closed-music-surface-\(surfaceTrack.title)|\(surfaceTrack.artist)|\(model.playerManager.track.nsAlbumArt.tiffRepresentation?.hashValue ?? 0)")
+                .id("closed-music-surface-\(surfaceTrack.title)|\(surfaceTrack.artist)|\(model.playerManager.track.artworkVersion)")
                 .background(closedSurfaceWidthReader)
             } else {
                 let layout: V6ClosedLayout = isExternalDisplayPlacement ? .external : .macbook
@@ -502,7 +509,8 @@ struct IslandPanelView: View {
                     height: closedNotchHeight,
                     physicalNotchWidth: layout == .macbook ? macbookPhysicalNotchWidth : 0,
                     minWidth: 70,
-                    glass: model.glassSettings.closedGlass(layout: layout)
+                    glass: model.glassSettings.closedGlass(layout: layout),
+                    glyphPaused: closedGlyphPaused
                 )
                 .scaleEffect(isPopping ? 1.04 : 1, anchor: .top)
                 .animation(popAnimation, value: isPopping)

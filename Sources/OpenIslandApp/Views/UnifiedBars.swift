@@ -16,20 +16,43 @@ struct UnifiedBars: View {
     var mode: Mode
     var size: CGFloat = 24
     var character: IslandCharacter = .dino
+    /// When true the glyph is off-screen / hidden (island opened, collapsed, or
+    /// behind a fullscreen window). Freeze to a single static frame so the
+    /// display link can idle instead of redrawing the Canvas every frame.
+    var paused: Bool = false
     /// Ink color for bars / tick. Defaults to the v6 paper ink.
     var tint: Color = Color(red: 0xf1 / 255.0, green: 0xea / 255.0, blue: 0xd9 / 255.0)
 
     private static let box: CGFloat = 24
 
     var body: some View {
-        TimelineView(.animation) { timeline in
-            Canvas { context, canvasSize in
-                withScaledContext(context, canvasSize) { ctx in
-                    drawCharacter(context: ctx, time: timeline.date.timeIntervalSinceReferenceDate)
+        // Match the redraw cadence to what each state actually needs. `.running`
+        // keeps display sync for its 5fps frame-swap + bounce; the others only
+        // move slowly (or not at all), so a coarse periodic schedule is visually
+        // identical at a fraction of the wakeups. Hidden → no schedule at all.
+        Group {
+            if paused {
+                canvas(time: 0)
+            } else {
+                switch mode {
+                case .running:
+                    TimelineView(.animation) { canvas(time: $0.date.timeIntervalSinceReferenceDate) }
+                case .waiting:
+                    TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { canvas(time: $0.date.timeIntervalSinceReferenceDate) }
+                case .idle:
+                    TimelineView(.periodic(from: .now, by: 1.0 / 15.0)) { canvas(time: $0.date.timeIntervalSinceReferenceDate) }
                 }
             }
         }
         .frame(width: size, height: size)
+    }
+
+    private func canvas(time: TimeInterval) -> some View {
+        Canvas { context, canvasSize in
+            withScaledContext(context, canvasSize) { ctx in
+                drawCharacter(context: ctx, time: time)
+            }
+        }
     }
 
     // MARK: - Drawing
