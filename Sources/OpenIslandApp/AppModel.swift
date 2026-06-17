@@ -28,6 +28,13 @@ final class AppModel {
     private static let legacyIslandSessionSortDefaultsKey = "appearance.island.v8.sessionSort"
     private static let legacyCompletedStaleThresholdDefaultsKey = "appearance.island.v8.completedStaleThreshold"
     private static let appearanceProfileSettingsDefaultsKey = "appearance.island.v8.settingsProfile"
+    private static let glassEnabledKey = "appearance.glass.enabled"
+    private static let glassTintRedKey = "appearance.glass.tint.r"
+    private static let glassTintGreenKey = "appearance.glass.tint.g"
+    private static let glassTintBlueKey = "appearance.glass.tint.b"
+    private static let glassTintStrengthKey = "appearance.glass.tint.strength"
+    private static let glassOpenViewKey = "appearance.glass.openView"
+    private static let glassClosedScopeKey = "appearance.glass.closedScope"
 
     private static let syntheticClaudeSessionPrefix = "claude-process:"
     private static let liveSessionStalenessWindow: TimeInterval = 15 * 60
@@ -296,6 +303,16 @@ final class AppModel {
     }
     @ObservationIgnored
     private var isApplyingLaunchAtLogin = false
+
+    /// Configurable Liquid Glass appearance for the island surfaces. Persisted
+    /// globally; see `LiquidGlassSettings`.
+    var glassSettings = LiquidGlassSettings() {
+        didSet {
+            guard glassSettings != oldValue else { return }
+            persistGlassSettings(glassSettings)
+        }
+    }
+
     var isSoundMuted = false {
         didSet {
             guard isSoundMuted != oldValue else {
@@ -601,6 +618,32 @@ final class AppModel {
         )
     }
 
+    private func persistGlassSettings(_ s: LiquidGlassSettings) {
+        let d = UserDefaults.standard
+        d.set(s.isEnabled, forKey: Self.glassEnabledKey)
+        d.set(s.tintRed, forKey: Self.glassTintRedKey)
+        d.set(s.tintGreen, forKey: Self.glassTintGreenKey)
+        d.set(s.tintBlue, forKey: Self.glassTintBlueKey)
+        d.set(s.tintStrength, forKey: Self.glassTintStrengthKey)
+        d.set(s.openView, forKey: Self.glassOpenViewKey)
+        d.set(s.closedScope.rawValue, forKey: Self.glassClosedScopeKey)
+    }
+
+    private static func loadGlassSettings() -> LiquidGlassSettings {
+        let d = UserDefaults.standard
+        var s = LiquidGlassSettings()
+        if d.object(forKey: glassEnabledKey) != nil { s.isEnabled = d.bool(forKey: glassEnabledKey) }
+        if d.object(forKey: glassTintRedKey) != nil { s.tintRed = d.double(forKey: glassTintRedKey) }
+        if d.object(forKey: glassTintGreenKey) != nil { s.tintGreen = d.double(forKey: glassTintGreenKey) }
+        if d.object(forKey: glassTintBlueKey) != nil { s.tintBlue = d.double(forKey: glassTintBlueKey) }
+        if d.object(forKey: glassTintStrengthKey) != nil { s.tintStrength = d.double(forKey: glassTintStrengthKey) }
+        if d.object(forKey: glassOpenViewKey) != nil { s.openView = d.bool(forKey: glassOpenViewKey) }
+        if let raw = d.string(forKey: glassClosedScopeKey), let scope = GlassClosedScope(rawValue: raw) {
+            s.closedScope = scope
+        }
+        return s
+    }
+
     init(
         terminalJumpAction: @escaping @Sendable (JumpTarget) throws -> String = { target in
             try TerminalJumpService().jump(to: target)
@@ -636,6 +679,7 @@ final class AppModel {
         ) ?? .topBar
         notchAppearancePreferences = Self.loadAppearancePreferences(for: .notch)
         topBarAppearancePreferences = Self.loadAppearancePreferences(for: .topBar)
+        glassSettings = Self.loadGlassSettings()
         watchNotificationEnabled = UserDefaults.standard.bool(forKey: Self.watchNotificationEnabledKey)
         if watchNotificationEnabled {
             startWatchRelay()

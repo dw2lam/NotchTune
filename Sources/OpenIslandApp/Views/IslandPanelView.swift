@@ -484,7 +484,8 @@ struct IslandPanelView: View {
                     layout: layout,
                     height: closedNotchHeight,
                     physicalNotchWidth: layout == .macbook ? macbookPhysicalNotchWidth : 0,
-                    panelContentWidth: panelContentWidth
+                    panelContentWidth: panelContentWidth,
+                    glassTint: model.glassSettings.closedTint(layout: layout)
                 )
                 .id("closed-music-surface-\(surfaceTrack.title)|\(surfaceTrack.artist)|\(model.playerManager.track.nsAlbumArt.tiffRepresentation?.hashValue ?? 0)")
                 .background(closedSurfaceWidthReader)
@@ -498,7 +499,8 @@ struct IslandPanelView: View {
                     layout: layout,
                     height: closedNotchHeight,
                     physicalNotchWidth: layout == .macbook ? macbookPhysicalNotchWidth : 0,
-                    minWidth: 70
+                    minWidth: 70,
+                    glassTint: model.glassSettings.closedTint(layout: layout)
                 )
                 .scaleEffect(isPopping ? 1.04 : 1, anchor: .top)
                 .animation(popAnimation, value: isPopping)
@@ -570,8 +572,7 @@ struct IslandPanelView: View {
         )
 
         ZStack(alignment: .top) {
-            surfaceShape
-                .fill(V6Palette.ink)
+            IslandSurfaceBackground(shape: surfaceShape, glassTint: model.glassSettings.openTint)
                 .frame(width: surfaceWidth, height: surfaceHeight)
                 .overlay {
                     if model.islandActiveTab == .music && model.playerManager.isRunning && !model.playerManager.track.isEmpty() {

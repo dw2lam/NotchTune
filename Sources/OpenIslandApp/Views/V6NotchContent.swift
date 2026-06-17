@@ -224,6 +224,9 @@ struct V6ClosedPill: View {
     /// width that fits just the glyph.
     var minWidth: CGFloat = 70
 
+    /// Liquid Glass tint for the pill background. `nil` renders solid ink.
+    var glassTint: Color? = nil
+
     var body: some View {
         switch layout {
         case .external: externalBody
@@ -253,8 +256,10 @@ struct V6ClosedPill: View {
         let width = max(minWidth, intrinsic)
 
         return ZStack {
-            V6ClosedPillShape(topFilletRadius: 0)
-                .fill(V6Palette.ink)
+            IslandSurfaceBackground(
+                shape: V6ClosedPillShape(topFilletRadius: 0),
+                glassTint: glassTint
+            )
 
             HStack(spacing: 0) {
                 UnifiedBars(mode: mode, size: 24, character: character)
@@ -295,8 +300,10 @@ struct V6ClosedPill: View {
         let outer = wingReserve + physicalNotchWidth + wingReserve
 
         return ZStack {
-            V6ClosedPillShape(topFilletRadius: 0)
-                .fill(V6Palette.ink)
+            IslandSurfaceBackground(
+                shape: V6ClosedPillShape(topFilletRadius: 0),
+                glassTint: glassTint
+            )
 
             HStack(spacing: 0) {
                 HStack {
@@ -540,6 +547,9 @@ struct V6ClosedMusicSurface: View {
     var physicalNotchWidth: CGFloat = 0
     var panelContentWidth: CGFloat = .greatestFiniteMagnitude
 
+    /// Liquid Glass tint for the surface background. `nil` renders solid ink.
+    var glassTint: Color? = nil
+
     private var isNotification: Bool { phase == .notification }
 
     var body: some View {
@@ -575,8 +585,10 @@ struct V6ClosedMusicSurface: View {
         let outer = leftWing + physicalNotchWidth + rightWing
 
         return ZStack(alignment: .topLeading) {
-            V6ClosedPillShape(topFilletRadius: 0)
-                .fill(V6Palette.ink)
+            IslandSurfaceBackground(
+                shape: V6ClosedPillShape(topFilletRadius: 0),
+                glassTint: glassTint
+            )
 
             HStack(spacing: 0) {
                 macbookLeftWing(
@@ -721,7 +733,12 @@ struct V6ClosedMusicSurface: View {
         }
         .frame(height: height)
         .fixedSize(horizontal: true, vertical: true)
-        .background(V6Palette.ink, in: V6ClosedPillShape(topFilletRadius: 0))
+        .background {
+            IslandSurfaceBackground(
+                shape: V6ClosedPillShape(topFilletRadius: 0),
+                glassTint: glassTint
+            )
+        }
         .background(externalClipReporter)
     }
 
