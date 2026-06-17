@@ -11,7 +11,9 @@ enum IslandChromeMetrics {
     /// Outer leading inset before album art on closed music surfaces.
     static let notchedMusicLeadingPadding: CGFloat = 8
     /// Trailing outer inset after play icon / waveform on closed music surfaces.
-    static let notchedMusicTrailingPadding: CGFloat = 6
+    /// Matches `notchedMusicLeadingPadding` so the compact pill is symmetric
+    /// around the notch (album art and trailing cluster get equal breathing room).
+    static let notchedMusicTrailingPadding: CGFloat = 8
     static let notchedClosedContentGap: CGFloat = 8
 
     /// Total outer width of a compact music pill on a notched MacBook.

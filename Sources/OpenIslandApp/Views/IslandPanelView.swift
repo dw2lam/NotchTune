@@ -95,7 +95,7 @@ private struct ConditionalDrawingGroup: ViewModifier {
 struct IslandPanelView: View {
     private static let headerControlButtonSize: CGFloat = 22
     private static let headerControlSpacing: CGFloat = 8
-    private static let headerHorizontalPadding: CGFloat = 18
+    private static let headerHorizontalPadding: CGFloat = 16
     private static let headerTopPadding: CGFloat = 2
     private static let notchHeaderHorizontalPadding: CGFloat = 16
     private static let openedTabBarTopPadding: CGFloat = 10
@@ -703,7 +703,7 @@ struct IslandPanelView: View {
             case .music:
                 MusicPanelView(
                     playerManager: model.playerManager,
-                    horizontalPadding: usesNotchAwareOpenedHeader ? Self.notchHeaderHorizontalPadding : 18
+                    horizontalPadding: usesNotchAwareOpenedHeader ? Self.notchHeaderHorizontalPadding : 16
                 )
                 .transition(.opacity)
                 .frame(maxWidth: .infinity)
