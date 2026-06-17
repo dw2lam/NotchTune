@@ -30,7 +30,7 @@ enum IslandChromeMetrics {
 
     /// Right wing for compact music — waveform against the notch, trailing outer inset.
     static func notchedCompactMusicRightWingReserve() -> CGFloat {
-        let waveformWidth: CGFloat = 20
+        let waveformWidth: CGFloat = MusicTrackNotificationMetrics.waveformWidth
         return ceil(waveformWidth + notchedMusicTrailingPadding)
     }
 
@@ -81,7 +81,7 @@ enum IslandChromeMetrics {
 
     /// Right wing for music notifications — play/pause icon pinned to the outer edge.
     static func notchedMusicNotificationRightWingReserve() -> CGFloat {
-        let playWidth: CGFloat = 18
+        let playWidth: CGFloat = MusicTrackNotificationMetrics.playIconWidth
         return ceil(notchedMusicTrailingPadding + playWidth)
     }
 

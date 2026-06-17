@@ -427,6 +427,10 @@ enum MusicTrackNotificationMetrics {
     static let minimumTextWidth: CGFloat = 48
     static let maximumTextWidth: CGFloat = 300
     static let measurementFudge: CGFloat = 14
+    /// Rendered widths of the trailing glyphs, shared so the notch wing-reserve
+    /// math (IslandChromeMetrics) stays in lockstep with the actual views.
+    static let waveformWidth: CGFloat = 20
+    static let playIconWidth: CGFloat = 18
 
     static func estimatedOuterWidth(
         for layout: V6ClosedLayout,
@@ -457,7 +461,7 @@ enum MusicTrackNotificationMetrics {
     static func estimatedExternalWidth(track: PlayerTrack) -> CGFloat {
         let artWidth: CGFloat = albumArtWidth
         let contentGap: CGFloat = 8
-        let playWidth: CGFloat = 18
+        let playWidth: CGFloat = playIconWidth
         let textWidth = estimatedTextBlockWidth(title: track.title, artist: track.artist)
         return IslandChromeMetrics.notchedMusicLeadingPadding
             + artWidth
@@ -676,7 +680,7 @@ struct V6ClosedMusicSurface: View {
             + V6ClosedMusicSurfaceMetrics.albumArtSize
             + IslandChromeMetrics.notchedClosedContentGap
             + IslandChromeMetrics.notchedMusicTrailingPadding
-            + 18
+            + MusicTrackNotificationMetrics.playIconWidth
         let available = panelContentWidth - chrome
         let maxText = min(
             MusicTrackNotificationMetrics.maximumTextWidth,
@@ -772,7 +776,8 @@ struct V6ClosedMusicSurface: View {
         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
             .font(.system(size: 10, weight: .bold))
             .foregroundStyle(track.avgAlbumColor)
-            .frame(width: 18, height: 18)
+            .frame(width: MusicTrackNotificationMetrics.playIconWidth,
+                   height: MusicTrackNotificationMetrics.playIconWidth)
     }
 }
 
@@ -786,7 +791,7 @@ struct MusicWaveformView: View {
                 MusicWaveformBar(index: index, isPlaying: isPlaying, color: color)
             }
         }
-        .frame(width: 20, height: 14)
+        .frame(width: MusicTrackNotificationMetrics.waveformWidth, height: 14)
     }
 }
 
