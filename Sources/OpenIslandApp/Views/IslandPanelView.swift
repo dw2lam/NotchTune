@@ -593,6 +593,15 @@ struct IslandPanelView: View {
                             .clipShape(surfaceShape)
                     }
                 }
+                // Directional opacity: stays at identity (1.0) on open so the
+                // glass never composites offscreen (and renders tinted from the
+                // first frame), then fades out cleanly on close instead of
+                // collapsing geometrically into the pill (which glitches).
+                .opacity(usesOpenedVisualState ? 1 : 0)
+                .animation(
+                    usesOpenedVisualState ? nil : .easeInOut(duration: 0.22),
+                    value: usesOpenedVisualState
+                )
 
             VStack(spacing: 0) {
                 openedHeaderContent
