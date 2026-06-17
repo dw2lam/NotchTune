@@ -32,6 +32,11 @@ final class OverlayPanelController {
     private var eventMonitors = NotchEventMonitors()
     private var hoverTimer: DispatchWorkItem?
     private var hoverCancelGrace: DispatchWorkItem?
+    /// Set when the island auto-collapses on mouse-leave; suppresses an
+    /// immediate hover-reopen while the cursor lingers over the notch (which
+    /// would otherwise interrupt the close animation). Cleared once the cursor
+    /// leaves the closed-surface area, so a deliberate re-hover still works.
+    private var suppressHoverOpenAfterCollapse = false
     weak var model: AppModel?
     private(set) var notchRect: NSRect = .zero
 
@@ -301,6 +306,8 @@ final class OverlayPanelController {
             }
         } else if model.notchStatus == .closed && !inClosedSurfaceArea {
             cancelHoverOpen()
+            // Cursor left the notch after an auto-collapse — re-arm hover-open.
+            suppressHoverOpenAfterCollapse = false
         }
 
         let shouldTrackNotificationPointer = model.notchStatus == .opened
@@ -311,7 +318,13 @@ final class OverlayPanelController {
             if isPointInExpandedArea(screenLocation) {
                 model.notePointerInsideIslandSurface()
             } else {
+                let wasOpened = model.notchStatus == .opened
                 model.handlePointerExitedIslandSurface()
+                // If that auto-collapsed the island, don't let the cursor still
+                // sitting over the notch immediately re-hover it open mid-close.
+                if wasOpened && model.notchStatus != .opened {
+                    suppressHoverOpenAfterCollapse = true
+                }
             }
         }
     }
@@ -340,6 +353,10 @@ final class OverlayPanelController {
     private static let hoverCancelGracePeriod: TimeInterval = 0.1
 
     private func scheduleHoverOpen() {
+        // Suppressed right after an auto-collapse until the cursor leaves the
+        // notch, so a lingering cursor doesn't interrupt the close animation.
+        guard !suppressHoverOpenAfterCollapse else { return }
+
         // Mouse re-entered during grace period — just revoke the cancel.
         hoverCancelGrace?.cancel()
         hoverCancelGrace = nil
