@@ -380,17 +380,11 @@ struct IslandPanelView: View {
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
                 if shouldRenderOpenedSurface {
+                    // NB: opacity is applied to the *content* inside, never to the
+                    // glass background — compositing Liquid Glass through an
+                    // opacity layer makes it render an untinted/frosted fallback
+                    // until the next clean pass. The morph clip reveals the glass.
                     openedSurface(width: openedWidth, height: openedHeight)
-                        .opacity(usesOpenedVisualState ? 1 : 0)
-                        .animation(
-                            usesOpenedVisualState
-                                ? .easeIn(duration: 0.14).delay(0.13)
-                                // Close: fade out smoothly across the collapse so
-                                // the panel eases back into the pill — but quickly
-                                // enough that the glass doesn't appear to linger.
-                                : .easeInOut(duration: 0.24),
-                            value: usesOpenedVisualState
-                        )
                         .allowsHitTesting(usesOpenedVisualState)
                 }
 
@@ -618,6 +612,16 @@ struct IslandPanelView: View {
                 surfaceShape
                     .stroke(Color.white.opacity(0.07), lineWidth: 1)
             }
+            // Fade only the content — the glass background stays at full opacity
+            // (revealed/hidden geometrically by the morph clip) so it never gets
+            // composited offscreen and always renders tinted against the backdrop.
+            .opacity(usesOpenedVisualState ? 1 : 0)
+            .animation(
+                usesOpenedVisualState
+                    ? .easeIn(duration: 0.14).delay(0.13)
+                    : .easeInOut(duration: 0.20),
+                value: usesOpenedVisualState
+            )
         }
         .frame(width: surfaceWidth, height: surfaceHeight, alignment: .top)
     }
