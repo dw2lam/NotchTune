@@ -51,7 +51,8 @@ struct UnifiedBars: View {
         }
         .frame(width: size, height: size)
         .onChange(of: nudgeTrigger) { _, newValue in
-            guard newValue != nil else { return }
+            // Skip while hidden/frozen — no point animating an off-screen glyph.
+            guard newValue != nil, !paused else { return }
             // Jump up sharply, then settle back with a springy landing.
             withAnimation(.easeOut(duration: 0.16)) { nudgeBounce = 3 }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {

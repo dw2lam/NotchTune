@@ -321,6 +321,11 @@ final class AppModel {
         didSet {
             guard nudgeSettings != oldValue else { return }
             persistNudgeSettings(nudgeSettings)
+            if nudgeSettings.isEnabled && !oldValue.isEnabled {
+                armNudgesForWaitingSessions()
+            } else if !nudgeSettings.isEnabled {
+                cancelAllNudges()
+            }
         }
     }
 
@@ -329,6 +334,10 @@ final class AppModel {
 
     /// Bumped to fire a one-shot character jump when an idle session is nudged.
     var nudgeTrigger: UUID?
+
+    /// When each waiting session entered its attention phase, anchored so the
+    /// "Waiting Xm Ys" display doesn't reset if `updatedAt` bumps mid-wait.
+    var attentionStartedAt: [String: Date] = [:]
 
     var isSoundMuted = false {
         didSet {
@@ -691,6 +700,11 @@ final class AppModel {
     /// Fires after the configured threshold if the session is still waiting.
     func scheduleIdleNudgeIfNeeded(for sessionID: String) {
         nudgeTimers[sessionID]?.cancel()
+        // Anchor the wait-start once (the displayed "Waiting Xm Ys" must not
+        // reset if updatedAt bumps mid-wait). Preserved across re-arms.
+        if attentionStartedAt[sessionID] == nil {
+            attentionStartedAt[sessionID] = state.session(id: sessionID)?.updatedAt ?? Date()
+        }
         let seconds = nudgeSettings.threshold.seconds
         nudgeTimers[sessionID] = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
@@ -707,14 +721,32 @@ final class AppModel {
         nudgeTrigger = UUID()
     }
 
+    /// Arm nudges for every session already waiting — used when the feature is
+    /// turned on mid-wait (otherwise only fresh events would arm).
+    private func armNudgesForWaitingSessions() {
+        for session in state.sessions where session.phase.requiresAttention {
+            scheduleIdleNudgeIfNeeded(for: session.id)
+        }
+    }
+
+    /// Cancel and clear all pending nudge state (feature disabled).
+    private func cancelAllNudges() {
+        for task in nudgeTimers.values { task.cancel() }
+        nudgeTimers.removeAll()
+        attentionStartedAt.removeAll()
+    }
+
     /// Cancel pending nudges for sessions that are no longer waiting (the user
     /// responded, the session completed, or it was removed). Called from every
     /// resolution path so a resolved session never nudges.
     private func reconcileNudgeTimers() {
-        guard !nudgeTimers.isEmpty else { return }
-        for (id, task) in nudgeTimers where state.session(id: id)?.phase.requiresAttention != true {
-            task.cancel()
+        guard !nudgeTimers.isEmpty || !attentionStartedAt.isEmpty else { return }
+        for id in Array(nudgeTimers.keys) where state.session(id: id)?.phase.requiresAttention != true {
+            nudgeTimers[id]?.cancel()
             nudgeTimers[id] = nil
+        }
+        for id in Array(attentionStartedAt.keys) where state.session(id: id)?.phase.requiresAttention != true {
+            attentionStartedAt[id] = nil
         }
     }
 

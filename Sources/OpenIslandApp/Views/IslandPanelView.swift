@@ -960,6 +960,7 @@ struct IslandPanelView: View {
                     completedStaleThreshold: model.completedStaleThreshold.seconds,
                     isActionable: true,
                     showsWaitingTime: model.nudgeSettings.isEnabled,
+                    waitingSince: model.attentionStartedAt[session.id],
                     useDrawingGroup: model.notchStatus == .opened,
                     isInteractive: model.notchStatus == .opened,
                     presentation: .notification,
@@ -1003,6 +1004,7 @@ struct IslandPanelView: View {
                                 completedStaleThreshold: model.completedStaleThreshold.seconds,
                                 isActionable: session.phase.requiresAttention || session.id == actionableSessionID,
                                 showsWaitingTime: model.nudgeSettings.isEnabled,
+                                waitingSince: model.attentionStartedAt[session.id],
                                 useDrawingGroup: model.notchStatus == .opened,
                                 isInteractive: model.notchStatus == .opened,
                                 sideInset: sessionListSideInset,
@@ -1054,6 +1056,7 @@ struct IslandPanelView: View {
                         completedStaleThreshold: model.completedStaleThreshold.seconds,
                         isActionable: session.phase.requiresAttention || session.id == actionableSessionID,
                         showsWaitingTime: model.nudgeSettings.isEnabled,
+                        waitingSince: model.attentionStartedAt[session.id],
                         useDrawingGroup: model.notchStatus == .opened,
                         isInteractive: model.notchStatus == .opened,
                         sideInset: sessionListSideInset,
@@ -1596,6 +1599,7 @@ private struct IslandSessionRow: View {
     var completedStaleThreshold: TimeInterval = AgentSession.staleCompletedDisplayThreshold
     var isActionable: Bool = false
     var showsWaitingTime: Bool = false
+    var waitingSince: Date?
     var useDrawingGroup: Bool = true
     var isInteractive: Bool = true
     var presentation: IslandSessionRowPresentation = .list
@@ -1735,7 +1739,7 @@ private struct IslandSessionRow: View {
                 Image(systemName: "hourglass")
                     .font(.system(size: 9, weight: .semibold))
                 TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                    Text("Waiting \(subagentElapsed(since: session.updatedAt, at: timeline.date))")
+                    Text("Waiting \(subagentElapsed(since: waitingSince ?? session.updatedAt, at: timeline.date))")
                         .font(.system(size: 10.5, weight: .medium))
                 }
             }
