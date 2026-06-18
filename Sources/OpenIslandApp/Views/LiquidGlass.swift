@@ -94,14 +94,17 @@ struct IslandSurfaceBackground<S: Shape>: View {
     var body: some View {
         if let glass, #available(macOS 26.0, *) {
             let base: Glass = glass.style == .regular ? .regular : .clear
-            // Wrap in a GlassEffectContainer so the material renders against the
-            // live backdrop from the first frame. Without it, a bare glassEffect
-            // inside the opacity/clip transition used to open the island renders
-            // the frosted fallback and only resolves to the true variant on the
-            // next render pass (i.e. after the user interacts).
+            // Render the untinted material in a GlassEffectContainer (so it
+            // composites against the live backdrop from the first frame)...
             GlassEffectContainer {
-                Color.clear.glassEffect(base.tint(glass.tint), in: shape)
+                Color.clear.glassEffect(base, in: shape)
             }
+            // ...and apply the tint as a plain shape fill on top, NOT via
+            // Glass.tint(_:). Inside the island's open/morph transition the
+            // material's integrated tint only resolves on a later re-render
+            // (e.g. when the user interacts), so the tint pops in late. A shape
+            // fill always renders on the first frame.
+            .overlay { shape.fill(glass.tint) }
         } else {
             shape.fill(V6Palette.ink)
         }
