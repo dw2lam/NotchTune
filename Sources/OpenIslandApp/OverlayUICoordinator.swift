@@ -257,6 +257,13 @@ final class OverlayUICoordinator {
         notchStatus = status
         overlayPanelController.setInteractive(interactive)
 
+        // An agent notification belongs to the Agents tab — switch to it so the
+        // card is actually shown (and the panel isn't sized for the agents
+        // content while the Music tab is still displayed).
+        if status == .opened, reason == .notification, surface.isNotificationCard {
+            appModel?.islandActiveTab = .agents
+        }
+
         if status == .opened, let appModel {
             refreshFullscreenState()
             if appModel.isOverlayDisplayFullscreen {
