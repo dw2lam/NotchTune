@@ -230,6 +230,9 @@ struct V6ClosedPill: View {
     /// Freeze the animated glyph when the pill is hidden/off-screen.
     var glyphPaused: Bool = false
 
+    /// Changes to trigger a one-shot jump on the glyph (idle-session nudge).
+    var nudgeTrigger: UUID? = nil
+
     var body: some View {
         switch layout {
         case .external: externalBody
@@ -265,7 +268,7 @@ struct V6ClosedPill: View {
             )
 
             HStack(spacing: 0) {
-                UnifiedBars(mode: mode, size: 24, character: character, paused: glyphPaused)
+                UnifiedBars(mode: mode, size: 24, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
                     .frame(width: glyphW, height: 24)
 
                 if let label {
@@ -310,7 +313,7 @@ struct V6ClosedPill: View {
 
             HStack(spacing: 0) {
                 HStack {
-                    UnifiedBars(mode: mode, size: 24, character: character, paused: glyphPaused)
+                    UnifiedBars(mode: mode, size: 24, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
                         .frame(width: 24, height: 24)
                     Spacer(minLength: 0)
                 }

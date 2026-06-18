@@ -509,7 +509,8 @@ struct IslandPanelView: View {
                     physicalNotchWidth: layout == .macbook ? macbookPhysicalNotchWidth : 0,
                     minWidth: 70,
                     glass: model.glassSettings.closedGlass(layout: layout),
-                    glyphPaused: closedGlyphPaused
+                    glyphPaused: closedGlyphPaused,
+                    nudgeTrigger: model.nudgeTrigger
                 )
                 .scaleEffect(isPopping ? 1.04 : 1, anchor: .top)
                 .animation(popAnimation, value: isPopping)
@@ -958,6 +959,7 @@ struct IslandPanelView: View {
                     stateIndicator: model.islandSessionStateIndicator,
                     completedStaleThreshold: model.completedStaleThreshold.seconds,
                     isActionable: true,
+                    showsWaitingTime: model.nudgeSettings.isEnabled,
                     useDrawingGroup: model.notchStatus == .opened,
                     isInteractive: model.notchStatus == .opened,
                     presentation: .notification,
@@ -1000,6 +1002,7 @@ struct IslandPanelView: View {
                                 stateIndicator: model.islandSessionStateIndicator,
                                 completedStaleThreshold: model.completedStaleThreshold.seconds,
                                 isActionable: session.phase.requiresAttention || session.id == actionableSessionID,
+                                showsWaitingTime: model.nudgeSettings.isEnabled,
                                 useDrawingGroup: model.notchStatus == .opened,
                                 isInteractive: model.notchStatus == .opened,
                                 sideInset: sessionListSideInset,
@@ -1050,6 +1053,7 @@ struct IslandPanelView: View {
                         stateIndicator: model.islandSessionStateIndicator,
                         completedStaleThreshold: model.completedStaleThreshold.seconds,
                         isActionable: session.phase.requiresAttention || session.id == actionableSessionID,
+                        showsWaitingTime: model.nudgeSettings.isEnabled,
                         useDrawingGroup: model.notchStatus == .opened,
                         isInteractive: model.notchStatus == .opened,
                         sideInset: sessionListSideInset,
@@ -1591,6 +1595,7 @@ private struct IslandSessionRow: View {
     var stateIndicator: IslandSessionStateIndicator = .animatedDot
     var completedStaleThreshold: TimeInterval = AgentSession.staleCompletedDisplayThreshold
     var isActionable: Bool = false
+    var showsWaitingTime: Bool = false
     var useDrawingGroup: Bool = true
     var isInteractive: Bool = true
     var presentation: IslandSessionRowPresentation = .list
@@ -1725,6 +1730,21 @@ private struct IslandSessionRow: View {
 
     @ViewBuilder
     private func rowAuxiliaryDetails(presence: IslandSessionPresence) -> some View {
+        if showsWaitingTime, session.phase.requiresAttention {
+            HStack(spacing: 5) {
+                Image(systemName: "hourglass")
+                    .font(.system(size: 9, weight: .semibold))
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    Text("Waiting \(subagentElapsed(since: session.updatedAt, at: timeline.date))")
+                        .font(.system(size: 10.5, weight: .medium))
+                }
+            }
+            .foregroundStyle(statusTint(for: presence).opacity(0.9))
+            .padding(.leading, detailLeadingInset)
+            .padding(.trailing, sideInset)
+            .padding(.bottom, 10)
+        }
+
         if !shouldShowEmbeddedDetailBody,
            let activityLine = session.spotlightActivityLineText ?? expandedActivityLineText {
             Text(activityLine)

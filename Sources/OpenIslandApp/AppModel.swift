@@ -36,6 +36,8 @@ final class AppModel {
     private static let glassTintStrengthKey = "appearance.glass.tint.strength"
     private static let glassOpenViewKey = "appearance.glass.openView"
     private static let glassClosedScopeKey = "appearance.glass.closedScope"
+    private static let nudgeEnabledKey = "feature.nudge.enabled"
+    private static let nudgeThresholdKey = "feature.nudge.threshold"
 
     private static let syntheticClaudeSessionPrefix = "claude-process:"
     private static let liveSessionStalenessWindow: TimeInterval = 15 * 60
@@ -314,6 +316,20 @@ final class AppModel {
         }
     }
 
+    /// Idle-session nudge configuration; persisted. See `NudgeSettings`.
+    var nudgeSettings = NudgeSettings() {
+        didSet {
+            guard nudgeSettings != oldValue else { return }
+            persistNudgeSettings(nudgeSettings)
+        }
+    }
+
+    /// Per-session pending nudge timers, keyed by session id.
+    @ObservationIgnored private var nudgeTimers: [String: Task<Void, Never>] = [:]
+
+    /// Bumped to fire a one-shot character jump when an idle session is nudged.
+    var nudgeTrigger: UUID?
+
     var isSoundMuted = false {
         didSet {
             guard isSoundMuted != oldValue else {
@@ -330,6 +346,12 @@ final class AppModel {
         didSet {
             guard selectedSoundName != oldValue else { return }
             NotificationSoundService.selectedSoundName = selectedSoundName
+        }
+    }
+    var selectedNudgeSoundName: String = NotificationSoundService.defaultSoundName(for: .nudge) {
+        didSet {
+            guard selectedNudgeSoundName != oldValue else { return }
+            NotificationSoundService.setSelectedSoundName(selectedNudgeSoundName, for: .nudge)
         }
     }
     var overlayDisplaySelectionID: String {
@@ -647,6 +669,55 @@ final class AppModel {
         return s
     }
 
+    private func persistNudgeSettings(_ s: NudgeSettings) {
+        let d = UserDefaults.standard
+        d.set(s.isEnabled, forKey: Self.nudgeEnabledKey)
+        d.set(s.threshold.rawValue, forKey: Self.nudgeThresholdKey)
+    }
+
+    private static func loadNudgeSettings() -> NudgeSettings {
+        let d = UserDefaults.standard
+        var s = NudgeSettings()
+        if d.object(forKey: nudgeEnabledKey) != nil { s.isEnabled = d.bool(forKey: nudgeEnabledKey) }
+        if let raw = d.string(forKey: nudgeThresholdKey), let t = IdleNudgeThreshold(rawValue: raw) {
+            s.threshold = t
+        }
+        return s
+    }
+
+    // MARK: - Idle-session nudge
+
+    /// Arm a one-shot nudge for a session that just entered an attention phase.
+    /// Fires after the configured threshold if the session is still waiting.
+    func scheduleIdleNudgeIfNeeded(for sessionID: String) {
+        nudgeTimers[sessionID]?.cancel()
+        let seconds = nudgeSettings.threshold.seconds
+        nudgeTimers[sessionID] = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard let self, !Task.isCancelled else { return }
+            defer { self.nudgeTimers[sessionID] = nil }
+            guard self.nudgeSettings.isEnabled,
+                  self.state.session(id: sessionID)?.phase.requiresAttention == true else { return }
+            self.fireSessionNudge(for: sessionID)
+        }
+    }
+
+    private func fireSessionNudge(for sessionID: String) {
+        NotificationSoundService.play(type: .nudge, isMuted: isSoundMuted)
+        nudgeTrigger = UUID()
+    }
+
+    /// Cancel pending nudges for sessions that are no longer waiting (the user
+    /// responded, the session completed, or it was removed). Called from every
+    /// resolution path so a resolved session never nudges.
+    private func reconcileNudgeTimers() {
+        guard !nudgeTimers.isEmpty else { return }
+        for (id, task) in nudgeTimers where state.session(id: id)?.phase.requiresAttention != true {
+            task.cancel()
+            nudgeTimers[id] = nil
+        }
+    }
+
     init(
         terminalJumpAction: @escaping @Sendable (JumpTarget) throws -> String = { target in
             try TerminalJumpService().jump(to: target)
@@ -683,6 +754,8 @@ final class AppModel {
         notchAppearancePreferences = Self.loadAppearancePreferences(for: .notch)
         topBarAppearancePreferences = Self.loadAppearancePreferences(for: .topBar)
         glassSettings = Self.loadGlassSettings()
+        nudgeSettings = Self.loadNudgeSettings()
+        selectedNudgeSoundName = NotificationSoundService.selectedSoundName(for: .nudge)
         watchNotificationEnabled = UserDefaults.standard.bool(forKey: Self.watchNotificationEnabledKey)
         if watchNotificationEnabled {
             startWatchRelay()
@@ -1548,6 +1621,7 @@ final class AppModel {
         let resolution = permissionResolution(for: approved)
         dismissNotificationSurfaceIfPresent(for: sessionID)
         state.resolvePermission(sessionID: session.id, resolution: resolution)
+        reconcileNudgeTimers()
         synchronizeSelection()
         refreshOverlayPlacementIfVisible()
 
@@ -1581,6 +1655,7 @@ final class AppModel {
 
         dismissNotificationSurfaceIfPresent(for: sessionID)
         state.resolvePermission(sessionID: session.id, resolution: resolution)
+        reconcileNudgeTimers()
         synchronizeSelection()
         refreshOverlayPlacementIfVisible()
 
@@ -1593,6 +1668,7 @@ final class AppModel {
     func dismissSession(_ sessionID: String) {
         state.dismissSession(id: sessionID)
         dismissNotificationSurfaceIfPresent(for: sessionID)
+        reconcileNudgeTimers()
         synchronizeSelection()
     }
 
@@ -1603,6 +1679,7 @@ final class AppModel {
 
         dismissNotificationSurfaceIfPresent(for: sessionID)
         state.answerQuestion(sessionID: session.id, response: answer)
+        reconcileNudgeTimers()
         synchronizeSelection()
         refreshOverlayPlacementIfVisible()
 
@@ -1682,7 +1759,16 @@ final class AppModel {
 
         state.apply(event)
         reconcileIslandSurfaceAfterStateChange()
-        
+
+        // Arm an idle nudge when a session enters an attention phase.
+        if nudgeSettings.isEnabled {
+            switch event {
+            case let .permissionRequested(p): scheduleIdleNudgeIfNeeded(for: p.sessionID)
+            case let .questionAsked(p): scheduleIdleNudgeIfNeeded(for: p.sessionID)
+            default: break
+            }
+        }
+
         if case let .sessionCompleted(payload) = event, !wasAlreadyCompleted, payload.isInterrupt != true, payload.isSessionEnd != true {
             completionFlashSessionID = payload.sessionID
             if notchStatus == .closed, (ingress == .bridge || !isResolvingInitialLiveSessions) {
@@ -1745,6 +1831,9 @@ final class AppModel {
                 ingress: ingress
             )
         }
+
+        // Tear down nudges for sessions that left their attention phase.
+        reconcileNudgeTimers()
     }
 
     private func scheduleNotificationSurfacePresentationIfNeeded(
