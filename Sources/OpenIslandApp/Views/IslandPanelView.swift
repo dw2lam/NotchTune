@@ -117,6 +117,10 @@ struct IslandPanelView: View {
     @State private var keepsOpenedSurfaceMounted = false
     @State private var openedSurfaceMountGeneration: UInt64 = 0
     @State private var morphProgress: CGFloat = 0
+    /// Bumped when the open animation finishes to force one fresh render of the
+    /// glass — the Liquid Glass material renders a plain-blur fallback while the
+    /// morph clip is animating and only resolves to true glass on a re-render.
+    @State private var glassRefreshTick = 0
 
     private var isOpened: Bool {
         model.notchStatus == .opened
@@ -347,6 +351,15 @@ struct IslandPanelView: View {
             switch status {
             case .opened:
                 withAnimation(openAnimation) { morphProgress = 1 }
+                // Once the morph has settled, force one fresh render of the glass
+                // so it resolves from the plain-blur fallback to true Liquid Glass
+                // (otherwise it only resolves on the next interaction).
+                let generation = openedSurfaceMountGeneration
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                    guard model.notchStatus == .opened,
+                          openedSurfaceMountGeneration == generation else { return }
+                    glassRefreshTick &+= 1
+                }
             case .closed, .popping:
                 withAnimation(closeAnimation) { morphProgress = 0 }
             }
@@ -583,6 +596,7 @@ struct IslandPanelView: View {
 
         ZStack(alignment: .top) {
             IslandSurfaceBackground(shape: surfaceShape, glass: model.glassSettings.openGlass)
+                .id(glassRefreshTick)
                 .frame(width: surfaceWidth, height: surfaceHeight)
                 .overlay {
                     if model.islandActiveTab == .music && model.playerManager.isRunning && !model.playerManager.track.isEmpty() {
