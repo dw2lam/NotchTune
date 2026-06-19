@@ -117,10 +117,6 @@ struct IslandPanelView: View {
     @State private var keepsOpenedSurfaceMounted = false
     @State private var openedSurfaceMountGeneration: UInt64 = 0
     @State private var morphProgress: CGFloat = 0
-    /// Bumped when the open animation finishes to force one fresh render of the
-    /// glass — the Liquid Glass material renders a plain-blur fallback while the
-    /// morph clip is animating and only resolves to true glass on a re-render.
-    @State private var glassRefreshTick = 0
 
     private var isOpened: Bool {
         model.notchStatus == .opened
@@ -351,15 +347,6 @@ struct IslandPanelView: View {
             switch status {
             case .opened:
                 withAnimation(openAnimation) { morphProgress = 1 }
-                // Once the morph has settled, force one fresh render of the glass
-                // so it resolves from the plain-blur fallback to true Liquid Glass
-                // (otherwise it only resolves on the next interaction).
-                let generation = openedSurfaceMountGeneration
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                    guard model.notchStatus == .opened,
-                          openedSurfaceMountGeneration == generation else { return }
-                    glassRefreshTick &+= 1
-                }
             case .closed, .popping:
                 withAnimation(closeAnimation) { morphProgress = 0 }
             }
@@ -392,16 +379,21 @@ struct IslandPanelView: View {
 
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
+                // Glass backdrop sits OUTSIDE the morph clip so the material
+                // renders clear from the first frame (the animating clip is what
+                // makes Liquid Glass flip between blur fallback and clear).
                 if shouldRenderOpenedSurface {
-                    // NB: opacity is applied to the *content* inside, never to the
-                    // glass background — compositing Liquid Glass through an
-                    // opacity layer makes it render an untinted/frosted fallback
-                    // until the next clean pass. The morph clip reveals the glass.
-                    openedSurface(width: openedWidth, height: openedHeight)
-                        .allowsHitTesting(usesOpenedVisualState)
+                    openGlassBackground(width: openedWidth, height: openedHeight)
+                        .allowsHitTesting(false)
                 }
 
-                v6ClosedSurface(panelContentWidth: resolvedPanelContentWidth)
+                ZStack(alignment: .top) {
+                    if shouldRenderOpenedSurface {
+                        openedSurfaceContent(width: openedWidth, height: openedHeight)
+                            .allowsHitTesting(usesOpenedVisualState)
+                    }
+
+                    v6ClosedSurface(panelContentWidth: resolvedPanelContentWidth)
                     .offset(
                         x: usesOpenedVisualState ? 0 : macbookNotchAlignmentOffsetX,
                         y: closedSurfaceVerticalOffset
@@ -436,6 +428,7 @@ struct IslandPanelView: View {
                 compactLeftWingWidth: compactClipLeftWingWidth,
                 compactNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth
             ))
+            }
         }
         .scaleEffect(usesOpenedVisualState ? 1 : (isHovering ? IslandChromeMetrics.closedHoverScale : 1), anchor: .top)
         .animation(.easeInOut(duration: 0.3), value: isHovering)
@@ -584,70 +577,66 @@ struct IslandPanelView: View {
 
     // MARK: - Opened surface
 
+    private var openedSurfaceShape: OpenedIslandSurfaceShape {
+        OpenedIslandSurfaceShape(topProfile: usesNotchAwareOpenedHeader ? .notch : .topBar)
+    }
+
+    /// The Liquid Glass backdrop. Rendered full-size and OUTSIDE the morph clip
+    /// so the material renders clear from the first frame instead of flipping
+    /// between the blur fallback and clear as the clip animates open. Opacity is
+    /// identity (1.0) on open (no offscreen compositing → no frosted fallback),
+    /// fading out only on close.
     @ViewBuilder
-    private func openedSurface(width openedWidth: CGFloat, height openedHeight: CGFloat) -> some View {
-        let horizontalInset = 0.0
-        let bottomInset = 0.0
-        let surfaceWidth = openedWidth + (horizontalInset * 2)
-        let surfaceHeight = openedHeight + bottomInset
-        let surfaceShape = OpenedIslandSurfaceShape(
-            topProfile: usesNotchAwareOpenedHeader ? .notch : .topBar
-        )
-
-        ZStack(alignment: .top) {
-            IslandSurfaceBackground(shape: surfaceShape, glass: model.glassSettings.openGlass)
-                .id(glassRefreshTick)
-                .frame(width: surfaceWidth, height: surfaceHeight)
-                .overlay {
-                    if model.islandActiveTab == .music && model.playerManager.isRunning && !model.playerManager.track.isEmpty() {
-                        Image(nsImage: model.playerManager.track.nsAlbumArt)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .opacity(0.12)
-                            .blur(radius: 20)
-                            .clipShape(surfaceShape)
-                    }
-                }
-                // Directional opacity: stays at identity (1.0) on open so the
-                // glass never composites offscreen (and renders tinted from the
-                // first frame), then fades out cleanly on close instead of
-                // collapsing geometrically into the pill (which glitches).
-                .opacity(usesOpenedVisualState ? 1 : 0)
-                .animation(
-                    usesOpenedVisualState ? nil : .easeInOut(duration: 0.22),
-                    value: usesOpenedVisualState
-                )
-
-            VStack(spacing: 0) {
-                openedHeaderContent
-                    .frame(height: closedNotchHeight)
-
-                openedContent
-                    .frame(width: openedWidth)
-                    .frame(maxHeight: max(0, openedHeight - closedNotchHeight), alignment: .top)
-                    .clipped()
-            }
-            .id(usesNotchAwareOpenedHeader)
-            .frame(width: openedWidth, height: openedHeight, alignment: .top)
-            .padding(.horizontal, horizontalInset)
-            .padding(.bottom, bottomInset)
-            .clipShape(surfaceShape)
+    private func openGlassBackground(width openedWidth: CGFloat, height openedHeight: CGFloat) -> some View {
+        let surfaceShape = openedSurfaceShape
+        IslandSurfaceBackground(shape: surfaceShape, glass: model.glassSettings.openGlass)
+            .frame(width: openedWidth, height: openedHeight)
             .overlay {
-                surfaceShape
-                    .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                if model.islandActiveTab == .music && model.playerManager.isRunning && !model.playerManager.track.isEmpty() {
+                    Image(nsImage: model.playerManager.track.nsAlbumArt)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .opacity(0.12)
+                        .blur(radius: 20)
+                        .clipShape(surfaceShape)
+                }
             }
-            // Fade only the content — the glass background stays at full opacity
-            // (revealed/hidden geometrically by the morph clip) so it never gets
-            // composited offscreen and always renders tinted against the backdrop.
             .opacity(usesOpenedVisualState ? 1 : 0)
             .animation(
-                usesOpenedVisualState
-                    ? .easeIn(duration: 0.14).delay(0.13)
-                    : .easeInOut(duration: 0.20),
+                usesOpenedVisualState ? nil : .easeInOut(duration: 0.22),
                 value: usesOpenedVisualState
             )
+    }
+
+    /// The opened panel content (header + tab content). Lives INSIDE the morph
+    /// clip so it grows/collapses with the open/close animation; the glass
+    /// backdrop behind it stays full-size.
+    @ViewBuilder
+    private func openedSurfaceContent(width openedWidth: CGFloat, height openedHeight: CGFloat) -> some View {
+        let surfaceShape = openedSurfaceShape
+        VStack(spacing: 0) {
+            openedHeaderContent
+                .frame(height: closedNotchHeight)
+
+            openedContent
+                .frame(width: openedWidth)
+                .frame(maxHeight: max(0, openedHeight - closedNotchHeight), alignment: .top)
+                .clipped()
         }
-        .frame(width: surfaceWidth, height: surfaceHeight, alignment: .top)
+        .id(usesNotchAwareOpenedHeader)
+        .frame(width: openedWidth, height: openedHeight, alignment: .top)
+        .clipShape(surfaceShape)
+        .overlay {
+            surfaceShape
+                .stroke(Color.white.opacity(0.07), lineWidth: 1)
+        }
+        .opacity(usesOpenedVisualState ? 1 : 0)
+        .animation(
+            usesOpenedVisualState
+                ? .easeIn(duration: 0.14).delay(0.13)
+                : .easeInOut(duration: 0.20),
+            value: usesOpenedVisualState
+        )
     }
 
     // MARK: - Closed state
