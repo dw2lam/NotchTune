@@ -585,6 +585,7 @@ struct SetupSettingsPane: View {
     @State private var confirmingUninstallCodebuddy = false
     @State private var confirmingUninstallCursor = false
     @State private var confirmingUninstallGemini = false
+    @State private var confirmingUninstallAntigravity = false
     @State private var confirmingUninstallKimi = false
     @State private var confirmingUninstallClaudeUsage = false
 
@@ -755,6 +756,23 @@ struct SetupSettingsPane: View {
                 }
 
                 hookRow(
+                    name: "Antigravity",
+                    installed: model.antigravityHooksInstalled,
+                    busy: model.isAntigravityHookSetupBusy,
+                    configLocationURL: antigravityHookConfigURL,
+                    installAction: { model.installAntigravityHooks() },
+                    uninstallAction: { confirmingUninstallAntigravity = true }
+                )
+                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallAntigravity) {
+                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                        model.uninstallAntigravityHooks()
+                    }
+                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
+                } message: {
+                    Text("This will remove NotchTune hooks from ~/.gemini/config/hooks.json.")
+                }
+
+                hookRow(
                     name: "Kimi CLI",
                     installed: model.kimiHooksInstalled,
                     busy: model.isKimiHookSetupBusy,
@@ -847,6 +865,7 @@ struct SetupSettingsPane: View {
                     if !model.codebuddyHooksInstalled { model.installCodebuddyHooks() }
                     if !model.cursorHooksInstalled { model.installCursorHooks() }
                     if !model.geminiHooksInstalled { model.installGeminiHooks() }
+                    if !model.antigravityHooksInstalled { model.installAntigravityHooks() }
                     if !model.kimiHooksInstalled { model.installKimiHooks() }
                     if !model.claudeUsageInstalled { model.installClaudeUsageBridge() }
                 }
@@ -946,6 +965,11 @@ struct SetupSettingsPane: View {
     private var geminiHookConfigURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".gemini/settings.json")
+    }
+
+    private var antigravityHookConfigURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".gemini/config/hooks.json")
     }
 
     private var hasErrors: Bool {

@@ -150,6 +150,9 @@ final class AppModel {
     var geminiHooksInstalled: Bool { hooks.geminiHooksInstalled }
     var isGeminiHookSetupBusy: Bool { hooks.isGeminiHookSetupBusy }
     var geminiHookStatus: GeminiHookInstallationStatus? { hooks.geminiHookStatus }
+    var antigravityHooksInstalled: Bool { hooks.antigravityHooksInstalled }
+    var isAntigravityHookSetupBusy: Bool { hooks.isAntigravityHookSetupBusy }
+    var antigravityHookStatus: AntigravityHookInstallationStatus? { hooks.antigravityHookStatus }
     var geminiHookStatusTitle: String { hooks.geminiHookStatusTitle }
     var geminiHookStatusSummary: String { hooks.geminiHookStatusSummary }
     var kimiHooksInstalled: Bool { hooks.kimiHooksInstalled }
@@ -209,6 +212,8 @@ final class AppModel {
     func uninstallCursorHooks() { hooks.uninstallCursorHooks() }
     func installGeminiHooks() { hooks.installGeminiHooks() }
     func uninstallGeminiHooks() { hooks.uninstallGeminiHooks() }
+    func installAntigravityHooks() { hooks.installAntigravityHooks() }
+    func uninstallAntigravityHooks() { hooks.uninstallAntigravityHooks() }
     func refreshKimiHookStatus() { hooks.refreshKimiHookStatus() }
     func installKimiHooks() { hooks.installKimiHooks() }
     func uninstallKimiHooks() { hooks.uninstallKimiHooks() }
@@ -331,6 +336,12 @@ final class AppModel {
 
     /// Per-session pending nudge timers, keyed by session id.
     @ObservationIgnored private var nudgeTimers: [String: Task<Void, Never>] = [:]
+
+    /// Per-session debounce that settles an Antigravity session to idle once its
+    /// tool-call hooks stop arriving. Antigravity emits only `PreToolUse` /
+    /// `PostToolUse` hooks (no turn- or session-end event), so without this the
+    /// notch could never tell "actively working" from "done". Keyed by session id.
+    @ObservationIgnored private var antigravitySettleTimers: [String: Task<Void, Never>] = [:]
 
     /// Bumped to fire a one-shot character jump when an idle session is nudged.
     var nudgeTrigger: UUID?
@@ -586,6 +597,9 @@ final class AppModel {
     @ObservationIgnored
     private let isNotificationSessionAlreadyFrontmost: @Sendable (AgentSession) async -> Bool
 
+    @ObservationIgnored
+    private let frontmostBundleIdentifierProvider: @Sendable () -> String?
+
 
     @ObservationIgnored
     var harnessRuntimeMonitor: HarnessRuntimeMonitor? {
@@ -696,6 +710,48 @@ final class AppModel {
 
     // MARK: - Idle-session nudge
 
+    /// How long to wait before re-checking when a nudge is held back because the
+    /// user is currently looking at the terminal that owns the waiting session.
+    /// Bounds how late the nudge lands after they finally look away.
+    private static let nudgeFocusRecheckSeconds: TimeInterval = 15
+
+    /// Antigravity emits only per-tool-call hooks (`PreToolUse` / `PostToolUse`)
+    /// and never a turn- or session-end event. We keep its session `.running`
+    /// while those hooks keep arriving and settle it to idle after this much
+    /// silence. Long enough to bridge a model-thinking gap between tools, short
+    /// enough that the notch stops reading "active" promptly once agy finishes.
+    private static let antigravityActivitySettleSeconds: TimeInterval = 8
+
+    /// (Re)arm the Antigravity idle-settle debounce. Each running tool event
+    /// pushes the deadline out; when it finally fires we emit a synthetic
+    /// completion so the session stops reading as actively working.
+    private func armAntigravitySettleTimer(for sessionID: String) {
+        antigravitySettleTimers[sessionID]?.cancel()
+        antigravitySettleTimers[sessionID] = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.antigravityActivitySettleSeconds))
+            guard let self, !Task.isCancelled else { return }
+            self.antigravitySettleTimers[sessionID] = nil
+            guard let session = self.state.session(id: sessionID),
+                  session.tool == .antigravity,
+                  session.phase == .running else { return }
+            self.applyTrackedEvent(
+                .activityUpdated(
+                    SessionActivityUpdated(
+                        sessionID: sessionID,
+                        summary: session.summary,
+                        phase: .completed,
+                        timestamp: Date()
+                    )
+                )
+            )
+        }
+    }
+
+    private func cancelAntigravitySettleTimer(for sessionID: String) {
+        antigravitySettleTimers[sessionID]?.cancel()
+        antigravitySettleTimers[sessionID] = nil
+    }
+
     /// Arm a one-shot nudge for a session that just entered an attention phase.
     /// Fires after the configured threshold if the session is still waiting.
     func scheduleIdleNudgeIfNeeded(for sessionID: String) {
@@ -705,15 +761,65 @@ final class AppModel {
         if attentionStartedAt[sessionID] == nil {
             attentionStartedAt[sessionID] = state.session(id: sessionID)?.updatedAt ?? Date()
         }
-        let seconds = nudgeSettings.threshold.seconds
+        armNudgeTimer(for: sessionID, after: nudgeSettings.threshold.seconds)
+    }
+
+    private func armNudgeTimer(for sessionID: String, after seconds: TimeInterval) {
         nudgeTimers[sessionID] = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
             guard let self, !Task.isCancelled else { return }
-            defer { self.nudgeTimers[sessionID] = nil }
-            guard self.nudgeSettings.isEnabled,
-                  self.state.session(id: sessionID)?.phase.requiresAttention == true else { return }
+
+            @MainActor func stillWaiting() -> Bool {
+                self.nudgeSettings.isEnabled
+                    && self.state.session(id: sessionID)?.phase.requiresAttention == true
+            }
+            guard stillWaiting(), let session = self.state.session(id: sessionID) else {
+                self.nudgeTimers[sessionID] = nil
+                return
+            }
+
+            // Mirror the dock-bounce condition: a terminal only bounces when
+            // it's in the background. If the user is actively looking at the
+            // terminal that owns this session, hold the nudge and re-check
+            // shortly so it still lands once they look away.
+            let focused = await self.isOwningTerminalFocused(session)
+            // The focus probe can await (AppleScript); bail if we were replaced
+            // or the session resolved meanwhile, without clobbering a newer timer.
+            guard !Task.isCancelled else { return }
+            guard stillWaiting() else {
+                self.nudgeTimers[sessionID] = nil
+                return
+            }
+            if focused {
+                self.armNudgeTimer(for: sessionID, after: Self.nudgeFocusRecheckSeconds)
+                return
+            }
+            self.nudgeTimers[sessionID] = nil
             self.fireSessionNudge(for: sessionID)
         }
+    }
+
+    /// Whether the user is currently looking at the terminal that owns this
+    /// session — used to hold back the idle nudge (don't pester about something
+    /// already on screen).
+    private func isOwningTerminalFocused(_ session: AgentSession) async -> Bool {
+        // Pane/tab precision where the probe supports it (Ghostty, Terminal,
+        // iTerm): a focused background tab of the same app correctly reads as
+        // not-focused for this session.
+        if await isNotificationSessionAlreadyFrontmost(session) {
+            return true
+        }
+        // App-level fallback for terminals the probe can't introspect (Warp,
+        // VS Code, Cursor, JetBrains, …): if that app is frontmost, treat the
+        // session as on-screen. Skip when the frontmost app IS pane-
+        // introspectable — there the probe already gave an authoritative answer
+        // and a background tab of the same app must still nudge.
+        guard let frontmost = frontmostBundleIdentifierProvider(),
+              !ForegroundTerminalSessionProbe.paneIntrospectableBundleIDs.contains(frontmost),
+              let terminalApp = session.jumpTarget?.terminalApp else {
+            return false
+        }
+        return TerminalJumpService.bundleIdentifiers(forTerminalAppName: terminalApp).contains(frontmost)
     }
 
     private func fireSessionNudge(for sessionID: String) {
@@ -756,10 +862,14 @@ final class AppModel {
         },
         isNotificationSessionAlreadyFrontmost: @escaping @Sendable (AgentSession) async -> Bool = { session in
             await ForegroundTerminalSessionProbe().matches(session: session)
+        },
+        frontmostBundleIdentifierProvider: @escaping @Sendable () -> String? = {
+            NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         }
     ) {
         self.terminalJumpAction = terminalJumpAction
         self.isNotificationSessionAlreadyFrontmost = isNotificationSessionAlreadyFrontmost
+        self.frontmostBundleIdentifierProvider = frontmostBundleIdentifierProvider
         UserDefaults.standard.register(defaults: [
             Self.showDockIconDefaultsKey: true,
             Self.hapticFeedbackEnabledDefaultsKey: false,
@@ -1801,6 +1911,17 @@ final class AppModel {
             }
         }
 
+        // Antigravity only emits per-tool-call hooks with no turn/session end,
+        // so keep its session "active" while tool events arrive and settle it to
+        // idle after a quiet gap (see armAntigravitySettleTimer).
+        if case let .activityUpdated(p) = event,
+           p.phase == .running,
+           state.session(id: p.sessionID)?.tool == .antigravity {
+            armAntigravitySettleTimer(for: p.sessionID)
+        } else if case let .sessionCompleted(p) = event {
+            cancelAntigravitySettleTimer(for: p.sessionID)
+        }
+
         if case let .sessionCompleted(payload) = event, !wasAlreadyCompleted, payload.isInterrupt != true, payload.isSessionEnd != true {
             completionFlashSessionID = payload.sessionID
             if notchStatus == .closed, (ingress == .bridge || !isResolvingInitialLiveSessions) {
@@ -1969,6 +2090,7 @@ final class AppModel {
                 if self.hooks.shouldAutoInstall(.openCode) { self.installOpenCodePlugin() }
                 if self.hooks.shouldAutoInstall(.cursor) { self.installCursorHooks() }
                 if self.hooks.shouldAutoInstall(.gemini) { self.installGeminiHooks() }
+                if self.hooks.shouldAutoInstall(.antigravity) { self.installAntigravityHooks() }
                 if self.hooks.shouldAutoInstall(.kimi) { self.installKimiHooks() }
                 if self.hooks.shouldAutoInstall(.claudeUsageBridge) { self.installClaudeUsageBridge() }
 

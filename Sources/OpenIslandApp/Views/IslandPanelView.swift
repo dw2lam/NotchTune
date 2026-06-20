@@ -73,7 +73,9 @@ extension AgentSession {
 
 // MARK: - Animations
 
-private let openAnimation  = Animation.spring(response: 0.48, dampingFraction: 0.82)
+// Open: a slightly slower, softly-settling spring so the pill flows out into
+// the panel like a drop of liquid spreading, rather than snapping open.
+private let openAnimation  = Animation.spring(response: 0.5, dampingFraction: 0.8)
 // Eased but prompt: a smooth collapse that still clears quickly so the
 // translucent glass panel doesn't appear to linger open.
 private let closeAnimation = Animation.spring(response: 0.38, dampingFraction: 0.86)
@@ -117,6 +119,9 @@ struct IslandPanelView: View {
     @State private var keepsOpenedSurfaceMounted = false
     @State private var openedSurfaceMountGeneration: UInt64 = 0
     @State private var morphProgress: CGFloat = 0
+    /// Drives the sliding active-tab pill so it glides between tabs instead of
+    /// cross-fading in place.
+    @Namespace private var tabIndicatorNamespace
 
     private var isOpened: Bool {
         model.notchStatus == .opened
@@ -431,12 +436,15 @@ struct IslandPanelView: View {
             }
         }
         .scaleEffect(usesOpenedVisualState ? 1 : (isHovering ? IslandChromeMetrics.closedHoverScale : 1), anchor: .top)
-        .animation(.easeInOut(duration: 0.3), value: isHovering)
+        // A soft spring instead of a linear ease so the pill "swells" toward the
+        // cursor with a little surface-tension settle — the liquid peek before
+        // it flows open.
+        .animation(.spring(response: 0.32, dampingFraction: 0.68), value: isHovering)
         .padding(.horizontal, panelShadowHorizontalInset)
         .padding(.bottom, panelShadowBottomInset)
         .contentShape(Rectangle())
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.3)) {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.68)) {
                 isHovering = hovering
             }
         }
@@ -633,7 +641,10 @@ struct IslandPanelView: View {
         .opacity(usesOpenedVisualState ? 1 : 0)
         .animation(
             usesOpenedVisualState
-                ? .easeIn(duration: 0.14).delay(0.13)
+                // Emerge softly *with* the expansion (earlier start, longer
+                // easeOut) so the content surfaces as the panel spreads instead
+                // of popping in once it has settled.
+                ? .easeOut(duration: 0.22).delay(0.07)
                 : .easeInOut(duration: 0.20),
             value: usesOpenedVisualState
         )
@@ -738,7 +749,7 @@ struct IslandPanelView: View {
                     playerManager: model.playerManager,
                     horizontalPadding: usesNotchAwareOpenedHeader ? Self.notchHeaderHorizontalPadding : 16
                 )
-                .transition(.opacity)
+                .transition(Self.tabContentTransition)
                 .frame(maxWidth: .infinity)
             }
         }
@@ -767,10 +778,15 @@ struct IslandPanelView: View {
             .foregroundStyle(model.islandActiveTab == tab ? .white : .white.opacity(0.4))
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(
-                model.islandActiveTab == tab ? Color.white.opacity(0.12) : Color.clear,
-                in: Capsule()
-            )
+            .background {
+                // Only the active tab owns the pill; matchedGeometryEffect makes
+                // it slide to the newly-selected tab rather than fade in place.
+                if model.islandActiveTab == tab {
+                    Capsule()
+                        .fill(Color.white.opacity(0.12))
+                        .matchedGeometryEffect(id: "islandTabIndicator", in: tabIndicatorNamespace)
+                }
+            }
         }
         .buttonStyle(.plain)
     }
@@ -796,8 +812,14 @@ struct IslandPanelView: View {
             }
         }
         .padding(.bottom, 0)
-        .transition(.opacity)
+        .transition(Self.tabContentTransition)
     }
+
+    /// Tab swaps fade while gently scaling up from the top edge, so a tab reads
+    /// as growing into place rather than hard-cutting to the next one.
+    private static let tabContentTransition: AnyTransition = .opacity.combined(
+        with: .scale(scale: 0.97, anchor: .top)
+    )
 
     /// Persistent hint at the top of the expanded island while no agent
     /// hooks are installed. Decoupled from session presence — process

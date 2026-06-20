@@ -18,12 +18,13 @@ struct OpenIslandHooksCLI {
         case cursor
         case gemini
         case kimi
+        case antigravity
 
         var isClaudeFormat: Bool {
             switch self {
             case .claude, .qoder, .qwen, .factory, .droid, .codebuddy, .kimi:
                 return true
-            case .codex, .cursor, .gemini:
+            case .codex, .cursor, .gemini, .antigravity:
                 return false
             }
         }
@@ -134,6 +135,16 @@ struct OpenIslandHooksCLI {
                 }
 
                 _ = try? client.send(.processGeminiHook(payload), timeout: 45)
+            case .antigravity:
+                // Antigravity ships its own (non-Claude) payload format and its
+                // events (SessionStart/End, Before/AfterAgent, Notification) are
+                // informational — none blocks the agent — so we fire-and-forget
+                // like Gemini and emit no stdout directive.
+                let payload = try decoder
+                    .decode(AntigravityHookPayload.self, from: input)
+                    .withRuntimeContext(environment: ProcessInfo.processInfo.environment)
+
+                _ = try? client.send(.processAntigravityHook(payload), timeout: 45)
             }
         } catch {
             // Hooks should fail open so the CLI continues working even if the bridge is unavailable.

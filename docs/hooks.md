@@ -1,14 +1,14 @@
 # Hook System
 
-OpenIsland receives hook events from AI agents (Codex / Claude Code / Gemini CLI) via the `OpenIslandHooks` CLI. The CLI forwards payloads to the app over a Unix socket and, when necessary, writes a directive back to stdout so the agent can act on it (e.g. block a tool call).
+OpenIsland receives hook events from AI agents (Codex / Claude Code / Gemini CLI / Antigravity) via the `OpenIslandHooks` CLI. The CLI forwards payloads to the app over a Unix socket and, when necessary, writes a directive back to stdout so the agent can act on it (e.g. block a tool call).
 
 ## Architecture
 
 ```
-Agent (Codex / Claude Code / Gemini CLI)
+Agent (Codex / Claude Code / Gemini CLI / Antigravity)
   │  stdin: JSON payload
   ▼
-OpenIslandHooks CLI  (--source codex | --source claude | --source gemini)
+OpenIslandHooks CLI  (--source codex | --source claude | --source gemini | --source antigravity)
   │  Unix socket
   ▼
 BridgeServer → AppModel → UI
@@ -271,6 +271,33 @@ Setting `interrupt: true` terminates the current agent turn immediately.
 
 ---
 
+## Antigravity Hooks (`--source antigravity`)
+
+**Payload type**: `AntigravityHookPayload`  
+**Source**: [`Sources/OpenIslandCore/AntigravityHooks.swift`](../Sources/OpenIslandCore/AntigravityHooks.swift)
+
+Antigravity ships its own (non–Claude-format) hook payload, so it is decoded by
+`AntigravityHookPayload` rather than `ClaudeHookPayload`. Unlike Codex / Claude
+Code, OpenIsland does **not** auto-install Antigravity hooks — point Antigravity's
+hook configuration at the OpenIslandHooks binary with `--source antigravity` and
+it will start forwarding events.
+
+### Events
+
+| `hook_event_name` | When it fires | Current OpenIsland behavior |
+|---|---|---|
+| `SessionStart` | Session starts or resumes | Creates or restores the Antigravity session, title, jump target, and transcript metadata |
+| `BeforeAgent` | Antigravity starts handling a prompt / turn | Marks the session running and updates the current prompt / tool |
+| `AfterAgent` | Antigravity finishes a turn | Marks the turn completed and emits a completion card |
+| `SessionEnd` | Antigravity reports the session ended | Marks the hook-managed session ended and removes it from active visibility |
+| `Notification` | Antigravity emits a notification message | Updates the session summary / activity text without blocking the agent |
+
+The CLI decodes the Antigravity payload, enriches it with runtime terminal
+context, and forwards it to the app as `processAntigravityHook`. All events are
+fire-and-forget — none blocks the agent — so the CLI emits no stdout directive.
+
+---
+
 ## Timeout Policy
 
 | Source | Event | Timeout |
@@ -279,6 +306,7 @@ Setting `interrupt: true` terminates the current agent turn immediately.
 | Claude Code | `PermissionRequest` | **24 hours** (awaits human approval) |
 | Claude Code | All other events | **45 seconds** |
 | Gemini CLI | All events | Bridge default |
+| Antigravity | All events | 45 seconds |
 
 ---
 
