@@ -455,6 +455,11 @@ final class OverlayUICoordinator {
             return false
         }
 
+        // Actionable notification cards (e.g. waiting for approval or answer) must never collapse on mouse leave.
+        if islandSurface.isNotificationCard && !islandSurface.autoDismissesWhenPresentedAsNotification(session: activeIslandCardSession) {
+            return false
+        }
+
         if appModel?.shouldAutoHideIsland == true {
             return true
         }

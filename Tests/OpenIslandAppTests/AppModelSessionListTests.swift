@@ -18,12 +18,14 @@ struct AppModelSessionListTests {
             "appearance.island.v8.notch.sessionGroup",
             "appearance.island.v8.notch.sessionSort",
             "appearance.island.v8.notch.completedStaleThreshold",
+            "appearance.island.v8.notch.autoHideWhenInactive",
             "appearance.island.v8.topBar.rightSlot",
             "appearance.island.v8.topBar.centerLabel",
             "appearance.island.v8.topBar.stateIndicator",
             "appearance.island.v8.topBar.sessionGroup",
             "appearance.island.v8.topBar.sessionSort",
             "appearance.island.v8.topBar.completedStaleThreshold",
+            "appearance.island.v8.topBar.autoHideWhenInactive",
             "app.suppressFrontmostNotifications",
             "feature.completionReply.enabled",
             "overlay.sound.muted",
@@ -741,6 +743,60 @@ struct AppModelSessionListTests {
 
         #expect(model.notchStatus == .closed)
         #expect(model.notchOpenReason == nil)
+    }
+
+    @Test
+    func actionableNotificationDoesNotCollapseOnMouseLeaveEvenIfIslandIsInactive() {
+        let model = AppModel()
+        let originalAutoHide = model.appearancePreferences(for: model.activeAppearanceProfile).autoHideWhenInactive
+        defer {
+            model.updateAppearancePreferences(for: model.activeAppearanceProfile) {
+                $0.autoHideWhenInactive = originalAutoHide
+            }
+        }
+        // Configure appearance preference to auto-hide when inactive (to make shouldAutoHideIsland true when empty/idle)
+        model.updateAppearancePreferences(for: model.activeAppearanceProfile) {
+            $0.autoHideWhenInactive = true
+        }
+
+        // Add a session that is waiting for approval
+        model.applyTrackedEvent(
+            .sessionStarted(SessionStarted(
+                sessionID: "session-1",
+                title: "Test",
+                tool: .codex,
+                summary: "Waiting",
+                timestamp: .now
+            )),
+            updateLastActionMessage: false
+        )
+        model.applyTrackedEvent(
+            .permissionRequested(PermissionRequested(
+                sessionID: "session-1",
+                request: PermissionRequest(
+                    title: "Allow access?",
+                    summary: "Allow access?",
+                    affectedPath: "/some/path"
+                ),
+                timestamp: .now
+            )),
+            updateLastActionMessage: false
+        )
+
+        model.notchStatus = .opened
+        model.notchOpenReason = .notification
+        model.islandSurface = .sessionList(actionableSessionID: "session-1")
+
+        // Actionable notification must never auto-collapse on mouse leave, even if the island is inactive.
+        #expect(!model.shouldAutoCollapseOnMouseLeave)
+
+        // Simulating pointer entry and exit
+        model.notePointerInsideIslandSurface()
+        model.handlePointerExitedIslandSurface()
+
+        // It should NOT collapse (notchStatus remains .opened)
+        #expect(model.notchStatus == .opened)
+        #expect(model.notchOpenReason == .notification)
     }
 
     @Test
