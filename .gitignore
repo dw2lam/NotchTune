@@ -27,3 +27,4 @@ output/
 *.tmp
 .worktrees/
 .air/
+.gstack/

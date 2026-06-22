@@ -11,7 +11,7 @@
 <link rel="icon" type="image/png" href="assets/icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -21,6 +21,7 @@
   <div class="blob blob-a"></div>
   <div class="blob blob-b"></div>
   <div class="blob blob-c"></div>
+  <div class="blob blob-d"></div>
   <div class="grain"></div>
 </div>
 
@@ -48,7 +49,7 @@
 <section class="hero">
   <div class="hero-copy reveal">
     <div class="eyebrow"><span class="dot-live"></span> v<span data-latest-version>0.1.2</span> · Free &amp; open source</div>
-    <h1>Your notch,<br/>finally doing something.</h1>
+    <h1>Your notch,<br/><span class="typer" id="typer">Opensource.</span><span class="caret" aria-hidden="true"></span></h1>
     <p class="lede">NotchTune turns your Mac's notch into a live control surface for your music <em>and</em> your terminal AI agents — playback, approvals, questions, and one-tap jump-back to the right session. Native. Local-first. Liquid glass.</p>
     <div class="hero-actions">
       <a class="btn btn-primary" data-download-latest href="https://github.com/dw2lam/NotchTune/releases/latest" target="_blank" rel="noopener">
@@ -105,32 +106,29 @@
       </div>
     </div>
   </div>
-</section>
 
-<!-- trust strip -->
-<section class="strip reveal">
-  <span>Works with</span>
-  <div class="strip-items">
-    <span class="pill">Claude Code</span>
-    <span class="pill">Codex</span>
-    <span class="pill">Gemini CLI</span>
-    <span class="pill">Kimi CLI</span>
-    <span class="pill">OpenCode</span>
-    <span class="pill">Factory</span>
-    <span class="pill">Qwen</span>
-    <span class="pill pill-mute">Spotify</span>
-    <span class="pill pill-mute">Apple Music</span>
+  <div class="strip reveal">
+    <span class="strip-label">Works with</span>
+    <div class="marquee" aria-label="Works with Claude Code, Codex, Gemini, Kimi, OpenCode, Factory, Qwen, Spotify, and Apple Music">
+      <div class="marquee-track" aria-hidden="true">
+        <img class="logo" src="assets/logos/claude.svg" alt="" /><span class="wm">Codex</span><img class="logo" src="assets/logos/googlegemini.svg" alt="" /><span class="wm">Kimi</span><img class="logo" src="assets/logos/opencode.svg" alt="" /><span class="wm">Factory</span><img class="logo" src="assets/logos/qwen.svg" alt="" /><img class="logo" src="assets/logos/spotify.svg" alt="" /><img class="logo logo-am" src="assets/logos/applemusic.svg" alt="" />
+        <img class="logo" src="assets/logos/claude.svg" alt="" /><span class="wm">Codex</span><img class="logo" src="assets/logos/googlegemini.svg" alt="" /><span class="wm">Kimi</span><img class="logo" src="assets/logos/opencode.svg" alt="" /><span class="wm">Factory</span><img class="logo" src="assets/logos/qwen.svg" alt="" /><img class="logo" src="assets/logos/spotify.svg" alt="" /><img class="logo logo-am" src="assets/logos/applemusic.svg" alt="" />
+      </div>
+    </div>
   </div>
 </section>
 
 <!-- dynamic switching -->
-<section id="switch" class="section switch">
+<section id="adapts" class="section">
   <div class="section-head reveal">
-    <h2>It switches itself.</h2>
-    <p>Music when you're listening. Agents when they're working. A prompt the moment one needs you. The island morphs to whatever matters now — you never go looking.</p>
+    <h2>It adapts to the moment.</h2>
+    <p>Open, the island switches itself between music, agents, and prompts. Closed, it keeps you posted from inside the notch — you never go looking.</p>
   </div>
 
-  <div class="switch-wrap reveal">
+  <div class="adapts-grid reveal">
+    <div class="adapts-col">
+      <div class="adapts-cap">Open · switches itself</div>
+      <div class="switch-wrap">
     <div class="scene scene-switch">
       <div class="island-deck" data-island-demo>
         <!-- music -->
@@ -151,8 +149,8 @@
             <div class="art" style="--c1:#7b5cff;--c2:#ff5c8a"></div>
             <div class="m-col">
               <div class="m-head">
-                <div class="m-title">Midnight Compiler</div>
-                <div class="m-artist">The Daemons</div>
+                <div class="m-title">Sienna</div>
+                <div class="m-artist">The Marías</div>
               </div>
               <div class="m-ctrls">
                 <button class="m-ic m-side" aria-label="Shuffle"><svg viewBox="0 0 24 24"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
@@ -219,6 +217,33 @@
       <span class="dl-pill" data-demo-label="agents"><span class="dl-ico dl-run"></span> Agents working</span>
       <span class="dl-pill" data-demo-label="approve"><span class="dl-ico dl-wait"></span> Needs you</span>
     </div>
+      </div>
+    </div>
+    <div class="adapts-col">
+      <div class="adapts-cap">Closed · still watching</div>
+      <div class="closed-wrap">
+    <div class="closed-scene">
+      <div class="cnotch" data-compact-demo>
+        <div class="cn-wing cn-left">
+          <span class="cn-slot" data-cstate="music"><span class="cn-art"></span></span>
+          <span class="cn-slot" data-cstate="agents"><span class="sprite sprite-run cn-sprite cn-dance" data-run="dino"></span></span>
+          <span class="cn-slot" data-cstate="idle"><span class="sprite cn-sprite" data-char="dino"></span></span>
+        </div>
+        <span class="cn-core"></span>
+        <div class="cn-wing cn-right">
+          <span class="cn-slot" data-cstate="music"><span class="eq"><i></i><i></i><i></i><i></i><i></i></span></span>
+          <span class="cn-slot" data-cstate="agents"><span class="cn-tiles"><i></i><i class="t2"></i></span></span>
+          <span class="cn-slot" data-cstate="idle"></span>
+        </div>
+      </div>
+    </div>
+    <div class="switch-legend">
+      <span class="dl-pill" data-clabel="music"><span class="dl-ico">♫</span> Now playing</span>
+      <span class="dl-pill" data-clabel="agents"><span class="dl-ico dl-agent"></span> Agents live</span>
+      <span class="dl-pill" data-clabel="idle"><span class="dl-ico cn-idle-dot"></span> Idle</span>
+    </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -255,8 +280,8 @@
             <div class="art" style="--c1:#7b5cff;--c2:#ff5c8a"></div>
             <div class="m-col">
               <div class="m-head">
-                <div class="m-title">Midnight Compiler</div>
-                <div class="m-artist">The Daemons</div>
+                <div class="m-title">Sienna</div>
+                <div class="m-artist">The Marías</div>
               </div>
               <div class="m-ctrls">
                 <button class="m-ic m-side" aria-label="Shuffle"><svg viewBox="0 0 24 24"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
@@ -382,8 +407,8 @@
     </article>
     <article class="card glass">
       <div class="card-ico">🖥️</div>
-      <h4>Notch or no notch</h4>
-      <p>A real notch surface on MacBooks, and a clean top-center bar on external and non-notch displays. Same glass, anywhere.</p>
+      <h4>Follows your focus</h4>
+      <p>The island moves to whatever display you're working on, and adapts as it goes — a real notch surface on MacBooks, a clean top-center bar on external and non-notch screens. It even keeps a separate look for each.</p>
     </article>
   </div>
 </section>
@@ -435,12 +460,24 @@
       <div class="lab-wall">
         <span class="lab-wall-tag">live preview</span>
         <div class="island island-expanded lab-island" id="labIsland">
+          <div class="isl-top">
+            <div class="isl-usage"><span class="uchip"><b>Claude</b><em>5h</em><i class="u-ok">41%</i></span></div>
+            <div class="isl-notch"></div>
+            <div class="isl-tools">
+              <button class="iconbtn" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.6 7.6 0 000-1.88l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.61-.22l-2.39.96a7 7 0 00-1.62-.94l-.36-2.54a.5.5 0 00-.5-.42h-3.84a.5.5 0 00-.5.42l-.36 2.54a7 7 0 00-1.62.94l-2.39-.96a.5.5 0 00-.61.22L2.71 8.84a.5.5 0 00.12.64l2.03 1.58a7.6 7.6 0 000 1.88l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32a.5.5 0 00.61.22l2.39-.96a7 7 0 001.62.94l.36 2.54a.5.5 0 00.5.42h3.84a.5.5 0 00.5-.42l.36-2.54a7 7 0 001.62-.94l2.39.96a.5.5 0 00.61-.22l1.92-3.32a.5.5 0 00-.12-.64zM12 15.6A3.6 3.6 0 1112 8.4a3.6 3.6 0 010 7.2z"/></svg></button>
+              <button class="iconbtn" aria-label="Quit"><svg viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17-1.42 1.42A6.92 6.92 0 0119 12a7 7 0 11-14 0 6.92 6.92 0 012.59-5.41L6.17 5.17A9 9 0 1021 12a8.94 8.94 0 00-3.17-6.83z"/></svg></button>
+            </div>
+          </div>
+          <div class="tabbar">
+            <button class="tab"><svg viewBox="0 0 24 24"><path d="M4 7l4 4-4 4 1.4 1.4L11 11 5.4 5.6 4 7zM12 15h6v2h-6z"/></svg>Agents</button>
+            <button class="tab is-on"><svg viewBox="0 0 24 24"><path d="M12 3v10.55A4 4 0 1014 17V7h4V3h-6z"/></svg>Music</button>
+          </div>
           <div class="music">
             <div class="art" style="--c1:#7b5cff;--c2:#ff5c8a"></div>
             <div class="m-col">
               <div class="m-head">
-                <div class="m-title">Midnight Compiler</div>
-                <div class="m-artist">The Daemons</div>
+                <div class="m-title">Sienna</div>
+                <div class="m-artist">The Marías</div>
               </div>
               <div class="m-ctrls">
                 <button class="m-ic m-side" aria-label="Shuffle"><svg viewBox="0 0 24 24"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
@@ -490,6 +527,66 @@
         <div class="lab-field-head"><span class="lab-label">Tint strength</span><b data-val="strength">22%</b></div>
         <input type="range" id="ctl-strength" min="0" max="100" value="22">
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- personalization showcase -->
+<section id="personalize" class="section">
+  <div class="section-head reveal">
+    <h2>Personalize every pixel.</h2>
+    <p>Past the glass and your island buddy, the Appearance settings shape exactly what the notch shows and how it behaves — and it keeps a separate profile for your MacBook notch and any external display.</p>
+  </div>
+  <div class="settings-panel glass reveal">
+    <div class="sp-bar">
+      <span class="sp-dot"></span><span class="sp-dot"></span><span class="sp-dot"></span>
+      <span class="sp-title">Settings · Appearance</span>
+    </div>
+    <div class="sp-grid">
+      <article class="set-card">
+        <div class="set-kicker">Display profile</div>
+        <p class="set-note">A separate look per screen, applied automatically as the overlay moves.</p>
+        <div class="set-chips" data-chips><button class="mono-chip is-on">MacBook notch</button><button class="mono-chip">External display</button></div>
+      </article>
+      <article class="set-card set-toggle">
+        <div><div class="set-kicker">Auto-hide</div><p class="set-note">Hide the island when nothing's active; hover the top of the screen to peek.</p></div>
+        <label class="lab-switch"><input type="checkbox" checked><span class="sw"></span></label>
+      </article>
+      <article class="set-card">
+        <div class="set-kicker">01 · Right slot</div>
+        <p class="set-note">What shows on the right of the closed island.</p>
+        <div class="set-chips" data-chips><button class="mono-chip is-on">Count</button><button class="mono-chip">Agents</button><button class="mono-chip">None</button></div>
+      </article>
+      <article class="set-card">
+        <div class="set-kicker">02 · Usage</div>
+        <p class="set-note">Show compact agent usage in the opened island.</p>
+        <div class="set-chips" data-chips><button class="mono-chip is-on">Compact</button><button class="mono-chip">Hidden</button></div>
+      </article>
+      <article class="set-card">
+        <div class="set-kicker">Center label</div>
+        <p class="set-note">External displays only — the notch covers this space on MacBook.</p>
+        <div class="set-chips" data-chips><button class="mono-chip is-on">Agent · action</button><button class="mono-chip">Session name</button><button class="mono-chip">Off</button></div>
+      </article>
+      <article class="set-card">
+        <div class="set-kicker">03 · Session state</div>
+        <p class="set-note">How rows show running, waiting, and completed.</p>
+        <div class="set-chips" data-chips><button class="mono-chip is-on">Animated dot</button><button class="mono-chip">Bar</button><button class="mono-chip">Glyph</button><button class="mono-chip">Tint</button></div>
+      </article>
+      <article class="set-card">
+        <div class="set-kicker">04 · Session grouping</div>
+        <p class="set-note">Optional sections for the expanded session list.</p>
+        <div class="set-chips" data-chips><button class="mono-chip is-on">None</button><button class="mono-chip">State</button><button class="mono-chip">Agent</button><button class="mono-chip">Project</button></div>
+      </article>
+      <article class="set-card">
+        <div class="set-kicker">05 · Session sorting</div>
+        <p class="set-note">The default order inside the expanded list.</p>
+        <div class="set-chips" data-chips><button class="mono-chip is-on">Attention</button><button class="mono-chip">Last update</button></div>
+      </article>
+      <article class="set-card">
+        <div class="set-kicker">06 · Done timeout</div>
+        <p class="set-note">When completed sessions fade to the low-priority idle look.</p>
+        <div class="set-chips" data-chips><button class="mono-chip">2 min</button><button class="mono-chip is-on">5 min</button><button class="mono-chip">10 min</button><button class="mono-chip">20 min</button><button class="mono-chip">Never</button></div>
+      </article>
     </div>
   </div>
 </section>
@@ -571,7 +668,7 @@
       <a href="https://github.com/dw2lam/NotchTune/blob/main/PRIVACY_POLICY.md" target="_blank" rel="noopener">Privacy</a>
     </div>
   </div>
-  <div class="footer-base">Local-first &amp; open source · macOS 14+ · © 2026 NotchTune contributors</div>
+  <div class="footer-base">Local-first &amp; open source · macOS 14+ · © 2026 David Lam</div>
 </footer>
 
 <script src="app.js"></script>

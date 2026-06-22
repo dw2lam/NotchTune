@@ -27,6 +27,31 @@
     })
     .catch(() => {/* keep static fallback (0.1.2) */});
 
+  /* ---------- hero typewriter ---------- */
+  const typer = document.getElementById("typer");
+  if (typer) {
+    const WORDS = ["Opensource.", "finally free.", "fun.", "stylish.", "customizable."];
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      typer.textContent = WORDS[0];
+    } else {
+      let w = 0, c = WORDS[0].length, deleting = false;
+      const tick = () => {
+        const word = WORDS[w];
+        if (!deleting) {
+          c++;
+          typer.textContent = word.slice(0, c);
+          if (c >= word.length) { deleting = true; return void setTimeout(tick, 1700); }
+        } else {
+          c--;
+          typer.textContent = word.slice(0, c);
+          if (c <= 0) { deleting = false; w = (w + 1) % WORDS.length; return void setTimeout(tick, 320); }
+        }
+        setTimeout(tick, deleting ? 45 : 85);
+      };
+      setTimeout(tick, 1700); // hold the initial word first
+    }
+  }
+
   /* ---------- scroll reveal ---------- */
   const io = new IntersectionObserver(
     (entries) => {
@@ -71,16 +96,31 @@
       [0,1,0,1,1,1,0,1,0],[1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,0],
       [0,1,0,1,0,1,0,1,0],[0,1,0,1,0,1,0,1,0],[0,1,0,1,0,1,0,1,0]],
   };
-  document.querySelectorAll(".sprite[data-char]").forEach((el) => {
-    const grid = SPRITES[el.dataset.char];
-    if (!grid) return;
+  // running frames (lifted from UnifiedBars.swift) — used for the "dance"
+  const SPRITES_RUN = {
+    dino: [
+      [0,0,0,0,1,1,1,1,1],[0,0,0,0,1,0,1,1,1],[0,0,0,0,1,1,1,1,1],
+      [0,0,1,1,1,1,1,1,0],[0,1,1,1,1,1,1,0,0],[1,1,1,1,1,1,1,0,0],
+      [1,0,1,1,1,1,1,0,0],[0,0,0,0,0,1,0,0,0],[0,0,0,0,0,1,0,0,0]],
+  };
+  const spriteSVG = (grid) => {
     let rects = "";
     grid.forEach((row, y) =>
       row.forEach((v, x) => { if (v) rects += '<rect x="' + x + '" y="' + y + '" width="1" height="1"/>'; })
     );
+    return '<svg viewBox="0 0 9 9" shape-rendering="crispEdges" fill="#f1ead9" xmlns="http://www.w3.org/2000/svg">' + rects + "</svg>";
+  };
+  document.querySelectorAll(".sprite[data-char]").forEach((el) => {
+    const grid = SPRITES[el.dataset.char];
+    if (grid) el.innerHTML = spriteSVG(grid);
+  });
+  // animated run cycle (the buddy's dance when agents are live)
+  document.querySelectorAll(".sprite-run[data-run]").forEach((el) => {
+    const idle = SPRITES[el.dataset.run], run = SPRITES_RUN[el.dataset.run];
+    if (!idle || !run) return;
     el.innerHTML =
-      '<svg viewBox="0 0 9 9" shape-rendering="crispEdges" fill="#f1ead9" xmlns="http://www.w3.org/2000/svg">' +
-      rects + "</svg>";
+      '<span class="frA">' + spriteSVG(idle) + "</span>" +
+      '<span class="frB">' + spriteSVG(run) + "</span>";
   });
 
   /* ---------- liquid glass lab (mirrors the app's real glass settings) ---------- */
@@ -110,10 +150,14 @@
       } else {
         const frost = state.material === "frosted" ? 0.17 : 0.04;
         const blur = state.material === "frosted" ? 30 : 18;
+        const tint = "rgba(" + r + "," + g + "," + b + "," + a.toFixed(2) + ")";
+        const fr = "rgba(255,255,255," + frost + ")";
+        // every layer must be a gradient/image — a bare color is only valid as the
+        // final background-color, so wrap the tint + frost as flat gradient layers
         island.style.background =
           "linear-gradient(155deg,rgba(255,255,255,.16),transparent 38%)," +
-          "rgba(" + r + "," + g + "," + b + "," + a.toFixed(2) + ")," +
-          "rgba(255,255,255," + frost + ")";
+          "linear-gradient(" + tint + "," + tint + ")," +
+          "linear-gradient(" + fr + "," + fr + ")";
         island.style.backdropFilter = island.style.webkitBackdropFilter =
           "blur(" + blur + "px) saturate(150%)";
         island.style.borderColor = "rgba(255,255,255,.16)";
@@ -145,6 +189,15 @@
     render();
   }
 
+  /* ---------- personalization showcase chips ---------- */
+  document.querySelectorAll("[data-chips]").forEach((group) => {
+    group.addEventListener("click", (e) => {
+      const chip = e.target.closest(".mono-chip");
+      if (!chip || !group.contains(chip)) return;
+      group.querySelectorAll(".mono-chip").forEach((c) => c.classList.toggle("is-on", c === chip));
+    });
+  });
+
   /* ---------- dynamic island switch demo ---------- */
   const demo = document.querySelector("[data-island-demo]");
   if (demo && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -171,5 +224,28 @@
       });
     }, { threshold: 0.3 });
     vis.observe(demo);
+  }
+
+  /* ---------- closed / compact notch demo ---------- */
+  const cdemo = document.querySelector("[data-compact-demo]");
+  if (cdemo && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const slots = cdemo.querySelectorAll(".cn-slot");
+    const clabels = document.querySelectorAll("[data-clabel]");
+    const corder = ["music", "agents", "idle", "music", "agents"];
+    let ci = 0;
+    const cshow = (name) => {
+      slots.forEach((s) => s.classList.toggle("active", s.dataset.cstate === name));
+      clabels.forEach((l) => l.classList.toggle("active", l.dataset.clabel === name));
+    };
+    cshow(corder[0]);
+    let crunning = true;
+    setInterval(() => {
+      if (!crunning) return;
+      ci = (ci + 1) % corder.length;
+      cshow(corder[ci]);
+    }, 2400);
+    new IntersectionObserver((es) => {
+      es.forEach((e) => { crunning = e.isIntersecting; });
+    }, { threshold: 0.3 }).observe(cdemo);
   }
 })();
