@@ -1,0 +1,293 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Barlow:wght@300;400;500;600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@font-face {
+  font-family: 'Dirtyline';
+  src: url('https://fonts.cdnfonts.com/s/15011/Dirtyline36DaysofType.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   New aesthetic layer (Wanderful-style) over the NotchTune base
+   ============================================================ */
+
+:root {
+  --glass-stroke: rgba(255, 255, 255, 0.12);
+}
+
+/* Body → Barlow, headings → Inter, mono stays JetBrains */
+body {
+  font-family: 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #000;
+}
+h1, h2, h3, h4, h5 {
+  font-family: 'Inter', sans-serif;
+}
+
+/* ---- liquid glass (exact spec from brief, rounding inherited) ---- */
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+.liquid-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0.15) 20%,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.15) 80%,
+    rgba(255, 255, 255, 0.45) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ---- fixed glass pill nav ---- */
+.nt-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 26px 40px;
+  transition: padding 0.3s ease, background 0.3s ease;
+}
+.nt-nav.scrolled {
+  padding: 16px 40px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent);
+  backdrop-filter: blur(6px);
+}
+.nt-wordmark {
+  font-family: 'Inter', sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.nt-wordmark sup {
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.6;
+  top: -0.7em;
+}
+.nt-wordmark img { width: 24px; height: 24px; border-radius: 6px; }
+
+.nt-navlinks {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 8px;
+}
+.nt-navlink {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.9);
+  padding: 6px 16px;
+  border-radius: 999px;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.nt-navlink:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+
+.nt-navcta {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.9);
+  padding: 10px 20px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: color 0.2s ease;
+}
+.nt-navcta:hover { color: #fff; }
+
+/* GlassSurface wrappers in the nav (pill + GITHUB CTA) */
+.nt-nav-glass {
+  flex: 0 0 auto;
+  /* edge-glow tuned for the dark hero rather than the light-bg default */
+  box-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.16) inset,
+    0 1px 1px rgba(255, 255, 255, 0.12) inset,
+    0 8px 24px rgba(0, 0, 0, 0.28);
+}
+.nt-nav-glass .nt-navlinks { padding: 8px; }
+.nt-nav-glass .nt-navcta { padding: 10px 20px; }
+
+@media (max-width: 880px) {
+  .nt-nav { padding: 18px 18px; }
+  .nt-nav-glass:has(.nt-navlinks) { display: none; }
+}
+
+/* ---- white glow CTA button (the "plan my escape" treatment) ---- */
+.nt-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  background: #fff;
+  color: #000;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 13px 28px;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  border: none;
+  cursor: pointer;
+}
+.nt-cta:hover {
+  transform: scale(1.03);
+  box-shadow: 0 0 32px 4px rgba(255, 255, 255, 0.2);
+}
+.nt-cta:active { transform: scale(0.97); }
+
+.nt-cta-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.92);
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 13px 26px;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+.nt-cta-ghost:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+
+/* secure-by-design style trust row */
+.nt-trust {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ---- hero fade-in on mount ---- */
+.nt-fade {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 1s ease, transform 1s ease;
+}
+.nt-fade.in { opacity: 1; transform: translateY(0); }
+.nt-fade.d3 { transition-delay: 0.3s; }
+
+/* hero headline treatment (Inter, large, tight, refined weight) */
+.hero .nt-hero-head {
+  font-family: 'Inter', sans-serif;
+  font-weight: 560;
+  font-size: clamp(38px, 5vw, 66px);
+  line-height: 1.03;
+  letter-spacing: -0.035em;
+  color: #fff;
+}
+/* single solid accent — no rainbow gradient, no typewriter */
+.nt-hero-accent { color: #9db8ff; }
+.nt-hero-sub { color: rgba(255, 255, 255, 0.55); }
+
+/* notch (hero island): no backdrop blur — show what's behind it sharp */
+.island.glass-deep {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ---- hero vertical position: sit lower, with room under the fixed nav ---- */
+.hero {
+  margin-top: 0;
+  padding-top: 140px;
+  padding-bottom: 72px;
+}
+
+/* ---- "Works with" row: real brand logos, generously spaced ---- */
+.hero .strip { margin-top: 80px; }
+.hero .strip .marquee-track { gap: 104px; align-items: center; }
+.hero .strip .logo {
+  height: 30px;
+  width: auto;
+  flex: none;
+  filter: brightness(0) invert(1);
+  opacity: 0.55;
+  transition: opacity 0.2s ease;
+}
+.hero .strip .logo-am { height: 27px; }
+.hero .strip .marquee:hover .logo { opacity: 0.78; }
+/* a little extra padding so logos don't crowd the fade edges of the marquee */
+.hero .strip .marquee-track > .logo:first-child { margin-left: 24px; }
+.hero .strip .strip-label {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.32);
+}
+
+/* ---- "It adapts to the moment" previews ---- */
+/* Both preview boxes share one height; the closed box stretches to match the
+   open island on the left, while the notch itself stays small at the top. */
+.adapts-grid { align-items: stretch; }
+.adapts-col { justify-content: flex-start; }
+.adapts-col .closed-wrap { flex: 1 1 auto; }
+.closed-wrap { justify-content: flex-start; }
+.closed-scene {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 188px;
+}
+/* notch sits flush against the top edge of the box — no border seam above it */
+.closed-scene {
+  border: none;
+  box-shadow: var(--shadow), inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+.closed-scene .cnotch {
+  top: 0;
+  /* lift the notch over the box's inset hairline so its top edge meets the
+     very top of the container with no seam; scale down a touch */
+  margin-top: -1px;
+  transform: translateX(-50%) scale(0.84);
+  transform-origin: top center;
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* light-rays background container */
+.light-rays-container {
+  width: 100%;
+  height: 100%;
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  overflow: hidden;
+  mix-blend-mode: screen;
+}

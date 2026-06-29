@@ -40,12 +40,11 @@ h1,h2,h3,h4,h5{margin:0;letter-spacing:-.02em;line-height:1.05;font-weight:700}
 code{font-family:"JetBrains Mono",ui-monospace,monospace}
 
 /* ---------- ambient backdrop ---------- */
-.ambient{position:fixed;inset:0;z-index:-2;overflow:hidden;background:
-  radial-gradient(1300px 760px at 78% -12%,#1d3170 0%,transparent 58%),
-  radial-gradient(1000px 680px at 8% 6%,#2a1a5e 0%,transparent 56%),
-  radial-gradient(900px 700px at 50% 112%,#143f5e 0%,transparent 60%),
-  linear-gradient(180deg,var(--bg),var(--bg-2));
-}
+.ambient{position:fixed;inset:0;z-index:-2;overflow:hidden;background:#000}
+/* WebGL light-rays layer: above the gradient/blobs, behind page content.
+   screen blend makes the rays add light onto the gradient instead of being
+   washed out by it. */
+.light-rays{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;mix-blend-mode:screen}
 .blob{position:absolute;border-radius:50%;filter:blur(72px);opacity:.72;mix-blend-mode:screen;animation:float 22s ease-in-out infinite}
 .blob-a{width:640px;height:640px;left:-160px;top:-120px;background:radial-gradient(circle,#4f7bff,transparent 64%)}
 .blob-b{width:560px;height:560px;right:-130px;top:90px;background:radial-gradient(circle,#9067ff,transparent 64%);animation-delay:-7s}
@@ -136,10 +135,11 @@ code{font-family:"JetBrains Mono",ui-monospace,monospace}
   border:1px solid rgba(255,255,255,.08);box-shadow:var(--shadow);isolation:isolate}
 .scene::before{content:"";position:absolute;inset:0;z-index:-1}
 .scene-hero::before{background:
-  radial-gradient(120% 90% at 70% 0%,#4a6cff 0%,#6e3cff 38%,#1a1140 78%)}
-.scene-music::before{background:radial-gradient(120% 100% at 30% 10%,#ff7eb3 0%,#a25cff 40%,#241046 80%)}
-.scene-agents::before{background:radial-gradient(120% 100% at 75% 10%,#2fd0a0 0%,#2b7bff 45%,#101a3a 82%)}
-.scene-approve::before{background:radial-gradient(120% 100% at 50% 0%,#ffb24b 0%,#ff6b6b 38%,#2a1330 80%)}
+  linear-gradient(180deg,rgba(6,8,16,.22),rgba(6,8,16,.5)),
+  url("assets/wallpapers/sonoma.jpg") center/cover no-repeat}
+.scene-music::before{background:linear-gradient(180deg,rgba(6,8,16,.24),rgba(6,8,16,.5)),url("assets/wallpapers/purple.jpg") center/cover no-repeat}
+.scene-agents::before{background:linear-gradient(180deg,rgba(6,8,16,.24),rgba(6,8,16,.5)),url("assets/wallpapers/green.jpg") center/cover no-repeat}
+.scene-approve::before{background:linear-gradient(180deg,rgba(6,8,16,.24),rgba(6,8,16,.5)),url("assets/wallpapers/orange.jpg") center/cover no-repeat}
 .scene::after{content:"";position:absolute;inset:0;z-index:-1;opacity:.5;
   background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");mix-blend-mode:overlay}
 
@@ -335,7 +335,7 @@ code{font-family:"JetBrains Mono",ui-monospace,monospace}
 .closed-wrap{display:flex;flex-direction:column;align-items:center;gap:26px}
 .closed-scene{position:relative;width:min(480px,100%);height:188px;border-radius:26px;overflow:hidden;
   border:1px solid rgba(255,255,255,.08);box-shadow:var(--shadow);
-  background:radial-gradient(120% 130% at 50% -20%,#3b2d72 0%,#1a1140 52%,#0c0922 86%)}
+  background:linear-gradient(180deg,rgba(6,8,16,.2),rgba(6,8,16,.46)),url("assets/wallpapers/sky.jpg") center/cover no-repeat}
 /* the closed island: black notch with a small wing on either side (Dynamic-Island style) */
 .cnotch{position:absolute;top:0;left:50%;transform:translateX(-50%);display:flex;align-items:center;
   height:54px;background:#05050b;border-radius:0 0 21px 21px;padding:12px 9px 15px;
@@ -373,7 +373,7 @@ code{font-family:"JetBrains Mono",ui-monospace,monospace}
 @media (prefers-reduced-motion:reduce){.eq i{animation:none;height:11px}}
 
 /* ---------- dynamic switch deck ---------- */
-.scene-switch::before{background:radial-gradient(120% 100% at 50% -10%,#5566ff 0%,#7b3cff 42%,#160e36 84%)}
+.scene-switch::before{background:linear-gradient(180deg,rgba(6,8,16,.24),rgba(6,8,16,.5)),url("assets/wallpapers/blue.jpg") center/cover no-repeat}
 .switch-wrap{display:flex;flex-direction:column;align-items:center;gap:26px}
 .scene-switch{width:min(648px,100%);padding-bottom:40px}
 .island-deck{position:relative;min-height:150px;display:grid;grid-template-columns:minmax(0,1fr);align-items:start;justify-items:center}
@@ -450,11 +450,7 @@ code{font-family:"JetBrains Mono",ui-monospace,monospace}
 .lab{display:grid;grid-template-columns:1.25fr .9fr;gap:24px;align-items:stretch}
 .lab-stage{border-radius:26px;overflow:hidden;border:1px solid rgba(255,255,255,.08);box-shadow:var(--shadow)}
 .lab-wall{position:relative;height:100%;min-height:360px;display:grid;place-items:center;padding:40px;
-  background:
-    radial-gradient(60% 80% at 18% 20%,#ff7eb3 0%,transparent 55%),
-    radial-gradient(70% 90% at 85% 25%,#5cc6ff 0%,transparent 55%),
-    radial-gradient(80% 90% at 60% 95%,#39d98a 0%,transparent 55%),
-    linear-gradient(140deg,#2a1d5e,#0c1733)}
+  background:url("assets/wallpapers/sonoma.jpg") center/cover no-repeat}
 .lab-wall::after{content:"";position:absolute;inset:0;
   background-image:linear-gradient(rgba(255,255,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.07) 1px,transparent 1px);
   background-size:38px 38px;mask-image:radial-gradient(70% 70% at 50% 50%,#000,transparent);opacity:.5}
