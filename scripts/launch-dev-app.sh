@@ -15,7 +15,7 @@ brand_script="$repo_root/scripts/generate_brand_icons.py"
 brand_icon="$repo_root/Assets/Brand/OpenIsland.icns"
 bundle_dir="$HOME/Applications/NotchTune Dev.app"
 plist_path="$bundle_dir/Contents/Info.plist"
-bundle_binary="$bundle_dir/Contents/MacOS/OpenIslandApp"
+bundle_binary="$bundle_dir/Contents/MacOS/NotchTune Dev"
 
 cd "$repo_root"
 
@@ -44,6 +44,8 @@ pkill -9 -f "Notch Tune Dev" 2>/dev/null || true
 pkill -9 -f "Open Island Dev" 2>/dev/null || true
 sleep 2
 
+# Remove the pre-rename executable so stale copies don't linger in the bundle.
+rm -f "$bundle_dir/Contents/MacOS/OpenIslandApp"
 command cp "$app_binary" "$bundle_binary"
 command cp "$hooks_binary" "$bundle_dir/Contents/Helpers/OpenIslandHooks"
 command cp "$setup_binary" "$bundle_dir/Contents/Helpers/OpenIslandSetup"
@@ -70,7 +72,7 @@ cat > "$plist_path" <<EOF
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>OpenIslandApp</string>
+    <string>NotchTune Dev</string>
     <key>CFBundleIdentifier</key>
     <string>app.openisland.dev</string>
     <key>CFBundleInfoDictionaryVersion</key>

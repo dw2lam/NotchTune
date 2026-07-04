@@ -46,7 +46,7 @@ python3 "$dmg_bg_script"
 rm -rf "$bundle_dir" "$zip_path" "$dmg_path"
 mkdir -p "$bundle_dir/Contents/MacOS" "$bundle_dir/Contents/Helpers" "$bundle_dir/Contents/Resources" "$bundle_dir/Contents/Frameworks"
 
-cp "$app_binary" "$bundle_dir/Contents/MacOS/OpenIslandApp"
+cp "$app_binary" "$bundle_dir/Contents/MacOS/$app_name"
 cp "$hooks_binary" "$bundle_dir/Contents/Helpers/OpenIslandHooks"
 cp "$setup_binary" "$bundle_dir/Contents/Helpers/OpenIslandSetup"
 cp "$brand_icon" "$bundle_dir/Contents/Resources/OpenIsland.icns"
@@ -70,12 +70,12 @@ else
 fi
 
 chmod +x \
-    "$bundle_dir/Contents/MacOS/OpenIslandApp" \
+    "$bundle_dir/Contents/MacOS/$app_name" \
     "$bundle_dir/Contents/Helpers/OpenIslandHooks" \
     "$bundle_dir/Contents/Helpers/OpenIslandSetup"
 
 # Add rpath so the binary can find Sparkle.framework in Contents/Frameworks/.
-install_name_tool -add_rpath @loader_path/../Frameworks "$bundle_dir/Contents/MacOS/OpenIslandApp" 2>/dev/null || true
+install_name_tool -add_rpath @loader_path/../Frameworks "$bundle_dir/Contents/MacOS/$app_name" 2>/dev/null || true
 
 cat > "$bundle_dir/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -87,7 +87,7 @@ cat > "$bundle_dir/Contents/Info.plist" <<EOF
     <key>CFBundleDisplayName</key>
     <string>$app_name</string>
     <key>CFBundleExecutable</key>
-    <string>OpenIslandApp</string>
+    <string>$app_name</string>
     <key>CFBundleIconFile</key>
     <string>OpenIsland</string>
     <key>CFBundleIdentifier</key>
@@ -123,7 +123,7 @@ plutil -lint "$bundle_dir/Contents/Info.plist" >/dev/null
 # --- Verify bundle structure matches what the app expects at runtime ---
 verify_errors=0
 for required in \
-    "Contents/MacOS/OpenIslandApp" \
+    "Contents/MacOS/$app_name" \
     "Contents/Helpers/OpenIslandHooks" \
     "Contents/Helpers/OpenIslandSetup" \
     "Contents/Resources/OpenIsland.icns" \
@@ -148,7 +148,7 @@ smoke_dir="$(mktemp -d)/smoke-test"
 mkdir -p "$smoke_dir"
 cp -R "$bundle_dir" "$smoke_dir/"
 smoke_app="$smoke_dir/$(basename "$bundle_dir")"
-smoke_binary="$smoke_app/Contents/MacOS/OpenIslandApp"
+smoke_binary="$smoke_app/Contents/MacOS/$app_name"
 if [[ -x "$smoke_binary" ]]; then
     # Launch and give it a few seconds — if it crashes, the pid disappears.
     "$smoke_binary" &
