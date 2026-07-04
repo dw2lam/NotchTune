@@ -162,6 +162,20 @@ struct TerminalJumpService {
         ),
     ]
 
+    /// Candidate bundle identifiers for a hook-reported terminal app name, used
+    /// to check whether that app is frontmost. Exact-match only (no
+    /// "first installed" fallback) so a focus check never mis-attributes a
+    /// session to an unrelated frontmost app. Returns `[]` for "Unknown" or
+    /// unrecognized names.
+    static func bundleIdentifiers(forTerminalAppName name: String) -> [String] {
+        let normalized = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty, normalized != "unknown" else { return [] }
+        guard let descriptor = knownApps.first(where: { descriptor in
+            descriptor.displayName.lowercased() == normalized || descriptor.aliases.contains(normalized)
+        }) else { return [] }
+        return descriptor.allBundleIdentifiers
+    }
+
     /// Bundle identifiers of JetBrains IDEs.
     private static let jetbrainsBundleIDs: Set<String> = Set(
         knownApps

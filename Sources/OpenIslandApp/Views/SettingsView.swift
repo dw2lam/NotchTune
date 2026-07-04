@@ -336,11 +336,60 @@ struct SoundSettingsPane: View {
                     Label(lang.t("settings.sound.addCustomSound"), systemImage: "plus")
                 }
             }
+
+            nudgeSection
         }
         .formStyle(.grouped)
         .navigationTitle(lang.t("settings.tab.sound"))
         .onAppear {
             loadCustomSounds()
+        }
+    }
+
+    @ViewBuilder
+    private var nudgeSection: some View {
+        Section("Idle Session Nudge") {
+            Toggle("Nudge me about sessions I haven't answered", isOn: Binding(
+                get: { model.nudgeSettings.isEnabled },
+                set: { model.nudgeSettings.isEnabled = $0 }
+            ))
+
+            Picker("Nudge after", selection: Binding(
+                get: { model.nudgeSettings.threshold },
+                set: { model.nudgeSettings.threshold = $0 }
+            )) {
+                ForEach(IdleNudgeThreshold.allCases) { threshold in
+                    Text(threshold.displayName).tag(threshold)
+                }
+            }
+            .disabled(!model.nudgeSettings.isEnabled)
+
+            HStack {
+                Picker("Nudge sound", selection: Binding(
+                    get: { model.selectedNudgeSoundName },
+                    set: { model.selectedNudgeSoundName = $0; NotificationSoundService.play($0) }
+                )) {
+                    ForEach(availableSounds, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                    ForEach(customSounds, id: \.self) { filename in
+                        Text(cleanFilename(filename)).tag(filename)
+                    }
+                }
+
+                Button {
+                    NotificationSoundService.play(model.selectedNudgeSoundName)
+                } label: {
+                    Image(systemName: "play.circle")
+                }
+                .buttonStyle(.borderless)
+                .help("Preview nudge sound")
+            }
+            .disabled(!model.nudgeSettings.isEnabled)
+
+            Text("When a session waits for you longer than the chosen time, the island's character jumps once and the nudge sound plays. The nudge sound shares the custom sounds added above.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -378,6 +427,9 @@ struct SoundSettingsPane: View {
             loadCustomSounds()
             if model.selectedSoundName == filename {
                 model.selectedSoundName = NotificationSoundService.defaultSoundName
+            }
+            if model.selectedNudgeSoundName == filename {
+                model.selectedNudgeSoundName = NotificationSoundService.defaultSoundName(for: .nudge)
             }
         } catch {
             print("Failed to delete custom sound: \(error)")
@@ -533,6 +585,7 @@ struct SetupSettingsPane: View {
     @State private var confirmingUninstallCodebuddy = false
     @State private var confirmingUninstallCursor = false
     @State private var confirmingUninstallGemini = false
+    @State private var confirmingUninstallAntigravity = false
     @State private var confirmingUninstallKimi = false
     @State private var confirmingUninstallClaudeUsage = false
 
@@ -703,6 +756,23 @@ struct SetupSettingsPane: View {
                 }
 
                 hookRow(
+                    name: "Antigravity",
+                    installed: model.antigravityHooksInstalled,
+                    busy: model.isAntigravityHookSetupBusy,
+                    configLocationURL: antigravityHookConfigURL,
+                    installAction: { model.installAntigravityHooks() },
+                    uninstallAction: { confirmingUninstallAntigravity = true }
+                )
+                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallAntigravity) {
+                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                        model.uninstallAntigravityHooks()
+                    }
+                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
+                } message: {
+                    Text("This will remove NotchTune hooks from ~/.gemini/config/hooks.json.")
+                }
+
+                hookRow(
                     name: "Kimi CLI",
                     installed: model.kimiHooksInstalled,
                     busy: model.isKimiHookSetupBusy,
@@ -795,6 +865,7 @@ struct SetupSettingsPane: View {
                     if !model.codebuddyHooksInstalled { model.installCodebuddyHooks() }
                     if !model.cursorHooksInstalled { model.installCursorHooks() }
                     if !model.geminiHooksInstalled { model.installGeminiHooks() }
+                    if !model.antigravityHooksInstalled { model.installAntigravityHooks() }
                     if !model.kimiHooksInstalled { model.installKimiHooks() }
                     if !model.claudeUsageInstalled { model.installClaudeUsageBridge() }
                 }
@@ -894,6 +965,11 @@ struct SetupSettingsPane: View {
     private var geminiHookConfigURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".gemini/settings.json")
+    }
+
+    private var antigravityHookConfigURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".gemini/config/hooks.json")
     }
 
     private var hasErrors: Bool {

@@ -224,6 +224,15 @@ struct V6ClosedPill: View {
     /// width that fits just the glyph.
     var minWidth: CGFloat = 70
 
+    /// Liquid Glass material for the pill background. `nil` renders solid ink.
+    var glass: ResolvedGlass? = nil
+
+    /// Freeze the animated glyph when the pill is hidden/off-screen.
+    var glyphPaused: Bool = false
+
+    /// Changes to trigger a one-shot jump on the glyph (idle-session nudge).
+    var nudgeTrigger: UUID? = nil
+
     var body: some View {
         switch layout {
         case .external: externalBody
@@ -253,11 +262,13 @@ struct V6ClosedPill: View {
         let width = max(minWidth, intrinsic)
 
         return ZStack {
-            V6ClosedPillShape(topFilletRadius: 0)
-                .fill(V6Palette.ink)
+            IslandSurfaceBackground(
+                shape: V6ClosedPillShape(topFilletRadius: 0),
+                glass: glass
+            )
 
             HStack(spacing: 0) {
-                UnifiedBars(mode: mode, size: 24, character: character)
+                UnifiedBars(mode: mode, size: 24, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
                     .frame(width: glyphW, height: 24)
 
                 if let label {
@@ -295,12 +306,14 @@ struct V6ClosedPill: View {
         let outer = wingReserve + physicalNotchWidth + wingReserve
 
         return ZStack {
-            V6ClosedPillShape(topFilletRadius: 0)
-                .fill(V6Palette.ink)
+            IslandSurfaceBackground(
+                shape: V6ClosedPillShape(topFilletRadius: 0),
+                glass: glass
+            )
 
             HStack(spacing: 0) {
                 HStack {
-                    UnifiedBars(mode: mode, size: 24, character: character)
+                    UnifiedBars(mode: mode, size: 24, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
                         .frame(width: 24, height: 24)
                     Spacer(minLength: 0)
                 }
@@ -358,10 +371,20 @@ private struct MusicNotificationMarqueeText: View {
     let foregroundStyle: Color
     let lineHeight: CGFloat
     let maxWidth: CGFloat
+    /// Measured once at init — the text/font are immutable, so there's no reason
+    /// to re-run Core Text measurement inside the per-frame scroll timeline.
+    private let intrinsicWidth: CGFloat
 
-    private var intrinsicWidth: CGFloat {
-        guard !text.isEmpty else { return 0 }
-        return ceil((text as NSString).size(withAttributes: [.font: nsFont]).width)
+    init(text: String, font: Font, nsFont: NSFont, foregroundStyle: Color, lineHeight: CGFloat, maxWidth: CGFloat) {
+        self.text = text
+        self.font = font
+        self.nsFont = nsFont
+        self.foregroundStyle = foregroundStyle
+        self.lineHeight = lineHeight
+        self.maxWidth = maxWidth
+        self.intrinsicWidth = text.isEmpty
+            ? 0
+            : ceil((text as NSString).size(withAttributes: [.font: nsFont]).width)
     }
 
     private var shouldScroll: Bool {
@@ -427,6 +450,10 @@ enum MusicTrackNotificationMetrics {
     static let minimumTextWidth: CGFloat = 48
     static let maximumTextWidth: CGFloat = 300
     static let measurementFudge: CGFloat = 14
+    /// Rendered widths of the trailing glyphs, shared so the notch wing-reserve
+    /// math (IslandChromeMetrics) stays in lockstep with the actual views.
+    static let waveformWidth: CGFloat = 20
+    static let playIconWidth: CGFloat = 18
 
     static func estimatedOuterWidth(
         for layout: V6ClosedLayout,
@@ -457,7 +484,7 @@ enum MusicTrackNotificationMetrics {
     static func estimatedExternalWidth(track: PlayerTrack) -> CGFloat {
         let artWidth: CGFloat = albumArtWidth
         let contentGap: CGFloat = 8
-        let playWidth: CGFloat = 18
+        let playWidth: CGFloat = playIconWidth
         let textWidth = estimatedTextBlockWidth(title: track.title, artist: track.artist)
         return IslandChromeMetrics.notchedMusicLeadingPadding
             + artWidth
@@ -520,7 +547,6 @@ private struct MusicClosedAlbumArtThumbnail: View {
         .clipShape(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         )
-        .id(nsImage.tiffRepresentation?.hashValue ?? 0)
     }
 }
 
@@ -535,6 +561,9 @@ struct V6ClosedMusicSurface: View {
     var height: CGFloat
     var physicalNotchWidth: CGFloat = 0
     var panelContentWidth: CGFloat = .greatestFiniteMagnitude
+
+    /// Liquid Glass material for the surface background. `nil` renders solid ink.
+    var glass: ResolvedGlass? = nil
 
     private var isNotification: Bool { phase == .notification }
 
@@ -571,8 +600,10 @@ struct V6ClosedMusicSurface: View {
         let outer = leftWing + physicalNotchWidth + rightWing
 
         return ZStack(alignment: .topLeading) {
-            V6ClosedPillShape(topFilletRadius: 0)
-                .fill(V6Palette.ink)
+            IslandSurfaceBackground(
+                shape: V6ClosedPillShape(topFilletRadius: 0),
+                glass: glass
+            )
 
             HStack(spacing: 0) {
                 macbookLeftWing(
@@ -643,7 +674,7 @@ struct V6ClosedMusicSurface: View {
             .opacity(isNotification ? 1 : 0)
 
             HStack(spacing: 0) {
-                MusicWaveformView(isPlaying: isPlaying, color: track.avgAlbumColor)
+                MusicWaveformView(isPlaying: isPlaying && !isNotification, color: track.avgAlbumColor)
                 Spacer(minLength: 0)
                 musicTrailingInset
             }
@@ -676,7 +707,7 @@ struct V6ClosedMusicSurface: View {
             + V6ClosedMusicSurfaceMetrics.albumArtSize
             + IslandChromeMetrics.notchedClosedContentGap
             + IslandChromeMetrics.notchedMusicTrailingPadding
-            + 18
+            + MusicTrackNotificationMetrics.playIconWidth
         let available = panelContentWidth - chrome
         let maxText = min(
             MusicTrackNotificationMetrics.maximumTextWidth,
@@ -709,7 +740,7 @@ struct V6ClosedMusicSurface: View {
             ZStack {
                 playStateIcon
                     .opacity(isNotification ? 1 : 0)
-                MusicWaveformView(isPlaying: isPlaying, color: track.avgAlbumColor)
+                MusicWaveformView(isPlaying: isPlaying && !isNotification, color: track.avgAlbumColor)
                     .opacity(isNotification ? 0 : 1)
             }
 
@@ -717,7 +748,12 @@ struct V6ClosedMusicSurface: View {
         }
         .frame(height: height)
         .fixedSize(horizontal: true, vertical: true)
-        .background(V6Palette.ink, in: V6ClosedPillShape(topFilletRadius: 0))
+        .background {
+            IslandSurfaceBackground(
+                shape: V6ClosedPillShape(topFilletRadius: 0),
+                glass: glass
+            )
+        }
         .background(externalClipReporter)
     }
 
@@ -772,7 +808,8 @@ struct V6ClosedMusicSurface: View {
         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
             .font(.system(size: 10, weight: .bold))
             .foregroundStyle(track.avgAlbumColor)
-            .frame(width: 18, height: 18)
+            .frame(width: MusicTrackNotificationMetrics.playIconWidth,
+                   height: MusicTrackNotificationMetrics.playIconWidth)
     }
 }
 
@@ -786,7 +823,7 @@ struct MusicWaveformView: View {
                 MusicWaveformBar(index: index, isPlaying: isPlaying, color: color)
             }
         }
-        .frame(width: 20, height: 14)
+        .frame(width: MusicTrackNotificationMetrics.waveformWidth, height: 14)
     }
 }
 

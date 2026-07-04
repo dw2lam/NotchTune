@@ -3,9 +3,32 @@ import AppKit
 /// Manages notification sound playback using macOS system sounds.
 @MainActor
 struct NotificationSoundService {
+    /// A selectable sound slot. Both slots draw from the same system + custom
+    /// sound lists, but persist their selection independently.
+    enum SoundType {
+        case notification
+        case nudge
+    }
+
     private static let soundsDirectory = "/System/Library/Sounds"
-    private static let defaultsKey = "notification.sound.name"
+    private static let notificationDefaultsKey = "notification.sound.name"
+    private static let nudgeDefaultsKey = "feature.nudge.sound.name"
     static let defaultSoundName = "Bottle"
+    static let nudgeDefaultSoundName = "Submarine"
+
+    static func defaultSoundName(for type: SoundType) -> String {
+        switch type {
+        case .notification: return defaultSoundName
+        case .nudge: return nudgeDefaultSoundName
+        }
+    }
+
+    private static func defaultsKey(for type: SoundType) -> String {
+        switch type {
+        case .notification: return notificationDefaultsKey
+        case .nudge: return nudgeDefaultsKey
+        }
+    }
 
     static var customSoundsDirectory: URL {
         let fm = FileManager.default
@@ -40,14 +63,19 @@ struct NotificationSoundService {
             .sorted()
     }
 
-    /// The currently selected sound name, persisted in UserDefaults.
+    /// The currently selected sound name for a given slot, persisted in UserDefaults.
+    static func selectedSoundName(for type: SoundType) -> String {
+        UserDefaults.standard.string(forKey: defaultsKey(for: type)) ?? defaultSoundName(for: type)
+    }
+
+    static func setSelectedSoundName(_ name: String, for type: SoundType) {
+        UserDefaults.standard.set(name, forKey: defaultsKey(for: type))
+    }
+
+    /// Legacy accessor for the notification slot, kept so existing call sites compile.
     static var selectedSoundName: String {
-        get {
-            UserDefaults.standard.string(forKey: defaultsKey) ?? defaultSoundName
-        }
-        set {
-            UserDefaults.standard.set(newValue, forKey: defaultsKey)
-        }
+        get { selectedSoundName(for: .notification) }
+        set { setSelectedSoundName(newValue, for: .notification) }
     }
 
     /// Plays a system sound or custom sound by name.
@@ -72,7 +100,13 @@ struct NotificationSoundService {
     /// Plays the user-selected notification sound, respecting the mute setting.
     static func playNotification(isMuted: Bool) {
         guard !isMuted else { return }
-        play(selectedSoundName)
+        play(selectedSoundName(for: .notification))
+    }
+
+    /// Plays the user-selected sound for a given slot, respecting the mute setting.
+    static func play(type: SoundType, isMuted: Bool) {
+        guard !isMuted else { return }
+        play(selectedSoundName(for: type))
     }
 
     /// Copies a sound file to the custom sounds directory and returns the filename on success.

@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import QuartzCore
 import SwiftUI
 import OpenIslandCore
 
@@ -32,6 +33,11 @@ final class OverlayPanelController {
     private var eventMonitors = NotchEventMonitors()
     private var hoverTimer: DispatchWorkItem?
     private var hoverCancelGrace: DispatchWorkItem?
+    /// Set when the island auto-collapses on mouse-leave; suppresses an
+    /// immediate hover-reopen while the cursor lingers over the notch (which
+    /// would otherwise interrupt the close animation). Cleared once the cursor
+    /// leaves the closed-surface area, so a deliberate re-hover still works.
+    private var suppressHoverOpenAfterCollapse = false
     weak var model: AppModel?
     private(set) var notchRect: NSRect = .zero
 
@@ -201,14 +207,26 @@ final class OverlayPanelController {
 
         let windowFrame = panelFrame(for: model, on: screen)
 
-        // Always set the panel frame instantly — no AppKit animation.
-        // All visual transitions (shape, size, opacity, corner radius) are
-        // driven by SwiftUI's .animation() modifier on the content view.
-        // Mixing NSAnimationContext with SwiftUI spring animations caused
-        // visible jank because the two systems have different timing curves,
-        // durations, and start times (AppKit was deferred by one runloop).
+        // The window is ALWAYS opened-size, so the closed↔open morph never
+        // resizes it — that transition is pure SwiftUI inside a fixed window.
+        // The window only resizes when the *opened* content height changes
+        // (switching tabs, the session list growing/shrinking). Those resizes
+        // are therefore safe to animate: there's no SwiftUI open/close spring
+        // running to collide with. SwiftUI relayout tracks the window each
+        // frame (GeometryReader), so the glass + content morph height in step
+        // with the window. Open/close, first present, and display moves still
+        // snap instantly (see `shouldAnimateResize`).
         if panel.frame != windowFrame {
-            panel.setFrame(windowFrame, display: true)
+            if animated, shouldAnimateResize(panel: panel, to: windowFrame) {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = Self.panelResizeAnimationDuration
+                    context.timingFunction = Self.panelResizeTimingFunction
+                    context.allowsImplicitAnimation = true
+                    panel.animator().setFrame(windowFrame, display: true)
+                }
+            } else {
+                panel.setFrame(windowFrame, display: true)
+            }
         }
         computeNotchRect(screen: screen)
 
@@ -218,11 +236,46 @@ final class OverlayPanelController {
         )
     }
 
+    /// How long the opened panel takes to morph to a new height. Tuned to sit
+    /// just under the SwiftUI tab-content transition (`.smooth(0.35)`) so the
+    /// window and its content settle together.
+    private static let panelResizeAnimationDuration: TimeInterval = 0.34
+
+    /// A soft decelerating curve (no overshoot) so the height settles like a
+    /// liquid surface rather than a linear slide.
+    private static let panelResizeTimingFunction =
+        CAMediaTimingFunction(controlPoints: 0.22, 0.85, 0.25, 1)
+
+    /// A frame change is safe to animate only when the island is already open
+    /// and on-screen and *only its height* is changing. That isolates content /
+    /// tab height changes (which should morph) from the open/close transition
+    /// (which doesn't resize the window), the first present (panel not yet
+    /// visible), and display moves (which change width / x) — all of which must
+    /// snap instantly.
+    private func shouldAnimateResize(panel: NSPanel, to newFrame: NSRect) -> Bool {
+        guard panel.isVisible,
+              model?.notchStatus == .opened,
+              model?.isOverlayDisplayFullscreen != true else {
+            return false
+        }
+        let current = panel.frame
+        return abs(current.width - newFrame.width) < 0.5
+            && abs(current.minX - newFrame.minX) < 0.5
+            && abs(current.height - newFrame.height) >= 0.5
+    }
+
     private func presentPanel(_ panel: NSPanel, activates: Bool) {
         if activates {
             panel.makeKeyAndOrderFront(nil)
         } else {
             panel.orderFrontRegardless()
+            // Make the panel key even on hover/notification opens (without
+            // activating the app — it's a .nonactivatingPanel, so the user's
+            // active app keeps keyboard focus). Liquid Glass renders its
+            // inactive "frosted" appearance in a non-key window and only flips
+            // to the real, backdrop-refracting material once the window is key.
+            // Without this, the glass stayed frosted until the user clicked.
+            panel.makeKey()
         }
     }
 
@@ -301,6 +354,8 @@ final class OverlayPanelController {
             }
         } else if model.notchStatus == .closed && !inClosedSurfaceArea {
             cancelHoverOpen()
+            // Cursor left the notch after an auto-collapse — re-arm hover-open.
+            suppressHoverOpenAfterCollapse = false
         }
 
         let shouldTrackNotificationPointer = model.notchStatus == .opened
@@ -311,7 +366,13 @@ final class OverlayPanelController {
             if isPointInExpandedArea(screenLocation) {
                 model.notePointerInsideIslandSurface()
             } else {
+                let wasOpened = model.notchStatus == .opened
                 model.handlePointerExitedIslandSurface()
+                // If that auto-collapsed the island, don't let the cursor still
+                // sitting over the notch immediately re-hover it open mid-close.
+                if wasOpened && model.notchStatus != .opened {
+                    suppressHoverOpenAfterCollapse = true
+                }
             }
         }
     }
@@ -340,6 +401,10 @@ final class OverlayPanelController {
     private static let hoverCancelGracePeriod: TimeInterval = 0.1
 
     private func scheduleHoverOpen() {
+        // Suppressed right after an auto-collapse until the cursor leaves the
+        // notch, so a lingering cursor doesn't interrupt the close animation.
+        guard !suppressHoverOpenAfterCollapse else { return }
+
         // Mouse re-entered during grace period — just revoke the cancel.
         hoverCancelGrace?.cancel()
         hoverCancelGrace = nil
