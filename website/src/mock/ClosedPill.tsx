@@ -82,58 +82,63 @@ export type PillMode =
   | { kind: 'agents'; char: string; running: boolean; label?: string; tiles?: { color: string; state: 'running' | 'idle' | 'waiting' }[] }
   | { kind: 'idle'; char: string };
 
-export function ClosedPill({ mode, glass = false, width, children, className = '' }: {
+export function ClosedPill({ mode, glass = false, width, layout = 'pill', children, className = '' }: {
   mode: PillMode;
   glass?: boolean;
   /** optional fixed width; omit to auto-size like the real pill */
   width?: number;
+  /** 'pill' = external top-bar pill · 'notch' = MacBook wings around the physical notch */
+  layout?: 'pill' | 'notch';
   children?: ReactNode;
   className?: string;
 }) {
-  let inner: ReactNode = children;
-  if (!inner) {
-    switch (mode.kind) {
-      case 'music-notification':
-        inner = (
-          <>
-            <span className="nt-pill-art" style={{ backgroundImage: `url(${mode.art})` }} />
-            <span className="nt-pill-meta">
-              <Marquee text={mode.title} className="nt-pill-title" />
-              <Marquee text={mode.artist} className="nt-pill-artist" />
-            </span>
-            <span className="nt-pill-gap" />
-            <span style={{ width: 18, height: 18, color: mode.accent ?? 'var(--nt-paper)', display: 'grid', placeItems: 'center', flex: 'none' }}>
-              <span style={{ width: 10, height: 10, display: 'block' }}>
-                {mode.playing ? <PauseIcon /> : <PlayIcon />}
-              </span>
-            </span>
-          </>
-        );
-        break;
-      case 'music-compact':
-        inner = (
-          <>
-            <span className="nt-pill-art" style={{ backgroundImage: `url(${mode.art})` }} />
-            <span className="nt-pill-gap" />
-            <Waveform paused={!mode.playing} color={mode.accent} />
-          </>
-        );
-        break;
-      case 'agents':
-        inner = (
-          <>
-            <PixelSprite char={mode.char} running={mode.running} />
-            {mode.label && <Marquee text={mode.label} className="nt-pill-label" />}
-            <span className="nt-pill-gap" />
-            {mode.tiles && <AgentGrid tiles={mode.tiles} />}
-          </>
-        );
-        break;
-      case 'idle':
-        inner = <PixelSprite char={mode.char} />;
-        break;
-    }
+  let left: ReactNode = null;
+  let right: ReactNode = null;
+  switch (mode.kind) {
+    case 'music-notification':
+      left = (
+        <>
+          <span className="nt-pill-art" style={{ backgroundImage: `url(${mode.art})` }} />
+          <span className="nt-pill-meta">
+            <Marquee text={mode.title} className="nt-pill-title" />
+            <Marquee text={mode.artist} className="nt-pill-artist" />
+          </span>
+        </>
+      );
+      right = (
+        <span style={{ width: 18, height: 18, color: mode.accent ?? 'var(--nt-paper)', display: 'grid', placeItems: 'center', flex: 'none' }}>
+          <span style={{ width: 10, height: 10, display: 'block' }}>
+            {mode.playing ? <PauseIcon /> : <PlayIcon />}
+          </span>
+        </span>
+      );
+      break;
+    case 'music-compact':
+      left = <span className="nt-pill-art" style={{ backgroundImage: `url(${mode.art})` }} />;
+      right = <Waveform paused={!mode.playing} color={mode.accent} />;
+      break;
+    case 'agents':
+      left = (
+        <>
+          <PixelSprite char={mode.char} running={mode.running} />
+          {mode.label && <Marquee text={mode.label} className="nt-pill-label" />}
+        </>
+      );
+      right = mode.tiles ? <AgentGrid tiles={mode.tiles} /> : <span style={{ width: 24, flex: 'none' }} />;
+      break;
+    case 'idle':
+      left = <PixelSprite char={mode.char} />;
+      right = layout === 'notch' ? <span style={{ width: 24, flex: 'none' }} /> : null;
+      break;
   }
+
+  const inner = children ?? (
+    <>
+      {left}
+      {right && <span className={layout === 'notch' ? 'nt-pill-notchgap' : 'nt-pill-gap'} />}
+      {right}
+    </>
+  );
   return (
     <div className={`nt nt-pill nt-pill-${mode.kind} ${glass ? 'nt-glass' : ''} ${className}`.trim()} style={width ? { width } : undefined}>
       <div className="nt-pill-inner" style={{ flex: 1 }}>{inner}</div>

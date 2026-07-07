@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ShuffleIcon, RepeatIcon, PrevIcon, NextIcon, PlayIcon, PauseIcon } from './icons';
+import { Shuffle, Rewind, FastForward, Play, Pause, Repeat } from 'lucide-react';
 
 /* ============================================================
    1:1 open Music tab (MusicPanelView.swift):
@@ -78,14 +78,16 @@ export function MusicTab({
           <div className="nt-track-title">{track.title}</div>
           <div className="nt-track-artist">{track.artist}</div>
         </div>
+        {/* SF-symbol glyphs: shuffle · backward.fill · play/pause.fill ·
+            forward.fill · repeat (MusicPlaybackButtonsView) */}
         <div className="nt-controls">
-          <button type="button" className={`nt-cbtn nt-cbtn-sm ${shuffle ? '' : 'is-off'}`} onClick={onShuffle} aria-label="Shuffle"><ShuffleIcon /></button>
-          <button type="button" className="nt-cbtn nt-cbtn-md" onClick={onPrev} aria-label="Previous"><PrevIcon /></button>
+          <button type="button" className={`nt-cbtn nt-cbtn-sm ${shuffle ? '' : 'is-off'}`} onClick={onShuffle} aria-label="Shuffle"><Shuffle strokeWidth={2.4} /></button>
+          <button type="button" className="nt-cbtn nt-cbtn-md" onClick={onPrev} aria-label="Previous"><Rewind fill="currentColor" strokeWidth={0} /></button>
           <button type="button" className="nt-cbtn nt-cbtn-lg" onClick={onPlayPause} aria-label={playing ? 'Pause' : 'Play'}>
-            {playing ? <PauseIcon /> : <PlayIcon />}
+            {playing ? <Pause fill="currentColor" strokeWidth={0} /> : <Play fill="currentColor" strokeWidth={0} />}
           </button>
-          <button type="button" className="nt-cbtn nt-cbtn-md" onClick={onNext} aria-label="Next"><NextIcon /></button>
-          <button type="button" className={`nt-cbtn nt-cbtn-sm ${repeat ? '' : 'is-off'}`} onClick={onRepeat} aria-label="Repeat"><RepeatIcon /></button>
+          <button type="button" className="nt-cbtn nt-cbtn-md" onClick={onNext} aria-label="Next"><FastForward fill="currentColor" strokeWidth={0} /></button>
+          <button type="button" className={`nt-cbtn nt-cbtn-sm ${repeat ? '' : 'is-off'}`} onClick={onRepeat} aria-label="Repeat"><Repeat strokeWidth={2.4} /></button>
         </div>
         <div className="nt-progress">
           <div className="nt-rail" ref={railRef} onClick={seek}>

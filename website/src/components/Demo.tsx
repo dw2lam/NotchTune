@@ -45,8 +45,9 @@ export default function Demo() {
   const [repeat, setRepeat] = useState(false);
   const [char, setChar] = useState<(typeof CHARS)[number]>('dino');
   const [glass, setGlass] = useState<'clear' | 'frosted' | 'off'>('clear');
-  const [tint, setTint] = useState(50);
+  const [tint, setTint] = useState(22); /* app default tintStrength (LiquidGlass.swift:44) */
   const [approval, setApproval] = useState(false);
+  const [notifMode, setNotifMode] = useState(true);
   const [resolved, setResolved] = useState<'allowed' | 'denied' | null>(null);
   const closeTimer = useRef<number>();
 
@@ -79,6 +80,7 @@ export default function Demo() {
   const triggerApproval = () => {
     setResolved(null);
     setApproval(true);
+    setNotifMode(true);
     setTab('agents');
     setOpen(true);
     setPinned(true);
@@ -89,12 +91,14 @@ export default function Demo() {
     window.setTimeout(() => setResolved(null), 4000);
   };
 
+  const approvalSession: MockSession = {
+    state: 'approve', title: 'web', branch: 'main', prompt: 'ship the landing page',
+    waiting: 'Waiting 0m 12s', agent: 'claude', terminal: 'WezTerm', age: '12s',
+  };
   const sessions: MockSession[] = [
-    ...(approval
-      ? [{ state: 'approve', title: 'web', branch: 'main', prompt: 'ship the landing page', waiting: 'Waiting 0m 12s', agent: 'claude', terminal: 'WezTerm', age: '12s' } as MockSession]
-      : resolved
-        ? [{ state: resolved === 'allowed' ? 'running' : 'idle', title: 'web', branch: 'main', prompt: 'ship the landing page', agent: 'claude', terminal: 'WezTerm', age: '‹1m', command: resolved === 'allowed' ? 'git push origin main' : undefined } as MockSession]
-        : []),
+    ...(resolved
+      ? [{ state: resolved === 'allowed' ? 'running' : 'idle', title: 'web', branch: 'main', prompt: 'ship the landing page', agent: 'claude', terminal: 'WezTerm', age: '‹1m', command: resolved === 'allowed' ? 'git push origin main' : undefined } as MockSession]
+      : []),
     ...BASE_SESSIONS,
   ];
 
@@ -111,33 +115,36 @@ export default function Demo() {
         <p>This is a live, pixel-faithful mock of the real app — same fonts, same spacing, same glass. Hover (or tap) the notch to open it.</p>
       </div>
 
-      <div className="demo-scene reveal" data-open={open}>
+      <div
+        className="demo-scene reveal"
+        data-open={open}
+        onClick={(e) => {
+          if (!(e.target as HTMLElement).closest('.demo-anchor')) { setPinned(false); setOpen(false); }
+        }}
+      >
         <div className="demo-menubar" />
         <div
           className="demo-anchor"
           onMouseEnter={enter}
           onMouseLeave={leave}
-          onClick={() => { setPinned((p) => !p); setOpen(true); }}
+          onClick={() => { setOpen(true); setPinned(true); }}
         >
           <div className="demo-pill">
             {pillMode.kind === 'music-compact' && !pillMode.art ? (
-              <ClosedPill mode={{ kind: 'agents', char, running: false, label: 'Claude Code' }} />
+              <ClosedPill layout="notch" mode={{ kind: 'agents', char, running: false, label: 'Claude Code' }} />
             ) : (
-              <ClosedPill mode={pillMode} />
+              <ClosedPill layout="notch" mode={pillMode} />
             )}
           </div>
-          <div className="demo-panel">
+          <div className="demo-panel" onClick={(e) => e.stopPropagation()}>
             <IslandPanel
-              usage={<>
-                <UsageChip name="Claude" window="5h" pct={41} />
-                <UsageChip name="Codex" window="7d" pct={76} tone="warn" />
-              </>}
+              usage={<UsageChip name="Claude" window="5h" pct={41} />}
               tab={tab}
               onTab={setTab}
               glass={glass}
               tintStrength={tint / 100}
               ambientArt={tab === 'music' && playing && track.art.startsWith('url') ? track.art.slice(4, -1) : undefined}
-              showNotchGap={false}
+              showNotchGap
             >
               {tab === 'music' ? (
                 <MusicTab
@@ -149,8 +156,23 @@ export default function Demo() {
                   onRepeat={() => setRepeat((r) => !r)}
                   onSeek={setPosition}
                 />
+              ) : approval && notifMode ? (
+                /* notification presentation: only the actionable session +
+                   card + "Show all N" (like the real app) */
+                <AgentsTab sessions={[approvalSession]}>
+                  <ApprovalCard
+                    command="git push origin main"
+                    path="~/dev/web"
+                    onDeny={() => resolve('denied')}
+                    onAllowOnce={() => resolve('allowed')}
+                    onAlwaysAllow={() => resolve('allowed')}
+                  />
+                  <button type="button" className="nt-showall" onClick={() => setNotifMode(false)}>
+                    Show all {BASE_SESSIONS.length + 1} sessions
+                  </button>
+                </AgentsTab>
               ) : (
-                <AgentsTab sessions={sessions}>
+                <AgentsTab sessions={approval ? [approvalSession, ...sessions] : sessions}>
                   {approval && (
                     <ApprovalCard
                       command="git push origin main"
@@ -164,6 +186,7 @@ export default function Demo() {
               )}
             </IslandPanel>
           </div>
+          <div className="demo-hw-notch" aria-hidden="true" />
         </div>
       </div>
 

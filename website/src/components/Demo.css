@@ -2,7 +2,7 @@
 
 .demo-scene {
   position: relative;
-  min-height: 460px;
+  min-height: 520px;
   border-radius: 26px;
   overflow: hidden;
   background: url('/assets/wallpapers/sonoma.jpg') center / cover;
@@ -18,7 +18,7 @@
 /* faux menu bar */
 .demo-menubar {
   position: absolute; top: 0; left: 0; right: 0; height: 38px;
-  background: rgba(8, 8, 10, 0.62);
+  background: rgba(8, 8, 10, 0.78);
   -webkit-backdrop-filter: blur(30px) saturate(1.2);
   backdrop-filter: blur(30px) saturate(1.2);
 }
@@ -28,6 +28,18 @@
   transform: translateX(-50%);
   z-index: 2;
   cursor: pointer;
+}
+
+/* the MacBook's physical notch — always present, everything renders
+   around/under it */
+.demo-hw-notch {
+  position: absolute; top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 190px; height: 38px;
+  background: #000;
+  border-radius: 0 0 12px 12px;
+  z-index: 4;
+  pointer-events: none;
 }
 
 /* closed pill sits flush under the menu bar */

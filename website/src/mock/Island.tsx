@@ -87,7 +87,7 @@ function AnimatedHeight({ children }: { children: ReactNode }) {
 }
 
 export function IslandPanel({
-  usage, tab, onTab, ambientArt, glass = 'clear', tintStrength = 0.5, showNotchGap = true, children, className = '',
+  usage, tab, onTab, ambientArt, glass = 'clear', tintStrength = 0.22, showNotchGap = true, children, className = '',
 }: {
   usage?: ReactNode;
   tab?: IslandTab;
