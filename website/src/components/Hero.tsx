@@ -7,18 +7,18 @@ const HERO_SESSIONS: MockSession[] = [
   {
     state: 'running', title: 'notchtune', branch: 'feat/agy-hooks',
     prompt: 'the notch should react when agy is actually working…',
-    agent: 'Claude Code', terminal: 'Ghostty', age: '‹1m',
+    agent: 'claude', terminal: 'Ghostty', age: '‹1m',
   },
   {
     state: 'approve', title: 'island-demo', branch: 'main',
     prompt: 'run the release script?',
     waiting: 'Waiting 0m 12s',
-    agent: 'Codex', terminal: 'iTerm2', age: '12s',
+    agent: 'codex', terminal: 'iTerm2', age: '12s',
   },
   {
     state: 'done', title: 'site', branch: 'main',
     prompt: 'build the liquid-glass hero',
-    agent: 'Claude Code', terminal: 'tmux', age: '3m',
+    agent: 'claude', terminal: 'tmux', age: '3m',
   },
 ];
 

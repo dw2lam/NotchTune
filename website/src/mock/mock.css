@@ -111,22 +111,22 @@
 /* ---------- Tab bar (IslandPanelView.swift:759-792) ---------- */
 .nt-tabbar {
   position: relative;
-  display: flex; gap: 4px; align-items: center;
+  display: flex; gap: 8px; align-items: center;
   padding: 10px 16px 8px; /* top 10 / bottom 8 (IslandPanelView.swift:105) */
 }
 .nt-tab {
   position: relative;
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 5px 10px; border-radius: 999px;
-  font-size: 11px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px;
+  font-size: 11px; font-weight: 500; line-height: 1;
   color: rgba(255, 255, 255, 0.4);
   transition: color 0.2s ease;
 }
-.nt-tab svg { width: 10px; height: 10px; fill: currentColor; }
-.nt-tab.is-on { color: #fff; }
+.nt-tab svg { width: 12px; height: 12px; fill: currentColor; }
+.nt-tab.is-on { color: #fff; font-weight: 600; }
 /* sliding capsule indicator (matchedGeometryEffect equivalent) */
 .nt-tab-ind {
-  position: absolute; top: 10px; height: 22px; border-radius: 999px;
+  position: absolute; border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
   transition: left 0.35s cubic-bezier(0.32, 1.25, 0.42, 1), width 0.35s cubic-bezier(0.32, 1.25, 0.42, 1);
 }
@@ -196,7 +196,7 @@
 /* SESSIONS header: mono 10.5 semibold, tracking 1.4, paper@0.55, uppercase,
    height 36, divider white@0.055 (IslandPanelView:1105-1133) */
 .nt-sess-head {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: flex-start; gap: 12px;
   height: 36px; padding: 0 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.055);
 }
@@ -222,14 +222,30 @@
 
 /* session row */
 .nt-row {
-  display: grid; grid-template-columns: auto 1fr auto; gap: 10px;
-  align-items: center; padding: 8px 16px;
+  display: grid; grid-template-columns: 16px 1fr auto; gap: 10px;
+  align-items: center; padding: 10px 12px 10px 16px;
   border-radius: 10px; margin: 1px 6px;
   transition: background 0.15s ease;
 }
 .nt-row:hover { background: rgba(255, 255, 255, 0.04); }
+/* glyph state indicators (indicator style "glyph"):
+   running = spinning open ring · done = green check circle ·
+   waiting = pulsing dot */
+.nt-ind { display: inline-grid; place-items: center; justify-self: center; }
+.nt-ind-run {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 1.6px solid var(--nt-run);
+  border-top-color: transparent;
+  animation: nt-spin 1.1s linear infinite;
+}
+@keyframes nt-spin { to { transform: rotate(360deg); } }
+.nt-ind-done {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--nt-done);
+}
+.nt-ind-done svg { width: 8px; height: 8px; fill: #08130b; }
+.nt-ind-dot { width: 9px; height: 9px; justify-self: center; }
 /* animated status dot 9pt w/ pulse glow (IslandPanelView:2333-2345) */
-.nt-row .nt-dot { width: 9px; height: 9px; }
 .nt-dot-pulse { animation: nt-dotpulse 1.96s ease-in-out infinite; }
 @keyframes nt-dotpulse {
   0%, 100% { transform: scale(1); box-shadow: 0 0 4px 0 currentColor; opacity: 0.92; }
@@ -280,6 +296,15 @@
   color: rgba(241, 234, 217, 0.45); min-width: 30px; text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* detail-toggle chevron: 10px bold in a 22px circle (IslandPanelView:2428) */
+.nt .nt-chev {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  display: grid; place-items: center;
+  transition: background 0.15s ease;
+}
+.nt .nt-chev:hover { background: rgba(255, 255, 255, 0.12); }
+.nt-chev svg { width: 10px; height: 10px; fill: rgba(255, 255, 255, 0.55); transform: rotate(180deg); }
 /* subagent row (IslandPanelView:1790-1827) */
 .nt-subrow {
   display: flex; align-items: center; gap: 7px;
@@ -332,15 +357,30 @@
 .nt .nt-abtn-primary { background: var(--nt-paper); color: rgba(0, 0, 0, 0.88); }
 
 /* ---------- Closed pill (V6ClosedPillShape / V6NotchContent) ---------- */
-/* flat top, semicircle bottom r = h/2; external sim 190x38 min-w 70 */
+/* flat top, semicircle bottom r = h/2; auto-sizes to content like the
+   real pill (min-width 70, edge pad h/2); overflowing text marquees
+   instead of clipping (V6NotchContent:407-436). */
 .nt-pill {
   position: relative;
   display: inline-flex; align-items: center;
-  height: 38px; min-width: 70px;
+  height: 38px; min-width: 70px; max-width: 320px;
+  width: fit-content;
   padding: 0 19px; /* edge pad = height/2 (V6NotchContent:246) */
   background: var(--nt-ink);
   border-radius: 0 0 19px 19px;
   color: var(--nt-paper);
+}
+
+/* marquee: 30px/s ping-pong with 1.1s end pauses (V6NotchContent:407-436) */
+.nt-marq { display: block; overflow: hidden; max-width: 100%; }
+.nt-marq-inner { display: inline-block; white-space: nowrap; }
+.nt-marq.is-scrolling .nt-marq-inner {
+  animation: nt-marq var(--marq-dur, 6s) linear infinite;
+}
+@keyframes nt-marq {
+  0%, 12% { transform: translateX(0); }
+  46%, 58% { transform: translateX(var(--marq-dist, 0px)); }
+  92%, 100% { transform: translateX(0); }
 }
 .nt-pill.nt-glass {
   background: rgba(0, 0, 0, 0.55);
@@ -354,22 +394,23 @@
   width: 22px; height: 22px; border-radius: 5px; flex: none;
   background-size: cover; background-position: center;
 }
-.nt-pill-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.nt-pill-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; max-width: 150px; }
 /* closed music title mono 11 semibold paper; artist mono 10 medium @0.55 */
 .nt-pill-title {
   font-family: var(--nt-mono); font-size: 11px; font-weight: 600;
   line-height: 14px; color: var(--nt-paper);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .nt-pill-artist {
   font-family: var(--nt-mono); font-size: 10px; font-weight: 500;
   line-height: 12px; color: rgba(241, 234, 217, 0.55);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* center label mono 11.5 medium paper (V6NotchContent:196-199) */
 .nt-pill-label {
   font-family: var(--nt-mono); font-size: 11.5px; font-weight: 500;
   color: var(--nt-paper); white-space: nowrap;
+  max-width: 180px;
 }
 .nt-pill-gap { flex: 1; min-width: 6px; }
 
@@ -396,6 +437,39 @@
 .nt-sprite { width: 24px; height: 24px; flex: none; display: grid; place-items: center; }
 .nt-sprite.is-running { animation: nt-bounce 0.4s steps(2) infinite; }
 @keyframes nt-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.2px); } }
+
+/* ---------- GlassSurface (React Bits) integration ---------- */
+/* When the island renders through <GlassSurface>, its container owns
+   the backdrop-filter; we restore the island's chrome on top. */
+.nt-island-gs {
+  position: relative; overflow: hidden;
+  /* GlassSurface writes a uniform inline border-radius; the island's
+     top edge must stay flush with the notch */
+  border-radius: 0 0 22px 22px !important;
+}
+.nt-island-gs.glass-surface--svg {
+  background: transparent !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), 0 18px 44px rgba(0, 0, 0, 0.55) !important;
+}
+/* Safari/Firefox fallback → same dark blur the kit used before */
+.nt-island-gs.glass-surface--fallback {
+  background: rgba(0, 0, 0, 0.22) !important;
+  border: 0 !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.15) !important;
+  backdrop-filter: blur(26px) saturate(1.15) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), 0 18px 44px rgba(0, 0, 0, 0.55) !important;
+}
+.nt-island-gs .glass-surface__content {
+  display: block; padding: 0; width: 100%; height: auto;
+  align-items: stretch; justify-content: flex-start;
+}
+/* ink tint fill over the glass, exactly like the app's overlay
+   (LiquidGlass.swift:89-112, tintStrength 0.22) */
+.nt-gs-tint {
+  position: absolute; inset: 0; pointer-events: none;
+  background: rgba(0, 0, 0, 0.22);
+}
+.nt-island-gs.is-frosted .nt-gs-tint { background: rgba(12, 12, 14, 0.55); }
 
 /* ---------- Feature focus stage ---------- */
 /* Crops the mock to the fragment being highlighted instead of showing

@@ -1,14 +1,48 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import './mock.css';
 import { SPRITES, SPRITES_RUN, spriteSVG } from '../lib/sprites';
 import { PlayIcon, PauseIcon } from './icons';
 
 /* ============================================================
    1:1 closed pill (V6ClosedPillShape + V6NotchContent):
-   flat top, semicircular bottom (r = h/2), external sim 38pt
-   tall, min-width 70, edge pad h/2, inner gap 8.
-   Modes: music notification / music compact / agents / idle.
+   flat top, semicircular bottom (r = h/2), auto-sized to
+   content (min-width 70, edge pad h/2, inner gap 8).
+   Overflowing text uses the app's real marquee logic —
+   30px/s ping-pong with 1.1s pauses at each end
+   (V6NotchContent:407-436) — it never clips.
    ============================================================ */
+
+export function Marquee({ text, className = '' }: { text: string; className?: string }) {
+  const outer = useRef<HTMLSpanElement>(null);
+  const inner = useRef<HTMLSpanElement>(null);
+  const [scrolling, setScrolling] = useState(false);
+  const [style, setStyle] = useState<CSSProperties>();
+
+  useLayoutEffect(() => {
+    const o = outer.current;
+    const i = inner.current;
+    if (!o || !i) return;
+    const dist = i.scrollWidth - o.clientWidth;
+    if (dist > 2) {
+      /* scrollDuration = max(0.8, travel/30), pause 1.1s each end */
+      const travel = Math.max(0.8, dist / 30);
+      setScrolling(true);
+      setStyle({
+        '--marq-dist': `-${dist}px`,
+        '--marq-dur': `${(travel + 1.1) * 2}s`,
+      } as CSSProperties);
+    } else {
+      setScrolling(false);
+      setStyle(undefined);
+    }
+  }, [text]);
+
+  return (
+    <span ref={outer} className={`nt-marq ${scrolling ? 'is-scrolling' : ''} ${className}`.trim()} style={style}>
+      <span ref={inner} className="nt-marq-inner">{text}</span>
+    </span>
+  );
+}
 
 export function Waveform({ paused = false, color }: { paused?: boolean; color?: string }) {
   return (
@@ -51,6 +85,7 @@ export type PillMode =
 export function ClosedPill({ mode, glass = false, width, children, className = '' }: {
   mode: PillMode;
   glass?: boolean;
+  /** optional fixed width; omit to auto-size like the real pill */
   width?: number;
   children?: ReactNode;
   className?: string;
@@ -63,11 +98,11 @@ export function ClosedPill({ mode, glass = false, width, children, className = '
           <>
             <span className="nt-pill-art" style={{ backgroundImage: `url(${mode.art})` }} />
             <span className="nt-pill-meta">
-              <span className="nt-pill-title">{mode.title}</span>
-              <span className="nt-pill-artist">{mode.artist}</span>
+              <Marquee text={mode.title} className="nt-pill-title" />
+              <Marquee text={mode.artist} className="nt-pill-artist" />
             </span>
             <span className="nt-pill-gap" />
-            <span style={{ width: 18, height: 18, color: mode.accent ?? 'var(--nt-paper)', display: 'grid', placeItems: 'center' }}>
+            <span style={{ width: 18, height: 18, color: mode.accent ?? 'var(--nt-paper)', display: 'grid', placeItems: 'center', flex: 'none' }}>
               <span style={{ width: 10, height: 10, display: 'block' }}>
                 {mode.playing ? <PauseIcon /> : <PlayIcon />}
               </span>
@@ -88,7 +123,7 @@ export function ClosedPill({ mode, glass = false, width, children, className = '
         inner = (
           <>
             <PixelSprite char={mode.char} running={mode.running} />
-            {mode.label && <span className="nt-pill-label">{mode.label}</span>}
+            {mode.label && <Marquee text={mode.label} className="nt-pill-label" />}
             <span className="nt-pill-gap" />
             {mode.tiles && <AgentGrid tiles={mode.tiles} />}
           </>

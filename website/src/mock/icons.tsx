@@ -8,9 +8,17 @@ export const PowerIcon = () => (
   <svg viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17-1.42 1.42A6.92 6.92 0 0119 12a7 7 0 11-14 0 6.92 6.92 0 012.59-5.41L6.17 5.17A9 9 0 1021 12a8.94 8.94 0 00-3.17-6.83z" /></svg>
 );
 
-/* terminal — Agents tab */
+/* SF "terminal" — rounded window with prompt (Agents tab) */
 export const TerminalIcon = () => (
-  <svg viewBox="0 0 24 24"><path d="M4 7l4 4-4 4 1.4 1.4L11 11 5.4 5.6 4 7zM12 15h6v2h-6z" /></svg>
+  <svg viewBox="0 0 24 24" fill="none">
+    <rect x="2.25" y="4" width="19.5" height="16" rx="4" fill="none" stroke="currentColor" strokeWidth="2.2" />
+    <path d="M6.6 9.2l3.2 2.8-3.2 2.8" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M12.6 15.4h4.8" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+  </svg>
+);
+
+export const CheckIcon = () => (
+  <svg viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" /></svg>
 );
 
 /* music.note — Music tab */

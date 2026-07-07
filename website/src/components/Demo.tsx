@@ -21,14 +21,14 @@ const BASE_SESSIONS: MockSession[] = [
   {
     state: 'running', title: 'api', branch: 'feat/bridge-queue',
     prompt: 'make BridgeServer dispatch on a background queue…',
-    agent: 'Claude Code', terminal: 'Ghostty', age: '‹1m',
+    agent: 'claude', terminal: 'Ghostty', age: '‹1m',
     command: 'swift test --filter BridgeServerTests',
     subagents: [{ name: 'subagent', desc: 'searching the codebase', time: '3s' }],
   },
   {
     state: 'done', title: 'infra', branch: 'main',
     prompt: 'deploy the staging build',
-    agent: 'Codex', terminal: 'tmux', age: '2m',
+    agent: 'codex', terminal: 'tmux', age: '2m',
   },
 ];
 
@@ -90,9 +90,9 @@ export default function Demo() {
 
   const sessions: MockSession[] = [
     ...(approval
-      ? [{ state: 'approve', title: 'web', branch: 'main', prompt: 'ship the landing page', waiting: 'Waiting 0m 12s', agent: 'Claude Code', terminal: 'WezTerm', age: '12s' } as MockSession]
+      ? [{ state: 'approve', title: 'web', branch: 'main', prompt: 'ship the landing page', waiting: 'Waiting 0m 12s', agent: 'claude', terminal: 'WezTerm', age: '12s' } as MockSession]
       : resolved
-        ? [{ state: resolved === 'allowed' ? 'running' : 'idle', title: 'web', branch: 'main', prompt: 'ship the landing page', agent: 'Claude Code', terminal: 'WezTerm', age: '‹1m', command: resolved === 'allowed' ? 'git push origin main' : undefined } as MockSession]
+        ? [{ state: resolved === 'allowed' ? 'running' : 'idle', title: 'web', branch: 'main', prompt: 'ship the landing page', agent: 'claude', terminal: 'WezTerm', age: '‹1m', command: resolved === 'allowed' ? 'git push origin main' : undefined } as MockSession]
         : []),
     ...BASE_SESSIONS,
   ];
@@ -120,9 +120,9 @@ export default function Demo() {
         >
           <div className="demo-pill">
             {pillMode.kind === 'music-compact' && !pillMode.art ? (
-              <ClosedPill mode={{ kind: 'agents', char, running: false }} width={190} />
+              <ClosedPill mode={{ kind: 'agents', char, running: false, label: 'Claude Code' }} />
             ) : (
-              <ClosedPill mode={pillMode} width={190} />
+              <ClosedPill mode={pillMode} />
             )}
           </div>
           <div className="demo-panel">

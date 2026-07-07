@@ -8,19 +8,19 @@ const AGENT_ROWS: MockSession[] = [
   {
     state: 'running', title: 'api', branch: 'feat/bridge-queue',
     prompt: 'make BridgeServer dispatch on a background queue…',
-    agent: 'Claude Code', terminal: 'Ghostty', age: '‹1m',
+    agent: 'claude', terminal: 'Ghostty', age: '‹1m',
     subagents: [{ name: 'subagent', desc: 'searching the codebase', time: '3s' }],
   },
   {
     state: 'answer', title: 'web', branch: 'main',
     prompt: 'redesign the pricing page',
     waiting: 'Waiting 0m 18s',
-    agent: 'Gemini', terminal: 'WezTerm', age: '18s',
+    agent: 'gemini', terminal: 'WezTerm', age: '18s',
   },
   {
     state: 'done', title: 'infra', branch: 'main',
     prompt: 'deploy the staging build',
-    agent: 'Codex', terminal: 'tmux', age: '2m',
+    agent: 'codex', terminal: 'tmux', age: '2m',
   },
 ];
 
