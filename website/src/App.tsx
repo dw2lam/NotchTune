@@ -2,10 +2,9 @@ import { useReveal } from './hooks/useReveal';
 import LightRays from './components/LightRays';
 import Nav from './components/Nav';
 import Hero from './components/Hero';
-import Adapts from './components/Adapts';
+import Demo from './components/Demo';
 import Features from './components/Features';
 import Characters from './components/Characters';
-import GlassLab from './components/GlassLab';
 import Personalize from './components/Personalize';
 import Compare from './components/Compare';
 import Download from './components/Download';
@@ -40,10 +39,9 @@ export default function App() {
 
       <main id="top">
         <Hero />
-        <Adapts />
+        <Demo />
         <Features />
         <Characters />
-        <GlassLab />
         <Personalize />
         <Compare />
         <Download />

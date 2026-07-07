@@ -1,6 +1,33 @@
-import { IslandTop, TabBar, UsageChip, MusicView } from './IslandParts';
+import { useState } from 'react';
+import { MusicTab, AgentsTab, ApprovalCard, type MockSession } from '../mock';
+
+/* Feature highlights — each stage crops in on the one fragment of the
+   island the feature is about, rendered with the 1:1 mock kit. */
+
+const AGENT_ROWS: MockSession[] = [
+  {
+    state: 'running', title: 'api', branch: 'feat/bridge-queue',
+    prompt: 'make BridgeServer dispatch on a background queue…',
+    agent: 'Claude Code', terminal: 'Ghostty', age: '‹1m',
+    subagents: [{ name: 'subagent', desc: 'searching the codebase', time: '3s' }],
+  },
+  {
+    state: 'answer', title: 'web', branch: 'main',
+    prompt: 'redesign the pricing page',
+    waiting: 'Waiting 0m 18s',
+    agent: 'Gemini', terminal: 'WezTerm', age: '18s',
+  },
+  {
+    state: 'done', title: 'infra', branch: 'main',
+    prompt: 'deploy the staging build',
+    agent: 'Codex', terminal: 'tmux', age: '2m',
+  },
+];
 
 export default function Features() {
+  const [playing, setPlaying] = useState(true);
+  const [position, setPosition] = useState(102);
+
   return (
     <section id="features" className="section">
       <div className="section-head reveal">
@@ -8,25 +35,29 @@ export default function Features() {
         <p>NotchTune switches itself between music and agents, so the notch always shows the thing you need right now.</p>
       </div>
 
-      {/* Music */}
+      {/* Music — close-up on the player itself */}
       <div className="feature reveal">
         <div className="feature-text">
           <span className="kicker">Music</span>
           <h3>Full playback, right in the glass.</h3>
-          <p>Control Spotify or Apple Music without leaving your work — artwork, scrubbable progress, shuffle, repeat, love, and volume, all inside a liquid-glass panel that lives where your eyes already are.</p>
+          <p>Control Spotify or Apple Music without leaving your work — artwork that flips with the track, a scrubbable progress rail, shuffle and repeat, all inside the liquid-glass panel that lives where your eyes already are.</p>
         </div>
         <div className="feature-stage">
-          <div className="scene scene-music">
-            <div className="island island-expanded glass-deep">
-              <IslandTop><UsageChip name="Claude" time="5h" pct="41%" /></IslandTop>
-              <TabBar active="music" />
-              <MusicView />
+          <div className="nt nt-stage" style={{ backgroundImage: 'url(/assets/wallpapers/purple.jpg)' }}>
+            <div className="nt-fragment nt-zoom" style={{ transform: 'scale(1.08)' }}>
+              <MusicTab
+                track={{ title: 'Sienna', artist: 'The Marías', art: 'url(/assets/submarine.jpg)', duration: 218 }}
+                playing={playing}
+                position={position}
+                onPlayPause={() => setPlaying((p) => !p)}
+                onSeek={setPosition}
+              />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Agents */}
+      {/* Agents — close-up on the session rows */}
       <div className="feature feature-rev reveal">
         <div className="feature-text">
           <span className="kicker">Agents</span>
@@ -39,48 +70,15 @@ export default function Features() {
           </div>
         </div>
         <div className="feature-stage">
-          <div className="scene scene-agents">
-            <div className="island island-expanded glass-deep">
-              <IslandTop>
-                <UsageChip name="Claude" time="5h" pct="78%" tone="u-warn" />
-                <UsageChip name="Codex" time="7d" pct="62%" />
-              </IslandTop>
-              <TabBar active="agents" />
-              <ul className="rows">
-                <li className="row">
-                  <span className="rdot on" />
-                  <div className="rmain">
-                    <div className="rtitle"><b>api</b> · refactoring the bridge transport</div>
-                    <div className="rprev"><span className="who">You:</span> make BridgeServer dispatch on a background queue…</div>
-                    <div className="rstate">running</div>
-                  </div>
-                  <div className="rmeta"><div className="rbadges"><span className="rb">Claude Code</span><span className="rb">Ghostty</span></div><span className="rtime">‹1m</span></div>
-                </li>
-                <li className="row rchild">
-                  <span className="rdot on" />
-                  <div className="rmain"><div className="rtitle">↳ subagent · searching the codebase</div></div>
-                  <div className="rmeta"><span className="rtime">3s</span></div>
-                </li>
-                <li className="row">
-                  <span className="rdot wait" />
-                  <div className="rmain">
-                    <div className="rtitle"><b>web</b> · ready to deploy to staging?</div>
-                    <div className="rstate">waiting for you</div>
-                  </div>
-                  <div className="rmeta"><div className="rbadges"><span className="rb">Gemini</span><span className="rb">WezTerm</span></div><span className="rtime">18s</span></div>
-                </li>
-                <li className="row">
-                  <span className="rdot done" />
-                  <div className="rmain"><div className="rtitle"><b>infra</b> · deployed to staging ✓</div></div>
-                  <div className="rmeta"><div className="rbadges"><span className="rb">Codex</span><span className="rb">tmux</span></div><span className="rtime">2m</span></div>
-                </li>
-              </ul>
+          <div className="nt nt-stage" style={{ backgroundImage: 'url(/assets/wallpapers/green.jpg)' }}>
+            <div className="nt-fragment nt-zoom" style={{ width: 'min(470px, 100%)', transform: 'scale(1.04)' }}>
+              <AgentsTab sessions={AGENT_ROWS} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Approvals */}
+      {/* Approvals — close-up on the permission card */}
       <div className="feature reveal">
         <div className="feature-text">
           <span className="kicker">Approvals &amp; questions</span>
@@ -88,17 +86,12 @@ export default function Features() {
           <p>When an agent needs permission or has a question, the island grows into a notification panel right under the notch. Approve, deny, or answer in place — then it round-trips straight back to the process that asked.</p>
         </div>
         <div className="feature-stage">
-          <div className="scene scene-approve">
-            <div className="island island-expanded glass-deep island-notify">
-              <IslandTop><UsageChip name="Claude" time="5h" pct="41%" /></IslandTop>
-              <div className="notify">
-                <div className="n-head"><span className="s-dot waiting" /> <b>api</b> · Claude Code wants to run</div>
-                <code className="n-code">rm -rf ./build &amp;&amp; swift build -c release</code>
-                <div className="n-actions">
-                  <button className="btn btn-deny">Deny</button>
-                  <button className="btn btn-allow">Allow</button>
-                </div>
-              </div>
+          <div className="nt nt-stage" style={{ backgroundImage: 'url(/assets/wallpapers/orange.jpg)' }}>
+            <div className="nt-fragment nt-zoom" style={{ width: 'min(440px, 100%)', transform: 'scale(1.1)' }}>
+              <ApprovalCard
+                command="rm -rf ./build && swift build -c release"
+                path="~/dev/api"
+              />
             </div>
           </div>
         </div>

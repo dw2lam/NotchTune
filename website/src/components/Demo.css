@@ -1,0 +1,107 @@
+/* Live demo scene — wallpaper plate with a working notch. */
+
+.demo-scene {
+  position: relative;
+  min-height: 460px;
+  border-radius: 26px;
+  overflow: hidden;
+  background: url('/assets/wallpapers/sonoma.jpg') center / cover;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+.demo-scene::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(130% 100% at 50% 0%, transparent 45%, rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+}
+
+/* faux menu bar */
+.demo-menubar {
+  position: absolute; top: 0; left: 0; right: 0; height: 38px;
+  background: rgba(8, 8, 10, 0.62);
+  -webkit-backdrop-filter: blur(30px) saturate(1.2);
+  backdrop-filter: blur(30px) saturate(1.2);
+}
+
+.demo-anchor {
+  position: absolute; top: 0; left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  cursor: pointer;
+}
+
+/* closed pill sits flush under the menu bar */
+.demo-pill {
+  display: flex; justify-content: center;
+  transition: opacity 0.05s ease-out, transform 0.32s cubic-bezier(0.33, 1.35, 0.5, 1);
+}
+.demo-anchor:hover .demo-pill { transform: scale(1.035); } /* closedHoverScale */
+.demo-scene[data-open='true'] .demo-pill {
+  opacity: 0;
+  pointer-events: none;
+  transition-delay: 0s;
+}
+
+/* opened panel morphs out of the notch: spring(response .5, damping .8) */
+.demo-panel {
+  position: absolute; top: 0; left: 50%;
+  width: 520px; max-width: calc(100vw - 48px);
+  transform: translateX(-50%) scale(0.42);
+  transform-origin: top center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.5s cubic-bezier(0.3, 1.18, 0.35, 1),
+    opacity 0.2s ease-out;
+}
+.demo-scene[data-open='true'] .demo-panel {
+  transform: translateX(-50%) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+  transition:
+    transform 0.5s cubic-bezier(0.3, 1.18, 0.35, 1),
+    opacity 0.22s ease-out 0.07s;
+}
+
+/* controls under the scene */
+.demo-controls {
+  display: flex; flex-wrap: wrap; gap: 18px 32px;
+  justify-content: center; align-items: center;
+  margin-top: 26px;
+}
+.demo-ctl { display: flex; align-items: center; gap: 8px; }
+.demo-ctl-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+  margin-right: 2px;
+}
+.demo-chip {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px; font-weight: 500;
+  color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  padding: 6px 13px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  text-transform: capitalize;
+}
+.demo-chip:hover { background: rgba(255, 255, 255, 0.11); color: #fff; }
+.demo-chip.is-on {
+  background: rgba(241, 234, 217, 0.92);
+  border-color: transparent;
+  color: rgba(0, 0, 0, 0.85);
+}
+.demo-chip-cta {
+  background: rgba(244, 164, 164, 0.14);
+  border-color: rgba(244, 164, 164, 0.4);
+  color: #f4a4a4;
+}
+.demo-chip-cta:hover { background: rgba(244, 164, 164, 0.24); color: #ffd3d3; }
+
+@media (max-width: 640px) {
+  .demo-scene { min-height: 520px; }
+  .demo-panel { max-width: calc(100vw - 32px); }
+}
