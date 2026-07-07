@@ -74,7 +74,7 @@ export function MusicTab({
     <div className="nt-music">
       <AlbumArt art={track.art} />
       <div className="nt-music-col">
-        <div>
+        <div className="nt-track-meta">
           <div className="nt-track-title">{track.title}</div>
           <div className="nt-track-artist">{track.artist}</div>
         </div>

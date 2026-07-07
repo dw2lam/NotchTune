@@ -45,6 +45,7 @@ export default function Demo() {
   const [repeat, setRepeat] = useState(false);
   const [char, setChar] = useState<(typeof CHARS)[number]>('dino');
   const [glass, setGlass] = useState<'clear' | 'frosted' | 'off'>('clear');
+  const [tint, setTint] = useState(50);
   const [approval, setApproval] = useState(false);
   const [resolved, setResolved] = useState<'allowed' | 'denied' | null>(null);
   const closeTimer = useRef<number>();
@@ -134,6 +135,7 @@ export default function Demo() {
               tab={tab}
               onTab={setTab}
               glass={glass}
+              tintStrength={tint / 100}
               ambientArt={tab === 'music' && playing && track.art.startsWith('url') ? track.art.slice(4, -1) : undefined}
               showNotchGap={false}
             >
@@ -195,6 +197,18 @@ export default function Demo() {
               {g === 'off' ? 'solid ink' : g}
             </button>
           ))}
+        </div>
+        <div className="demo-ctl">
+          <span className="demo-ctl-label">Tint</span>
+          <input
+            type="range" min={0} max={100} step={1}
+            value={tint}
+            onChange={(e) => setTint(Number(e.target.value))}
+            className="demo-slider"
+            disabled={glass === 'off'}
+            aria-label="Glass tint strength"
+          />
+          <span className="demo-pct">{tint}%</span>
         </div>
       </div>
     </section>

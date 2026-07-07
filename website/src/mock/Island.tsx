@@ -35,8 +35,14 @@ export function TabBar({ tab, onTab }: { tab: IslandTab; onTab?: (t: IslandTab) 
   useLayoutEffect(() => {
     const bar = barRef.current;
     if (!bar) return;
-    const btn = bar.querySelector<HTMLElement>(`[data-tab="${tab}"]`);
-    if (btn) setInd({ left: btn.offsetLeft, top: btn.offsetTop, width: btn.offsetWidth, height: btn.offsetHeight });
+    const measure = () => {
+      const btn = bar.querySelector<HTMLElement>(`[data-tab="${tab}"]`);
+      if (btn) setInd({ left: btn.offsetLeft, top: btn.offsetTop, width: btn.offsetWidth, height: btn.offsetHeight });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(bar);
+    return () => ro.disconnect();
   }, [tab]);
 
   return (
@@ -60,8 +66,28 @@ export function TabBar({ tab, onTab }: { tab: IslandTab; onTab?: (t: IslandTab) 
   );
 }
 
+/* panel-height morph: the real island animates its height when tab
+   content changes (OverlayPanelController measures + springs) */
+function AnimatedHeight({ children }: { children: ReactNode }) {
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [h, setH] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    setH(el.offsetHeight);
+    const ro = new ResizeObserver(() => setH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div className="nt-height" style={{ height: h ?? 'auto' }}>
+      <div ref={innerRef}>{children}</div>
+    </div>
+  );
+}
+
 export function IslandPanel({
-  usage, tab, onTab, ambientArt, glass = 'clear', showNotchGap = true, children, className = '',
+  usage, tab, onTab, ambientArt, glass = 'clear', tintStrength = 0.5, showNotchGap = true, children, className = '',
 }: {
   usage?: ReactNode;
   tab?: IslandTab;
@@ -69,6 +95,8 @@ export function IslandPanel({
   /** album-art ambience behind content when music plays (opacity .12 blur 20) */
   ambientArt?: string;
   glass?: 'clear' | 'frosted' | 'off';
+  /** ink tint over the glass, 0–1 (LiquidGlass tintStrength; app default 0.22) */
+  tintStrength?: number;
   showNotchGap?: boolean;
   children: ReactNode;
   className?: string;
@@ -85,7 +113,9 @@ export function IslandPanel({
         </div>
       </div>
       {tab !== undefined && <TabBar tab={tab} onTab={onTab} />}
-      {children}
+      <AnimatedHeight>
+        <div className="nt-tabfade" key={tab ?? 'static'}>{children}</div>
+      </AnimatedHeight>
     </>
   );
 
@@ -98,21 +128,24 @@ export function IslandPanel({
       width="min(520px, 100%)"
       height="auto"
       borderRadius={22}
-      borderWidth={0.04}
+      borderWidth={0.03}
       brightness={55}
       opacity={0.9}
-      blur={14}
-      displace={0.7}
-      distortionScale={-110}
+      blur={16}
+      displace={1.2}
+      distortionScale={-90}
       redOffset={0}
-      greenOffset={8}
-      blueOffset={16}
+      greenOffset={5}
+      blueOffset={10}
       backgroundOpacity={0}
       saturation={1.1}
       className={`nt nt-island nt-island-gs ${glass === 'frosted' ? 'is-frosted' : ''} ${className}`.trim()}
       style={{ borderRadius: '0 0 22px 22px' }}
     >
-      <div className="nt-gs-tint" />
+      <div
+        className="nt-gs-tint"
+        style={{ background: `rgba(6, 6, 8, ${glass === 'frosted' ? Math.max(0.55, tintStrength) : tintStrength})` }}
+      />
       {inner}
     </GlassSurface>
   );

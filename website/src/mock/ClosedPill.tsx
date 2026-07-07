@@ -135,7 +135,7 @@ export function ClosedPill({ mode, glass = false, width, children, className = '
     }
   }
   return (
-    <div className={`nt nt-pill ${glass ? 'nt-glass' : ''} ${className}`.trim()} style={width ? { width } : undefined}>
+    <div className={`nt nt-pill nt-pill-${mode.kind} ${glass ? 'nt-glass' : ''} ${className}`.trim()} style={width ? { width } : undefined}>
       <div className="nt-pill-inner" style={{ flex: 1 }}>{inner}</div>
     </div>
   );
