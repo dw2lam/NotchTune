@@ -10,9 +10,11 @@ Monitor your agents and music all in one place.
 - **Dynamic notch switching**: NotchTune moves between Music and Agents automatically, so the island can show the thing that matters now: current playback, active agent work, permission prompts, questions, or recently completed sessions.
 - **Music controls**: Control Spotify or Apple Music from the notch, including playback, track details, artwork, progress, shuffle, repeat, love, volume, and quick open actions.
 - **Agent monitoring**: Track local coding-agent sessions from the menu bar or notch, including running state, waiting approvals, questions, completions, subagents, and usage summaries.
+- **Myspace**: Save dictated thoughts, drop in images or files, and keep time-based reminders in a local personal space.
 - **Character personalization**: Choose the island character that fits your setup, including dino, cat, and dog appearances.
 - **Notch-aware layouts**: Runs as a real notch surface on MacBook displays and falls back to a clean top-center bar on external or non-notch screens.
-- **Local and native**: Built with SwiftUI and AppKit. No Electron shell, no telemetry, and no remote server dependency.
+- **Local, native, and open source**: Built with SwiftUI and AppKit. No Electron shell, no telemetry, and no remote server dependency.
+- **Automatic updates**: Signed releases update in place through the open-source Sparkle framework.
 
 ## Supported Integrations
 
@@ -79,4 +81,4 @@ NotchTune builds on work from:
 
 ## What's Next
 
-More connectors, personalization options, and deeper agent workflows are planned as NotchTune continues to grow into a local-first control surface for music and coding agents.
+Opt-in screen context for AI assistance, more connectors, personalization options, and deeper agent workflows are planned as NotchTune continues to grow into a local-first control surface for music, personal notes, and coding agents.

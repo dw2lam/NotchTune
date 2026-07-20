@@ -56,6 +56,7 @@ CLI coding agents are powerful, but they pull attention away from the editor and
 - **Process discovery** — match active agents via `ps`/`lsof`
 - **DMG packaging** — signing, notarization, GitHub Actions release workflow
 - **Auto-update** — Sparkle-based automatic updates with appcast
+- **Myspace** — local thoughts, dictated text, copied file/image attachments, and reminders
 
 ## Success Criteria
 
@@ -69,3 +70,4 @@ CLI coding agents are powerful, but they pull attention away from the editor and
 - Warp precision jump support
 - Sound packs, themes, and onboarding polish
 - Deeper terminal split targeting
+- Opt-in, privacy-reviewed screen context for AI assistance

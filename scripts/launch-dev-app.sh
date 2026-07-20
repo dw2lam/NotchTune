@@ -48,6 +48,11 @@ command cp "$app_binary" "$bundle_binary"
 command cp "$hooks_binary" "$bundle_dir/Contents/Helpers/OpenIslandHooks"
 command cp "$setup_binary" "$bundle_dir/Contents/Helpers/OpenIslandSetup"
 command cp "$brand_icon" "$bundle_dir/Contents/Resources/OpenIsland.icns"
+sparkle_framework="$repo_root/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+if [ -d "$sparkle_framework" ]; then
+    rm -rf "$bundle_dir/Contents/Frameworks/Sparkle.framework"
+    command cp -R "$sparkle_framework" "$bundle_dir/Contents/Frameworks/"
+fi
 chmod +x "$bundle_binary" "$bundle_dir/Contents/Helpers/OpenIslandHooks" "$bundle_dir/Contents/Helpers/OpenIslandSetup"
 
 # Add rpath so the binary can find Sparkle.framework in Contents/Frameworks/.

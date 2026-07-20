@@ -12,6 +12,7 @@ final class OpenIslandAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = self
         model.myspaceStore.restorePendingReminders()
+        model.updateChecker.startIfNeeded()
         ProcessInfo.processInfo.disableAutomaticTermination(
             "NotchTune should remain active while monitoring local agent sessions."
         )

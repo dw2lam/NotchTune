@@ -1,6 +1,6 @@
 # Releasing
 
-How to cut a new GitHub release for Open Island.
+How to cut a new GitHub release for NotchTune.
 
 ## Versioning
 
@@ -13,39 +13,44 @@ Follow [Semantic Versioning](https://semver.org/):
 ## Checklist
 
 1. **Confirm target**: ensure all intended changes are merged to `main`.
-2. **Build & package**:
+2. **Confirm signing secrets**: the repository must have `SPARKLE_PUBLIC_KEY`
+   and `SPARKLE_PRIVATE_KEY` Actions secrets. See **EdDSA Key Setup** below.
+3. **Tag the release**:
    ```bash
-   git checkout main && git pull
-   OPEN_ISLAND_VERSION=<version> \
-   OPEN_ISLAND_EDDSA_PUBLIC_KEY="<your-public-key>" \
-   zsh scripts/package-app.sh
+   git tag v<version>
+   git push origin v<version>
    ```
-   This produces `output/package/Open Island.dmg` and `output/package/Open Island.zip`.
-3. **Sign the update zip with EdDSA** (for Sparkle auto-update):
-   ```bash
-   .build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework/Versions/B/bin/sign_update \
-     "output/package/Open Island.zip"
-   ```
-   Copy the `sparkle:edSignature` and `length` values for the appcast entry.
-4. **Update `appcast.xml`** in the repo root — add a new `<item>` entry with the version, download URL, EdDSA signature, and length. See the "Sparkle Appcast" section below.
-5. **Commit and push** the updated `appcast.xml` to `main`.
-6. **Create the release**:
-   ```bash
-   gh release create v<version> \
-     "output/package/Open Island.dmg#Open.Island.dmg" \
-     "output/package/Open Island.zip#Open.Island.zip" \
-     --target main \
-     --title "Open Island v<version> — <Title>" \
-     --notes-file release-notes.md
-   ```
-7. **Verify**: open the release page and confirm assets are downloadable.
+4. **Watch the Release workflow**. It builds the app, signs the update archive,
+   generates `appcast.xml`, and publishes all three release assets.
+5. **Verify**: confirm the DMG, ZIP, and appcast are downloadable and use an
+   older NotchTune build's **Check for Updates…** button.
+
+For a local package without publishing:
+
+```bash
+public_key="$(
+  .build/artifacts/sparkle/Sparkle/bin/generate_keys \
+    --account NotchTune -p
+)"
+OPEN_ISLAND_VERSION=<version> \
+OPEN_ISLAND_EDDSA_PUBLIC_KEY="$public_key" \
+zsh scripts/package-app.sh
+```
+
+This produces `output/package/NotchTune.dmg` and
+`output/package/NotchTune.zip`. To inspect its Sparkle signature manually:
+
+```bash
+.build/artifacts/sparkle/Sparkle/bin/sign_update \
+  "output/package/NotchTune.zip"
+```
 
 ## Release Notes Format
 
 All release notes **must be bilingual** (English + Simplified Chinese). Use the following template:
 
 ```markdown
-## Open Island v<version> — <Title>
+## NotchTune v<version> — <Title>
 
 ### Changes since v<prev> | 自 v<prev> 以来的变更
 
@@ -78,14 +83,14 @@ All release notes **must be bilingual** (English + Simplified Chinese). Use the 
 ```markdown
 ## Installation | 安装说明
 
-1. Download **Open Island.dmg**, open it, and drag **Open Island** to **Applications**.
-   下载 **Open Island.dmg**，打开后将 **Open Island** 拖入 **Applications**。
+1. Download **NotchTune.dmg**, open it, and drag **NotchTune** to **Applications**.
+   下载 **NotchTune.dmg**，打开后将 **NotchTune** 拖入 **Applications**。
 
-2. Since this is an unsigned app, macOS will show **"Open Island is damaged"** when you try to open it. Run this command in Terminal to fix it:
-   由于应用未签名，macOS 会提示**「"Open Island"已损坏」**。请在终端中执行以下命令：
+2. Since this is an unsigned app, macOS may show **"NotchTune is damaged"** when you try to open it. Run this command in Terminal to fix it:
+   由于应用未签名，macOS 可能会提示**「"NotchTune"已损坏」**。请在终端中执行以下命令：
 
    ```bash
-   xattr -dr com.apple.quarantine "/Applications/Open Island.app"
+   xattr -dr com.apple.quarantine "/Applications/NotchTune.app"
    ```
 
 3. Requirements: **macOS 14+**, **Apple Silicon** (M1/M2/M3/M4/M5).
@@ -97,19 +102,21 @@ All release notes **must be bilingual** (English + Simplified Chinese). Use the 
 
 ## Assets
 
-Every release ships two artifacts:
+Every release ships three artifacts:
 
 | File | Purpose |
 |------|---------|
-| `Open Island.dmg` | Styled disk image with drag-to-Applications |
-| `Open Island.zip` | Plain zip for automation / CI downloads |
+| `NotchTune.dmg` | Styled disk image with drag-to-Applications |
+| `NotchTune.zip` | Sparkle-signed app archive |
+| `appcast.xml` | Sparkle update feed for the latest release |
 
 ## Sparkle Appcast
 
-The file `appcast.xml` in the repo root is the Sparkle update feed. It is served via GitHub raw content at:
+The release workflow generates a signed `appcast.xml` asset for every tagged release.
+Sparkle follows GitHub's latest-release redirect at:
 
 ```
-https://raw.githubusercontent.com/Octane0411/open-vibe-island/main/appcast.xml
+https://github.com/dw2lam/NotchTune/releases/latest/download/appcast.xml
 ```
 
 Each release needs a new `<item>` entry. Template:
@@ -122,7 +129,7 @@ Each release needs a new `<item>` entry. Template:
     <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
     <pubDate>Thu, 06 Apr 2026 00:00:00 +0000</pubDate>
     <enclosure
-        url="https://github.com/Octane0411/open-vibe-island/releases/download/vX.Y.Z/Open.Island.zip"
+        url="https://github.com/dw2lam/NotchTune/releases/download/vX.Y.Z/NotchTune.zip"
         type="application/octet-stream"
         sparkle:edSignature="PASTE_SIGNATURE_HERE"
         length="PASTE_LENGTH_HERE"
@@ -132,13 +139,26 @@ Each release needs a new `<item>` entry. Template:
 
 ### EdDSA Key Setup (one-time)
 
-Generate a key pair with Sparkle's tool:
+Generate a NotchTune-specific key pair with Sparkle's tool:
 
 ```bash
-.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework/Versions/B/bin/generate_keys
+.build/artifacts/sparkle/Sparkle/bin/generate_keys --account NotchTune
 ```
 
-This stores the private key in your macOS Keychain and prints the public key. Save the public key — it goes into `OPEN_ISLAND_EDDSA_PUBLIC_KEY` env var during packaging and into `SUPublicEDKey` in Info.plist.
+This stores the private key in your macOS Keychain and prints the public key. Keep
+the private key out of the repository. Configure the release workflow once:
+
+```bash
+tools=".build/artifacts/sparkle/Sparkle/bin"
+"$tools/generate_keys" --account NotchTune -p \
+  | gh secret set SPARKLE_PUBLIC_KEY
+"$tools/generate_keys" --account NotchTune -x /tmp/notchtune-sparkle-private-key
+gh secret set SPARKLE_PRIVATE_KEY < /tmp/notchtune-sparkle-private-key
+rm /tmp/notchtune-sparkle-private-key
+```
+
+The public key is embedded as `SUPublicEDKey`; the private key is used only by
+GitHub Actions to sign the update archive.
 
 ## Signing (future)
 

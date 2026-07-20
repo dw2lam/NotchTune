@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
     <channel>
-        <title>Open Island Music Updates</title>
-        <link>https://github.com/dw2lam/open-vibe-island-music/releases</link>
-        <description>Most recent changes with links to updates.</description>
+        <title>NotchTune Updates</title>
+        <link>https://github.com/dw2lam/NotchTune/releases</link>
+        <description>Signed NotchTune releases.</description>
         <language>en</language>
         <!-- Items are added by the release workflow. -->
     </channel>

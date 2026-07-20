@@ -415,6 +415,11 @@ struct AboutSettingsPane: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
+
+                Button("Check for Updates…") {
+                    model.updateChecker.checkForUpdates()
+                }
+                .disabled(!model.updateChecker.canCheckForUpdates)
             }
             .padding(.top, 24)
             .padding(.bottom, 20)
@@ -423,6 +428,12 @@ struct AboutSettingsPane: View {
 
             Form {
                 Section("Credits") {
+                    creditLinkRow(
+                        title: "View NotchTune source",
+                        subtitle: "Open source on GitHub",
+                        url: "https://github.com/dw2lam/NotchTune"
+                    )
+
                     creditLinkRow(
                         title: "Forked from Open Vibe Island",
                         subtitle: "Octane0411/open-vibe-island",
@@ -1289,4 +1300,3 @@ struct RemoteConnectionSection: View {
         }
     }
 }
-

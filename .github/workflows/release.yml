@@ -32,12 +32,71 @@ jobs:
           swift build -c release --product OpenIslandSetup
 
       - name: Package app
-        run: zsh scripts/package-app.sh "${{ steps.version.outputs.version }}"
+        env:
+          OPEN_ISLAND_VERSION: ${{ steps.version.outputs.version }}
+          OPEN_ISLAND_EDDSA_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
+        run: |
+          test -n "$OPEN_ISLAND_EDDSA_PUBLIC_KEY" || {
+            echo "SPARKLE_PUBLIC_KEY is not configured" >&2
+            exit 1
+          }
+          zsh scripts/package-app.sh
+
+      - name: Create signed Sparkle appcast
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          test -n "$SPARKLE_PRIVATE_KEY" || {
+            echo "SPARKLE_PRIVATE_KEY is not configured" >&2
+            exit 1
+          }
+
+          sign_update=".build/artifacts/sparkle/Sparkle/bin/sign_update"
+          archive="output/package/NotchTune.zip"
+          appcast="output/package/appcast.xml"
+          signature_xml="$(printf '%s' "$SPARKLE_PRIVATE_KEY" | "$sign_update" --ed-key-file - "$archive")"
+          signature="$(printf '%s' "$signature_xml" | sed -E 's/.*sparkle:edSignature="([^"]+)".*/\1/')"
+          length="$(printf '%s' "$signature_xml" | sed -E 's/.*length="([^"]+)".*/\1/')"
+          test -n "$signature" -a -n "$length" || {
+            echo "Sparkle did not return a signature and archive length" >&2
+            exit 1
+          }
+          build_number="$(git rev-list --count HEAD)"
+          published_at="$(date -R)"
+
+          cat > "$appcast" <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>NotchTune Updates</title>
+              <link>https://github.com/dw2lam/NotchTune/releases</link>
+              <description>Signed NotchTune releases.</description>
+              <language>en</language>
+              <item>
+                <title>NotchTune ${VERSION}</title>
+                <pubDate>${published_at}</pubDate>
+                <sparkle:version>${build_number}</sparkle:version>
+                <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+                <enclosure
+                  url="https://github.com/dw2lam/NotchTune/releases/download/v${VERSION}/NotchTune.zip"
+                  type="application/octet-stream"
+                  sparkle:edSignature="${signature}"
+                  length="${length}"
+                />
+              </item>
+            </channel>
+          </rss>
+          EOF
+
+          xmllint --noout "$appcast"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            Open Island*.zip
-            Open Island*.dmg
+            output/package/NotchTune.zip
+            output/package/NotchTune.dmg
+            output/package/appcast.xml
           generate_release_notes: true

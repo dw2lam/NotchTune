@@ -18,6 +18,13 @@ zip_path="${OPEN_ISLAND_ZIP_PATH:-$package_root/$app_name.zip}"
 dmg_path="${OPEN_ISLAND_DMG_PATH:-$package_root/$app_name.dmg}"
 signing_identity="${OPEN_ISLAND_SIGN_IDENTITY:-}"
 notary_profile="${OPEN_ISLAND_NOTARY_PROFILE:-}"
+sparkle_public_key="${OPEN_ISLAND_EDDSA_PUBLIC_KEY:-}"
+
+if [[ -z "$sparkle_public_key" ]]; then
+    echo "ERROR: OPEN_ISLAND_EDDSA_PUBLIC_KEY is required for Sparkle-enabled packages." >&2
+    echo "Run Sparkle's generate_keys --account NotchTune, then pass the printed public key." >&2
+    exit 1
+fi
 
 brand_script="$repo_root/scripts/generate_brand_icons.py"
 dmg_bg_script="$repo_root/scripts/generate_dmg_background.py"
@@ -111,9 +118,9 @@ cat > "$bundle_dir/Contents/Info.plist" <<EOF
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>SUFeedURL</key>
-    <string>https://raw.githubusercontent.com/Octane0411/open-vibe-island/main/appcast.xml</string>
+    <string>https://github.com/dw2lam/NotchTune/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string>${OPEN_ISLAND_EDDSA_PUBLIC_KEY:-3IF8txq9RRNanzE2FNhyGRcwhslTucCcJHpTkpxcgBQ=}</string>
+    <string>$sparkle_public_key</string>
 </dict>
 </plist>
 EOF
