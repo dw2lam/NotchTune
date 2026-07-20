@@ -609,9 +609,31 @@ struct MyspacePanelView: View {
     }
 }
 
+private enum ReminderSection: String, CaseIterable, Identifiable {
+    case active
+    case archive
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .active: "Active"
+        case .archive: "Archive"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .active: "bell"
+        case .archive: "archivebox"
+        }
+    }
+}
+
 struct RemindersPanelView: View {
     let store: MyspaceStore
 
+    @State private var selectedSection: ReminderSection = .active
     @State private var draft = ""
     @State private var includesTime = false
     @State private var reminderAt = Date.now.addingTimeInterval(60 * 60)
@@ -620,7 +642,10 @@ struct RemindersPanelView: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            reminderComposer
+            reminderSectionPicker
+            if selectedSection == .active {
+                reminderComposer
+            }
             reminderList
         }
         .padding(.horizontal, 16)
@@ -635,6 +660,44 @@ struct RemindersPanelView: View {
             }
         }
         .transition(.opacity)
+    }
+
+    private var reminderSectionPicker: some View {
+        HStack(spacing: 4) {
+            ForEach(ReminderSection.allCases) { section in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        selectedSection = section
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: section.systemImage)
+                        Text(section.label)
+                        Text("\(reminderCount(for: section))")
+                            .monospacedDigit()
+                            .foregroundStyle(.white.opacity(0.34))
+                    }
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(
+                        selectedSection == section ? .white.opacity(0.86) : .white.opacity(0.44)
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 28)
+                    .background(
+                        selectedSection == section ? .white.opacity(0.1) : .clear,
+                        in: Capsule()
+                    )
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(section.label) reminders")
+            }
+        }
+        .padding(3)
+        .background(.white.opacity(0.035), in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(.white.opacity(0.07), lineWidth: 0.5)
+        }
     }
 
     private var reminderComposer: some View {
@@ -713,16 +776,24 @@ struct RemindersPanelView: View {
 
     @ViewBuilder
     private var reminderList: some View {
-        if store.activeReminders.isEmpty {
+        let reminders = selectedSection == .active
+            ? store.activeReminders
+            : store.archivedReminders
+
+        if reminders.isEmpty {
             VStack(spacing: 6) {
                 Spacer(minLength: 12)
-                Image(systemName: "bell.slash")
+                Image(systemName: selectedSection == .active ? "bell.slash" : "archivebox")
                     .font(.system(size: 20, weight: .light))
                     .foregroundStyle(.white.opacity(0.24))
-                Text("No active reminders")
+                Text(selectedSection == .active ? "No active reminders" : "Archive is empty")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.56))
-                Text("Keep a reminder here, or add a time when it should notify you.")
+                Text(
+                    selectedSection == .active
+                        ? "Keep a reminder here, or add a time when it should notify you."
+                        : "Completed reminders will live here."
+                )
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.3))
                     .multilineTextAlignment(.center)
@@ -732,30 +803,39 @@ struct RemindersPanelView: View {
         } else {
             MyspaceAutoHeightScrollView(maxHeight: 240) {
                 VStack(spacing: 7) {
-                    ForEach(store.activeReminders) { reminder in
-                        reminderRow(reminder)
+                    ForEach(reminders) { reminder in
+                        reminderRow(reminder, isArchived: selectedSection == .archive)
                     }
                 }
             }
         }
     }
 
-    private func reminderRow(_ reminder: MyspaceThought) -> some View {
+    private func reminderRow(_ reminder: MyspaceThought, isArchived: Bool) -> some View {
         HStack(alignment: .top, spacing: 9) {
             Button {
-                store.toggleReminderCompleted(id: reminder.id)
+                withAnimation(.easeOut(duration: 0.2)) {
+                    store.toggleReminderCompleted(id: reminder.id)
+                }
             } label: {
-                Image(systemName: "circle")
+                Image(systemName: isArchived ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.45))
+                    .foregroundStyle(
+                        isArchived
+                            ? IslandDesignPalette.Status.completed.opacity(0.8)
+                            : .white.opacity(0.45)
+                    )
+                    .frame(width: 24, height: 24)
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Complete reminder")
+            .accessibilityLabel(isArchived ? "Restore reminder" : "Complete reminder")
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(reminder.text)
                     .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.86))
+                    .foregroundStyle(.white.opacity(isArchived ? 0.58 : 0.86))
+                    .strikethrough(isArchived, color: .white.opacity(0.28))
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(spacing: 6) {
@@ -798,6 +878,13 @@ struct RemindersPanelView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(.white.opacity(0.065), lineWidth: 0.5)
+        }
+    }
+
+    private func reminderCount(for section: ReminderSection) -> Int {
+        switch section {
+        case .active: store.activeReminders.count
+        case .archive: store.archivedReminders.count
         }
     }
 

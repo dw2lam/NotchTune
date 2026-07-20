@@ -114,6 +114,12 @@ final class MyspaceStore {
             }
     }
 
+    var archivedReminders: [MyspaceThought] {
+        thoughts
+            .filter { $0.isReminder && $0.isReminderCompleted }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
     nonisolated static func groupThoughtsByDay(
         _ thoughts: [MyspaceThought],
         calendar: Calendar = .current

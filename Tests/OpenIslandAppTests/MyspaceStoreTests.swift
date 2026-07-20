@@ -109,10 +109,16 @@ struct MyspaceStoreTests {
 
         store.toggleReminderCompleted(id: thought.id)
         #expect(store.activeReminders.isEmpty)
+        #expect(store.archivedReminders.map(\.id) == [thought.id])
         #expect(store.thoughts.first?.isReminderCompleted == true)
 
         let reloaded = MyspaceStore(rootURL: storage, notificationsEnabled: false)
         #expect(reloaded.thoughts.first?.isReminderCompleted == true)
+        #expect(reloaded.archivedReminders.map(\.id) == [thought.id])
+
+        reloaded.toggleReminderCompleted(id: thought.id)
+        #expect(reloaded.archivedReminders.isEmpty)
+        #expect(reloaded.activeReminders.map(\.id) == [thought.id])
 
         reloaded.deleteThought(id: thought.id)
         #expect(MyspaceStore(rootURL: storage, notificationsEnabled: false).thoughts.isEmpty)
