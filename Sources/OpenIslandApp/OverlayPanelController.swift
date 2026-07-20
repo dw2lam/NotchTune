@@ -12,7 +12,7 @@ final class OverlayPanelController {
         let activeTab: IslandTab
     }
 
-    private static let preferredNotchOpenedPanelWidth: CGFloat = 520
+    nonisolated static let preferredNotchOpenedPanelWidth: CGFloat = 580
     private static let preferredTopBarOpenedPanelWidth: CGFloat = 520
     private static let preferredNotificationPanelWidth: CGFloat = 620
     private static let openedContentWidthPadding: CGFloat = 0

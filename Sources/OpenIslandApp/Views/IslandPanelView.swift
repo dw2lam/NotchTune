@@ -96,6 +96,7 @@ struct IslandPanelView: View {
     nonisolated static let tabHitTargetHeight: CGFloat = 30
     private static let headerControlButtonSize: CGFloat = 22
     private static let headerControlSpacing: CGFloat = 8
+    private static let headerControlCount = 2
     private static let headerHorizontalPadding: CGFloat = 18
     private static let headerTopPadding: CGFloat = 2
     private static let notchHeaderHorizontalPadding: CGFloat = 16
@@ -297,7 +298,21 @@ struct IslandPanelView: View {
     }
 
     private var openedHeaderButtonsWidth: CGFloat {
-        (Self.headerControlButtonSize * 3) + (Self.headerControlSpacing * 2)
+        Self.headerControlStripWidth(
+            controlCount: Self.headerControlCount,
+            buttonSize: Self.headerControlButtonSize,
+            spacing: Self.headerControlSpacing
+        )
+    }
+
+    nonisolated static func headerControlStripWidth(
+        controlCount: Int,
+        buttonSize: CGFloat,
+        spacing: CGFloat
+    ) -> CGFloat {
+        guard controlCount > 0 else { return 0 }
+        return (buttonSize * CGFloat(controlCount))
+            + (spacing * CGFloat(controlCount - 1))
     }
 
     private var openedHeaderHorizontalPadding: CGFloat {
@@ -1444,19 +1459,39 @@ struct IslandPanelView: View {
         let rawLeftWidth = max(0, min(contentMaxX, leftVisibleMaxX) - contentMinX)
         let rawRightWidth = max(0, contentMaxX - max(contentMinX, rightVisibleMinX))
 
-        let leftUsageWidth = max(0, rawLeftWidth - Self.notchLaneSafetyInset)
-        let rightAvailableWidth = max(0, rawRightWidth - Self.notchLaneSafetyInset)
+        return Self.calculateOpenedHeaderMetrics(
+            contentWidth: contentWidth,
+            rawLeftWidth: rawLeftWidth,
+            rawRightWidth: rawRightWidth,
+            laneSafetyInset: Self.notchLaneSafetyInset,
+            headerButtonsWidth: openedHeaderButtonsWidth,
+            controlSpacing: Self.headerControlSpacing,
+            minimumRightUsageLaneWidth: Self.minimumRightUsageLaneWidth
+        )
+    }
+
+    nonisolated static func calculateOpenedHeaderMetrics(
+        contentWidth: CGFloat,
+        rawLeftWidth: CGFloat,
+        rawRightWidth: CGFloat,
+        laneSafetyInset: CGFloat,
+        headerButtonsWidth: CGFloat,
+        controlSpacing: CGFloat,
+        minimumRightUsageLaneWidth: CGFloat
+    ) -> OpenedHeaderMetrics {
+        let leftUsageWidth = max(0, rawLeftWidth - laneSafetyInset)
+        let rightAvailableWidth = max(0, rawRightWidth - laneSafetyInset)
         let proposedRightUsageWidth = max(
             0,
-            rightAvailableWidth - openedHeaderButtonsWidth - Self.headerControlSpacing
+            rightAvailableWidth - headerButtonsWidth - controlSpacing
         )
-        let rightUsageWidth = proposedRightUsageWidth >= Self.minimumRightUsageLaneWidth
+        let rightUsageWidth = proposedRightUsageWidth >= minimumRightUsageLaneWidth
             ? proposedRightUsageWidth
             : 0
         let rightLaneWidth = min(
             contentWidth,
-            openedHeaderButtonsWidth
-                + (rightUsageWidth > 0 ? Self.headerControlSpacing + rightUsageWidth : 0)
+            headerButtonsWidth
+                + (rightUsageWidth > 0 ? controlSpacing + rightUsageWidth : 0)
         )
         let centerGapWidth = max(0, contentWidth - leftUsageWidth - rightLaneWidth)
 
@@ -1616,7 +1651,7 @@ private struct UsageWindowPresentation: Identifiable {
     }
 }
 
-private struct OpenedHeaderMetrics {
+struct OpenedHeaderMetrics: Equatable {
     let leftUsageWidth: CGFloat
     let centerGapWidth: CGFloat
     let rightUsageWidth: CGFloat

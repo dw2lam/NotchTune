@@ -164,6 +164,38 @@ struct OverlayPanelControllerTests {
         #expect(IslandPanelView.tabHitTargetHeight >= 30)
     }
 
+    @Test
+    func openedNotchHeaderFitsClaudeAndCodexOutsidePhysicalNotch() {
+        let totalWidth = OverlayPanelController.preferredNotchOpenedPanelWidth
+        let physicalNotchWidth: CGFloat = 224
+        let horizontalPadding: CGFloat = 16
+        let safetyInset: CGFloat = 12
+        let controlSpacing: CGFloat = 8
+        let contentWidth = totalWidth - (horizontalPadding * 2)
+        let rawWingWidth = ((totalWidth - physicalNotchWidth) / 2) - horizontalPadding
+        let buttonStripWidth = IslandPanelView.headerControlStripWidth(
+            controlCount: 2,
+            buttonSize: 22,
+            spacing: controlSpacing
+        )
+
+        let metrics = IslandPanelView.calculateOpenedHeaderMetrics(
+            contentWidth: contentWidth,
+            rawLeftWidth: rawWingWidth,
+            rawRightWidth: rawWingWidth,
+            laneSafetyInset: safetyInset,
+            headerButtonsWidth: buttonStripWidth,
+            controlSpacing: controlSpacing,
+            minimumRightUsageLaneWidth: 58
+        )
+
+        #expect(totalWidth == 580)
+        #expect(buttonStripWidth == 52)
+        #expect(metrics.leftUsageWidth == 150)
+        #expect(metrics.rightUsageWidth == 90)
+        #expect(metrics.centerGapWidth == physicalNotchWidth + (safetyInset * 2))
+    }
+
     @Test @MainActor
     func transientFileDropPreservesAndRestoresRemindersTab() {
         let model = AppModel()
