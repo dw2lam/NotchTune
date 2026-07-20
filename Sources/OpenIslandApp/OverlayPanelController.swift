@@ -5,6 +5,13 @@ import OpenIslandCore
 
 @MainActor
 final class OverlayPanelController {
+    private struct FileDragPresentationSnapshot {
+        let notchStatus: NotchStatus
+        let openReason: NotchOpenReason?
+        let surface: IslandSurface
+        let activeTab: IslandTab
+    }
+
     private static let preferredNotchOpenedPanelWidth: CGFloat = 520
     private static let preferredTopBarOpenedPanelWidth: CGFloat = 520
     private static let preferredNotificationPanelWidth: CGFloat = 620
@@ -35,6 +42,7 @@ final class OverlayPanelController {
     private var isFileDragNearNotch = false
     private var acceptedCurrentFileDrop = false
     private var fileDragEndGeneration: UInt64 = 0
+    private var fileDragPresentationSnapshot: FileDragPresentationSnapshot?
     weak var model: AppModel?
     private(set) var notchRect: NSRect = .zero
 
@@ -353,15 +361,22 @@ final class OverlayPanelController {
         guard let closedRect = closedSurfaceRect(for: model) else { return }
 
         let activationRect = Self.fileDragActivationRect(closedSurfaceRect: closedRect)
-        guard Self.rectContainsIncludingEdges(activationRect, point: screenLocation) else { return }
+        guard Self.rectContainsIncludingEdges(activationRect, point: screenLocation) else {
+            if isFileDragNearNotch {
+                fileDragEndGeneration &+= 1
+                restoreStateBeforeFileDrag()
+                isFileDragNearNotch = false
+                acceptedCurrentFileDrop = false
+            }
+            return
+        }
 
         fileDragEndGeneration &+= 1
         guard !isFileDragNearNotch else { return }
 
         isFileDragNearNotch = true
         acceptedCurrentFileDrop = false
-        model.islandActiveTab = .myspace
-        model.notchOpen(reason: .drag)
+        presentFileDragTarget()
     }
 
     private func handleFileDragEnded() {
@@ -373,19 +388,54 @@ final class OverlayPanelController {
             guard let self, generation == self.fileDragEndGeneration else { return }
             if !self.acceptedCurrentFileDrop,
                self.model?.notchOpenReason == .drag {
-                self.model?.notchClose()
+                self.restoreStateBeforeFileDrag()
             }
             self.isFileDragNearNotch = false
             self.acceptedCurrentFileDrop = false
+            self.fileDragPresentationSnapshot = nil
         }
     }
 
+    func presentFileDragTarget() {
+        guard let model else { return }
+        if fileDragPresentationSnapshot == nil {
+            fileDragPresentationSnapshot = FileDragPresentationSnapshot(
+                notchStatus: model.notchStatus,
+                openReason: model.notchOpenReason,
+                surface: model.islandSurface,
+                activeTab: model.islandActiveTab
+            )
+        }
+        model.notchOpen(reason: .drag, surface: model.islandSurface)
+    }
+
+    func restoreStateBeforeFileDrag() {
+        guard let model, let snapshot = fileDragPresentationSnapshot else { return }
+        fileDragPresentationSnapshot = nil
+        model.islandActiveTab = snapshot.activeTab
+
+        if snapshot.notchStatus == .opened {
+            model.notchOpen(
+                reason: snapshot.openReason ?? .click,
+                surface: snapshot.surface
+            )
+        } else {
+            model.notchClose()
+        }
+    }
+
+    var canAcceptDroppedFileURLs: Bool {
+        guard let model else { return false }
+        return model.notchOpenReason == .drag || model.islandActiveTab == .myspace
+    }
+
     fileprivate func acceptDroppedFileURLs(_ urls: [URL]) -> Bool {
-        guard let model, !urls.isEmpty else { return false }
+        guard let model, canAcceptDroppedFileURLs, !urls.isEmpty else { return false }
         do {
             try model.myspaceStore.holdFiles(urls)
             acceptedCurrentFileDrop = true
             fileDragEndGeneration &+= 1
+            fileDragPresentationSnapshot = nil
             model.islandActiveTab = .myspace
             model.notchOpen(reason: .click)
             model.lastActionMessage = "Held \(urls.count) file\(urls.count == 1 ? "" : "s") in Myspace."
@@ -901,11 +951,13 @@ final class NotchHostingView<Content: View>: NSHostingView<Content> {
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        fileURLs(from: sender).isEmpty ? [] : .copy
+        guard notchController?.canAcceptDroppedFileURLs == true else { return [] }
+        return fileURLs(from: sender).isEmpty ? [] : .copy
     }
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        fileURLs(from: sender).isEmpty ? [] : .copy
+        guard notchController?.canAcceptDroppedFileURLs == true else { return [] }
+        return fileURLs(from: sender).isEmpty ? [] : .copy
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {

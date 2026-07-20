@@ -113,6 +113,47 @@ struct OverlayPanelControllerTests {
         #expect(!activationRect.contains(NSPoint(x: closedRect.midX, y: closedRect.minY - 50)))
     }
 
+    @Test @MainActor
+    func transientFileDropPreservesAndRestoresRemindersTab() {
+        let model = AppModel()
+        let controller = OverlayPanelController()
+        controller.model = model
+        model.islandActiveTab = .reminders
+        model.notchOpen(reason: .click)
+
+        #expect(!controller.canAcceptDroppedFileURLs)
+
+        controller.presentFileDragTarget()
+
+        #expect(model.notchOpenReason == .drag)
+        #expect(model.islandActiveTab == .reminders)
+        #expect(controller.canAcceptDroppedFileURLs)
+
+        controller.restoreStateBeforeFileDrag()
+
+        #expect(model.notchStatus == .opened)
+        #expect(model.notchOpenReason == .click)
+        #expect(model.islandActiveTab == .reminders)
+        #expect(!controller.canAcceptDroppedFileURLs)
+    }
+
+    @Test @MainActor
+    func cancelledFileDropRestoresClosedStateWithoutChangingTab() {
+        let model = AppModel()
+        let controller = OverlayPanelController()
+        controller.model = model
+        model.islandActiveTab = .reminders
+        model.notchStatus = .closed
+        model.notchOpenReason = nil
+
+        controller.presentFileDragTarget()
+        controller.restoreStateBeforeFileDrag()
+
+        #expect(model.notchStatus == .closed)
+        #expect(model.notchOpenReason == nil)
+        #expect(model.islandActiveTab == .reminders)
+    }
+
     // MARK: - islandClosedHeight
 
     @Test
