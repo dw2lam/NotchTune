@@ -233,7 +233,7 @@ fi
 # --- Styled DMG creation ---
 dmg_bg="$repo_root/Assets/Brand/dmg-background@2x.png"
 
-create-dmg \
+if ! create-dmg \
     --volname "$app_name" \
     --background "$dmg_bg" \
     --window-pos 200 120 \
@@ -245,7 +245,20 @@ create-dmg \
     --app-drop-link 480 210 \
     --no-internet-enable \
     "$dmg_path" \
-    "$bundle_dir"
+    "$bundle_dir"; then
+    echo "Styled DMG creation failed; falling back to a standard disk image." >&2
+    rm -f "$dmg_path" "$package_root"/rw.*."$app_name".dmg
+    fallback_dir="$(mktemp -d)"
+    ditto "$bundle_dir" "$fallback_dir/$app_name.app"
+    ln -s /Applications "$fallback_dir/Applications"
+    hdiutil create \
+        -volname "$app_name" \
+        -srcfolder "$fallback_dir" \
+        -ov \
+        -format UDZO \
+        "$dmg_path"
+    rm -rf "$fallback_dir"
+fi
 
 # Sign the DMG itself (required before notarization)
 if [[ -n "$signing_identity" ]]; then
