@@ -102,6 +102,25 @@ struct OverlayPanelControllerTests {
     }
 
     @Test
+    func staleFileURLsDoNotTurnOrdinaryMouseDragsIntoFileDrops() {
+        #expect(!OverlayPanelController.isFreshFileDrag(
+            pasteboardChangeCount: 71,
+            mouseDownChangeCount: 71,
+            hasFileURLs: true
+        ))
+        #expect(!OverlayPanelController.isFreshFileDrag(
+            pasteboardChangeCount: 72,
+            mouseDownChangeCount: 71,
+            hasFileURLs: false
+        ))
+        #expect(OverlayPanelController.isFreshFileDrag(
+            pasteboardChangeCount: 72,
+            mouseDownChangeCount: 71,
+            hasFileURLs: true
+        ))
+    }
+
+    @Test
     func fileDragActivationAreaAddsApproachPaddingAroundClosedNotch() {
         let closedRect = NSRect(x: 400, y: 900, width: 320, height: 38)
         let activationRect = OverlayPanelController.fileDragActivationRect(

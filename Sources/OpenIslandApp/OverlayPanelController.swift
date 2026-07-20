@@ -43,6 +43,7 @@ final class OverlayPanelController {
     private var acceptedCurrentFileDrop = false
     private var fileDragEndGeneration: UInt64 = 0
     private var fileDragPresentationSnapshot: FileDragPresentationSnapshot?
+    private var fileDragPasteboardChangeCountAtMouseDown = 0
     weak var model: AppModel?
     private(set) var notchRect: NSRect = .zero
 
@@ -52,6 +53,14 @@ final class OverlayPanelController {
 
     nonisolated static func shouldActivatePanel(for reason: NotchOpenReason?) -> Bool {
         reason == .click
+    }
+
+    nonisolated static func isFreshFileDrag(
+        pasteboardChangeCount: Int,
+        mouseDownChangeCount: Int,
+        hasFileURLs: Bool
+    ) -> Bool {
+        hasFileURLs && pasteboardChangeCount != mouseDownChangeCount
     }
 
     func availableDisplayOptions() -> [OverlayDisplayOption] {
@@ -279,6 +288,7 @@ final class OverlayPanelController {
 
         guard !eventMonitors.isActive else { return }
 
+        fileDragPasteboardChangeCountAtMouseDown = dragPasteboardChangeCount()
         eventMonitors.start { [weak self] location in
             self?.handleMouseMoved(location)
         } mouseDownHandler: { [weak self] location in
@@ -332,6 +342,7 @@ final class OverlayPanelController {
     }
 
     private func handleMouseDown(_ screenLocation: NSPoint) {
+        fileDragPasteboardChangeCountAtMouseDown = dragPasteboardChangeCount()
         guard let model else { return }
         guard !model.isOverlayDisplayFullscreen else { return }
 
@@ -357,7 +368,12 @@ final class OverlayPanelController {
 
     private func handleFileDragMoved(_ screenLocation: NSPoint) {
         guard let model, !model.isOverlayDisplayFullscreen else { return }
-        guard !draggedFileURLs().isEmpty else { return }
+        let fileURLs = draggedFileURLs()
+        guard Self.isFreshFileDrag(
+            pasteboardChangeCount: dragPasteboardChangeCount(),
+            mouseDownChangeCount: fileDragPasteboardChangeCountAtMouseDown,
+            hasFileURLs: !fileURLs.isEmpty
+        ) else { return }
         guard let closedRect = closedSurfaceRect(for: model) else { return }
 
         let activationRect = Self.fileDragActivationRect(closedSurfaceRect: closedRect)
@@ -380,6 +396,7 @@ final class OverlayPanelController {
     }
 
     private func handleFileDragEnded() {
+        fileDragPasteboardChangeCountAtMouseDown = dragPasteboardChangeCount()
         guard isFileDragNearNotch else { return }
         fileDragEndGeneration &+= 1
         let generation = fileDragEndGeneration
@@ -447,11 +464,18 @@ final class OverlayPanelController {
     }
 
     private func draggedFileURLs() -> [URL] {
-        let pasteboard = NSPasteboard(name: .drag)
-        return pasteboard.readObjects(
+        dragPasteboard().readObjects(
             forClasses: [NSURL.self],
             options: [.urlReadingFileURLsOnly: true]
         ) as? [URL] ?? []
+    }
+
+    private func dragPasteboardChangeCount() -> Int {
+        dragPasteboard().changeCount
+    }
+
+    private func dragPasteboard() -> NSPasteboard {
+        NSPasteboard(name: .drag)
     }
 
     // MARK: - Hover expansion
