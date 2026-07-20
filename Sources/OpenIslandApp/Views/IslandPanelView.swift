@@ -708,8 +708,18 @@ struct IslandPanelView: View {
                 .transition(.opacity)
                 .frame(maxWidth: .infinity)
             case .myspace:
-                MyspacePanelView(store: model.myspaceStore)
+                MyspacePanelView(
+                    store: model.myspaceStore,
+                    onFilesHeld: {
+                        model.notchOpen(reason: .click)
+                    }
+                )
                     .frame(maxWidth: .infinity)
+                    .onPreferenceChange(MyspaceContentHeightKey.self) { height in
+                        if height > 0 {
+                            model.measuredMyspaceContentHeight = height
+                        }
+                    }
             }
         }
         .animation(.smooth(duration: 0.35, extraBounce: 0.1), value: model.islandActiveTab)

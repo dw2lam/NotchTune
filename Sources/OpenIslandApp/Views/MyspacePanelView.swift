@@ -2,6 +2,50 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+struct MyspaceContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct MyspaceListContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct MyspaceAutoHeightScrollView<Content: View>: View {
+    let maxHeight: CGFloat
+    @ViewBuilder let content: () -> Content
+    @State private var contentHeight: CGFloat = 0
+
+    var body: some View {
+        ScrollView(.vertical) {
+            content()
+                .background {
+                    GeometryReader { geometry in
+                        Color.clear.preference(
+                            key: MyspaceListContentHeightKey.self,
+                            value: geometry.size.height
+                        )
+                    }
+                }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollIndicators(contentHeight > maxHeight ? .automatic : .hidden)
+        .frame(height: contentHeight > 0 ? min(contentHeight, maxHeight) : nil)
+        .onPreferenceChange(MyspaceListContentHeightKey.self) { height in
+            if height > 0 {
+                contentHeight = height
+            }
+        }
+    }
+}
+
 struct MyspacePanelView: View {
     enum Section: String, CaseIterable, Identifiable {
         case space = "Space"
@@ -11,6 +55,7 @@ struct MyspacePanelView: View {
     }
 
     let store: MyspaceStore
+    let onFilesHeld: () -> Void
     @State private var selectedSection: Section = .space
     @State private var draft = ""
     @State private var pendingAttachments: [URL] = []
@@ -33,6 +78,22 @@ struct MyspacePanelView: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 14)
+        .fixedSize(horizontal: false, vertical: true)
+        .background {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: MyspaceContentHeightKey.self,
+                    value: geometry.size.height
+                )
+            }
+        }
+        .dropDestination(for: URL.self) { urls, _ in
+            holdFiles(urls)
+        } isTargeted: { targeted in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isDropTargeted = targeted
+            }
+        }
         .transition(.opacity)
     }
 
@@ -164,14 +225,6 @@ struct MyspacePanelView: View {
                         )
                 )
         )
-        .dropDestination(for: URL.self) { urls, _ in
-            appendPendingAttachments(urls)
-            return !urls.isEmpty
-        } isTargeted: { targeted in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isDropTargeted = targeted
-            }
-        }
     }
 
     private func composerButton(
@@ -221,14 +274,13 @@ struct MyspacePanelView: View {
                 detail: "Save a thought, dictate an idea, or drop in a file."
             )
         } else {
-            ScrollView {
-                LazyVStack(spacing: 7) {
+            MyspaceAutoHeightScrollView(maxHeight: 210) {
+                VStack(spacing: 7) {
                     ForEach(thoughts) { thought in
                         thoughtRow(thought, showsCompletionControl: false)
                     }
                 }
             }
-            .scrollIndicators(.hidden)
         }
     }
 
@@ -241,14 +293,13 @@ struct MyspacePanelView: View {
                 detail: "Add a reminder to any thought and it will stay here."
             )
         } else {
-            ScrollView {
-                LazyVStack(spacing: 7) {
+            MyspaceAutoHeightScrollView(maxHeight: 210) {
+                VStack(spacing: 7) {
                     ForEach(store.activeReminders) { thought in
                         thoughtRow(thought, showsCompletionControl: true)
                     }
                 }
             }
-            .scrollIndicators(.hidden)
         }
     }
 
@@ -358,6 +409,19 @@ struct MyspacePanelView: View {
         let existing = Set(pendingAttachments)
         pendingAttachments.append(contentsOf: urls.filter { !existing.contains($0) })
         composerMessage = "\(pendingAttachments.count) attachment\(pendingAttachments.count == 1 ? "" : "s") ready"
+    }
+
+    private func holdFiles(_ urls: [URL]) -> Bool {
+        guard !urls.isEmpty else { return false }
+        do {
+            try store.holdFiles(urls)
+            composerMessage = "Held \(urls.count) file\(urls.count == 1 ? "" : "s")"
+            onFilesHeld()
+            return true
+        } catch {
+            composerMessage = error.localizedDescription
+            return false
+        }
     }
 
     private func saveThought() {

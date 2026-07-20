@@ -837,6 +837,18 @@ final class AppModel {
         }
     }
 
+    /// Measured by SwiftUI from Myspace's natural content height.
+    var measuredMyspaceContentHeight: CGFloat = 0 {
+        didSet {
+            let delta = abs(measuredMyspaceContentHeight - oldValue)
+            if delta >= 2, measuredMyspaceContentHeight > 0 {
+                DispatchQueue.main.async { [weak self] in
+                    self?.overlay.refreshOverlayPlacementIfVisible()
+                }
+            }
+        }
+    }
+
     var completionFlashSessionID: String?
 
     var musicNotificationTrack: PlayerTrack?

@@ -12,6 +12,7 @@ enum NotchStatus: Equatable {
 enum NotchOpenReason: Equatable {
     case click
     case hover
+    case drag
     case notification
     case boot
 }

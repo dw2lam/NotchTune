@@ -47,6 +47,31 @@ struct MyspaceStoreTests {
     }
 
     @Test
+    func holdingFilesCreatesAnAttachmentOnlyThought() throws {
+        let root = temporaryDirectory()
+        let source = root.appendingPathComponent("held.pdf")
+        try Data("held file".utf8).write(to: source)
+        let store = MyspaceStore(
+            rootURL: root.appendingPathComponent("storage"),
+            notificationsEnabled: false
+        )
+
+        let thought = try store.holdFiles([source])
+
+        #expect(thought.text.isEmpty)
+        #expect(thought.attachments.map(\.originalFilename) == ["held.pdf"])
+        #expect(store.thoughts.first?.id == thought.id)
+        #expect(
+            FileManager.default.fileExists(
+                atPath: store.attachmentURL(
+                    for: try #require(thought.attachments.first),
+                    thoughtID: thought.id
+                ).path
+            )
+        )
+    }
+
+    @Test
     func completingAndDeletingReminderPersists() throws {
         let storage = temporaryDirectory()
         let store = MyspaceStore(rootURL: storage, notificationsEnabled: false)

@@ -99,6 +99,11 @@ final class MyspaceStore {
         }
     }
 
+    @discardableResult
+    func holdFiles(_ urls: [URL]) throws -> MyspaceThought {
+        try addThought(text: "", attachmentURLs: urls)
+    }
+
     func deleteThought(id: UUID) {
         guard let index = thoughts.firstIndex(where: { $0.id == id }) else { return }
         let removed = thoughts.remove(at: index)

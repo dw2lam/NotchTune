@@ -95,9 +95,22 @@ struct OverlayPanelControllerTests {
     @Test
     func passiveOpensDoNotActivateThePanel() {
         #expect(!OverlayPanelController.shouldActivatePanel(for: .hover))
+        #expect(!OverlayPanelController.shouldActivatePanel(for: .drag))
         #expect(!OverlayPanelController.shouldActivatePanel(for: .notification))
         #expect(!OverlayPanelController.shouldActivatePanel(for: .boot))
         #expect(!OverlayPanelController.shouldActivatePanel(for: nil))
+    }
+
+    @Test
+    func fileDragActivationAreaAddsApproachPaddingAroundClosedNotch() {
+        let closedRect = NSRect(x: 400, y: 900, width: 320, height: 38)
+        let activationRect = OverlayPanelController.fileDragActivationRect(
+            closedSurfaceRect: closedRect
+        )
+
+        #expect(activationRect == NSRect(x: 344, y: 858, width: 432, height: 122))
+        #expect(activationRect.contains(NSPoint(x: closedRect.midX, y: closedRect.minY - 30)))
+        #expect(!activationRect.contains(NSPoint(x: closedRect.midX, y: closedRect.minY - 50)))
     }
 
     // MARK: - islandClosedHeight
