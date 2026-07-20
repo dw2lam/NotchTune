@@ -118,6 +118,47 @@ struct MyspaceStoreTests {
         #expect(MyspaceStore(rootURL: storage, notificationsEnabled: false).thoughts.isEmpty)
     }
 
+    @Test
+    func untimedReminderRemainsSeparateFromMyspaceAfterReload() throws {
+        let storage = temporaryDirectory()
+        let store = MyspaceStore(rootURL: storage, notificationsEnabled: false)
+
+        let reminder = try store.addThought(
+            text: "Keep this visible",
+            reminderAt: nil,
+            isReminder: true
+        )
+        let thought = try store.addThought(text: "An ordinary thought")
+
+        #expect(store.activeReminders.map(\.id) == [reminder.id])
+        #expect(store.thoughts.first(where: { $0.id == thought.id })?.isReminder == false)
+
+        let reloaded = MyspaceStore(rootURL: storage, notificationsEnabled: false)
+        #expect(reloaded.activeReminders.map(\.id) == [reminder.id])
+        #expect(reloaded.thoughts.first(where: { $0.id == thought.id })?.isReminder == false)
+    }
+
+    @Test
+    func legacyTimedThoughtDecodesAsReminder() throws {
+        let id = UUID()
+        let createdAt = Date(timeIntervalSinceReferenceDate: 100)
+        let reminderAt = Date(timeIntervalSinceReferenceDate: 200)
+        let data = try JSONSerialization.data(withJSONObject: [
+            "id": id.uuidString,
+            "text": "Legacy reminder",
+            "createdAt": createdAt.timeIntervalSinceReferenceDate,
+            "reminderAt": reminderAt.timeIntervalSinceReferenceDate,
+            "isReminderCompleted": false,
+            "attachments": [],
+        ])
+
+        let decoded = try JSONDecoder().decode(MyspaceThought.self, from: data)
+
+        #expect(decoded.id == id)
+        #expect(decoded.isReminder)
+        #expect(decoded.reminderAt == reminderAt)
+    }
+
     private func temporaryDirectory() -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("NotchTuneMyspaceTests-\(UUID().uuidString)", isDirectory: true)

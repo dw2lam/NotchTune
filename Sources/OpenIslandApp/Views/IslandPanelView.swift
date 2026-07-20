@@ -332,6 +332,9 @@ struct IslandPanelView: View {
             model.openSettingsWindow = { [openWindow] in
                 openWindow(id: "settings")
             }
+            model.openOnboardingWindow = { [openWindow] in
+                openWindow(id: "onboarding")
+            }
         }
         .onChange(of: model.notchStatus) { _, status in
             syncOpenedSurfaceMount(with: status)
@@ -739,6 +742,14 @@ struct IslandPanelView: View {
                                 model.measuredMyspaceContentHeight = height
                             }
                         }
+                    case .reminders:
+                        RemindersPanelView(store: model.myspaceStore)
+                            .frame(maxWidth: .infinity)
+                            .onPreferenceChange(RemindersContentHeightKey.self) { height in
+                                if height > 0 {
+                                    model.measuredRemindersContentHeight = height
+                                }
+                            }
                     }
                 }
                 .transition(.opacity)
@@ -782,7 +793,8 @@ struct IslandPanelView: View {
             tabButton(label: "Agents", systemImage: "terminal", tab: .agents)
             tabButton(label: "Music", systemImage: "music.note", tab: .music)
             tabButton(label: "Myspace", systemImage: "square.grid.2x2", tab: .myspace)
-            
+            tabButton(label: "Reminders", systemImage: "bell", tab: .reminders)
+
             Spacer()
         }
     }

@@ -336,6 +336,11 @@ final class OverlayPanelController {
             if !isPointInExpandedArea(screenLocation) {
                 model.notchClose()
                 repostMouseDown(at: screenLocation)
+            } else if model.notchOpenReason != .click {
+                // Passive hover/drag opens do not make the non-activating panel
+                // key. Promote an intentional inside click before SwiftUI
+                // handles it so text fields and editors can receive focus.
+                model.notchOpen(reason: .click, surface: model.islandSurface)
             }
         }
     }
@@ -670,6 +675,14 @@ final class OverlayPanelController {
                 return min(520, model.measuredMyspaceContentHeight + tabBarHeight + 8)
             }
             return 250
+        }
+
+        if model.islandActiveTab == .reminders {
+            let tabBarHeight: CGFloat = 36
+            if model.measuredRemindersContentHeight > 0 {
+                return min(520, model.measuredRemindersContentHeight + tabBarHeight + 8)
+            }
+            return 230
         }
 
         let now = Date.now

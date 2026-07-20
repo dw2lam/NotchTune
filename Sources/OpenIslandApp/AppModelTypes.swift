@@ -87,6 +87,7 @@ enum IslandTab: String, CaseIterable, Identifiable, Sendable {
     case agents
     case music
     case myspace
+    case reminders
 
     var id: String { rawValue }
 }

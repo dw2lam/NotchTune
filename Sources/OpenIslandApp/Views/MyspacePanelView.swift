@@ -12,6 +12,14 @@ struct MyspaceContentHeightKey: PreferenceKey {
     }
 }
 
+struct RemindersContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 private struct MyspaceListContentHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
 
@@ -142,40 +150,23 @@ private struct MyspacePreviewSelection: Identifiable {
 }
 
 struct MyspacePanelView: View {
-    enum Section: String, CaseIterable, Identifiable {
-        case space = "Space"
-        case reminders = "Reminders"
-
-        var id: String { rawValue }
-    }
-
     let store: MyspaceStore
     let onFilesHeld: () -> Void
-    @State private var selectedSection: Section = .space
     @State private var draft = ""
     @State private var pendingAttachments: [URL] = []
-    @State private var reminderDraft = ""
-    @State private var reminderAt = Date.now.addingTimeInterval(60 * 60)
     @State private var isDropTargeted = false
     @State private var composerMessage: String?
-    @State private var reminderMessage: String?
     @State private var previewSelection: MyspacePreviewSelection?
     @FocusState private var composerFocused: Bool
-    @FocusState private var reminderFocused: Bool
 
     var body: some View {
         VStack(spacing: 10) {
-            sectionPicker
-
             if let previewSelection {
                 inlinePreview(previewSelection)
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
-            } else if selectedSection == .space {
-                composer
-                thoughtList(store.thoughts)
             } else {
-                reminderComposer
-                reminderList
+                composer
+                thoughtList(store.thoughts.filter { !$0.isReminder })
             }
         }
         .padding(.horizontal, 16)
@@ -277,35 +268,6 @@ struct MyspacePanelView: View {
         return "\(typeName) · \(formattedSize)"
     }
 
-    private var sectionPicker: some View {
-        HStack(spacing: 4) {
-            ForEach(Section.allCases) { section in
-                Button {
-                    withAnimation(.smooth(duration: 0.25)) {
-                        previewSelection = nil
-                        selectedSection = section
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: section == .space ? "square.grid.2x2" : "bell")
-                            .font(.system(size: 9, weight: .semibold))
-                        Text(section.rawValue)
-                            .font(.system(size: 10.5, weight: .medium))
-                    }
-                    .foregroundStyle(selectedSection == section ? .white : .white.opacity(0.42))
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(
-                        selectedSection == section ? .white.opacity(0.12) : .clear,
-                        in: Capsule()
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer()
-        }
-    }
-
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextEditor(text: $draft)
@@ -383,61 +345,6 @@ struct MyspacePanelView: View {
                         )
                 )
         )
-    }
-
-    private var reminderComposer: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            TextField("What should I remind you about?", text: $reminderDraft)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(.white.opacity(0.9))
-                .focused($reminderFocused)
-                .onSubmit(saveReminder)
-
-            HStack(spacing: 8) {
-                DatePicker(
-                    "Reminder time",
-                    selection: $reminderAt,
-                    in: Date.now...,
-                    displayedComponents: [.date, .hourAndMinute]
-                )
-                .labelsHidden()
-                .datePickerStyle(.compact)
-                .colorScheme(.dark)
-                .font(.system(size: 10))
-
-                if let reminderMessage {
-                    Text(reminderMessage)
-                        .font(.system(size: 9.5))
-                        .foregroundStyle(.white.opacity(0.42))
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 4)
-
-                Button(action: saveReminder) {
-                    Label("Add reminder", systemImage: "bell.badge.fill")
-                        .font(.system(size: 9.5, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 9)
-                        .frame(height: 24)
-                        .background(.white, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .disabled(reminderDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .opacity(
-                    reminderDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        ? 0.35
-                        : 1
-                )
-            }
-        }
-        .padding(10)
-        .background(.white.opacity(0.025), in: RoundedRectangle(cornerRadius: 12))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(.white.opacity(0.08), lineWidth: 0.5)
-        }
     }
 
     private func composerButton(
@@ -526,25 +433,6 @@ struct MyspacePanelView: View {
         if calendar.isDateInYesterday(date) { return "YESTERDAY" }
         return date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
             .uppercased()
-    }
-
-    @ViewBuilder
-    private var reminderList: some View {
-        if store.activeReminders.isEmpty {
-            emptyState(
-                icon: "bell.slash",
-                title: "No active reminders",
-                detail: "Add a reminder to any thought and it will stay here."
-            )
-        } else {
-            MyspaceAutoHeightScrollView(maxHeight: 210) {
-                VStack(spacing: 7) {
-                    ForEach(store.activeReminders) { thought in
-                        thoughtRow(thought, showsCompletionControl: true)
-                    }
-                }
-            }
-        }
     }
 
     private func thoughtRow(_ thought: MyspaceThought, showsCompletionControl: Bool) -> some View {
@@ -705,21 +593,6 @@ struct MyspacePanelView: View {
         }
     }
 
-    private func saveReminder() {
-        let text = reminderDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-
-        do {
-            try store.addThought(text: text, reminderAt: reminderAt)
-            reminderDraft = ""
-            reminderAt = .now.addingTimeInterval(60 * 60)
-            reminderMessage = "Reminder added"
-            reminderFocused = false
-        } catch {
-            reminderMessage = error.localizedDescription
-        }
-    }
-
     private func attachmentIcon(for url: URL) -> String {
         attachmentIcon(forFilename: url.lastPathComponent)
     }
@@ -733,5 +606,218 @@ struct MyspacePanelView: View {
         if type.conforms(to: .movie) { return "film" }
         if type.conforms(to: .pdf) { return "doc.richtext" }
         return "doc"
+    }
+}
+
+struct RemindersPanelView: View {
+    let store: MyspaceStore
+
+    @State private var draft = ""
+    @State private var includesTime = false
+    @State private var reminderAt = Date.now.addingTimeInterval(60 * 60)
+    @State private var message: String?
+    @FocusState private var draftFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 10) {
+            reminderComposer
+            reminderList
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 14)
+        .fixedSize(horizontal: false, vertical: true)
+        .background {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: RemindersContentHeightKey.self,
+                    value: geometry.size.height
+                )
+            }
+        }
+        .transition(.opacity)
+    }
+
+    private var reminderComposer: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            TextField("What should I remember?", text: $draft)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.9))
+                .focused($draftFocused)
+                .onSubmit(saveReminder)
+
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        includesTime.toggle()
+                    }
+                } label: {
+                    Label(
+                        includesTime ? "Timed" : "Add time",
+                        systemImage: includesTime ? "clock.fill" : "clock.badge.plus"
+                    )
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(includesTime ? .white.opacity(0.8) : .white.opacity(0.48))
+                    .padding(.horizontal, 8)
+                    .frame(height: 24)
+                    .background(.white.opacity(includesTime ? 0.11 : 0.055), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(includesTime ? "Remove reminder time" : "Add reminder time")
+
+                if includesTime {
+                    DatePicker(
+                        "Reminder time",
+                        selection: $reminderAt,
+                        in: Date.now...,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+                    .colorScheme(.dark)
+                    .font(.system(size: 10))
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+                }
+
+                if let message {
+                    Text(message)
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(.white.opacity(0.42))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 4)
+
+                Button(action: saveReminder) {
+                    Label("Add", systemImage: "bell.badge.fill")
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 9)
+                        .frame(height: 24)
+                        .background(.white, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(
+                    draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.35 : 1
+                )
+            }
+        }
+        .padding(10)
+        .background(.white.opacity(0.025), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(.white.opacity(0.08), lineWidth: 0.5)
+        }
+    }
+
+    @ViewBuilder
+    private var reminderList: some View {
+        if store.activeReminders.isEmpty {
+            VStack(spacing: 6) {
+                Spacer(minLength: 12)
+                Image(systemName: "bell.slash")
+                    .font(.system(size: 20, weight: .light))
+                    .foregroundStyle(.white.opacity(0.24))
+                Text("No active reminders")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.56))
+                Text("Keep a reminder here, or add a time when it should notify you.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.3))
+                    .multilineTextAlignment(.center)
+                Spacer(minLength: 12)
+            }
+            .frame(maxWidth: .infinity, minHeight: 94)
+        } else {
+            MyspaceAutoHeightScrollView(maxHeight: 240) {
+                VStack(spacing: 7) {
+                    ForEach(store.activeReminders) { reminder in
+                        reminderRow(reminder)
+                    }
+                }
+            }
+        }
+    }
+
+    private func reminderRow(_ reminder: MyspaceThought) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            Button {
+                store.toggleReminderCompleted(id: reminder.id)
+            } label: {
+                Image(systemName: "circle")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Complete reminder")
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(reminder.text)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.86))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 6) {
+                    if let reminderAt = reminder.reminderAt {
+                        Label {
+                            Text(
+                                reminderAt,
+                                format: .dateTime.month(.abbreviated).day().hour().minute()
+                            )
+                        } icon: {
+                            Image(systemName: "clock.fill")
+                        }
+                    } else {
+                        Label("No time", systemImage: "infinity")
+                    }
+
+                    Text("·")
+
+                    Text(reminder.createdAt, format: .dateTime.hour().minute().second())
+                        .monospacedDigit()
+                }
+                .font(.system(size: 8.5))
+                .foregroundStyle(.white.opacity(0.3))
+            }
+
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    store.deleteThought(id: reminder.id)
+                }
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white.opacity(0.25))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Delete reminder")
+        }
+        .padding(9)
+        .background(.white.opacity(0.024), in: RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(.white.opacity(0.065), lineWidth: 0.5)
+        }
+    }
+
+    private func saveReminder() {
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        do {
+            try store.addThought(
+                text: text,
+                reminderAt: includesTime ? reminderAt : nil,
+                isReminder: true
+            )
+            draft = ""
+            includesTime = false
+            reminderAt = .now.addingTimeInterval(60 * 60)
+            message = "Added"
+            draftFocused = false
+        } catch {
+            message = error.localizedDescription
+        }
     }
 }

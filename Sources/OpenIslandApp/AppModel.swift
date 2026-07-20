@@ -413,6 +413,9 @@ final class AppModel {
     var openSettingsWindow: (() -> Void)?
 
     @ObservationIgnored
+    var openOnboardingWindow: (() -> Void)?
+
+    @ObservationIgnored
     private var hasFinishedInit = false
 
     func appearancePreferences(for profile: IslandAppearanceDisplayProfile) -> IslandAppearancePreferences {
@@ -903,6 +906,18 @@ final class AppModel {
         didSet {
             let delta = abs(measuredMyspaceContentHeight - oldValue)
             if delta >= 2, measuredMyspaceContentHeight > 0 {
+                DispatchQueue.main.async { [weak self] in
+                    self?.overlay.refreshOverlayPlacementIfVisible()
+                }
+            }
+        }
+    }
+
+    /// Measured by SwiftUI from the Reminders tab's natural content height.
+    var measuredRemindersContentHeight: CGFloat = 0 {
+        didSet {
+            let delta = abs(measuredRemindersContentHeight - oldValue)
+            if delta >= 2, measuredRemindersContentHeight > 0 {
                 DispatchQueue.main.async { [weak self] in
                     self?.overlay.refreshOverlayPlacementIfVisible()
                 }
@@ -1480,13 +1495,14 @@ final class AppModel {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// Opens Settings on the Setup tab so the user can install hooks.
-    /// Used by every "Set up agents" CTA in the empty-state UI. A
-    /// dedicated first-run onboarding window will replace this in a
-    /// later PR; until then this is the canonical entry point.
     func showOnboarding() {
-        showSettings()
-        NotificationCenter.default.post(name: .openIslandSelectSetupTab, object: nil)
+        if let opener = openOnboardingWindow {
+            opener()
+            NSApp.activate(ignoringOtherApps: true)
+        } else {
+            showSettings()
+            NotificationCenter.default.post(name: .openIslandSelectSetupTab, object: nil)
+        }
     }
 
     func toggleSoundMuted() {
@@ -1862,6 +1878,10 @@ final class AppModel {
                 // on upgrade. Must run after status reads and before any
                 // install decision.
                 self.hooks.migrateIntentStoreIfNeeded()
+
+                if !self.firstLaunchCompleted {
+                    self.showOnboarding()
+                }
 
                 // Install only hooks the user has not explicitly opted out of.
                 // `shouldAutoInstall` skips `.uninstalled` agents and agents

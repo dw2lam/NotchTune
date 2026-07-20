@@ -210,6 +210,17 @@ struct GeneralSettingsPane: View {
                 ))
             }
 
+            Section("Getting Started") {
+                Button {
+                    model.showOnboarding()
+                } label: {
+                    Label("Open onboarding", systemImage: "sparkles")
+                }
+                Text("Review AI setup, permissions, and your Liquid Glass style.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
         }
         .formStyle(.grouped)
         .navigationTitle(lang.t("settings.tab.general"))

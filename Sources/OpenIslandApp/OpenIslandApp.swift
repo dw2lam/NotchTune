@@ -108,7 +108,7 @@ extension OpenIslandAppDelegate: UNUserNotificationCenterDelegate {
         ) else { return }
 
         await MainActor.run {
-            model.islandActiveTab = .myspace
+            model.islandActiveTab = .reminders
             model.notchOpen(reason: .click)
         }
     }
@@ -135,6 +135,11 @@ struct OpenIslandApp: App {
                 .keyboardShortcut(",", modifiers: .command)
             }
         }
+
+        Window("Welcome to NotchTune", id: "onboarding") {
+            OnboardingView(model: appDelegate.model)
+        }
+        .windowResizability(.contentSize)
     }
 }
 
@@ -149,6 +154,9 @@ private struct SettingsWindowContent: View {
             .onAppear {
                 model.openSettingsWindow = { [openWindow] in
                     openWindow(id: "settings")
+                }
+                model.openOnboardingWindow = { [openWindow] in
+                    openWindow(id: "onboarding")
                 }
             }
     }

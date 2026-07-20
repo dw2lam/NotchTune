@@ -12,9 +12,50 @@ struct MyspaceThought: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     var text: String
     let createdAt: Date
+    var isReminder: Bool
     var reminderAt: Date?
     var isReminderCompleted: Bool
     var attachments: [MyspaceAttachment]
+
+    init(
+        id: UUID,
+        text: String,
+        createdAt: Date,
+        isReminder: Bool? = nil,
+        reminderAt: Date?,
+        isReminderCompleted: Bool,
+        attachments: [MyspaceAttachment]
+    ) {
+        self.id = id
+        self.text = text
+        self.createdAt = createdAt
+        self.isReminder = isReminder ?? (reminderAt != nil)
+        self.reminderAt = reminderAt
+        self.isReminderCompleted = isReminderCompleted
+        self.attachments = attachments
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case text
+        case createdAt
+        case isReminder
+        case reminderAt
+        case isReminderCompleted
+        case attachments
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        text = try container.decode(String.self, forKey: .text)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        reminderAt = try container.decodeIfPresent(Date.self, forKey: .reminderAt)
+        isReminder = try container.decodeIfPresent(Bool.self, forKey: .isReminder)
+            ?? (reminderAt != nil)
+        isReminderCompleted = try container.decode(Bool.self, forKey: .isReminderCompleted)
+        attachments = try container.decode([MyspaceAttachment].self, forKey: .attachments)
+    }
 }
 
 struct MyspaceDayGroup: Equatable, Identifiable, Sendable {
@@ -62,9 +103,14 @@ final class MyspaceStore {
 
     var activeReminders: [MyspaceThought] {
         thoughts
-            .filter { $0.reminderAt != nil && !$0.isReminderCompleted }
+            .filter { $0.isReminder && !$0.isReminderCompleted }
             .sorted {
-                ($0.reminderAt ?? .distantFuture) < ($1.reminderAt ?? .distantFuture)
+                switch ($0.reminderAt, $1.reminderAt) {
+                case let (left?, right?): left < right
+                case (_?, nil): true
+                case (nil, _?): false
+                case (nil, nil): $0.createdAt > $1.createdAt
+                }
             }
     }
 
@@ -89,7 +135,8 @@ final class MyspaceStore {
     func addThought(
         text: String,
         attachmentURLs: [URL] = [],
-        reminderAt: Date? = nil
+        reminderAt: Date? = nil,
+        isReminder: Bool? = nil
     ) throws -> MyspaceThought {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty || !attachmentURLs.isEmpty else {
@@ -102,6 +149,7 @@ final class MyspaceStore {
             id: thoughtID,
             text: trimmedText,
             createdAt: .now,
+            isReminder: isReminder ?? (reminderAt != nil),
             reminderAt: reminderAt,
             isReminderCompleted: false,
             attachments: importedAttachments
@@ -262,7 +310,7 @@ enum MyspaceReminderService {
             guard granted else { return }
 
             let content = UNMutableNotificationContent()
-            content.title = "Myspace reminder"
+            content.title = "Reminder"
             content.body = thought.text.isEmpty
                 ? "Open your saved attachment."
                 : String(thought.text.prefix(160))
