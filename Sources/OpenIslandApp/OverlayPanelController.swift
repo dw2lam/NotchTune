@@ -24,6 +24,7 @@ final class OverlayPanelController {
     private static let notificationMeasuredContentPadding: CGFloat = 8
     private static let notificationEstimatedVerticalInsets: CGFloat = 36
     private static let openedEmptyStateHeight: CGFloat = 200
+    nonisolated private static let fileDragTargetHeight: CGFloat = 104
     private static let questionCardBaseHeight: CGFloat = 110
     private static let questionCardMaxHeight: CGFloat = 420
     // Completion card chrome breakdown (everything except the scrollable text):
@@ -43,7 +44,6 @@ final class OverlayPanelController {
     private var acceptedCurrentFileDrop = false
     private var fileDragEndGeneration: UInt64 = 0
     private var fileDragPresentationSnapshot: FileDragPresentationSnapshot?
-    private var fileDragPasteboardChangeCountAtMouseDown = 0
     weak var model: AppModel?
     private(set) var notchRect: NSRect = .zero
 
@@ -53,14 +53,6 @@ final class OverlayPanelController {
 
     nonisolated static func shouldActivatePanel(for reason: NotchOpenReason?) -> Bool {
         reason == .click
-    }
-
-    nonisolated static func isFreshFileDrag(
-        pasteboardChangeCount: Int,
-        mouseDownChangeCount: Int,
-        hasFileURLs: Bool
-    ) -> Bool {
-        hasFileURLs && pasteboardChangeCount != mouseDownChangeCount
     }
 
     func availableDisplayOptions() -> [OverlayDisplayOption] {
@@ -288,15 +280,10 @@ final class OverlayPanelController {
 
         guard !eventMonitors.isActive else { return }
 
-        fileDragPasteboardChangeCountAtMouseDown = dragPasteboardChangeCount()
         eventMonitors.start { [weak self] location in
             self?.handleMouseMoved(location)
         } mouseDownHandler: { [weak self] location in
             self?.handleMouseDown(location)
-        } fileDragHandler: { [weak self] location in
-            self?.handleFileDragMoved(location)
-        } fileDragEndedHandler: { [weak self] in
-            self?.handleFileDragEnded()
         }
     }
 
@@ -342,7 +329,6 @@ final class OverlayPanelController {
     }
 
     private func handleMouseDown(_ screenLocation: NSPoint) {
-        fileDragPasteboardChangeCountAtMouseDown = dragPasteboardChangeCount()
         guard let model else { return }
         guard !model.isOverlayDisplayFullscreen else { return }
 
@@ -366,37 +352,61 @@ final class OverlayPanelController {
 
     // MARK: - File drag shelf
 
-    private func handleFileDragMoved(_ screenLocation: NSPoint) {
-        guard let model, !model.isOverlayDisplayFullscreen else { return }
-        let fileURLs = draggedFileURLs()
-        guard Self.isFreshFileDrag(
-            pasteboardChangeCount: dragPasteboardChangeCount(),
-            mouseDownChangeCount: fileDragPasteboardChangeCountAtMouseDown,
-            hasFileURLs: !fileURLs.isEmpty
-        ) else { return }
-        guard let closedRect = closedSurfaceRect(for: model) else { return }
+    fileprivate func updateFileDrag(screenLocation: NSPoint, hasFileURLs: Bool) -> Bool {
+        guard let model, !model.isOverlayDisplayFullscreen, hasFileURLs else { return false }
+
+        if model.notchStatus == .opened,
+           model.notchOpenReason != .drag,
+           model.islandActiveTab == .myspace {
+            return true
+        }
+
+        guard let closedRect = closedSurfaceRect(for: model) else { return false }
 
         let activationRect = Self.fileDragActivationRect(closedSurfaceRect: closedRect)
-        guard Self.rectContainsIncludingEdges(activationRect, point: screenLocation) else {
+        let retentionRect = Self.fileDragRetentionRect(
+            notchRect: notchRect,
+            openedWidth: openedPanelWidth(for: resolveTargetScreen())
+        )
+        let isInsideTarget = Self.shouldPresentFileDragTarget(
+            hasFileURLs: hasFileURLs,
+            screenLocation: screenLocation,
+            activationRect: activationRect,
+            retentionRect: retentionRect,
+            isAlreadyPresenting: isFileDragNearNotch
+        )
+
+        guard isInsideTarget else {
             if isFileDragNearNotch {
                 fileDragEndGeneration &+= 1
                 restoreStateBeforeFileDrag()
                 isFileDragNearNotch = false
                 acceptedCurrentFileDrop = false
             }
-            return
+            return false
         }
 
         fileDragEndGeneration &+= 1
-        guard !isFileDragNearNotch else { return }
+        guard !isFileDragNearNotch else { return true }
 
         isFileDragNearNotch = true
         acceptedCurrentFileDrop = false
         presentFileDragTarget()
+        return true
     }
 
-    private func handleFileDragEnded() {
-        fileDragPasteboardChangeCountAtMouseDown = dragPasteboardChangeCount()
+    fileprivate func fileDragExited() {
+        guard isFileDragNearNotch else { return }
+        fileDragEndGeneration &+= 1
+        if !acceptedCurrentFileDrop {
+            restoreStateBeforeFileDrag()
+        }
+        isFileDragNearNotch = false
+        acceptedCurrentFileDrop = false
+        fileDragPresentationSnapshot = nil
+    }
+
+    fileprivate func fileDragEnded() {
         guard isFileDragNearNotch else { return }
         fileDragEndGeneration &+= 1
         let generation = fileDragEndGeneration
@@ -461,21 +471,6 @@ final class OverlayPanelController {
             model.lastActionMessage = "Could not hold file: \(error.localizedDescription)"
             return false
         }
-    }
-
-    private func draggedFileURLs() -> [URL] {
-        dragPasteboard().readObjects(
-            forClasses: [NSURL.self],
-            options: [.urlReadingFileURLsOnly: true]
-        ) as? [URL] ?? []
-    }
-
-    private func dragPasteboardChangeCount() -> Int {
-        dragPasteboard().changeCount
-    }
-
-    private func dragPasteboard() -> NSPasteboard {
-        NSPasteboard(name: .drag)
     }
 
     // MARK: - Hover expansion
@@ -623,7 +618,32 @@ final class OverlayPanelController {
     }
 
     nonisolated static func fileDragActivationRect(closedSurfaceRect: NSRect) -> NSRect {
-        closedSurfaceRect.insetBy(dx: -56, dy: -42)
+        closedSurfaceRect.insetBy(dx: -24, dy: -14)
+    }
+
+    nonisolated static func shouldPresentFileDragTarget(
+        hasFileURLs: Bool,
+        screenLocation: NSPoint,
+        activationRect: NSRect,
+        retentionRect: NSRect,
+        isAlreadyPresenting: Bool
+    ) -> Bool {
+        guard hasFileURLs else { return false }
+        return rectContainsIncludingEdges(activationRect, point: screenLocation)
+            || (isAlreadyPresenting
+                && rectContainsIncludingEdges(retentionRect, point: screenLocation))
+    }
+
+    nonisolated static func fileDragRetentionRect(
+        notchRect: NSRect,
+        openedWidth: CGFloat
+    ) -> NSRect {
+        NSRect(
+            x: notchRect.midX - openedWidth / 2,
+            y: notchRect.maxY - fileDragTargetHeight,
+            width: openedWidth,
+            height: fileDragTargetHeight
+        )
     }
 
     /// Hit-area width of the v6 closed pill.
@@ -715,7 +735,7 @@ final class OverlayPanelController {
         let isNotificationMode = model.notchOpenReason == .notification && actionableID != nil
 
         if model.notchOpenReason == .drag {
-            return Self.openedEmptyStateHeight
+            return Self.fileDragTargetHeight
         }
 
         if isNotificationMode {
@@ -975,17 +995,35 @@ final class NotchHostingView<Content: View>: NSHostingView<Content> {
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        guard notchController?.canAcceptDroppedFileURLs == true else { return [] }
-        return fileURLs(from: sender).isEmpty ? [] : .copy
+        fileDragOperation(for: sender)
     }
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        guard notchController?.canAcceptDroppedFileURLs == true else { return [] }
-        return fileURLs(from: sender).isEmpty ? [] : .copy
+        fileDragOperation(for: sender)
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        notchController?.fileDragExited()
+    }
+
+    override func draggingEnded(_ sender: any NSDraggingInfo) {
+        notchController?.fileDragEnded()
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         notchController?.acceptDroppedFileURLs(fileURLs(from: sender)) ?? false
+    }
+
+    private func fileDragOperation(for sender: any NSDraggingInfo) -> NSDragOperation {
+        let urls = fileURLs(from: sender)
+        guard let notchController,
+              notchController.updateFileDrag(
+                screenLocation: screenLocation(for: sender),
+                hasFileURLs: !urls.isEmpty
+              ) else {
+            return []
+        }
+        return .copy
     }
 
     private func fileURLs(from sender: any NSDraggingInfo) -> [URL] {
@@ -993,6 +1031,10 @@ final class NotchHostingView<Content: View>: NSHostingView<Content> {
             forClasses: [NSURL.self],
             options: [.urlReadingFileURLsOnly: true]
         ) as? [URL] ?? []
+    }
+
+    private func screenLocation(for sender: any NSDraggingInfo) -> NSPoint {
+        window?.convertPoint(toScreen: sender.draggingLocation) ?? sender.draggingLocation
     }
 
     private func convertToScreen(_ viewPoint: NSPoint) -> NSPoint {
@@ -1043,19 +1085,13 @@ final class NotchEventMonitors {
     private var localMoveMonitor: Any?
     private var globalClickMonitor: Any?
     private var localClickMonitor: Any?
-    private var globalDragMonitor: Any?
-    private var localDragMonitor: Any?
-    private var globalDragEndMonitor: Any?
-    private var localDragEndMonitor: Any?
     private var lastMoveTime: TimeInterval = 0
 
     var isActive: Bool { globalMoveMonitor != nil }
 
     func start(
         mouseMoveHandler: @MainActor @escaping @Sendable (NSPoint) -> Void,
-        mouseDownHandler: @MainActor @escaping @Sendable (NSPoint) -> Void,
-        fileDragHandler: @MainActor @escaping @Sendable (NSPoint) -> Void,
-        fileDragEndedHandler: @MainActor @escaping @Sendable () -> Void
+        mouseDownHandler: @MainActor @escaping @Sendable (NSPoint) -> Void
     ) {
         let throttleInterval: TimeInterval = 0.05
 
@@ -1089,25 +1125,6 @@ final class NotchEventMonitors {
             return event
         }
 
-        globalDragMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDragged) { _ in
-            let location = NSEvent.mouseLocation
-            Task { @MainActor in fileDragHandler(location) }
-        }
-
-        localDragMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDragged) { event in
-            let location = NSEvent.mouseLocation
-            Task { @MainActor in fileDragHandler(location) }
-            return event
-        }
-
-        globalDragEndMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
-            Task { @MainActor in fileDragEndedHandler() }
-        }
-
-        localDragEndMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { event in
-            Task { @MainActor in fileDragEndedHandler() }
-            return event
-        }
     }
 
     func stop() {
@@ -1115,18 +1132,10 @@ final class NotchEventMonitors {
         if let m = localMoveMonitor { NSEvent.removeMonitor(m) }
         if let m = globalClickMonitor { NSEvent.removeMonitor(m) }
         if let m = localClickMonitor { NSEvent.removeMonitor(m) }
-        if let m = globalDragMonitor { NSEvent.removeMonitor(m) }
-        if let m = localDragMonitor { NSEvent.removeMonitor(m) }
-        if let m = globalDragEndMonitor { NSEvent.removeMonitor(m) }
-        if let m = localDragEndMonitor { NSEvent.removeMonitor(m) }
         globalMoveMonitor = nil
         localMoveMonitor = nil
         globalClickMonitor = nil
         localClickMonitor = nil
-        globalDragMonitor = nil
-        localDragMonitor = nil
-        globalDragEndMonitor = nil
-        localDragEndMonitor = nil
     }
 }
 

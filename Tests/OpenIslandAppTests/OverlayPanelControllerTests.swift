@@ -102,21 +102,37 @@ struct OverlayPanelControllerTests {
     }
 
     @Test
-    func staleFileURLsDoNotTurnOrdinaryMouseDragsIntoFileDrops() {
-        #expect(!OverlayPanelController.isFreshFileDrag(
-            pasteboardChangeCount: 71,
-            mouseDownChangeCount: 71,
-            hasFileURLs: true
+    func fileDragTargetRequiresFilesInsideTheNativeDropZone() {
+        let activationRect = NSRect(x: 400, y: 900, width: 320, height: 60)
+        let retentionRect = NSRect(x: 300, y: 856, width: 520, height: 104)
+
+        #expect(!OverlayPanelController.shouldPresentFileDragTarget(
+            hasFileURLs: false,
+            screenLocation: NSPoint(x: 500, y: 920),
+            activationRect: activationRect,
+            retentionRect: retentionRect,
+            isAlreadyPresenting: false
         ))
-        #expect(!OverlayPanelController.isFreshFileDrag(
-            pasteboardChangeCount: 72,
-            mouseDownChangeCount: 71,
-            hasFileURLs: false
+        #expect(OverlayPanelController.shouldPresentFileDragTarget(
+            hasFileURLs: true,
+            screenLocation: NSPoint(x: 500, y: 920),
+            activationRect: activationRect,
+            retentionRect: retentionRect,
+            isAlreadyPresenting: false
         ))
-        #expect(OverlayPanelController.isFreshFileDrag(
-            pasteboardChangeCount: 72,
-            mouseDownChangeCount: 71,
-            hasFileURLs: true
+        #expect(!OverlayPanelController.shouldPresentFileDragTarget(
+            hasFileURLs: true,
+            screenLocation: NSPoint(x: 350, y: 870),
+            activationRect: activationRect,
+            retentionRect: retentionRect,
+            isAlreadyPresenting: false
+        ))
+        #expect(OverlayPanelController.shouldPresentFileDragTarget(
+            hasFileURLs: true,
+            screenLocation: NSPoint(x: 350, y: 870),
+            activationRect: activationRect,
+            retentionRect: retentionRect,
+            isAlreadyPresenting: true
         ))
     }
 
@@ -127,9 +143,25 @@ struct OverlayPanelControllerTests {
             closedSurfaceRect: closedRect
         )
 
-        #expect(activationRect == NSRect(x: 344, y: 858, width: 432, height: 122))
-        #expect(activationRect.contains(NSPoint(x: closedRect.midX, y: closedRect.minY - 30)))
-        #expect(!activationRect.contains(NSPoint(x: closedRect.midX, y: closedRect.minY - 50)))
+        #expect(activationRect == NSRect(x: 376, y: 886, width: 368, height: 66))
+        #expect(activationRect.contains(NSPoint(x: closedRect.midX, y: closedRect.minY - 12)))
+        #expect(!activationRect.contains(NSPoint(x: closedRect.midX, y: closedRect.minY - 16)))
+    }
+
+    @Test
+    func activeFileDragUsesACompactRetentionArea() {
+        let notchRect = NSRect(x: 500, y: 962, width: 224, height: 38)
+        let retentionRect = OverlayPanelController.fileDragRetentionRect(
+            notchRect: notchRect,
+            openedWidth: 520
+        )
+
+        #expect(retentionRect == NSRect(x: 352, y: 896, width: 520, height: 104))
+    }
+
+    @Test
+    func islandTabsHaveAFullCapsuleSizedHitTarget() {
+        #expect(IslandPanelView.tabHitTargetHeight >= 30)
     }
 
     @Test @MainActor

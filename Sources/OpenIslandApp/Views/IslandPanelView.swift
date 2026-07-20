@@ -93,6 +93,7 @@ private struct ConditionalDrawingGroup: ViewModifier {
 // MARK: - Main island view
 
 struct IslandPanelView: View {
+    nonisolated static let tabHitTargetHeight: CGFloat = 30
     private static let headerControlButtonSize: CGFloat = 22
     private static let headerControlSpacing: CGFloat = 8
     private static let headerHorizontalPadding: CGFloat = 18
@@ -812,12 +813,15 @@ struct IslandPanelView: View {
             .foregroundStyle(model.islandActiveTab == tab ? .white : .white.opacity(0.4))
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
+            .frame(minHeight: Self.tabHitTargetHeight)
             .background(
                 model.islandActiveTab == tab ? Color.white.opacity(0.12) : Color.clear,
                 in: Capsule()
             )
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("island-tab-\(tab.rawValue)")
     }
 
     private var agentsContent: some View {
