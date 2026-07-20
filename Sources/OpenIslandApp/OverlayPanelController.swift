@@ -13,8 +13,12 @@ final class OverlayPanelController {
         let activeTab: IslandTab
     }
 
-    nonisolated static let preferredNotchOpenedPanelWidth: CGFloat = 580
-    private static let preferredTopBarOpenedPanelWidth: CGFloat = 520
+    // Opened-panel widths only — the closed pill is unaffected. Wide enough for
+    // multiple agent usage chips in the header: on notched displays the lanes
+    // flanking the physical notch get the extra room; external/top-bar displays
+    // get one continuous row.
+    nonisolated static let preferredNotchOpenedPanelWidth: CGFloat = 620
+    private static let preferredTopBarOpenedPanelWidth: CGFloat = 600
     private static let preferredNotificationPanelWidth: CGFloat = 620
     private static let openedContentWidthPadding: CGFloat = 0
     private static let openedContentBottomPadding: CGFloat = 0
@@ -481,9 +485,17 @@ final class OverlayPanelController {
                 isFileDragNearNotch = false
                 acceptedCurrentFileDrop = false
             }
+            // Approach phase: the drag is near but not on the notch. Hint that
+            // the shelf is ready instead of opening.
+            let hintRect = Self.fileDragHintRect(closedSurfaceRect: closedRect)
+            setFileDragHint(
+                model.notchStatus == .closed
+                    && Self.rectContainsIncludingEdges(hintRect, point: screenLocation)
+            )
             return false
         }
 
+        setFileDragHint(false)
         fileDragEndGeneration &+= 1
         guard !isFileDragNearNotch else { return true }
 
@@ -493,7 +505,18 @@ final class OverlayPanelController {
         return true
     }
 
+    /// Toggle the closed pill's "ready to catch this file" hint. Entering the
+    /// hint zone also hops the character once — a nudge, not an open.
+    private func setFileDragHint(_ active: Bool) {
+        guard let model, model.isFileDragHintReady != active else { return }
+        model.isFileDragHintReady = active
+        if active {
+            model.nudgeTrigger = UUID()
+        }
+    }
+
     fileprivate func fileDragExited() {
+        setFileDragHint(false)
         guard isFileDragNearNotch else { return }
         fileDragEndGeneration &+= 1
         if !acceptedCurrentFileDrop {
@@ -505,6 +528,7 @@ final class OverlayPanelController {
     }
 
     fileprivate func fileDragEnded() {
+        setFileDragHint(false)
         guard isFileDragNearNotch else { return }
         fileDragEndGeneration &+= 1
         let generation = fileDragEndGeneration
@@ -719,8 +743,17 @@ final class OverlayPanelController {
             && point.y <= rect.maxY
     }
 
+    /// The hit zone that actually opens the drop target: the closed surface
+    /// itself plus a small tolerance so edge pixels still count.
     nonisolated static func fileDragActivationRect(closedSurfaceRect: NSRect) -> NSRect {
-        closedSurfaceRect.insetBy(dx: -24, dy: -14)
+        closedSurfaceRect.insetBy(dx: -6, dy: -4)
+    }
+
+    /// The approach zone around the notch. A file drag inside it makes the
+    /// closed pill hint (nudge + slight grow) that it's ready to catch the
+    /// file, WITHOUT opening — only the activation rect opens.
+    nonisolated static func fileDragHintRect(closedSurfaceRect: NSRect) -> NSRect {
+        closedSurfaceRect.insetBy(dx: -96, dy: -64)
     }
 
     nonisolated static func shouldPresentFileDragTarget(

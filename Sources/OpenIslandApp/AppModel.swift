@@ -348,6 +348,11 @@ final class AppModel {
     /// Bumped to fire a one-shot character jump when an idle session is nudged.
     var nudgeTrigger: UUID?
 
+    /// A file drag is hovering NEAR the closed notch (approach zone). The pill
+    /// grows slightly to hint it can catch the file; it does not open until the
+    /// drag reaches the notch itself.
+    var isFileDragHintReady = false
+
     /// When each waiting session entered its attention phase, anchored so the
     /// "Waiting Xm Ys" display doesn't reset if `updatedAt` bumps mid-wait.
     var attentionStartedAt: [String: Date] = [:]

@@ -553,6 +553,10 @@ struct IslandPanelView: View {
             measuredMusicClipMetrics = metrics
             updateClosedPillWidth(metrics.width, fromMusicNotification: true)
         }
+        // File drag in the approach zone: grow slightly to signal the shelf is
+        // ready to catch the file (the character hop rides nudgeTrigger).
+        .scaleEffect(model.isFileDragHintReady ? 1.07 : 1, anchor: .top)
+        .animation(.spring(response: 0.32, dampingFraction: 0.62), value: model.isFileDragHintReady)
     }
 
     private var closedSurfaceWidthReader: some View {
@@ -1345,6 +1349,7 @@ struct IslandPanelView: View {
             ViewThatFits(in: .horizontal) {
                 compactUsageSummaryView(providers, usesShortTitles: false)
                 compactUsageSummaryView(providers, usesShortTitles: true)
+                scrollableUsageLane(providers)
             }
         } else {
             Color.clear
@@ -1474,9 +1479,31 @@ struct IslandPanelView: View {
             ViewThatFits(in: .horizontal) {
                 compactUsageSummaryView(providers, usesShortTitles: false)
                 compactUsageSummaryView(providers, usesShortTitles: true)
+                scrollableUsageLane(providers)
             }
             .frame(maxWidth: .infinity, alignment: alignment)
         }
+    }
+
+    /// Last-resort usage presentation when even short titles overflow the lane:
+    /// the chips scroll horizontally and fade out at the right edge. ViewThatFits
+    /// only reaches this option when neither fixed row fits.
+    private func scrollableUsageLane(_ providers: [UsageProviderPresentation]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            compactUsageSummaryView(providers, usesShortTitles: true)
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        .mask(
+            HStack(spacing: 0) {
+                Rectangle().fill(.black)
+                LinearGradient(
+                    gradient: Gradient(colors: [.black, .clear]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: 28)
+            }
+        )
     }
 
     private func openedHeaderMetrics(for totalWidth: CGFloat) -> OpenedHeaderMetrics {

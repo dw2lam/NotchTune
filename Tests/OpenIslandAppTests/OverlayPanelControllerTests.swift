@@ -156,15 +156,35 @@ struct OverlayPanelControllerTests {
     }
 
     @Test
-    func fileDragActivationAreaAddsApproachPaddingAroundClosedNotch() {
+    func fileDragActivationAreaHugsTheClosedNotch() {
         let closedRect = NSRect(x: 400, y: 900, width: 320, height: 38)
         let activationRect = OverlayPanelController.fileDragActivationRect(
             closedSurfaceRect: closedRect
         )
 
-        #expect(activationRect == NSRect(x: 376, y: 886, width: 368, height: 66))
-        #expect(activationRect.contains(NSPoint(x: closedRect.midX, y: closedRect.minY - 12)))
-        #expect(!activationRect.contains(NSPoint(x: closedRect.midX, y: closedRect.minY - 16)))
+        // Tight hit zone: only edge tolerance, no approach padding — the
+        // approach zone hints instead of opening.
+        #expect(activationRect == NSRect(x: 394, y: 896, width: 332, height: 46))
+        #expect(activationRect.contains(NSPoint(x: closedRect.midX, y: closedRect.minY - 3)))
+        #expect(!activationRect.contains(NSPoint(x: closedRect.midX, y: closedRect.minY - 8)))
+    }
+
+    @Test
+    func fileDragHintAreaSurroundsTheActivationArea() {
+        let closedRect = NSRect(x: 400, y: 900, width: 320, height: 38)
+        let hintRect = OverlayPanelController.fileDragHintRect(
+            closedSurfaceRect: closedRect
+        )
+        let activationRect = OverlayPanelController.fileDragActivationRect(
+            closedSurfaceRect: closedRect
+        )
+
+        #expect(hintRect == NSRect(x: 304, y: 836, width: 512, height: 166))
+        #expect(hintRect.contains(activationRect))
+        // Approaching from below / the side hints without activating.
+        let approach = NSPoint(x: closedRect.midX - 80, y: closedRect.minY - 40)
+        #expect(hintRect.contains(approach))
+        #expect(!activationRect.contains(approach))
     }
 
     @Test
@@ -208,10 +228,10 @@ struct OverlayPanelControllerTests {
             minimumRightUsageLaneWidth: 58
         )
 
-        #expect(totalWidth == 580)
+        #expect(totalWidth == 620)
         #expect(buttonStripWidth == 52)
-        #expect(metrics.leftUsageWidth == 150)
-        #expect(metrics.rightUsageWidth == 90)
+        #expect(metrics.leftUsageWidth == 170)
+        #expect(metrics.rightUsageWidth == 110)
         #expect(metrics.centerGapWidth == physicalNotchWidth + (safetyInset * 2))
     }
 
