@@ -663,7 +663,7 @@ final class OverlayPanelController {
         if model.islandActiveTab == .myspace {
             let tabBarHeight: CGFloat = 36
             if model.measuredMyspaceContentHeight > 0 {
-                return min(430, model.measuredMyspaceContentHeight + tabBarHeight + 8)
+                return min(520, model.measuredMyspaceContentHeight + tabBarHeight + 8)
             }
             return 250
         }

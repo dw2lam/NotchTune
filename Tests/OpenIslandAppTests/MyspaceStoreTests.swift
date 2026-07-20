@@ -72,6 +72,33 @@ struct MyspaceStoreTests {
     }
 
     @Test
+    func groupsThoughtsByDayNewestFirst() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let newest = try #require(calendar.date(from: DateComponents(
+            year: 2026, month: 7, day: 19, hour: 20
+        )))
+        let earlierToday = try #require(calendar.date(from: DateComponents(
+            year: 2026, month: 7, day: 19, hour: 8
+        )))
+        let yesterday = try #require(calendar.date(from: DateComponents(
+            year: 2026, month: 7, day: 18, hour: 23
+        )))
+        let thoughts = [
+            thought(createdAt: earlierToday),
+            thought(createdAt: yesterday),
+            thought(createdAt: newest),
+        ]
+
+        let groups = MyspaceStore.groupThoughtsByDay(thoughts, calendar: calendar)
+
+        #expect(groups.count == 2)
+        #expect(groups[0].day == calendar.startOfDay(for: newest))
+        #expect(groups[0].thoughts.map(\.createdAt) == [newest, earlierToday])
+        #expect(groups[1].thoughts.map(\.createdAt) == [yesterday])
+    }
+
+    @Test
     func completingAndDeletingReminderPersists() throws {
         let storage = temporaryDirectory()
         let store = MyspaceStore(rootURL: storage, notificationsEnabled: false)
@@ -96,5 +123,16 @@ struct MyspaceStoreTests {
             .appendingPathComponent("NotchTuneMyspaceTests-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
+    }
+
+    private func thought(createdAt: Date) -> MyspaceThought {
+        MyspaceThought(
+            id: UUID(),
+            text: "",
+            createdAt: createdAt,
+            reminderAt: nil,
+            isReminderCompleted: false,
+            attachments: []
+        )
     }
 }

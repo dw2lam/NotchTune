@@ -17,6 +17,13 @@ struct MyspaceThought: Codable, Equatable, Identifiable, Sendable {
     var attachments: [MyspaceAttachment]
 }
 
+struct MyspaceDayGroup: Equatable, Identifiable, Sendable {
+    let day: Date
+    let thoughts: [MyspaceThought]
+
+    var id: Date { day }
+}
+
 enum MyspaceStoreError: LocalizedError {
     case emptyThought
 
@@ -59,6 +66,23 @@ final class MyspaceStore {
             .sorted {
                 ($0.reminderAt ?? .distantFuture) < ($1.reminderAt ?? .distantFuture)
             }
+    }
+
+    nonisolated static func groupThoughtsByDay(
+        _ thoughts: [MyspaceThought],
+        calendar: Calendar = .current
+    ) -> [MyspaceDayGroup] {
+        let grouped = Dictionary(grouping: thoughts) {
+            calendar.startOfDay(for: $0.createdAt)
+        }
+        return grouped
+            .map { day, thoughts in
+                MyspaceDayGroup(
+                    day: day,
+                    thoughts: thoughts.sorted { $0.createdAt > $1.createdAt }
+                )
+            }
+            .sorted { $0.day > $1.day }
     }
 
     @discardableResult
