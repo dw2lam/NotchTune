@@ -619,7 +619,7 @@ struct AppModelSessionListTests {
     }
 
     @Test
-    func hoverOpenedSessionListAutoCollapsesOnPointerExit() {
+    func hoverOpenedSessionListAutoCollapsesOnPointerExit() async throws {
         let model = AppModel()
         model.notchStatus = .opened
         model.notchOpenReason = .hover
@@ -628,9 +628,27 @@ struct AppModelSessionListTests {
         #expect(model.shouldAutoCollapseOnMouseLeave)
 
         model.handlePointerExitedIslandSurface()
+        try await Task.sleep(for: .milliseconds(240))
 
         #expect(model.notchStatus == .closed)
         #expect(model.notchOpenReason == nil)
+        #expect(model.islandSurface == .sessionList())
+    }
+
+    @Test
+    func pointerReentryDuringExitGraceKeepsHoverOpenedPanelOpen() async throws {
+        let model = AppModel()
+        model.notchStatus = .opened
+        model.notchOpenReason = .hover
+        model.islandSurface = .sessionList()
+
+        model.notePointerInsideIslandSurface()
+        model.handlePointerExitedIslandSurface()
+        model.notePointerInsideIslandSurface()
+        try await Task.sleep(for: .milliseconds(240))
+
+        #expect(model.notchStatus == .opened)
+        #expect(model.notchOpenReason == .hover)
         #expect(model.islandSurface == .sessionList())
     }
 

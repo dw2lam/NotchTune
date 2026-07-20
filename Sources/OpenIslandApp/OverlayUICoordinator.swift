@@ -10,6 +10,7 @@ final class OverlayUICoordinator {
 
     private static let notificationSurfaceAutoCollapseDelay: TimeInterval = 10
     private static let musicTrackNotificationDuration: TimeInterval = 2.5
+    private static let pointerExitCollapseDelay: Duration = .milliseconds(160)
 
     var notchStatus: NotchStatus = .closed
     var notchOpenReason: NotchOpenReason?
@@ -55,6 +56,9 @@ final class OverlayUICoordinator {
 
     @ObservationIgnored
     private var notificationAutoCollapseTask: Task<Void, Never>?
+
+    @ObservationIgnored
+    private var pointerExitCollapseTask: Task<Void, Never>?
 
     @ObservationIgnored
     private var musicTrackNotificationTask: Task<Void, Never>?
@@ -191,7 +195,9 @@ final class OverlayUICoordinator {
             reason: reason,
             surface: surface,
             interactive: true,
-            beforeTransition: nil,
+            beforeTransition: { [weak self] in
+                self?.cancelPendingPointerExitCollapse()
+            },
             afterStateChange: { [weak self] in
                 guard let self else { return }
                 self.autoCollapseSurfaceHasBeenEntered = false
@@ -214,6 +220,7 @@ final class OverlayUICoordinator {
             beforeTransition: { [weak self] in
                 self?.notificationAutoCollapseTask?.cancel()
                 self?.notificationAutoCollapseTask = nil
+                self?.cancelPendingPointerExitCollapse()
             },
             afterStateChange: { [weak self] in
                 self?.autoCollapseSurfaceHasBeenEntered = false
@@ -490,6 +497,7 @@ final class OverlayUICoordinator {
             return
         }
 
+        cancelPendingPointerExitCollapse()
         isPointerInsideIslandSurface = true
         autoCollapseSurfaceHasBeenEntered = true
 
@@ -515,7 +523,41 @@ final class OverlayUICoordinator {
             return
         }
 
-        notchClose()
+        if notchOpenReason == .notification {
+            notchClose()
+        } else {
+            schedulePointerExitCollapse()
+        }
+    }
+
+    private func schedulePointerExitCollapse() {
+        cancelPendingPointerExitCollapse()
+        let expectedOpenReason = notchOpenReason
+        let expectedSurface = islandSurface
+        pointerExitCollapseTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: Self.pointerExitCollapseDelay)
+            } catch {
+                return
+            }
+
+            guard let self,
+                  !Task.isCancelled,
+                  self.notchStatus == .opened,
+                  self.notchOpenReason == expectedOpenReason,
+                  self.islandSurface == expectedSurface,
+                  !self.isPointerInsideIslandSurface else {
+                return
+            }
+
+            self.pointerExitCollapseTask = nil
+            self.notchClose()
+        }
+    }
+
+    private func cancelPendingPointerExitCollapse() {
+        pointerExitCollapseTask?.cancel()
+        pointerExitCollapseTask = nil
     }
 
     // MARK: - Notification surfaces

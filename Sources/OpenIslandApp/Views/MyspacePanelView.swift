@@ -1,5 +1,6 @@
 import AppKit
 @preconcurrency import QuickLookThumbnailing
+@preconcurrency import QuickLookUI
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -67,9 +68,9 @@ private struct MyspaceAttachmentPreview: View {
                 Image(nsImage: thumbnail ?? fallbackIcon)
                     .resizable()
                     .aspectRatio(contentMode: thumbnail == nil ? .fit : .fill)
+                    .padding(thumbnail == nil ? 5 : 0)
                     .frame(width: 42, height: 42)
                     .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                    .padding(thumbnail == nil ? 4 : 0)
 
                 Text(fileExtension)
                     .font(.system(size: 6.5, weight: .bold, design: .monospaced))
@@ -80,16 +81,20 @@ private struct MyspaceAttachmentPreview: View {
                     .offset(x: 3, y: 3)
             }
             .frame(width: 48, height: 48)
-            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 9))
+            .background(.white.opacity(0.025), in: RoundedRectangle(cornerRadius: 9))
+            .overlay {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(.white.opacity(0.09), lineWidth: 0.5)
+            }
 
             Text(filename)
                 .font(.system(size: 9.5, weight: .medium))
                 .foregroundStyle(.white.opacity(0.64))
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
-                .frame(width: 78, alignment: .leading)
+                .frame(width: 66, alignment: .leading)
         }
-        .frame(width: 138, alignment: .leading)
+        .frame(width: 126, alignment: .leading)
         .task(id: url) {
             thumbnail = await quickLookThumbnail()
         }
@@ -111,6 +116,31 @@ private struct MyspaceAttachmentPreview: View {
     }
 }
 
+private struct MyspaceQuickLookView: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> QLPreviewView {
+        let view = QLPreviewView(frame: .zero, style: .compact)
+            ?? QLPreviewView(frame: .zero)
+        view?.shouldCloseWithWindow = false
+        view?.autostarts = false
+        return view!
+    }
+
+    func updateNSView(_ nsView: QLPreviewView, context: Context) {
+        nsView.previewItem = url as NSURL
+        nsView.refreshPreviewItem()
+    }
+}
+
+private struct MyspacePreviewSelection: Identifiable {
+    let attachment: MyspaceAttachment
+    let url: URL
+    let createdAt: Date
+
+    var id: UUID { attachment.id }
+}
+
 struct MyspacePanelView: View {
     enum Section: String, CaseIterable, Identifiable {
         case space = "Space"
@@ -124,21 +154,28 @@ struct MyspacePanelView: View {
     @State private var selectedSection: Section = .space
     @State private var draft = ""
     @State private var pendingAttachments: [URL] = []
-    @State private var reminderEnabled = false
+    @State private var reminderDraft = ""
     @State private var reminderAt = Date.now.addingTimeInterval(60 * 60)
     @State private var isDropTargeted = false
     @State private var composerMessage: String?
+    @State private var reminderMessage: String?
+    @State private var previewSelection: MyspacePreviewSelection?
     @FocusState private var composerFocused: Bool
+    @FocusState private var reminderFocused: Bool
 
     var body: some View {
         VStack(spacing: 10) {
             sectionPicker
 
-            if selectedSection == .space {
+            if let previewSelection {
+                inlinePreview(previewSelection)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+            } else if selectedSection == .space {
                 dropShelf
                 composer
                 thoughtList(store.thoughts)
             } else {
+                reminderComposer
                 reminderList
             }
         }
@@ -161,6 +198,84 @@ struct MyspacePanelView: View {
             }
         }
         .transition(.opacity)
+    }
+
+    private func inlinePreview(_ selection: MyspacePreviewSelection) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        previewSelection = nil
+                    }
+                } label: {
+                    Label("Myspace", systemImage: "chevron.left")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+
+                Text(selection.attachment.originalFilename)
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .center)
+
+                Button {
+                    NSWorkspace.shared.open(selection.url)
+                } label: {
+                    Image(systemName: "arrow.up.forward.app")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open \(selection.attachment.originalFilename) externally")
+                .help("Open in the default app")
+            }
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(.black.opacity(0.08))
+
+                MyspaceQuickLookView(url: selection.url)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .padding(1)
+            }
+            .frame(height: 260)
+            .overlay {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .stroke(.white.opacity(0.11), lineWidth: 0.75)
+            }
+
+            HStack(spacing: 7) {
+                Label(previewMetadata(for: selection.url), systemImage: "doc")
+                Spacer()
+                Label {
+                    Text(selection.createdAt, format: .dateTime.hour().minute().second())
+                        .monospacedDigit()
+                } icon: {
+                    Image(systemName: "clock")
+                }
+            }
+            .font(.system(size: 8.5, weight: .medium))
+            .foregroundStyle(.white.opacity(0.36))
+        }
+        .padding(.top, 2)
+    }
+
+    private func previewMetadata(for url: URL) -> String {
+        let type = UTType(filenameExtension: url.pathExtension)
+        let typeName = type?.localizedDescription ?? (
+            url.pathExtension.isEmpty ? "File" : url.pathExtension.uppercased()
+        )
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+        guard let size = values?.fileSize else { return typeName }
+        let formattedSize = ByteCountFormatter.string(
+            fromByteCount: Int64(size),
+            countStyle: .file
+        )
+        return "\(typeName) · \(formattedSize)"
     }
 
     private var dropShelf: some View {
@@ -196,7 +311,7 @@ struct MyspacePanelView: View {
             .frame(minHeight: 54)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isDropTargeted ? Color.accentColor.opacity(0.12) : .white.opacity(0.035))
+                    .fill(isDropTargeted ? Color.accentColor.opacity(0.1) : .white.opacity(0.018))
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -219,6 +334,7 @@ struct MyspacePanelView: View {
             ForEach(Section.allCases) { section in
                 Button {
                     withAnimation(.smooth(duration: 0.25)) {
+                        previewSelection = nil
                         selectedSection = section
                     }
                 } label: {
@@ -272,19 +388,6 @@ struct MyspacePanelView: View {
                 .scrollIndicators(.hidden)
             }
 
-            if reminderEnabled {
-                DatePicker(
-                    "Remind me",
-                    selection: $reminderAt,
-                    in: Date.now...,
-                    displayedComponents: [.date, .hourAndMinute]
-                )
-                .labelsHidden()
-                .datePickerStyle(.compact)
-                .colorScheme(.dark)
-                .font(.system(size: 10))
-            }
-
             HStack(spacing: 7) {
                 composerButton(
                     systemName: "waveform",
@@ -296,16 +399,6 @@ struct MyspacePanelView: View {
 
                 composerButton(systemName: "paperclip", help: "Attach files") {
                     chooseAttachments()
-                }
-
-                composerButton(
-                    systemName: reminderEnabled ? "bell.fill" : "bell",
-                    help: "Add a reminder",
-                    isActive: reminderEnabled
-                ) {
-                    withAnimation(.smooth(duration: 0.2)) {
-                        reminderEnabled.toggle()
-                    }
                 }
 
                 if let message = composerMessage ?? store.lastErrorMessage {
@@ -333,7 +426,7 @@ struct MyspacePanelView: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.white.opacity(isDropTargeted ? 0.12 : 0.07))
+                .fill(.white.opacity(isDropTargeted ? 0.09 : 0.035))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(
@@ -342,6 +435,61 @@ struct MyspacePanelView: View {
                         )
                 )
         )
+    }
+
+    private var reminderComposer: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            TextField("What should I remind you about?", text: $reminderDraft)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.9))
+                .focused($reminderFocused)
+                .onSubmit(saveReminder)
+
+            HStack(spacing: 8) {
+                DatePicker(
+                    "Reminder time",
+                    selection: $reminderAt,
+                    in: Date.now...,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+                .labelsHidden()
+                .datePickerStyle(.compact)
+                .colorScheme(.dark)
+                .font(.system(size: 10))
+
+                if let reminderMessage {
+                    Text(reminderMessage)
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(.white.opacity(0.42))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 4)
+
+                Button(action: saveReminder) {
+                    Label("Add reminder", systemImage: "bell.badge.fill")
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 9)
+                        .frame(height: 24)
+                        .background(.white, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(reminderDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(
+                    reminderDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? 0.35
+                        : 1
+                )
+            }
+        }
+        .padding(10)
+        .background(.white.opacity(0.025), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(.white.opacity(0.08), lineWidth: 0.5)
+        }
     }
 
     private func composerButton(
@@ -483,7 +631,13 @@ struct MyspacePanelView: View {
                                     thoughtID: thought.id
                                 )
                                 Button {
-                                    NSWorkspace.shared.open(attachmentURL)
+                                    withAnimation(.easeOut(duration: 0.18)) {
+                                        previewSelection = MyspacePreviewSelection(
+                                            attachment: attachment,
+                                            url: attachmentURL,
+                                            createdAt: thought.createdAt
+                                        )
+                                    }
                                 } label: {
                                     MyspaceAttachmentPreview(
                                         url: attachmentURL,
@@ -491,7 +645,7 @@ struct MyspacePanelView: View {
                                     )
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel("Open \(attachment.originalFilename)")
+                                .accessibilityLabel("Preview \(attachment.originalFilename)")
                             }
                         }
                     }
@@ -533,7 +687,11 @@ struct MyspacePanelView: View {
             .accessibilityLabel("Delete thought")
         }
         .padding(9)
-        .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(.white.opacity(0.024), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(.white.opacity(0.065), lineWidth: 0.5)
+        }
     }
 
     private func emptyState(icon: String, title: String, detail: String) -> some View {
@@ -598,16 +756,29 @@ struct MyspacePanelView: View {
             try store.addThought(
                 text: draft,
                 attachmentURLs: pendingAttachments,
-                reminderAt: reminderEnabled ? reminderAt : nil
+                reminderAt: nil
             )
             draft = ""
             pendingAttachments = []
-            reminderEnabled = false
-            reminderAt = .now.addingTimeInterval(60 * 60)
             composerMessage = "Saved"
             composerFocused = false
         } catch {
             composerMessage = error.localizedDescription
+        }
+    }
+
+    private func saveReminder() {
+        let text = reminderDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        do {
+            try store.addThought(text: text, reminderAt: reminderAt)
+            reminderDraft = ""
+            reminderAt = .now.addingTimeInterval(60 * 60)
+            reminderMessage = "Reminder added"
+            reminderFocused = false
+        } catch {
+            reminderMessage = error.localizedDescription
         }
     }
 
