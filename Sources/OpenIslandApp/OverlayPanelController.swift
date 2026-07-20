@@ -590,6 +590,10 @@ final class OverlayPanelController {
             return 150 + 16 + 10 + 42 + 8 + 8
         }
 
+        if model.islandActiveTab == .myspace {
+            return 390
+        }
+
         let now = Date.now
         let visibleSessions = model.islandListSessions
 

@@ -77,6 +77,7 @@ final class AppModel {
     let monitoring = ProcessMonitoringCoordinator()
     let codexAppServer = CodexAppServerCoordinator()
     let playerManager = MusicPlayerManager()
+    let myspaceStore = MyspaceStore()
 
     var notchStatus: NotchStatus {
         get { overlay.notchStatus }

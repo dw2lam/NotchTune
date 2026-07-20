@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
 @MainActor
 final class OpenIslandAppDelegate: NSObject, NSApplicationDelegate {
@@ -9,6 +10,8 @@ final class OpenIslandAppDelegate: NSObject, NSApplicationDelegate {
     private lazy var harnessRuntimeMonitor = HarnessRuntimeMonitor(launchedAt: launchedAt)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = self
+        model.myspaceStore.restorePendingReminders()
         ProcessInfo.processInfo.disableAutomaticTermination(
             "NotchTune should remain active while monitoring local agent sessions."
         )
@@ -84,6 +87,29 @@ final class OpenIslandAppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         model.showSettings()
         return false
+    }
+}
+
+extension OpenIslandAppDelegate: UNUserNotificationCenterDelegate {
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .sound]
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        guard response.notification.request.identifier.hasPrefix(
+            MyspaceReminderService.notificationPrefix
+        ) else { return }
+
+        await MainActor.run {
+            model.islandActiveTab = .myspace
+            model.notchOpen(reason: .click)
+        }
     }
 }
 

@@ -707,6 +707,9 @@ struct IslandPanelView: View {
                 )
                 .transition(.opacity)
                 .frame(maxWidth: .infinity)
+            case .myspace:
+                MyspacePanelView(store: model.myspaceStore)
+                    .frame(maxWidth: .infinity)
             }
         }
         .animation(.smooth(duration: 0.35, extraBounce: 0.1), value: model.islandActiveTab)
@@ -716,6 +719,7 @@ struct IslandPanelView: View {
         HStack(spacing: 4) {
             tabButton(label: "Agents", systemImage: "terminal", tab: .agents)
             tabButton(label: "Music", systemImage: "music.note", tab: .music)
+            tabButton(label: "Myspace", systemImage: "square.grid.2x2", tab: .myspace)
             
             Spacer()
         }
@@ -3104,4 +3108,3 @@ private struct DismissButton: View {
         .onHover { isHovered = $0 }
     }
 }
-
