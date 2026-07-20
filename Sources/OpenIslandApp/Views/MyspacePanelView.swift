@@ -171,7 +171,6 @@ struct MyspacePanelView: View {
                 inlinePreview(previewSelection)
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             } else if selectedSection == .space {
-                dropShelf
                 composer
                 thoughtList(store.thoughts)
             } else {
@@ -276,57 +275,6 @@ struct MyspacePanelView: View {
             countStyle: .file
         )
         return "\(typeName) · \(formattedSize)"
-    }
-
-    private var dropShelf: some View {
-        Button {
-            chooseHeldFiles()
-        } label: {
-            HStack(spacing: 11) {
-                Image(systemName: isDropTargeted ? "tray.and.arrow.down.fill" : "tray.and.arrow.down")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(isDropTargeted ? Color.accentColor : .white.opacity(0.65))
-                    .symbolEffect(.bounce, value: isDropTargeted)
-                    .frame(width: 28)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(isDropTargeted ? "Drop to hold it" : "Throw anything in")
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                    Text("Drag a file near the notch. Myspace opens and keeps a local copy.")
-                        .font(.system(size: 9.5))
-                        .foregroundStyle(.white.opacity(0.4))
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 4)
-
-                Image(systemName: "plus")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .frame(width: 22, height: 22)
-                    .background(.white.opacity(0.08), in: Circle())
-            }
-            .padding(.horizontal, 12)
-            .frame(minHeight: 54)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isDropTargeted ? Color.accentColor.opacity(0.1) : .white.opacity(0.018))
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(
-                        isDropTargeted ? Color.accentColor.opacity(0.85) : .white.opacity(0.16),
-                        style: StrokeStyle(
-                            lineWidth: isDropTargeted ? 1.5 : 1,
-                            dash: isDropTargeted ? [] : [5, 4]
-                        )
-                    )
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Hold files in Myspace")
-        .help("Choose files, or drag them near the notch to hold a local copy.")
     }
 
     private var sectionPicker: some View {
@@ -719,16 +667,6 @@ struct MyspacePanelView: View {
         panel.allowedContentTypes = [.item]
         if panel.runModal() == .OK {
             appendPendingAttachments(panel.urls)
-        }
-    }
-
-    private func chooseHeldFiles() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.item]
-        if panel.runModal() == .OK {
-            _ = holdFiles(panel.urls)
         }
     }
 

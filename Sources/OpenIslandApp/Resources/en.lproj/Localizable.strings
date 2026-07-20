@@ -10,6 +10,7 @@
 "settings.tab.shortcuts" = "Shortcuts";
 "settings.tab.lab" = "Lab";
 "settings.tab.about" = "About";
+"settings.tab.updates" = "Updates";
 
 /* Settings - Section Headers */
 "settings.section.system" = "System";
@@ -175,6 +176,13 @@
 "settings.about.version" = "Version %@";
 "settings.about.checkForUpdates" = "Check for Updates…";
 "settings.about.quitApp" = "Quit NotchTune";
+"settings.updates.softwareUpdate" = "Software Update";
+"settings.updates.currentVersion" = "Current version";
+"settings.updates.build" = "Build";
+"settings.updates.availableVersion" = "Available version";
+"settings.updates.checkForUpdates" = "Check for Updates…";
+"settings.updates.releaseNotes" = "View Releases";
+"settings.updates.automaticDetail" = "NotchTune checks for updates automatically. Updates are downloaded only when you choose to install them.";
 "island.quit.confirmTitle" = "Quit NotchTune?";
 "island.quit.confirmAction" = "Quit";
 "island.quit.confirmMessage" = "Are you sure you want to quit?";

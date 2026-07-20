@@ -10,6 +10,7 @@
 "settings.tab.shortcuts" = "快捷键";
 "settings.tab.lab" = "实验室";
 "settings.tab.about" = "关于";
+"settings.tab.updates" = "更新";
 
 /* Settings - Section Headers */
 "settings.section.system" = "系统";
@@ -175,6 +176,13 @@
 "settings.about.version" = "版本 %@";
 "settings.about.checkForUpdates" = "检查更新…";
 "settings.about.quitApp" = "退出 NotchTune";
+"settings.updates.softwareUpdate" = "软件更新";
+"settings.updates.currentVersion" = "当前版本";
+"settings.updates.build" = "构建版本";
+"settings.updates.availableVersion" = "可用版本";
+"settings.updates.checkForUpdates" = "检查更新…";
+"settings.updates.releaseNotes" = "查看发布版本";
+"settings.updates.automaticDetail" = "NotchTune 会自动检查更新。只有在你选择安装时才会下载更新。";
 "island.quit.confirmTitle" = "退出 NotchTune？";
 "island.quit.confirmAction" = "退出";
 "island.quit.confirmMessage" = "确定要退出吗？";

@@ -702,39 +702,79 @@ struct IslandPanelView: View {
     }
 
     private var openedContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            islandTabBar
-                .padding(.horizontal, sessionListSideInset)
-                .padding(.top, Self.openedTabBarTopPadding)
-                .padding(.bottom, Self.openedTabBarBottomPadding)
+        Group {
+            if model.notchOpenReason == .drag {
+                fileDragTargetContent
+                    .transition(.opacity)
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    islandTabBar
+                        .padding(.horizontal, sessionListSideInset)
+                        .padding(.top, Self.openedTabBarTopPadding)
+                        .padding(.bottom, Self.openedTabBarBottomPadding)
 
-            switch model.islandActiveTab {
-            case .agents:
-                agentsContent
-                    .frame(maxWidth: .infinity)
-            case .music:
-                MusicPanelView(
-                    playerManager: model.playerManager,
-                    horizontalPadding: usesNotchAwareOpenedHeader ? Self.notchHeaderHorizontalPadding : 24
-                )
-                .transition(.opacity)
-                .frame(maxWidth: .infinity)
-            case .myspace:
-                MyspacePanelView(
-                    store: model.myspaceStore,
-                    onFilesHeld: {
-                        model.notchOpen(reason: .click)
-                    }
-                )
-                    .frame(maxWidth: .infinity)
-                    .onPreferenceChange(MyspaceContentHeightKey.self) { height in
-                        if height > 0 {
-                            model.measuredMyspaceContentHeight = height
+                    switch model.islandActiveTab {
+                    case .agents:
+                        agentsContent
+                            .frame(maxWidth: .infinity)
+                    case .music:
+                        MusicPanelView(
+                            playerManager: model.playerManager,
+                            horizontalPadding: usesNotchAwareOpenedHeader
+                                ? Self.notchHeaderHorizontalPadding
+                                : 24
+                        )
+                        .transition(.opacity)
+                        .frame(maxWidth: .infinity)
+                    case .myspace:
+                        MyspacePanelView(
+                            store: model.myspaceStore,
+                            onFilesHeld: {
+                                model.notchOpen(reason: .click)
+                            }
+                        )
+                        .frame(maxWidth: .infinity)
+                        .onPreferenceChange(MyspaceContentHeightKey.self) { height in
+                            if height > 0 {
+                                model.measuredMyspaceContentHeight = height
+                            }
                         }
                     }
+                }
+                .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.18), value: model.notchOpenReason)
         .animation(.smooth(duration: 0.35, extraBounce: 0.1), value: model.islandActiveTab)
+    }
+
+    private var fileDragTargetContent: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "tray.and.arrow.down.fill")
+                .font(.system(size: 23, weight: .light))
+                .foregroundStyle(.white.opacity(0.46))
+                .symbolEffect(.pulse)
+
+            Text("Throw anything in")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.68))
+
+            Text("Release to hold a copy in Myspace")
+                .font(.system(size: 9.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.3))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.white.opacity(0.018))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(
+                    .white.opacity(0.13),
+                    style: StrokeStyle(lineWidth: 0.75, dash: [6, 5])
+                )
+                .padding(7)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Drop files to hold them in Myspace")
     }
 
     private var islandTabBar: some View {

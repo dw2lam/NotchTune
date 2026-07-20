@@ -12,6 +12,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case sound
     case music
     case appearance
+    case updates
     case about
 
     var id: String { rawValue }
@@ -24,6 +25,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .display:    lang.t("settings.tab.display")
         case .sound:      lang.t("settings.tab.sound")
         case .music:      "Music"
+        case .updates:    lang.t("settings.tab.updates")
         case .about:      lang.t("settings.tab.about")
         }
     }
@@ -36,6 +38,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .display:    "textformat.size"
         case .sound:      "speaker.wave.2.fill"
         case .music:      "music.note"
+        case .updates:    "arrow.triangle.2.circlepath.circle.fill"
         case .about:      "info.circle.fill"
         }
     }
@@ -48,6 +51,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .display:    .blue
         case .sound:      .green
         case .music:      .pink
+        case .updates:    .green
         case .about:      .blue
         }
     }
@@ -55,7 +59,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var section: SettingsSection {
         switch self {
         case .general, .setup, .display, .sound, .music, .appearance: .system
-        case .about:                                                           .app
+        case .updates, .about:                                                 .app
         }
     }
 }
@@ -138,6 +142,8 @@ struct SettingsView: View {
                 SoundSettingsPane(model: model)
             case .music:
                 MusicSettingsPane(model: model)
+            case .updates:
+                UpdateSettingsPane(model: model)
             case .about:
                 AboutSettingsPane(model: model)
             }
@@ -385,7 +391,69 @@ struct SoundSettingsPane: View {
     }
 }
 
-// MARK: - About
+// MARK: - Updates
+
+struct UpdateSettingsPane: View {
+    var model: AppModel
+
+    private var lang: LanguageManager { model.lang }
+
+    private var currentVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+    }
+
+    private var currentBuild: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+    }
+
+    var body: some View {
+        Form {
+            Section(lang.t("settings.updates.softwareUpdate")) {
+                LabeledContent(
+                    lang.t("settings.updates.currentVersion"),
+                    value: currentVersion
+                )
+                LabeledContent(
+                    lang.t("settings.updates.build"),
+                    value: currentBuild
+                )
+
+                if model.updateChecker.hasUpdate,
+                   let latestVersion = model.updateChecker.latestVersion {
+                    LabeledContent(
+                        lang.t("settings.updates.availableVersion"),
+                        value: latestVersion
+                    )
+                }
+            }
+
+            Section {
+                Button {
+                    model.updateChecker.checkForUpdates()
+                } label: {
+                    Label(
+                        lang.t("settings.updates.checkForUpdates"),
+                        systemImage: "arrow.triangle.2.circlepath"
+                    )
+                }
+                .disabled(!model.updateChecker.canCheckForUpdates)
+
+                Link(destination: UpdateChecker.releasesURL) {
+                    Label(
+                        lang.t("settings.updates.releaseNotes"),
+                        systemImage: "safari"
+                    )
+                }
+            } footer: {
+                Text(lang.t("settings.updates.automaticDetail"))
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle(lang.t("settings.tab.updates"))
+    }
+}
+
+// MARK: - About & Credits
 
 struct AboutSettingsPane: View {
     var model: AppModel
@@ -415,11 +483,6 @@ struct AboutSettingsPane: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
-
-                Button("Check for Updates…") {
-                    model.updateChecker.checkForUpdates()
-                }
-                .disabled(!model.updateChecker.canCheckForUpdates)
             }
             .padding(.top, 24)
             .padding(.bottom, 20)

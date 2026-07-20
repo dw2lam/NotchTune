@@ -635,6 +635,10 @@ final class OverlayPanelController {
         let actionableID = model.islandSurface.sessionID
         let isNotificationMode = model.notchOpenReason == .notification && actionableID != nil
 
+        if model.notchOpenReason == .drag {
+            return Self.openedEmptyStateHeight
+        }
+
         if isNotificationMode {
             let tabBarHeight: CGFloat = 36
             // Use SwiftUI-measured height when available (accurate after first render).

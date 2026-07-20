@@ -10,6 +10,7 @@
 "settings.tab.shortcuts" = "快捷鍵";
 "settings.tab.lab" = "實驗室";
 "settings.tab.about" = "關於";
+"settings.tab.updates" = "更新";
 
 /* Settings - Section Headers */
 "settings.section.system" = "系統";
@@ -175,6 +176,13 @@
 "settings.about.version" = "版本 %@";
 "settings.about.checkForUpdates" = "檢查更新…";
 "settings.about.quitApp" = "結束 NotchTune";
+"settings.updates.softwareUpdate" = "軟體更新";
+"settings.updates.currentVersion" = "目前版本";
+"settings.updates.build" = "建置版本";
+"settings.updates.availableVersion" = "可用版本";
+"settings.updates.checkForUpdates" = "檢查更新…";
+"settings.updates.releaseNotes" = "檢視發佈版本";
+"settings.updates.automaticDetail" = "NotchTune 會自動檢查更新。只有在你選擇安裝時才會下載更新。";
 "island.quit.confirmTitle" = "結束 NotchTune？";
 "island.quit.confirmAction" = "結束";
 "island.quit.confirmMessage" = "確定要結束嗎？";
