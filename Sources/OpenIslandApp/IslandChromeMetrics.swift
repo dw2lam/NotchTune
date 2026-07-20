@@ -5,13 +5,15 @@ enum IslandChromeMetrics {
     static let openedShadowBottomInset: CGFloat = 22
     static let closedShadowHorizontalInset: CGFloat = 12
     static let closedShadowBottomInset: CGFloat = 14
-    static let closedHoverScale: CGFloat = 1.028
+    static let closedHoverScale: CGFloat = 1.035
     static let notchedClosedMinimumWingReserve: CGFloat = 44
     static let notchedClosedHorizontalPadding: CGFloat = 14
     /// Outer leading inset before album art on closed music surfaces.
     static let notchedMusicLeadingPadding: CGFloat = 8
     /// Trailing outer inset after play icon / waveform on closed music surfaces.
-    static let notchedMusicTrailingPadding: CGFloat = 6
+    /// Matches `notchedMusicLeadingPadding` so the compact pill is symmetric
+    /// around the notch (album art and trailing cluster get equal breathing room).
+    static let notchedMusicTrailingPadding: CGFloat = 8
     static let notchedClosedContentGap: CGFloat = 8
 
     /// Total outer width of a compact music pill on a notched MacBook.
@@ -28,7 +30,7 @@ enum IslandChromeMetrics {
 
     /// Right wing for compact music — waveform against the notch, trailing outer inset.
     static func notchedCompactMusicRightWingReserve() -> CGFloat {
-        let waveformWidth: CGFloat = 20
+        let waveformWidth: CGFloat = MusicTrackNotificationMetrics.waveformWidth
         return ceil(waveformWidth + notchedMusicTrailingPadding)
     }
 
@@ -79,7 +81,7 @@ enum IslandChromeMetrics {
 
     /// Right wing for music notifications — play/pause icon pinned to the outer edge.
     static func notchedMusicNotificationRightWingReserve() -> CGFloat {
-        let playWidth: CGFloat = 18
+        let playWidth: CGFloat = MusicTrackNotificationMetrics.playIconWidth
         return ceil(notchedMusicTrailingPadding + playWidth)
     }
 

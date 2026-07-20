@@ -1,7 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { useLatestRelease } from '../hooks/useLatestRelease';
-import { IslandTop, TabBar, UsageChip } from './IslandParts';
+import { IslandPanel, AgentsTab, UsageChip, type MockSession } from '../mock';
+
+const HERO_SESSIONS: MockSession[] = [
+  {
+    state: 'running', title: 'notchtune', branch: 'feat/agy-hooks',
+    prompt: 'the notch should react when agy is actually working…',
+    agent: 'claude', terminal: 'Ghostty', age: '‹1m',
+  },
+  {
+    state: 'approve', title: 'island-demo', branch: 'main',
+    prompt: 'run the release script?',
+    waiting: 'Waiting 0m 12s',
+    agent: 'codex', terminal: 'iTerm2', age: '12s',
+  },
+  {
+    state: 'done', title: 'site', branch: 'main',
+    prompt: 'build the liquid-glass hero',
+    agent: 'claude', terminal: 'tmux', age: '3m',
+  },
+];
 
 const BRANDS = [
   { name: 'Claude Code', file: 'claude.svg' },
@@ -70,37 +89,17 @@ export default function Hero() {
 
       <div className="hero-stage reveal" ref={demoRef}>
         <div className="scene scene-hero">
-          <div className="island island-expanded glass-deep">
-            <IslandTop>
-              <UsageChip name="Claude" time="5h" pct="41%" />
-              <UsageChip name="Codex" time="7d" pct="76%" tone="u-warn" />
-            </IslandTop>
-            <TabBar active="agents" />
-            <ul className="rows">
-              <li className="row">
-                <span className="rdot on" />
-                <div className="rmain">
-                  <div className="rtitle"><b>notchtune</b> · wiring antigravity hooks</div>
-                  <div className="rprev"><span className="who">You:</span> the notch should react when agy is actually working…</div>
-                  <div className="rstate">running</div>
-                </div>
-                <div className="rmeta"><div className="rbadges"><span className="rb">Claude Code</span><span className="rb">Ghostty</span></div><span className="rtime">‹1m</span></div>
-              </li>
-              <li className="row">
-                <span className="rdot wait" />
-                <div className="rmain">
-                  <div className="rtitle"><b>island-demo</b> · run the release script?</div>
-                  <div className="rstate">waiting for approval</div>
-                </div>
-                <div className="rmeta"><div className="rbadges"><span className="rb">Codex</span><span className="rb">iTerm2</span></div><span className="rtime">12s</span></div>
-              </li>
-              <li className="row">
-                <span className="rdot done" />
-                <div className="rmain"><div className="rtitle"><b>site</b> · built the liquid-glass hero</div></div>
-                <div className="rmeta"><div className="rbadges"><span className="rb">Claude Code</span><span className="rb">tmux</span></div><span className="rtime">3m</span></div>
-              </li>
-            </ul>
-          </div>
+          <IslandPanel
+            usage={<>
+              <UsageChip name="Claude" window="5h" pct={41} />
+              <UsageChip name="Codex" window="7d" pct={76} tone="warn" />
+            </>}
+            tab="agents"
+            glass="clear"
+            showNotchGap={false}
+          >
+            <AgentsTab sessions={HERO_SESSIONS} />
+          </IslandPanel>
         </div>
       </div>
 

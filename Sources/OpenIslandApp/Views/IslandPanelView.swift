@@ -73,8 +73,12 @@ extension AgentSession {
 
 // MARK: - Animations
 
-private let openAnimation  = Animation.spring(response: 0.48, dampingFraction: 0.82)
-private let closeAnimation = Animation.spring(response: 0.40, dampingFraction: 0.90)
+// Open: a slightly slower, softly-settling spring so the pill flows out into
+// the panel like a drop of liquid spreading, rather than snapping open.
+private let openAnimation  = Animation.spring(response: 0.5, dampingFraction: 0.8)
+// Eased but prompt: a smooth collapse that still clears quickly so the
+// translucent glass panel doesn't appear to linger open.
+private let closeAnimation = Animation.spring(response: 0.38, dampingFraction: 0.86)
 private let popAnimation   = Animation.spring(response: 0.35, dampingFraction: 0.65)
 private let openedSurfaceUnmountDelay: TimeInterval = 0.42
 
@@ -117,6 +121,9 @@ struct IslandPanelView: View {
     @State private var keepsOpenedSurfaceMounted = false
     @State private var openedSurfaceMountGeneration: UInt64 = 0
     @State private var morphProgress: CGFloat = 0
+    /// Drives the sliding active-tab pill so it glides between tabs instead of
+    /// cross-fading in place.
+    @Namespace private var tabIndicatorNamespace
 
     private var isOpened: Bool {
         model.notchStatus == .opened
@@ -128,6 +135,13 @@ struct IslandPanelView: View {
 
     private var shouldRenderOpenedSurface: Bool {
         usesOpenedVisualState || keepsOpenedSurfaceMounted
+    }
+
+    /// The closed-pill glyph isn't visible while the island is opened or while
+    /// the pill is collapsed/hidden (fullscreen, auto-hidden) and not peeking.
+    /// Freeze its per-frame animation in those states.
+    private var closedGlyphPaused: Bool {
+        usesOpenedVisualState || (model.shouldCollapseClosedNotch && !model.isPeeking)
     }
 
     private var isPopping: Bool {
@@ -389,9 +403,9 @@ struct IslandPanelView: View {
 
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
-                // Keep the glass backdrop outside the morph clip. Applying the
-                // animated clip directly to Liquid Glass makes it briefly
-                // resolve as a frosted fallback during expansion.
+                // Glass backdrop sits OUTSIDE the morph clip so the material
+                // renders clear from the first frame (the animating clip is what
+                // makes Liquid Glass flip between blur fallback and clear).
                 if shouldRenderOpenedSurface {
                     openGlassBackground(width: openedWidth, height: openedHeight)
                         .allowsHitTesting(false)
@@ -439,12 +453,15 @@ struct IslandPanelView: View {
             }
         }
         .scaleEffect(usesOpenedVisualState ? 1 : (isHovering ? IslandChromeMetrics.closedHoverScale : 1), anchor: .top)
-        .animation(.easeInOut(duration: 0.3), value: isHovering)
+        // A soft spring instead of a linear ease so the pill "swells" toward the
+        // cursor with a little surface-tension settle — the liquid peek before
+        // it flows open.
+        .animation(.spring(response: 0.32, dampingFraction: 0.68), value: isHovering)
         .padding(.horizontal, panelShadowHorizontalInset)
         .padding(.bottom, panelShadowBottomInset)
         .contentShape(Rectangle())
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.3)) {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.68)) {
                 isHovering = hovering
             }
         }
@@ -509,7 +526,7 @@ struct IslandPanelView: View {
                     panelContentWidth: panelContentWidth,
                     glass: model.glassSettings.closedGlass(layout: layout)
                 )
-                .id("closed-music-surface-\(surfaceTrack.title)|\(surfaceTrack.artist)|\(model.playerManager.track.nsAlbumArt.tiffRepresentation?.hashValue ?? 0)")
+                .id("closed-music-surface-\(surfaceTrack.title)|\(surfaceTrack.artist)|\(model.playerManager.track.artworkVersion)")
                 .background(closedSurfaceWidthReader)
             } else {
                 let layout: V6ClosedLayout = isExternalDisplayPlacement ? .external : .macbook
@@ -522,7 +539,9 @@ struct IslandPanelView: View {
                     height: closedNotchHeight,
                     physicalNotchWidth: layout == .macbook ? macbookPhysicalNotchWidth : 0,
                     minWidth: 70,
-                    glass: model.glassSettings.closedGlass(layout: layout)
+                    glass: model.glassSettings.closedGlass(layout: layout),
+                    glyphPaused: closedGlyphPaused,
+                    nudgeTrigger: model.nudgeTrigger
                 )
                 .scaleEffect(isPopping ? 1.04 : 1, anchor: .top)
                 .animation(popAnimation, value: isPopping)
@@ -587,6 +606,11 @@ struct IslandPanelView: View {
         OpenedIslandSurfaceShape(topProfile: usesNotchAwareOpenedHeader ? .notch : .topBar)
     }
 
+    /// The Liquid Glass backdrop. Rendered full-size and OUTSIDE the morph clip
+    /// so the material renders clear from the first frame instead of flipping
+    /// between the blur fallback and clear as the clip animates open. Opacity is
+    /// identity (1.0) on open (no offscreen compositing → no frosted fallback),
+    /// fading out only on close.
     @ViewBuilder
     private func openGlassBackground(width openedWidth: CGFloat, height openedHeight: CGFloat) -> some View {
         let surfaceShape = openedSurfaceShape
@@ -609,6 +633,9 @@ struct IslandPanelView: View {
             )
     }
 
+    /// The opened panel content (header + tab content). Lives INSIDE the morph
+    /// clip so it grows/collapses with the open/close animation; the glass
+    /// backdrop behind it stays full-size.
     @ViewBuilder
     private func openedSurfaceContent(width openedWidth: CGFloat, height openedHeight: CGFloat) -> some View {
         let surfaceShape = openedSurfaceShape
@@ -631,6 +658,9 @@ struct IslandPanelView: View {
         .opacity(usesOpenedVisualState ? 1 : 0)
         .animation(
             usesOpenedVisualState
+                // Emerge softly *with* the expansion (earlier start, longer
+                // easeOut) so the content surfaces as the panel spreads instead
+                // of popping in once it has settled.
                 ? .easeOut(duration: 0.22).delay(0.07)
                 : .easeInOut(duration: 0.20),
             value: usesOpenedVisualState
@@ -741,9 +771,9 @@ struct IslandPanelView: View {
                             playerManager: model.playerManager,
                             horizontalPadding: usesNotchAwareOpenedHeader
                                 ? Self.notchHeaderHorizontalPadding
-                                : 24
+                                : 16
                         )
-                        .transition(.opacity)
+                        .transition(Self.tabContentTransition)
                         .frame(maxWidth: .infinity)
                     case .myspace:
                         MyspacePanelView(
@@ -752,6 +782,7 @@ struct IslandPanelView: View {
                                 model.notchOpen(reason: .click)
                             }
                         )
+                        .transition(Self.tabContentTransition)
                         .frame(maxWidth: .infinity)
                         .onPreferenceChange(MyspaceContentHeightKey.self) { height in
                             if height > 0 {
@@ -760,6 +791,7 @@ struct IslandPanelView: View {
                         }
                     case .reminders:
                         RemindersPanelView(store: model.myspaceStore)
+                            .transition(Self.tabContentTransition)
                             .frame(maxWidth: .infinity)
                             .onPreferenceChange(RemindersContentHeightKey.self) { height in
                                 if height > 0 {
@@ -829,10 +861,15 @@ struct IslandPanelView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .frame(minHeight: Self.tabHitTargetHeight)
-            .background(
-                model.islandActiveTab == tab ? Color.white.opacity(0.12) : Color.clear,
-                in: Capsule()
-            )
+            .background {
+                // Only the active tab owns the pill; matchedGeometryEffect makes
+                // it slide to the newly-selected tab rather than fade in place.
+                if model.islandActiveTab == tab {
+                    Capsule()
+                        .fill(Color.white.opacity(0.12))
+                        .matchedGeometryEffect(id: "islandTabIndicator", in: tabIndicatorNamespace)
+                }
+            }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -860,8 +897,14 @@ struct IslandPanelView: View {
             }
         }
         .padding(.bottom, 0)
-        .transition(.opacity)
+        .transition(Self.tabContentTransition)
     }
+
+    /// Tab swaps fade while gently scaling up from the top edge, so a tab reads
+    /// as growing into place rather than hard-cutting to the next one.
+    private static let tabContentTransition: AnyTransition = .opacity.combined(
+        with: .scale(scale: 0.97, anchor: .top)
+    )
 
     /// Persistent hint at the top of the expanded island while no agent
     /// hooks are installed. Decoupled from session presence — process
@@ -1026,6 +1069,8 @@ struct IslandPanelView: View {
                     stateIndicator: model.islandSessionStateIndicator,
                     completedStaleThreshold: model.completedStaleThreshold.seconds,
                     isActionable: true,
+                    showsWaitingTime: model.nudgeSettings.isEnabled,
+                    waitingSince: model.attentionStartedAt[session.id],
                     useDrawingGroup: model.notchStatus == .opened,
                     isInteractive: model.notchStatus == .opened,
                     presentation: .notification,
@@ -1068,6 +1113,8 @@ struct IslandPanelView: View {
                                 stateIndicator: model.islandSessionStateIndicator,
                                 completedStaleThreshold: model.completedStaleThreshold.seconds,
                                 isActionable: session.phase.requiresAttention || session.id == actionableSessionID,
+                                showsWaitingTime: model.nudgeSettings.isEnabled,
+                                waitingSince: model.attentionStartedAt[session.id],
                                 useDrawingGroup: model.notchStatus == .opened,
                                 isInteractive: model.notchStatus == .opened,
                                 sideInset: sessionListSideInset,
@@ -1118,6 +1165,8 @@ struct IslandPanelView: View {
                         stateIndicator: model.islandSessionStateIndicator,
                         completedStaleThreshold: model.completedStaleThreshold.seconds,
                         isActionable: session.phase.requiresAttention || session.id == actionableSessionID,
+                        showsWaitingTime: model.nudgeSettings.isEnabled,
+                        waitingSince: model.attentionStartedAt[session.id],
                         useDrawingGroup: model.notchStatus == .opened,
                         isInteractive: model.notchStatus == .opened,
                         sideInset: sessionListSideInset,
@@ -1679,6 +1728,8 @@ private struct IslandSessionRow: View {
     var stateIndicator: IslandSessionStateIndicator = .animatedDot
     var completedStaleThreshold: TimeInterval = AgentSession.staleCompletedDisplayThreshold
     var isActionable: Bool = false
+    var showsWaitingTime: Bool = false
+    var waitingSince: Date?
     var useDrawingGroup: Bool = true
     var isInteractive: Bool = true
     var presentation: IslandSessionRowPresentation = .list
@@ -1813,6 +1864,21 @@ private struct IslandSessionRow: View {
 
     @ViewBuilder
     private func rowAuxiliaryDetails(presence: IslandSessionPresence) -> some View {
+        if showsWaitingTime, session.phase.requiresAttention {
+            HStack(spacing: 5) {
+                Image(systemName: "hourglass")
+                    .font(.system(size: 9, weight: .semibold))
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    Text("Waiting \(subagentElapsed(since: waitingSince ?? session.updatedAt, at: timeline.date))")
+                        .font(.system(size: 10.5, weight: .medium))
+                }
+            }
+            .foregroundStyle(statusTint(for: presence).opacity(0.9))
+            .padding(.leading, detailLeadingInset)
+            .padding(.trailing, sideInset)
+            .padding(.bottom, 10)
+        }
+
         if !shouldShowEmbeddedDetailBody,
            let activityLine = session.spotlightActivityLineText ?? expandedActivityLineText {
             Text(activityLine)

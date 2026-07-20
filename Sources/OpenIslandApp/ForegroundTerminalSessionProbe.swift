@@ -6,6 +6,16 @@ struct ForegroundTerminalSessionProbe {
     typealias FrontmostBundleIdentifierProvider = @Sendable () -> String?
     typealias AppleScriptRunner = @Sendable (String) async throws -> String
 
+    /// Apps this probe can introspect down to the focused tab/pane (see the
+    /// `switch` in `matches(jumpTarget:)`). For these, a `false` result is
+    /// authoritative — a different tab is focused — so callers must NOT fall
+    /// back to a coarse "is the app frontmost" check.
+    static let paneIntrospectableBundleIDs: Set<String> = [
+        "com.mitchellh.ghostty",
+        "com.apple.Terminal",
+        "com.googlecode.iterm2",
+    ]
+
     private static let fieldSeparator = "\u{1f}"
     private static let appleScriptTimeout: DispatchTimeInterval = .seconds(1)
 

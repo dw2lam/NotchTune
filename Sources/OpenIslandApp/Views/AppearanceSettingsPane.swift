@@ -616,6 +616,7 @@ struct AppearanceSettingsPane: View {
             .font(.system(size: 12))
             .foregroundStyle(.white.opacity(0.85))
 
+            // Material variant
             VStack(alignment: .leading, spacing: 6) {
                 Text("Material")
                     .font(.system(size: 12))
@@ -639,16 +640,17 @@ struct AppearanceSettingsPane: View {
             .disabled(glassControlsDisabled)
             .opacity(glassControlsDisabled ? 0.4 : 1)
 
+            // Tint hue + strength
             VStack(alignment: .leading, spacing: 10) {
                 ColorPicker(selection: Binding(
                     get: { model.glassSettings.tintColor },
                     set: { newColor in
                         let rgb = newColor.islandResolvedRGB()
-                        var settings = model.glassSettings
-                        settings.tintRed = rgb.r
-                        settings.tintGreen = rgb.g
-                        settings.tintBlue = rgb.b
-                        model.glassSettings = settings
+                        var s = model.glassSettings
+                        s.tintRed = rgb.r
+                        s.tintGreen = rgb.g
+                        s.tintBlue = rgb.b
+                        model.glassSettings = s
                     }
                 ), supportsOpacity: false) {
                     Text("Tint color")
@@ -675,6 +677,7 @@ struct AppearanceSettingsPane: View {
             .disabled(glassControlsDisabled)
             .opacity(glassControlsDisabled ? 0.4 : 1)
 
+            // Where it shows
             VStack(alignment: .leading, spacing: 10) {
                 Toggle("Open / expanded panel", isOn: Binding(
                     get: { model.glassSettings.openView },

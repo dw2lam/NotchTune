@@ -1,0 +1,555 @@
+/* ============================================================
+   NotchTune mock kit — 1:1 recreation of the real app UI.
+   Every value here is lifted from the SwiftUI sources (pt = px).
+   Sources: IslandPanelView.swift, V6NotchContent.swift,
+   MusicPanelView.swift, LiquidGlass.swift, UnifiedBars.swift.
+   ============================================================ */
+
+.nt {
+  /* V6Palette (V6ClosedPillShape.swift:62-65) */
+  --nt-ink: #000000;
+  --nt-paper: #f1ead9;
+  /* IslandDesignPalette.swift:6-12 */
+  --nt-run: #6ea7ff;
+  --nt-wait-approve: #f4a4a4;
+  --nt-wait-answer: #ffd58a;
+  --nt-wait-agg: #e7a762;
+  --nt-done: #6fb982;
+  /* SwiftUI .system == SF Pro; .monospaced == SF Mono */
+  --nt-sf: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --nt-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, 'Cascadia Mono', monospace;
+
+  font-family: var(--nt-sf);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: normal;
+  letter-spacing: normal;
+  line-height: normal;
+  color: #fff;
+  box-sizing: border-box;
+}
+.nt *, .nt *::before, .nt *::after { box-sizing: border-box; font-family: inherit; }
+.nt button { border: 0; background: none; padding: 0; color: inherit; cursor: pointer; font-family: inherit; }
+
+/* ---------- Opened island panel (520pt preferred width) ---------- */
+.nt-island {
+  position: relative;
+  width: min(520px, 100%);
+  background: var(--nt-ink);
+  /* top fillet 0 (flush w/ notch), bottom radius 22 (NotchShape.swift:207) */
+  border-radius: 0 0 22px 22px;
+  /* opened surface stroke white@0.07 x1 (IslandPanelView.swift:639) */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), 0 18px 44px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+/* Liquid Glass rendering (LiquidGlass.swift:89-112): clear material +
+   tint overlay fill at strength 0.22. CSS approximation: backdrop blur
+   + black tint. `.nt-glass-off` = solid ink fallback. */
+.nt-island.nt-glass {
+  background: rgba(0, 0, 0, 0.22);
+  -webkit-backdrop-filter: blur(26px) saturate(1.15);
+  backdrop-filter: blur(26px) saturate(1.15);
+}
+.nt-island.nt-glass-frosted {
+  background: rgba(16, 16, 18, 0.55);
+  -webkit-backdrop-filter: blur(34px) saturate(1.3);
+  backdrop-filter: blur(34px) saturate(1.3);
+}
+/* Music-playing ambience: album art @0.12 blur 20 behind content
+   (IslandPanelView.swift:603-610) */
+.nt-ambient {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center;
+  opacity: 0.12; filter: blur(20px); transform: scale(1.3);
+  pointer-events: none;
+}
+
+/* ---------- Header: usage lane | notch gap | tools ---------- */
+.nt-header {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px; /* notch lane safety inset (IslandPanelView.swift:106) */
+  padding: 2px 16px 0; /* top 2, horizontal 16 (IslandPanelView.swift:103-104) */
+  min-height: 30px;
+}
+.nt-header-gap { width: 190px; height: 24px; } /* physical notch lane */
+.nt-usage { display: flex; gap: 8px; align-items: center; min-width: 0; overflow: hidden; }
+.nt-tools { display: flex; gap: 8px; justify-content: flex-end; }
+/* 22x22 circle, white@0.08 bg, 10px semibold icon white@0.62
+   (IslandPanelView.swift:705-731) */
+.nt .nt-toolbtn {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  display: grid; place-items: center;
+}
+.nt-toolbtn svg { width: 10px; height: 10px; fill: rgba(255, 255, 255, 0.62); }
+
+/* Usage chip (IslandPanelView.swift:1472-1485): pad h8/v4, capsule
+   white@0.055, border white@0.06 */
+.nt-uchip {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  padding: 4px 8px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+.nt-uchip b { font-size: 11px; font-weight: 600; color: rgba(255, 255, 255, 0.74); }
+.nt-uchip em {
+  font-style: normal; font-family: var(--nt-mono);
+  font-size: 10.5px; font-weight: 600; color: rgba(255, 255, 255, 0.42);
+}
+.nt-uchip i {
+  font-style: normal; font-family: var(--nt-mono);
+  font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.nt-u-ok { color: rgba(74, 222, 128, 0.95); }
+.nt-u-warn { color: rgba(251, 146, 60, 0.95); }
+.nt-u-hot { color: rgba(248, 113, 113, 0.95); }
+
+/* ---------- Tab bar (IslandPanelView.swift:759-792) ---------- */
+.nt-tabbar {
+  position: relative;
+  display: flex; gap: 8px; align-items: center;
+  padding: 10px 16px 8px; /* top 10 / bottom 8 (IslandPanelView.swift:105) */
+}
+.nt .nt-tab {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px;
+  font-size: 11px; font-weight: 500; line-height: 1;
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.2s ease;
+}
+.nt-tab svg { width: 12px; height: 12px; fill: currentColor; flex: none; }
+.nt .nt-tab.is-on { color: #fff; font-weight: 600; }
+/* sliding capsule indicator (matchedGeometryEffect equivalent) —
+   boosted from the app's white@0.12 so it stays visible over glass */
+.nt-tab-ind {
+  position: absolute; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  transition: left 0.35s cubic-bezier(0.32, 1.25, 0.42, 1), width 0.35s cubic-bezier(0.32, 1.25, 0.42, 1);
+}
+
+/* ---------- Music tab (MusicPanelView.swift) ---------- */
+.nt-music {
+  display: flex; gap: 20px; align-items: center;
+  padding: 12px 16px 8px; /* top 12, bottom 8, notch-aware h-pad 16 */
+}
+/* album art 166x166 r12, shadow black@.35 r8 y4 (MusicAlbumArtView) */
+.nt-art {
+  width: 166px; height: 166px; flex: 0 0 166px;
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.35);
+  perspective: 500px; cursor: pointer;
+}
+.nt-art-inner {
+  width: 100%; height: 100%; border-radius: 12px;
+  background-size: cover; background-position: center;
+  transform-style: preserve-3d;
+}
+.nt-art.is-flipping-out .nt-art-inner { transition: transform 0.18s ease-in; transform: rotateY(90deg); }
+.nt-art.is-flipping-in .nt-art-inner { transition: transform 0.18s ease-out; transform: rotateY(0deg); }
+.nt-art:active .nt-art-inner { transform: scale(0.94); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* right column is a SwiftUI VStack — default alignment is .center,
+   so title/artist/controls all center over the progress rail */
+.nt-music-col {
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  flex: 1; min-width: 0;
+}
+.nt-music-col > * { max-width: 100%; }
+.nt-track-meta { text-align: center; min-width: 0; }
+.nt-track-title {
+  font-size: 14px; font-weight: 700; color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nt-track-artist {
+  font-size: 12px; font-weight: 500; color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* controls: [shuffle 16.5][prev 22][play 28.6][next 22][repeat 16.5] gap 20,
+   white@0.8 (MusicPlaybackButtonsView) */
+.nt-controls { display: flex; align-items: center; justify-content: center; gap: 20px; }
+.nt-cbtn { display: grid; place-items: center; color: rgba(255, 255, 255, 0.8); transition: transform 0.18s ease; }
+.nt-cbtn svg { stroke: currentColor; }
+.nt-cbtn:hover { transform: scale(1.15); }
+.nt-cbtn.is-off { color: rgba(255, 255, 255, 0.4); }
+.nt-cbtn-sm svg { width: 16.5px; height: 16.5px; }
+.nt-cbtn-md svg { width: 22px; height: 22px; }
+.nt-cbtn-lg svg { width: 28.6px; height: 28.6px; }
+
+/* progress: 7pt track r5, filled primary@0.85, rest @0.25, +3pt on hover
+   (MusicCustomSliderView); times size 10 white@0.5 pad h3 */
+.nt-progress { display: flex; flex-direction: column; gap: 4px; padding: 0; align-self: stretch; }
+.nt-rail {
+  height: 7px; border-radius: 5px;
+  background: rgba(255, 255, 255, 0.25);
+  overflow: hidden; cursor: pointer;
+  transition: height 0.15s ease, margin 0.15s ease;
+}
+.nt-progress:hover .nt-rail { height: 10px; margin: -1.5px 0; }
+.nt-fill { height: 100%; border-radius: 5px; background: rgba(255, 255, 255, 0.85); }
+.nt-times {
+  display: flex; justify-content: space-between; padding: 0 2px;
+  font-size: 10px; color: rgba(255, 255, 255, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Agents tab (IslandPanelView sessionList) ---------- */
+.nt-agents { display: flex; flex-direction: column; padding-bottom: 10px; }
+/* SESSIONS header: mono 10.5 semibold, tracking 1.4, paper@0.55, uppercase,
+   height 36, divider white@0.055 (IslandPanelView:1105-1133) */
+.nt-sess-head {
+  display: flex; align-items: center; justify-content: flex-start; gap: 12px;
+  height: 36px; padding: 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+.nt-sess-title {
+  font-family: var(--nt-mono); font-size: 10.5px; font-weight: 600;
+  letter-spacing: 1.4px; text-transform: uppercase;
+  color: rgba(241, 234, 217, 0.55);
+}
+.nt-sess-metrics { display: flex; gap: 10px; align-items: center; }
+.nt-metric {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--nt-mono); font-size: 10.5px; font-weight: 600;
+  color: rgba(241, 234, 217, 0.55); font-variant-numeric: tabular-nums;
+}
+.nt-metric .nt-dot { width: 5.5px; height: 5.5px; }
+
+.nt-dot { border-radius: 50%; flex: none; }
+.nt-dot-run { background: var(--nt-run); }
+.nt-dot-approve { background: var(--nt-wait-approve); }
+.nt-dot-answer { background: var(--nt-wait-answer); }
+.nt-dot-done { background: var(--nt-done); }
+.nt-dot-idle { background: rgba(241, 234, 217, 0.35); }
+
+/* session row */
+.nt-row {
+  display: grid; grid-template-columns: 16px 1fr auto; gap: 10px;
+  align-items: center; padding: 10px 12px 10px 16px;
+  border-radius: 10px; margin: 1px 6px;
+  transition: background 0.15s ease;
+}
+.nt-row:hover { background: rgba(255, 255, 255, 0.04); }
+/* glyph state indicators (indicator style "glyph"):
+   running = spinning open ring · done = green check circle ·
+   waiting = pulsing dot */
+.nt-ind { display: inline-grid; place-items: center; justify-self: center; }
+.nt-ind-run {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 1.6px solid var(--nt-run);
+  border-top-color: transparent;
+  animation: nt-spin 1.1s linear infinite;
+}
+@keyframes nt-spin { to { transform: rotate(360deg); } }
+.nt-ind-done {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--nt-done);
+}
+.nt-ind-done svg { width: 8px; height: 8px; fill: #08130b; }
+.nt-ind-dot { width: 9px; height: 9px; justify-self: center; }
+/* animated status dot 9pt w/ pulse glow (IslandPanelView:2333-2345) */
+.nt-dot-pulse { animation: nt-dotpulse 1.96s ease-in-out infinite; }
+@keyframes nt-dotpulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 4px 0 currentColor; opacity: 0.92; }
+  50% { transform: scale(1.18); box-shadow: 0 0 7px 1px currentColor; opacity: 1; }
+}
+.nt-dot-run.nt-dot-pulse { color: var(--nt-run); }
+.nt-dot-approve.nt-dot-pulse { color: var(--nt-wait-approve); }
+.nt-dot-answer.nt-dot-pulse { color: var(--nt-wait-answer); }
+
+.nt-row-main { min-width: 0; }
+/* headline 13.2 semibold (IslandPanelView:1976-1978) */
+.nt-row-title {
+  font-size: 13.2px; font-weight: 600; color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nt-row-title .nt-branch { color: rgba(255, 255, 255, 0.45); font-weight: 500; }
+/* prompt line 11.2 medium (IslandPanelView:1727) */
+.nt-row-prompt {
+  font-size: 11.2px; font-weight: 500; color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 2px;
+}
+/* waiting line: size 10.5 medium (IslandPanelView:1764-1768) */
+.nt-row-wait {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 3px;
+  font-size: 10.5px; font-weight: 500;
+}
+.nt-row-wait svg { width: 9px; height: 9px; fill: currentColor; }
+.nt-wait-approve { color: var(--nt-wait-approve); }
+.nt-wait-answer { color: var(--nt-wait-answer); }
+
+.nt-row-side { display: flex; align-items: center; gap: 6px; }
+/* agent badge: mono 10.5 semibold tinted, cap h8/v3, fill tint@0.10,
+   stroke tint@0.3 (IslandPanelView:1861-1870) */
+.nt-badge {
+  font-family: var(--nt-mono); font-size: 10.5px; font-weight: 600;
+  padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+}
+.nt-badge-agent { color: var(--agent, #d97757); background: color-mix(in srgb, var(--agent, #d97757) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--agent, #d97757) 30%, transparent); }
+.nt-badge-term {
+  font-weight: 500; color: rgba(241, 234, 217, 0.7);
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+/* age: mono 10.5 medium, min-width 30 trailing (IslandPanelView:1745-47) */
+.nt-age {
+  font-family: var(--nt-mono); font-size: 10.5px; font-weight: 500;
+  color: rgba(241, 234, 217, 0.45); min-width: 30px; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* detail-toggle chevron: 10px bold in a 22px circle (IslandPanelView:2428) */
+.nt .nt-chev {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  display: grid; place-items: center;
+  transition: background 0.15s ease;
+}
+.nt .nt-chev:hover { background: rgba(255, 255, 255, 0.12); }
+.nt-chev svg { width: 10px; height: 10px; fill: rgba(255, 255, 255, 0.55); transform: rotate(180deg); }
+/* subagent row (IslandPanelView:1790-1827) */
+.nt-subrow {
+  display: flex; align-items: center; gap: 7px;
+  padding: 3px 16px 3px 35px;
+}
+.nt-subrow .nt-dot { width: 6px; height: 6px; }
+.nt-sub-name { font-size: 11px; font-weight: 500; color: rgba(255, 255, 255, 0.8); }
+.nt-sub-desc { font-size: 10.5px; color: rgba(255, 255, 255, 0.5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nt-sub-time { font-size: 10px; font-weight: 500; color: rgba(255, 255, 255, 0.4); margin-left: auto; font-variant-numeric: tabular-nums; }
+/* running command box: mono 12 semibold white@0.82, RR7 white@0.045,
+   stroke white@0.06, pad h10/v7 (IslandPanelView:2074-2088) */
+.nt-cmdbox {
+  margin: 6px 16px 4px 35px;
+  padding: 7px 10px; border-radius: 7px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  font-family: var(--nt-mono); font-size: 12px; font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* "Show all N" (IslandPanelView:1008-1009): 10.5 medium white@0.36 */
+.nt .nt-showall {
+  display: block; width: 100%; text-align: center;
+  padding: 6px 0 10px;
+  font-size: 10.5px; font-weight: 500; color: rgba(255, 255, 255, 0.36);
+  transition: color 0.15s ease;
+}
+.nt .nt-showall:hover { color: rgba(255, 255, 255, 0.6); }
+
+/* ---------- Notification card (approval) ---------- */
+/* title 12.5 semibold paper@0.86; $ cmd mono 11.5 semibold paper@0.78 in
+   RR7 white@0.045; path 10.5 medium paper@0.42 (IslandPanelView:2098-2124) */
+.nt-notify { padding: 4px 16px 12px; }
+.nt-notify-head {
+  display: flex; align-items: center; gap: 8px; padding: 6px 0 8px;
+}
+.nt-notify-head .nt-dot { width: 9px; height: 9px; }
+.nt-notify-title { font-size: 12.5px; font-weight: 600; color: rgba(241, 234, 217, 0.86); }
+.nt-notify-cmd {
+  padding: 8px 10px; border-radius: 7px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  font-family: var(--nt-mono); font-size: 11.5px; font-weight: 600;
+  color: rgba(241, 234, 217, 0.78);
+  overflow-x: auto; white-space: nowrap;
+}
+.nt-notify-path { margin-top: 6px; font-size: 10.5px; font-weight: 500; color: rgba(241, 234, 217, 0.42); }
+/* buttons 11.8 semibold RR10 pad h13/v8 (IslandActionButtonStyle) */
+.nt-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+.nt .nt-abtn {
+  font-size: 11.8px; font-weight: 600; padding: 8px 13px; border-radius: 10px;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.nt .nt-abtn:hover { filter: brightness(1.15); }
+.nt .nt-abtn:active { transform: scale(0.97); }
+.nt .nt-abtn-secondary { background: rgba(255, 255, 255, 0.065); color: rgba(241, 234, 217, 0.78); }
+.nt .nt-abtn-warning { background: rgb(217, 140, 38); color: #fff; }
+.nt .nt-abtn-primary { background: var(--nt-paper); color: rgba(0, 0, 0, 0.88); }
+
+/* ---------- Closed pill (V6ClosedPillShape / V6NotchContent) ---------- */
+/* flat top, semicircle bottom r = h/2; auto-sizes to content like the
+   real pill (min-width 70, edge pad h/2); overflowing text marquees
+   instead of clipping (V6NotchContent:407-436). */
+.nt-pill {
+  position: relative;
+  display: inline-flex; align-items: center;
+  height: 38px; min-width: 70px; max-width: 320px;
+  width: fit-content;
+  padding: 0 12px;
+  background: var(--nt-ink);
+  border-radius: 0 0 19px 19px;
+  color: var(--nt-paper);
+}
+/* music surfaces use 8pt lead/trail insets (IslandChromeMetrics:12,16);
+   left reads a touch tight at 8 so it gets 10 */
+.nt-pill-music-notification, .nt-pill-music-compact { padding: 0 8px 0 10px; }
+.nt-pill-idle .nt-pill-inner { justify-content: center; }
+
+/* MacBook notch layout: content splits into left/right wings around the
+   physical notch (V6NotchContent MacBook layout — leftWing / notch gap /
+   rightWing, contentGap 8) */
+.nt-pill-notchgap { width: 190px; flex: none; align-self: stretch; }
+
+/* marquee: 30px/s ping-pong with 1.1s end pauses (V6NotchContent:407-436) */
+.nt-marq { display: block; overflow: hidden; max-width: 100%; }
+.nt-marq-inner { display: inline-block; white-space: nowrap; }
+.nt-marq.is-scrolling .nt-marq-inner {
+  animation: nt-marq var(--marq-dur, 6s) linear infinite;
+}
+@keyframes nt-marq {
+  0%, 12% { transform: translateX(0); }
+  46%, 58% { transform: translateX(var(--marq-dist, 0px)); }
+  92%, 100% { transform: translateX(0); }
+}
+.nt-pill.nt-glass {
+  background: rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(22px) saturate(1.1);
+  backdrop-filter: blur(22px) saturate(1.1);
+}
+.nt-pill-inner { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.nt-pill-inner svg { fill: currentColor; width: 100%; height: 100%; display: block; }
+/* closed art 22x22 r5 (V6NotchContent:517-518) */
+.nt-pill-art {
+  width: 22px; height: 22px; border-radius: 5px; flex: none;
+  background-size: cover; background-position: center;
+}
+.nt-pill-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; max-width: 150px; }
+/* closed music title mono 11 semibold paper; artist mono 10 medium @0.55 */
+.nt-pill-title {
+  font-family: var(--nt-mono); font-size: 11px; font-weight: 600;
+  line-height: 14px; color: var(--nt-paper);
+  white-space: nowrap;
+}
+.nt-pill-artist {
+  font-family: var(--nt-mono); font-size: 10px; font-weight: 500;
+  line-height: 12px; color: rgba(241, 234, 217, 0.55);
+  white-space: nowrap;
+}
+/* center label mono 11.5 medium paper (V6NotchContent:196-199) */
+.nt-pill-label {
+  font-family: var(--nt-mono); font-size: 11.5px; font-weight: 500;
+  color: var(--nt-paper); white-space: nowrap;
+  max-width: 180px;
+}
+.nt-pill-gap { flex: 1; min-width: 6px; }
+
+/* waveform: 4 bars w2.2 gap2 r1 in 20x14 (V6NotchContent:816-869) */
+.nt-eq { display: flex; align-items: center; gap: 2px; width: 20px; height: 14px; flex: none; }
+.nt-eq i {
+  width: 2.2px; border-radius: 1px; height: 100%;
+  background: currentColor; transform-origin: center;
+  animation: nt-eq 0.82s linear infinite alternate;
+}
+.nt-eq i:nth-child(1) { animation-duration: 1.05s; animation-delay: 0.16s; }
+.nt-eq i:nth-child(4) { animation-duration: 1.05s; animation-delay: 0.16s; }
+@keyframes nt-eq { from { transform: scaleY(0.3); } to { transform: scaleY(1); } }
+.nt-eq.is-paused i { animation: none; transform: scaleY(0.3); }
+
+/* agents grid tiles (V6NotchContent:75-96): cell 8, gap 2, r1.5 */
+.nt-grid { display: grid; gap: 2px; flex: none; }
+.nt-grid i { width: 8px; height: 8px; border-radius: 1.5px; }
+.nt-grid .is-idle { opacity: 0.22; }
+.nt-grid .is-waiting { animation: nt-tile 1.4s ease-in-out infinite alternate; }
+@keyframes nt-tile { from { opacity: 0.35; } to { opacity: 1; } }
+
+/* sprite slot: 24x24 (UnifiedBars.swift:117-140) */
+.nt-sprite { width: 24px; height: 24px; flex: none; display: grid; place-items: center; }
+.nt-sprite.is-running { animation: nt-bounce 0.4s steps(2) infinite; }
+@keyframes nt-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.2px); } }
+
+/* ---------- GlassSurface (React Bits) integration ---------- */
+/* When the island renders through <GlassSurface>, its container owns
+   the backdrop-filter; we restore the island's chrome on top. */
+.nt-island-gs {
+  position: relative; overflow: hidden;
+  /* GlassSurface writes a uniform inline border-radius; the island's
+     top edge must stay flush with the notch */
+  border-radius: 0 0 22px 22px !important;
+}
+.nt-island-gs.glass-surface--svg {
+  background: transparent !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), 0 18px 44px rgba(0, 0, 0, 0.55) !important;
+  /* refraction from the SVG displacement filter + a light frost blur —
+     the tint overlays this; it must never replace the glass */
+  -webkit-backdrop-filter: var(--filter-id) blur(8px) saturate(var(--glass-saturation, 1)) !important;
+  backdrop-filter: var(--filter-id) blur(8px) saturate(var(--glass-saturation, 1)) !important;
+}
+/* Safari/Firefox fallback → same dark blur the kit used before */
+.nt-island-gs.glass-surface--fallback {
+  background: rgba(0, 0, 0, 0.22) !important;
+  border: 0 !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.15) !important;
+  backdrop-filter: blur(26px) saturate(1.15) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), 0 18px 44px rgba(0, 0, 0, 0.55) !important;
+}
+.nt-island-gs .glass-surface__content {
+  display: block; padding: 0; width: 100%; height: auto;
+  align-items: stretch; justify-content: flex-start;
+}
+/* ink tint fill over the glass, exactly like the app's overlay
+   (LiquidGlass.swift:89-112, tintStrength 0.22) */
+.nt-gs-tint {
+  position: absolute; inset: 0; pointer-events: none;
+  background: rgba(0, 0, 0, 0.22);
+}
+.nt-island-gs.is-frosted .nt-gs-tint { background: rgba(12, 12, 14, 0.55); }
+
+/* tab-content transition: opacity + scale 0.97 anchored top
+   (IslandPanelView.swift:820-822) + animated height morph */
+.nt-height { overflow: hidden; transition: height 0.38s cubic-bezier(0.3, 1.12, 0.35, 1); }
+.nt-tabfade { animation: nt-tabfade 0.35s cubic-bezier(0.3, 1.1, 0.4, 1); transform-origin: top center; }
+@keyframes nt-tabfade {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nt-height { transition: none; }
+  .nt-tabfade { animation: none; }
+}
+
+/* ---------- Feature focus stage ---------- */
+/* Crops the mock to the fragment being highlighted instead of showing
+   the whole island. */
+.nt-stage {
+  position: relative; overflow: hidden;
+  border-radius: 20px;
+  background-size: cover; background-position: center;
+  display: grid; place-items: center;
+  min-height: 300px;
+  isolation: isolate;
+}
+.nt-stage::after {
+  content: ''; position: absolute; inset: 0; z-index: 0;
+  background: radial-gradient(120% 90% at 50% 0%, transparent 40%, rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+}
+.nt-stage > * { position: relative; z-index: 1; }
+.nt-zoom { transform-origin: center; }
+
+/* fragment plate: renders an isolated piece of the island close-up */
+.nt-fragment {
+  background: var(--nt-ink);
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), 0 24px 60px rgba(0, 0, 0, 0.5);
+  padding: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nt-eq i, .nt-dot-pulse, .nt-sprite.is-running, .nt-grid .is-waiting { animation: none; }
+}
+
+/* narrow screens: shrink the music layout gracefully */
+@media (max-width: 560px) {
+  .nt-music { gap: 14px; padding: 12px 16px 8px; }
+  .nt-art { width: 116px; height: 116px; flex-basis: 116px; }
+  .nt-controls { gap: 14px; }
+  .nt-row-side .nt-badge-term { display: none; }
+}
