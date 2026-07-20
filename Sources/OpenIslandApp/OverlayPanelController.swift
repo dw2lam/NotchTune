@@ -55,6 +55,14 @@ final class OverlayPanelController {
         reason == .click
     }
 
+    nonisolated static func shouldWakePanelForFileDrag(
+        pasteboardChangeCountAtMouseDown: Int,
+        currentPasteboardChangeCount: Int,
+        hasFileURLs: Bool
+    ) -> Bool {
+        hasFileURLs && currentPasteboardChangeCount != pasteboardChangeCountAtMouseDown
+    }
+
     func availableDisplayOptions() -> [OverlayDisplayOption] {
         OverlayDisplayResolver.availableDisplayOptions()
     }
@@ -284,6 +292,15 @@ final class OverlayPanelController {
             self?.handleMouseMoved(location)
         } mouseDownHandler: { [weak self] location in
             self?.handleMouseDown(location)
+        } fileDragHandler: { [weak self] location, mouseDownChangeCount, currentChangeCount, hasFileURLs in
+            self?.handleFileDragMoved(
+                location,
+                pasteboardChangeCountAtMouseDown: mouseDownChangeCount,
+                currentPasteboardChangeCount: currentChangeCount,
+                hasFileURLs: hasFileURLs
+            )
+        } fileDragEndedHandler: { [weak self] in
+            self?.fileDragEnded()
         }
     }
 
@@ -351,6 +368,25 @@ final class OverlayPanelController {
     }
 
     // MARK: - File drag shelf
+
+    private func handleFileDragMoved(
+        _ screenLocation: NSPoint,
+        pasteboardChangeCountAtMouseDown: Int,
+        currentPasteboardChangeCount: Int,
+        hasFileURLs: Bool
+    ) {
+        guard Self.shouldWakePanelForFileDrag(
+            pasteboardChangeCountAtMouseDown: pasteboardChangeCountAtMouseDown,
+            currentPasteboardChangeCount: currentPasteboardChangeCount,
+            hasFileURLs: hasFileURLs
+        ) else { return }
+
+        // Closed panels are click-through, so AppKit cannot route the first
+        // native draggingEntered callback to the hosting view. Wake the panel
+        // from global drag motion; subsequent updates and the drop itself are
+        // still validated by NotchHostingView's NSDraggingDestination methods.
+        _ = updateFileDrag(screenLocation: screenLocation, hasFileURLs: true)
+    }
 
     fileprivate func updateFileDrag(screenLocation: NSPoint, hasFileURLs: Bool) -> Bool {
         guard let model, !model.isOverlayDisplayFullscreen, hasFileURLs else { return false }
@@ -1085,17 +1121,24 @@ final class NotchEventMonitors {
     private var localMoveMonitor: Any?
     private var globalClickMonitor: Any?
     private var localClickMonitor: Any?
+    private var globalDragMonitor: Any?
+    private var localDragMonitor: Any?
+    private var globalDragEndMonitor: Any?
+    private var localDragEndMonitor: Any?
     private var lastMoveTime: TimeInterval = 0
 
     var isActive: Bool { globalMoveMonitor != nil }
 
     func start(
         mouseMoveHandler: @MainActor @escaping @Sendable (NSPoint) -> Void,
-        mouseDownHandler: @MainActor @escaping @Sendable (NSPoint) -> Void
+        mouseDownHandler: @MainActor @escaping @Sendable (NSPoint) -> Void,
+        fileDragHandler: @MainActor @escaping @Sendable (NSPoint, Int, Int, Bool) -> Void,
+        fileDragEndedHandler: @MainActor @escaping @Sendable () -> Void
     ) {
         let throttleInterval: TimeInterval = 0.05
 
         nonisolated(unsafe) var sharedLastMove: TimeInterval = 0
+        nonisolated(unsafe) var dragPasteboardChangeCountAtMouseDown = NSPasteboard(name: .drag).changeCount
 
         globalMoveMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { event in
             let now = ProcessInfo.processInfo.systemUptime
@@ -1115,16 +1158,59 @@ final class NotchEventMonitors {
         }
 
         globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { event in
+            dragPasteboardChangeCountAtMouseDown = NSPasteboard(name: .drag).changeCount
             let location = NSEvent.mouseLocation
             Task { @MainActor in mouseDownHandler(location) }
         }
 
         localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+            dragPasteboardChangeCountAtMouseDown = NSPasteboard(name: .drag).changeCount
             let location = NSEvent.mouseLocation
             Task { @MainActor in mouseDownHandler(location) }
             return event
         }
 
+        globalDragMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDragged) { _ in
+            let pasteboard = NSPasteboard(name: .drag)
+            let currentChangeCount = pasteboard.changeCount
+            let mouseDownChangeCount = dragPasteboardChangeCountAtMouseDown
+            let hasFileURLs = currentChangeCount != mouseDownChangeCount
+                && pasteboard.canReadObject(
+                    forClasses: [NSURL.self],
+                    options: [.urlReadingFileURLsOnly: true]
+                )
+            let location = NSEvent.mouseLocation
+            Task { @MainActor in
+                fileDragHandler(location, mouseDownChangeCount, currentChangeCount, hasFileURLs)
+            }
+        }
+
+        localDragMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDragged) { event in
+            let pasteboard = NSPasteboard(name: .drag)
+            let currentChangeCount = pasteboard.changeCount
+            let mouseDownChangeCount = dragPasteboardChangeCountAtMouseDown
+            let hasFileURLs = currentChangeCount != mouseDownChangeCount
+                && pasteboard.canReadObject(
+                    forClasses: [NSURL.self],
+                    options: [.urlReadingFileURLsOnly: true]
+                )
+            let location = NSEvent.mouseLocation
+            Task { @MainActor in
+                fileDragHandler(location, mouseDownChangeCount, currentChangeCount, hasFileURLs)
+            }
+            return event
+        }
+
+        globalDragEndMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
+            dragPasteboardChangeCountAtMouseDown = NSPasteboard(name: .drag).changeCount
+            Task { @MainActor in fileDragEndedHandler() }
+        }
+
+        localDragEndMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { event in
+            dragPasteboardChangeCountAtMouseDown = NSPasteboard(name: .drag).changeCount
+            Task { @MainActor in fileDragEndedHandler() }
+            return event
+        }
     }
 
     func stop() {
@@ -1132,10 +1218,18 @@ final class NotchEventMonitors {
         if let m = localMoveMonitor { NSEvent.removeMonitor(m) }
         if let m = globalClickMonitor { NSEvent.removeMonitor(m) }
         if let m = localClickMonitor { NSEvent.removeMonitor(m) }
+        if let m = globalDragMonitor { NSEvent.removeMonitor(m) }
+        if let m = localDragMonitor { NSEvent.removeMonitor(m) }
+        if let m = globalDragEndMonitor { NSEvent.removeMonitor(m) }
+        if let m = localDragEndMonitor { NSEvent.removeMonitor(m) }
         globalMoveMonitor = nil
         localMoveMonitor = nil
         globalClickMonitor = nil
         localClickMonitor = nil
+        globalDragMonitor = nil
+        localDragMonitor = nil
+        globalDragEndMonitor = nil
+        localDragEndMonitor = nil
     }
 }
 

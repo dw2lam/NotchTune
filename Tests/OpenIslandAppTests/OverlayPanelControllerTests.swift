@@ -137,6 +137,25 @@ struct OverlayPanelControllerTests {
     }
 
     @Test
+    func closedNotchOnlyWakesForAFreshFileDragPasteboard() {
+        #expect(!OverlayPanelController.shouldWakePanelForFileDrag(
+            pasteboardChangeCountAtMouseDown: 41,
+            currentPasteboardChangeCount: 41,
+            hasFileURLs: true
+        ))
+        #expect(!OverlayPanelController.shouldWakePanelForFileDrag(
+            pasteboardChangeCountAtMouseDown: 41,
+            currentPasteboardChangeCount: 42,
+            hasFileURLs: false
+        ))
+        #expect(OverlayPanelController.shouldWakePanelForFileDrag(
+            pasteboardChangeCountAtMouseDown: 41,
+            currentPasteboardChangeCount: 42,
+            hasFileURLs: true
+        ))
+    }
+
+    @Test
     func fileDragActivationAreaAddsApproachPaddingAroundClosedNotch() {
         let closedRect = NSRect(x: 400, y: 900, width: 320, height: 38)
         let activationRect = OverlayPanelController.fileDragActivationRect(
