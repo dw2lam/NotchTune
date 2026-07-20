@@ -31,6 +31,7 @@ struct AppearanceSettingsPane: View {
             VStack(alignment: .leading, spacing: 32) {
                 displayProfilePart
                 characterPart
+                liquidGlassPart
                 notchPersonalizationPart
                 sessionListPersonalizationPart
             }
@@ -589,6 +590,148 @@ struct AppearanceSettingsPane: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Liquid Glass
+
+    private var glassControlsDisabled: Bool {
+        !model.glassSettings.isEnabled || !LiquidGlass.isSupported
+    }
+
+    private var liquidGlassPart: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeader(
+                title: "Liquid Glass",
+                note: LiquidGlass.isSupported
+                    ? "Render the island with Apple's Liquid Glass material instead of solid black."
+                    : "Requires macOS 26 or later — your system shows the solid fallback."
+            )
+
+            Toggle("Enable Liquid Glass", isOn: Binding(
+                get: { model.glassSettings.isEnabled },
+                set: { model.glassSettings.isEnabled = $0 }
+            ))
+            .toggleStyle(.switch)
+            .disabled(!LiquidGlass.isSupported)
+            .font(.system(size: 12))
+            .foregroundStyle(.white.opacity(0.85))
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Material")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.85))
+                HStack(spacing: 8) {
+                    ForEach(GlassStyle.allCases) { style in
+                        monoChip(
+                            title: title(for: style),
+                            selected: model.glassSettings.style == style
+                        ) {
+                            model.glassSettings.style = style
+                        }
+                    }
+                }
+                Text(model.glassSettings.style == .clear
+                    ? "Transparent, light-bending glass — the most 'liquid' look."
+                    : "Frosted, more opaque glass with stronger contrast.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.38))
+            }
+            .disabled(glassControlsDisabled)
+            .opacity(glassControlsDisabled ? 0.4 : 1)
+
+            VStack(alignment: .leading, spacing: 10) {
+                ColorPicker(selection: Binding(
+                    get: { model.glassSettings.tintColor },
+                    set: { newColor in
+                        let rgb = newColor.islandResolvedRGB()
+                        var settings = model.glassSettings
+                        settings.tintRed = rgb.r
+                        settings.tintGreen = rgb.g
+                        settings.tintBlue = rgb.b
+                        model.glassSettings = settings
+                    }
+                ), supportsOpacity: false) {
+                    Text("Tint color")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Tint strength")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.white.opacity(0.6))
+                        Spacer()
+                        Text("\(Int((model.glassSettings.tintStrength * 100).rounded()))%")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                    Slider(value: Binding(
+                        get: { model.glassSettings.tintStrength },
+                        set: { model.glassSettings.tintStrength = $0 }
+                    ), in: 0...1)
+                }
+            }
+            .disabled(glassControlsDisabled)
+            .opacity(glassControlsDisabled ? 0.4 : 1)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Open / expanded panel", isOn: Binding(
+                    get: { model.glassSettings.openView },
+                    set: { model.glassSettings.openView = $0 }
+                ))
+                .toggleStyle(.switch)
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.85))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Closed pill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.85))
+                    HStack(spacing: 8) {
+                        ForEach(GlassClosedScope.allCases) { scope in
+                            monoChip(
+                                title: title(for: scope),
+                                selected: model.glassSettings.closedScope == scope
+                            ) {
+                                model.glassSettings.closedScope = scope
+                            }
+                        }
+                    }
+                    Text(closedScopeNote)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.38))
+                }
+            }
+            .disabled(glassControlsDisabled)
+            .opacity(glassControlsDisabled ? 0.4 : 1)
+        }
+    }
+
+    private var closedScopeNote: String {
+        switch model.glassSettings.closedScope {
+        case .off:
+            return "The compact pill stays solid on every display."
+        case .externalOnly:
+            return "Glass on external displays; the built-in notch pill stays solid so it still merges with the notch."
+        case .always:
+            return "Glass everywhere — may break the blend with the physical notch."
+        }
+    }
+
+    private func title(for scope: GlassClosedScope) -> String {
+        switch scope {
+        case .off: "Off"
+        case .externalOnly: "External only"
+        case .always: "Always"
+        }
+    }
+
+    private func title(for style: GlassStyle) -> String {
+        switch style {
+        case .clear: "Clear"
+        case .regular: "Frosted"
+        }
     }
 
     private func sectionHeader(title: String, note: String?) -> some View {

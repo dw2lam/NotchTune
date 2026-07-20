@@ -370,51 +370,54 @@ struct IslandPanelView: View {
 
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
+                // Keep the glass backdrop outside the morph clip. Applying the
+                // animated clip directly to Liquid Glass makes it briefly
+                // resolve as a frosted fallback during expansion.
                 if shouldRenderOpenedSurface {
-                    openedSurface(width: openedWidth, height: openedHeight)
-                        .opacity(usesOpenedVisualState ? 1 : 0)
-                        .animation(
-                            usesOpenedVisualState
-                                ? .easeIn(duration: 0.14).delay(0.13)
-                                : .easeOut(duration: 0.14).delay(0.13),
-                            value: usesOpenedVisualState
-                        )
-                        .allowsHitTesting(usesOpenedVisualState)
+                    openGlassBackground(width: openedWidth, height: openedHeight)
+                        .allowsHitTesting(false)
                 }
 
-                v6ClosedSurface(panelContentWidth: resolvedPanelContentWidth)
-                    .offset(
-                        x: usesOpenedVisualState ? 0 : macbookNotchAlignmentOffsetX,
-                        y: closedSurfaceVerticalOffset
-                    )
-                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: macbookNotchAlignmentOffsetX)
-                    .opacity(usesOpenedVisualState ? 0 : 1)
-                    .animation(
-                        usesOpenedVisualState
-                            ? .easeOut(duration: 0.05)
-                            : .easeIn(duration: 0.1).delay(0.08),
-                        value: usesOpenedVisualState
-                    )
-                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.isPeeking)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.shouldCollapseClosedNotch)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isShowingMusicNotification)
-                    .animation(.easeInOut(duration: 0.58), value: closedMusicSurfacePhase)
-                    .allowsHitTesting(!usesOpenedVisualState)
+                ZStack(alignment: .top) {
+                    if shouldRenderOpenedSurface {
+                        openedSurfaceContent(width: openedWidth, height: openedHeight)
+                            .allowsHitTesting(usesOpenedVisualState)
+                    }
+
+                    v6ClosedSurface(panelContentWidth: resolvedPanelContentWidth)
+                        .offset(
+                            x: usesOpenedVisualState ? 0 : macbookNotchAlignmentOffsetX,
+                            y: closedSurfaceVerticalOffset
+                        )
+                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: macbookNotchAlignmentOffsetX)
+                        .opacity(usesOpenedVisualState ? 0 : 1)
+                        .animation(
+                            usesOpenedVisualState
+                                ? .easeOut(duration: 0.05)
+                                : .easeIn(duration: 0.14).delay(0.16),
+                            value: usesOpenedVisualState
+                        )
+                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.isPeeking)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.shouldCollapseClosedNotch)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isShowingMusicNotification)
+                        .animation(.easeInOut(duration: 0.58), value: closedMusicSurfacePhase)
+                        .allowsHitTesting(!usesOpenedVisualState)
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
+                .modifier(NotchSurfaceClipModifier(
+                    usesMusicNotificationClip: usesClosedMusicSurfaceClip,
+                    musicClipMetrics: activeMusicClipMetrics,
+                    musicNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
+                    morphProgress: morphProgress,
+                    compactW: closedSurfaceClipWidth,
+                    compactH: closedNotchHeight,
+                    expandedW: openedWidth,
+                    expandedH: openedHeight,
+                    compactR: closedNotchHeight / 2,
+                    compactLeftWingWidth: compactClipLeftWingWidth,
+                    compactNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth
+                ))
             }
-            .frame(maxWidth: .infinity, alignment: .top)
-            .modifier(NotchSurfaceClipModifier(
-                usesMusicNotificationClip: usesClosedMusicSurfaceClip,
-                musicClipMetrics: activeMusicClipMetrics,
-                musicNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
-                morphProgress: morphProgress,
-                compactW: closedSurfaceClipWidth,
-                compactH: closedNotchHeight,
-                expandedW: openedWidth,
-                expandedH: openedHeight,
-                compactR: closedNotchHeight / 2,
-                compactLeftWingWidth: compactClipLeftWingWidth,
-                compactNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth
-            ))
         }
         .scaleEffect(usesOpenedVisualState ? 1 : (isHovering ? IslandChromeMetrics.closedHoverScale : 1), anchor: .top)
         .animation(.easeInOut(duration: 0.3), value: isHovering)
@@ -484,7 +487,8 @@ struct IslandPanelView: View {
                     layout: layout,
                     height: closedNotchHeight,
                     physicalNotchWidth: layout == .macbook ? macbookPhysicalNotchWidth : 0,
-                    panelContentWidth: panelContentWidth
+                    panelContentWidth: panelContentWidth,
+                    glass: model.glassSettings.closedGlass(layout: layout)
                 )
                 .id("closed-music-surface-\(surfaceTrack.title)|\(surfaceTrack.artist)|\(model.playerManager.track.nsAlbumArt.tiffRepresentation?.hashValue ?? 0)")
                 .background(closedSurfaceWidthReader)
@@ -498,7 +502,8 @@ struct IslandPanelView: View {
                     layout: layout,
                     height: closedNotchHeight,
                     physicalNotchWidth: layout == .macbook ? macbookPhysicalNotchWidth : 0,
-                    minWidth: 70
+                    minWidth: 70,
+                    glass: model.glassSettings.closedGlass(layout: layout)
                 )
                 .scaleEffect(isPopping ? 1.04 : 1, anchor: .top)
                 .animation(popAnimation, value: isPopping)
@@ -559,51 +564,58 @@ struct IslandPanelView: View {
 
     // MARK: - Opened surface
 
+    private var openedSurfaceShape: OpenedIslandSurfaceShape {
+        OpenedIslandSurfaceShape(topProfile: usesNotchAwareOpenedHeader ? .notch : .topBar)
+    }
+
     @ViewBuilder
-    private func openedSurface(width openedWidth: CGFloat, height openedHeight: CGFloat) -> some View {
-        let horizontalInset = 0.0
-        let bottomInset = 0.0
-        let surfaceWidth = openedWidth + (horizontalInset * 2)
-        let surfaceHeight = openedHeight + bottomInset
-        let surfaceShape = OpenedIslandSurfaceShape(
-            topProfile: usesNotchAwareOpenedHeader ? .notch : .topBar
-        )
-
-        ZStack(alignment: .top) {
-            surfaceShape
-                .fill(V6Palette.ink)
-                .frame(width: surfaceWidth, height: surfaceHeight)
-                .overlay {
-                    if model.islandActiveTab == .music && model.playerManager.isRunning && !model.playerManager.track.isEmpty() {
-                        Image(nsImage: model.playerManager.track.nsAlbumArt)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .opacity(0.12)
-                            .blur(radius: 20)
-                            .clipShape(surfaceShape)
-                    }
-                }
-
-            VStack(spacing: 0) {
-                openedHeaderContent
-                    .frame(height: closedNotchHeight)
-
-                openedContent
-                    .frame(width: openedWidth)
-                    .frame(maxHeight: max(0, openedHeight - closedNotchHeight), alignment: .top)
-                    .clipped()
-            }
-            .id(usesNotchAwareOpenedHeader)
-            .frame(width: openedWidth, height: openedHeight, alignment: .top)
-            .padding(.horizontal, horizontalInset)
-            .padding(.bottom, bottomInset)
-            .clipShape(surfaceShape)
+    private func openGlassBackground(width openedWidth: CGFloat, height openedHeight: CGFloat) -> some View {
+        let surfaceShape = openedSurfaceShape
+        IslandSurfaceBackground(shape: surfaceShape, glass: model.glassSettings.openGlass)
+            .frame(width: openedWidth, height: openedHeight)
             .overlay {
-                surfaceShape
-                    .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                if model.islandActiveTab == .music && model.playerManager.isRunning && !model.playerManager.track.isEmpty() {
+                    Image(nsImage: model.playerManager.track.nsAlbumArt)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .opacity(0.12)
+                        .blur(radius: 20)
+                        .clipShape(surfaceShape)
+                }
             }
+            .opacity(usesOpenedVisualState ? 1 : 0)
+            .animation(
+                usesOpenedVisualState ? nil : .easeInOut(duration: 0.22),
+                value: usesOpenedVisualState
+            )
+    }
+
+    @ViewBuilder
+    private func openedSurfaceContent(width openedWidth: CGFloat, height openedHeight: CGFloat) -> some View {
+        let surfaceShape = openedSurfaceShape
+        VStack(spacing: 0) {
+            openedHeaderContent
+                .frame(height: closedNotchHeight)
+
+            openedContent
+                .frame(width: openedWidth)
+                .frame(maxHeight: max(0, openedHeight - closedNotchHeight), alignment: .top)
+                .clipped()
         }
-        .frame(width: surfaceWidth, height: surfaceHeight, alignment: .top)
+        .id(usesNotchAwareOpenedHeader)
+        .frame(width: openedWidth, height: openedHeight, alignment: .top)
+        .clipShape(surfaceShape)
+        .overlay {
+            surfaceShape
+                .stroke(Color.white.opacity(0.07), lineWidth: 1)
+        }
+        .opacity(usesOpenedVisualState ? 1 : 0)
+        .animation(
+            usesOpenedVisualState
+                ? .easeOut(duration: 0.22).delay(0.07)
+                : .easeInOut(duration: 0.20),
+            value: usesOpenedVisualState
+        )
     }
 
     // MARK: - Closed state
