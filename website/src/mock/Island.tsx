@@ -152,3 +152,19 @@ export function IslandPanel({
     </GlassSurface>
   );
 }
+
+/* Guided-tour coach bubble (TourCoachView): ink 0.94 capsule-ish r13,
+   stroke white 0.12, icon tint by phase, 11.5 medium paper text. */
+export function TourCoach({ icon, tint, text }: { icon: 'cursor' | 'check' | 'sparkles'; tint: string; text: string }) {
+  return (
+    <div className="nt nt-coach">
+      <svg viewBox="0 0 24 24" style={{ fill: tint }}>
+        {icon === 'cursor' && <path d="M4 2l16 7.5-6.8 1.9L15 18l-2.6 1.2-1.9-6.6L4 16V2z" />}
+        {icon === 'check' && <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm-1.2 14.5L6.5 12.2l1.4-1.4 2.9 2.9 5.3-5.3 1.4 1.4-6.7 6.7z" />}
+        {icon === 'sparkles' && <path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2zm7 11l.9 2.6L22 16.5l-2.1.9L19 20l-.9-2.6-2.1-.9 2.1-.9L19 13z" />}
+      </svg>
+      <span>{text}</span>
+      <button type="button" className="nt-coach-skip">Skip tour</button>
+    </div>
+  );
+}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import './Demo.css';
 import {
   IslandPanel, MusicTab, AgentsTab, ApprovalCard, ClosedPill,
-  MyspaceTab, RemindersTab,
+  MyspaceTab, RemindersTab, MyspaceDropTarget,
   type IslandTab, type MockTrack, type MockSession,
   type MockThought, type MockReminder, UsageChip,
 } from '../mock';
@@ -67,6 +67,9 @@ export default function Demo() {
   const [notifMode, setNotifMode] = useState(true);
   const [thoughts, setThoughts] = useState<MockThought[]>(BASE_THOUGHTS);
   const [reminders, setReminders] = useState<MockReminder[]>(BASE_REMINDERS);
+  /* file-drag demo: idle → hint (near the notch) → catch (over it) */
+  const [dragPhase, setDragPhase] = useState<'idle' | 'hint' | 'catch'>('idle');
+  const sceneRef = useRef<HTMLDivElement>(null);
   const [resolved, setResolved] = useState<'allowed' | 'denied' | null>(null);
   const closeTimer = useRef<number>();
 
@@ -89,6 +92,37 @@ export default function Demo() {
 
   const next = () => { setTrackIdx((i) => (i + 1) % TRACKS.length); setPosition(0); };
   const prev = () => { setTrackIdx((i) => (i + TRACKS.length - 1) % TRACKS.length); setPosition(0); };
+
+  const onSceneDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const r = scene.getBoundingClientRect();
+    const dx = Math.abs(e.clientX - (r.left + r.width / 2));
+    const dy = e.clientY - r.top;
+    if (dx < 110 && dy < 64) {
+      setDragPhase('catch');
+    } else if (dx < 240 && dy < 170) {
+      setDragPhase('hint');
+    } else {
+      setDragPhase('idle');
+    }
+  };
+
+  const onSceneDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (dragPhase !== 'idle') {
+      setThoughts((t) => [{
+        text: '',
+        time: new Date().toLocaleTimeString(),
+        attachments: [{ name: 'quarterly-report.pdf', ext: 'pdf', kind: 'pdf' as const }],
+      }, ...t]);
+      setTab('myspace');
+      setOpen(true);
+      setPinned(true);
+    }
+    setDragPhase('idle');
+  };
 
   const enter = () => { window.clearTimeout(closeTimer.current); setOpen(true); };
   const leave = () => {
@@ -135,11 +169,15 @@ export default function Demo() {
       </div>
 
       <div
+        ref={sceneRef}
         className="demo-scene reveal"
-        data-open={open}
+        data-open={open || dragPhase === 'catch'}
         onClick={(e) => {
           if (!(e.target as HTMLElement).closest('.demo-anchor')) { setPinned(false); setOpen(false); }
         }}
+        onDragOver={onSceneDragOver}
+        onDragLeave={() => setDragPhase('idle')}
+        onDrop={onSceneDrop}
       >
         <div className="demo-menubar" />
         <div
@@ -148,7 +186,13 @@ export default function Demo() {
           onMouseLeave={leave}
           onClick={() => { setOpen(true); setPinned(true); }}
         >
-          <div className="demo-pill">
+          {dragPhase === 'hint' && (
+            <div className="demo-drop-hint">
+              <svg viewBox="0 0 24 24"><path d="M19 13v6a1 1 0 01-1 1H6a1 1 0 01-1-1v-6h2v5h10v-5h2zM12 3l4.5 4.5-1.42 1.42L13 6.83V15h-2V6.83L8.92 8.92 7.5 7.5 12 3z" transform="rotate(180 12 12)" /></svg>
+              Drop to hold
+            </div>
+          )}
+          <div className={`demo-pill ${dragPhase === 'hint' ? 'is-hinting' : ''}`}>
             {pillMode.kind === 'music-compact' && !pillMode.art ? (
               <ClosedPill layout="notch" mode={{ kind: 'agents', char, running: false, label: 'Claude Code' }} />
             ) : (
@@ -157,7 +201,7 @@ export default function Demo() {
           </div>
           <div className="demo-panel" onClick={(e) => e.stopPropagation()}>
             <IslandPanel
-              usage={<UsageChip name="Claude" window="5h" pct={41} />}
+              usage={<><UsageChip name="Claude" window="5h" pct={41} /><UsageChip name="Codex" window="5h" pct={78} /></>}
               tab={tab}
               onTab={setTab}
               glass={glass}
@@ -165,7 +209,9 @@ export default function Demo() {
               ambientArt={tab === 'music' && playing && track.art.startsWith('url') ? track.art.slice(4, -1) : undefined}
               showNotchGap
             >
-              {tab === 'myspace' ? (
+              {dragPhase === 'catch' ? (
+                <MyspaceDropTarget />
+              ) : tab === 'myspace' ? (
                 <MyspaceTab
                   thoughts={thoughts}
                   onSubmit={(text) => setThoughts((t) => [
@@ -227,6 +273,12 @@ export default function Demo() {
       <div className="demo-controls reveal">
         <div className="demo-ctl">
           <span className="demo-ctl-label">Try</span>
+          <span
+            className="demo-file"
+            draggable
+            onDragStart={(e) => e.dataTransfer.setData('text/plain', 'quarterly-report.pdf')}
+            onDragEnd={() => setDragPhase('idle')}
+          >📄 quarterly-report.pdf — drag me at the notch</span>
           <button type="button" className="demo-chip demo-chip-cta" onClick={triggerApproval}>
             Trigger an approval
           </button>

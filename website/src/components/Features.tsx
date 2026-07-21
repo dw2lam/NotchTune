@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MusicTab, AgentsTab, ApprovalCard, type MockSession } from '../mock';
+import { MusicTab, AgentsTab, ApprovalCard, ClosedPill, TourCoach, type MockSession } from '../mock';
 
 /* Feature highlights — each stage crops in on the one fragment of the
    island the feature is about, rendered with the 1:1 mock kit. */
@@ -114,6 +114,30 @@ export default function Features() {
           <h4>Follows your focus</h4>
           <p>The island moves to whatever display you're working on, and adapts as it goes — a real notch surface on MacBooks, a clean top-center bar on external and non-notch screens. It even keeps a separate look for each.</p>
         </article>
+      </div>
+      {/* Onboarding — the guided tour runs in the real notch */}
+      <div className="feature feature-rev reveal">
+        <div className="feature-text">
+          <span className="kicker">Onboarding</span>
+          <h3>A tour that happens in your actual notch.</h3>
+          <p>
+            Setup is a short wizard — connect your agents, pick a music player,
+            style the island live on your real notch — then it hands you over to
+            a hands-on tour: a demo agent asks for approval, you resolve it, peek
+            the music tab, and drop a file into Myspace. Sixty seconds, nothing
+            fake left behind. Replay it anytime from Settings.
+          </p>
+        </div>
+        <div className="feature-stage">
+          <div className="nt nt-stage nt-stage-col" style={{ backgroundImage: 'url(/assets/wallpapers/sonoma.jpg)' }}>
+            <ClosedPill layout="notch" mode={{ kind: 'agents', char: 'dino', running: true, tiles: [{ color: '#f4a4a4', state: 'waiting' }] }} />
+            <TourCoach
+              icon="cursor"
+              tint="#6ea7ff"
+              text="A demo agent needs your approval — hover the notch to open the island."
+            />
+          </div>
+        </div>
       </div>
     </section>
   );
