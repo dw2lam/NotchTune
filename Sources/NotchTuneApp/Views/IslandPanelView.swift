@@ -1417,8 +1417,8 @@ struct IslandPanelView: View {
 
         if providers.isEmpty == false {
             ViewThatFits(in: .horizontal) {
-                compactUsageSummaryView(providers, usesShortTitles: false)
-                compactUsageSummaryView(providers, usesShortTitles: true)
+                compactUsageSummaryView(providers, leading: .fullName)
+                compactUsageSummaryView(providers, leading: .appIcon)
                 scrollableUsageLane(providers)
             }
         } else {
@@ -1547,8 +1547,8 @@ struct IslandPanelView: View {
                 .frame(maxWidth: .infinity)
         } else {
             ViewThatFits(in: .horizontal) {
-                compactUsageSummaryView(providers, usesShortTitles: false)
-                compactUsageSummaryView(providers, usesShortTitles: true)
+                compactUsageSummaryView(providers, leading: .fullName)
+                compactUsageSummaryView(providers, leading: .appIcon)
                 scrollableUsageLane(providers)
             }
             .frame(maxWidth: .infinity, alignment: alignment)
@@ -1560,7 +1560,7 @@ struct IslandPanelView: View {
     /// only reaches this option when neither fixed row fits.
     private func scrollableUsageLane(_ providers: [UsageProviderPresentation]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            compactUsageSummaryView(providers, usesShortTitles: true)
+            compactUsageSummaryView(providers, leading: .appIcon)
         }
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .mask(
@@ -1651,11 +1651,11 @@ struct IslandPanelView: View {
 
     private func compactUsageSummaryView(
         _ providers: [UsageProviderPresentation],
-        usesShortTitles: Bool
+        leading: UsageChipLeading
     ) -> some View {
         HStack(spacing: 7) {
             ForEach(providers) { provider in
-                compactUsageChip(provider, usesShortTitle: usesShortTitles)
+                compactUsageChip(provider, leading: leading)
             }
         }
         .lineLimit(1)
@@ -1671,11 +1671,26 @@ struct IslandPanelView: View {
         return screen.localizedName
     }
 
-    private func compactUsageChip(_ provider: UsageProviderPresentation, usesShortTitle: Bool) -> some View {
+    private enum UsageChipLeading {
+        case fullName
+        /// The agent's real app icon (NSWorkspace, from the installed bundle);
+        /// providers without an installed app keep their full name.
+        case appIcon
+    }
+
+    private func compactUsageChip(_ provider: UsageProviderPresentation, leading: UsageChipLeading) -> some View {
         HStack(spacing: 5) {
-            Text(usesShortTitle ? provider.shortTitle : provider.title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.74))
+            if leading == .appIcon,
+               let icon = AgentAppIconProvider.icon(forProviderTitle: provider.title) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 15, height: 15)
+                    .accessibilityLabel(provider.title)
+            } else {
+                Text(provider.title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.74))
+            }
 
             Text(provider.peakWindowLabel)
                 .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
