@@ -710,20 +710,3 @@
 .nt-ms-drop span { font-size: 9.5px; font-weight: 500; color: rgba(255, 255, 255, 0.3); }
 @keyframes nt-drop-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 
-/* clips list */
-.nt .nt-clip-row { text-align: left; width: 100%; cursor: pointer; align-items: center; }
-.nt-clip-glyph {
-  width: 26px; height: 26px; flex: none;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: rgba(255, 255, 255, 0.05); border-radius: 7px;
-  color: rgba(255, 255, 255, 0.5);
-}
-.nt-clip-glyph svg { width: 11px; height: 11px; stroke-width: 2.2; }
-.nt-clip-thumb { width: 26px; height: 26px; flex: none; border-radius: 7px; background-size: cover; }
-.nt-clip-link { color: rgba(255, 255, 255, 0.75); }
-.nt-clip-copied {
-  display: inline-flex; align-items: center; gap: 4px; flex: none;
-  font-size: 9px; font-weight: 600; color: #6fb982;
-}
-.nt-clip-copied svg { width: 10px; height: 10px; }
-.nt-clip-foot { font-size: 8.5px; color: rgba(255, 255, 255, 0.3); }

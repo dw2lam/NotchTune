@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import {
   Archive, ArchiveRestore, ArrowUp, AudioWaveform, Bell, BellRing, CheckCircle2,
-  Circle, Clipboard as ClipboardIcon, Clock, FileText, Film, Folder as FolderIcon,
-  Image as ImageIcon, Infinity as InfinityIcon, Inbox, LayoutGrid,
-  Link as LinkIcon, Paperclip, Trash2, X,
+  Circle, Clock, FileText, Film, Image as ImageIcon, Infinity as InfinityIcon,
+  Inbox, Paperclip, Trash2, X,
 } from 'lucide-react';
 
 /* ============================================================
@@ -236,55 +235,3 @@ export function MyspaceDropTarget() {
   );
 }
 
-/* Clips list (clipboard history): rows mirror thought rows; kind glyph +
-   2-line preview + time · kind meta; click-to-copy affordance. */
-export interface MockClip {
-  kind: 'text' | 'link' | 'image' | 'file';
-  preview: string;
-  time: string;
-  art?: string;
-}
-
-const CLIP_GLYPH: Record<MockClip['kind'], () => JSX.Element> = {
-  text: () => <FileText />,
-  link: () => <LinkIcon />,
-  image: () => <ImageIcon />,
-  file: () => <FolderIcon />,
-};
-
-export function ClipsList({ clips }: { clips: MockClip[] }) {
-  const [copied, setCopied] = useState<number | null>(null);
-  return (
-    <div className="nt-ms">
-      <div className="nt-rm-picker">
-        <button type="button" className="nt-rm-seg"><LayoutGrid /> Thoughts</button>
-        <button type="button" className="nt-rm-seg is-on"><ClipboardIcon /> Clips <i>{clips.length}</i></button>
-      </div>
-      <div className="nt-ms-list">
-        {clips.map((clip, i) => (
-          <button
-            type="button"
-            className="nt-ms-row nt-clip-row"
-            key={clip.preview}
-            onClick={() => {
-              setCopied(i);
-              window.setTimeout(() => setCopied((c) => (c === i ? null : c)), 1200);
-            }}
-          >
-            {clip.kind === 'image' && clip.art ? (
-              <span className="nt-clip-thumb" style={{ background: clip.art }} />
-            ) : (
-              <span className="nt-clip-glyph">{CLIP_GLYPH[clip.kind]()}</span>
-            )}
-            <span className="nt-ms-row-body">
-              <span className={`nt-ms-text ${clip.kind === 'link' ? 'nt-clip-link' : ''}`}>{clip.preview}</span>
-              <span className="nt-ms-meta"><Clock /> <span>{clip.time}</span> <span className="nt-ms-dot">·</span> {clip.kind}</span>
-            </span>
-            {copied === i && <span className="nt-clip-copied"><CheckCircle2 /> Copied</span>}
-          </button>
-        ))}
-      </div>
-      <div className="nt-clip-foot">Click to copy · drag to use · kept 3 days</div>
-    </div>
-  );
-}

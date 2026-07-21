@@ -14,7 +14,6 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
         UNUserNotificationCenter.current().delegate = self
         model.myspaceStore.restorePendingReminders()
         model.updateChecker.startIfNeeded()
-        model.updateClipboardWatcher()
         ProcessInfo.processInfo.disableAutomaticTermination(
             "NotchTune should remain active while monitoring local agent sessions."
         )

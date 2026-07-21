@@ -150,25 +150,13 @@ private struct MyspacePreviewSelection: Identifiable {
 }
 
 struct MyspacePanelView: View {
-    private enum MyspaceSection: String, CaseIterable, Identifiable {
-        case thoughts
-        case clips
-
-        var id: String { rawValue }
-        var title: String { self == .thoughts ? "Thoughts" : "Clips" }
-        var icon: String { self == .thoughts ? "square.grid.2x2" : "doc.on.clipboard" }
-    }
-
     let store: MyspaceStore
-    let clipStore: MyspaceClipStore
     let onFilesHeld: () -> Void
     @State private var draft = ""
     @State private var pendingAttachments: [URL] = []
     @State private var isDropTargeted = false
     @State private var composerMessage: String?
     @State private var previewSelection: MyspacePreviewSelection?
-    @State private var section: MyspaceSection = .thoughts
-    @State private var copiedClipID: UUID?
     @FocusState private var composerFocused: Bool
 
     var body: some View {
@@ -177,13 +165,8 @@ struct MyspacePanelView: View {
                 inlinePreview(previewSelection)
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             } else {
-                sectionPicker
-                if section == .thoughts {
-                    composer
-                    thoughtList(store.thoughts.filter { !$0.isReminder })
-                } else {
-                    clipsList
-                }
+                composer
+                thoughtList(store.thoughts.filter { !$0.isReminder })
             }
         }
         .padding(.horizontal, 16)
@@ -207,188 +190,6 @@ struct MyspacePanelView: View {
         .transition(.opacity)
     }
 
-    // MARK: - Section picker (mirrors the Reminders Active/Archive capsule)
-
-    private var sectionPicker: some View {
-        HStack(spacing: 4) {
-            ForEach(MyspaceSection.allCases) { item in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.16)) { section = item }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: item.icon)
-                            .font(.system(size: 9.5, weight: .semibold))
-                        Text(item.title)
-                        if item == .clips, !clipStore.clips.isEmpty {
-                            Text("\(clipStore.clips.count)")
-                                .monospacedDigit()
-                                .foregroundStyle(.white.opacity(0.34))
-                        }
-                    }
-                    .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundStyle(.white.opacity(section == item ? 0.86 : 0.44))
-                    .frame(maxWidth: .infinity, minHeight: 28)
-                    .background(section == item ? .white.opacity(0.1) : .clear, in: Capsule())
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(3)
-        .background(.white.opacity(0.035), in: Capsule())
-        .overlay(Capsule().stroke(.white.opacity(0.07), lineWidth: 0.5))
-    }
-
-    // MARK: - Clips (NotchClip-style clipboard history)
-
-    @ViewBuilder
-    private var clipsList: some View {
-        if clipStore.clips.isEmpty {
-            VStack(spacing: 6) {
-                Spacer(minLength: 12)
-                Image(systemName: "doc.on.clipboard")
-                    .font(.system(size: 20, weight: .light))
-                    .foregroundStyle(.white.opacity(0.24))
-                Text("Nothing copied yet")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.56))
-                Text("Everything you copy lands here — text, links, images, and files. Kept on this Mac, cleared automatically.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.3))
-                    .multilineTextAlignment(.center)
-                Spacer(minLength: 12)
-            }
-            .frame(maxWidth: .infinity, minHeight: 94)
-        } else {
-            MyspaceAutoHeightScrollView(maxHeight: 210) {
-                LazyVStack(spacing: 7) {
-                    ForEach(clipStore.clips) { clip in
-                        clipRow(clip)
-                    }
-                }
-            }
-
-            HStack {
-                Text("Click to copy · drag to use · kept 3 days")
-                    .font(.system(size: 8.5))
-                    .foregroundStyle(.white.opacity(0.3))
-                Spacer()
-                Button("Clear all") {
-                    withAnimation(.easeInOut(duration: 0.18)) { clipStore.clearAll() }
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(.white.opacity(0.4))
-            }
-        }
-    }
-
-    private func clipRow(_ clip: MyspaceClip) -> some View {
-        HStack(alignment: .center, spacing: 9) {
-            clipThumb(clip)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(clipPreviewText(clip))
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(clip.kind == .link ? .white.opacity(0.75) : .white.opacity(0.86))
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
-                    Text(clip.createdAt, format: .dateTime.hour().minute())
-                        .monospacedDigit()
-                    Text("·")
-                    Text(clipKindLabel(clip.kind))
-                }
-                .font(.system(size: 8.5))
-                .foregroundStyle(.white.opacity(0.3))
-            }
-
-            if copiedClipID == clip.id {
-                Label("Copied", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(IslandDesignPalette.Status.completed)
-                    .labelStyle(.titleAndIcon)
-            }
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) { clipStore.delete(id: clip.id) }
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.25))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Delete clip")
-        }
-        .padding(9)
-        .background(.white.opacity(0.024), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(.white.opacity(0.065), lineWidth: 0.5)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 10))
-        .onTapGesture {
-            clipStore.copyToPasteboard(clip)
-            withAnimation(.easeOut(duration: 0.15)) { copiedClipID = clip.id }
-            let id = clip.id
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                if copiedClipID == id {
-                    withAnimation(.easeIn(duration: 0.2)) { copiedClipID = nil }
-                }
-            }
-        }
-        .onDrag {
-            if let url = clipStore.storedFileURL(of: clip) {
-                return NSItemProvider(contentsOf: url) ?? NSItemProvider()
-            }
-            return NSItemProvider(object: (clip.textValue ?? "") as NSString)
-        }
-    }
-
-    @ViewBuilder
-    private func clipThumb(_ clip: MyspaceClip) -> some View {
-        switch clip.kind {
-        case .image:
-            ClipImageThumb(url: clipStore.storedFileURL(of: clip))
-        case .file:
-            Image(nsImage: NSWorkspace.shared.icon(forFile: clip.filePath ?? ""))
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 26, height: 26)
-        case .link:
-            clipGlyph("link")
-        case .text:
-            clipGlyph("text.alignleft")
-        }
-    }
-
-    private func clipGlyph(_ systemName: String) -> some View {
-        Image(systemName: systemName)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(.white.opacity(0.5))
-            .frame(width: 26, height: 26)
-            .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 7))
-    }
-
-    private func clipPreviewText(_ clip: MyspaceClip) -> String {
-        switch clip.kind {
-        case .text, .link, .file:
-            return clip.textValue ?? clip.filePath ?? ""
-        case .image:
-            return "Image"
-        }
-    }
-
-    private func clipKindLabel(_ kind: MyspaceClip.Kind) -> String {
-        switch kind {
-        case .text: "Text"
-        case .link: "Link"
-        case .image: "Image"
-        case .file: "File"
-        }
-    }
 
     private func inlinePreview(_ selection: MyspacePreviewSelection) -> some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -1100,29 +901,3 @@ struct RemindersPanelView: View {
 }
 
 /// Async-loading thumbnail for image clips (42px cap keeps rows light).
-private struct ClipImageThumb: View {
-    let url: URL?
-    @State private var image: NSImage?
-
-    var body: some View {
-        Group {
-            if let image {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 26, height: 26)
-                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            } else {
-                Image(systemName: "photo")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .frame(width: 26, height: 26)
-                    .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 7))
-            }
-        }
-        .task(id: url) {
-            guard let url else { return }
-            image = NSImage(contentsOf: url)
-        }
-    }
-}

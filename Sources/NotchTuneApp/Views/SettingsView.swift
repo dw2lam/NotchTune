@@ -178,16 +178,6 @@ struct GeneralSettingsPane: View {
                 }
             }
 
-            Section("Myspace") {
-                Toggle("Clipboard history", isOn: Binding(
-                    get: { model.clipboardHistoryEnabled },
-                    set: { model.clipboardHistoryEnabled = $0 }
-                ))
-                Text("Everything you copy stays within reach in Myspace → Clips. Local-only, cleared automatically after 3 days.")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.secondary)
-            }
-
             Section("Onboarding") {
                 Button("Re-run setup assistant") {
                     model.showOnboarding()

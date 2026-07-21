@@ -851,7 +851,6 @@ struct IslandPanelView: View {
                     case .myspace:
                         MyspacePanelView(
                             store: model.myspaceStore,
-                            clipStore: model.clipStore,
                             onFilesHeld: {
                                 model.notchOpen(reason: .click)
                             }

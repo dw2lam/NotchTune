@@ -1,15 +1,8 @@
 import { useState } from 'react';
 import {
-  MyspaceTab, RemindersTab, MyspaceDropTarget, ClipsList,
-  type MockThought, type MockReminder, type MockClip,
+  MyspaceTab, RemindersTab, MyspaceDropTarget,
+  type MockThought, type MockReminder,
 } from '../mock';
-
-const SECTION_CLIPS: MockClip[] = [
-  { kind: 'link', preview: 'https://notchtune.dev/download', time: '4:41 PM' },
-  { kind: 'text', preview: 'const glass = resolve(.clear, tint: 0.22)', time: '4:38 PM' },
-  { kind: 'image', preview: 'Screenshot 2026-07-20', time: '4:12 PM', art: 'linear-gradient(135deg,#2c5f2d,#97bc62)' },
-  { kind: 'file', preview: 'NotchTune.dmg', time: '3:58 PM' },
-];
 
 /* The Myspace feature section — a personal space living in the notch.
    (Yes, that Myspace. Sort of.) */
@@ -88,28 +81,6 @@ export default function Myspace() {
                 ])}
                 onDelete={(i) => setThoughts((t) => t.filter((_, idx) => idx !== i))}
               />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Clipboard history */}
-      <div className="feature reveal">
-        <div className="feature-text">
-          <span className="kicker">Clipboard</span>
-          <h3>Everything you copy. One glance up.</h3>
-          <p>
-            Flip it on and Myspace keeps your clipboard history — text, links,
-            images, and files land in the Clips list the moment you copy them.
-            Off by default: your pasteboard is yours. Click to
-            copy back, drag straight into any app. Local-only, skips password
-            managers, and cleans up after itself in three days.
-          </p>
-        </div>
-        <div className="feature-stage">
-          <div className="nt nt-stage" style={{ backgroundImage: 'url(/assets/wallpapers/orange.jpg)' }}>
-            <div className="nt-fragment nt-zoom" style={{ width: 'min(470px, 100%)' }}>
-              <ClipsList clips={SECTION_CLIPS} />
             </div>
           </div>
         </div>
