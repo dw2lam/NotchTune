@@ -56,73 +56,6 @@ private struct MyspaceAutoHeightScrollView<Content: View>: View {
     }
 }
 
-private struct MyspaceAttachmentPreview: View {
-    let url: URL
-    let filename: String
-    @State private var thumbnail: NSImage?
-
-    private var fallbackIcon: NSImage {
-        NSWorkspace.shared.icon(forFile: url.path)
-    }
-
-    private var fileExtension: String {
-        let value = url.pathExtension.uppercased()
-        return value.isEmpty ? "FILE" : String(value.prefix(5))
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ZStack(alignment: .bottomTrailing) {
-                Image(nsImage: thumbnail ?? fallbackIcon)
-                    .resizable()
-                    .aspectRatio(contentMode: thumbnail == nil ? .fit : .fill)
-                    .padding(thumbnail == nil ? 5 : 0)
-                    .frame(width: 42, height: 42)
-                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-
-                Text(fileExtension)
-                    .font(.system(size: 6.5, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.88))
-                    .padding(.horizontal, 3)
-                    .padding(.vertical, 2)
-                    .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 3))
-                    .offset(x: 3, y: 3)
-            }
-            .frame(width: 48, height: 48)
-            .background(.white.opacity(0.025), in: RoundedRectangle(cornerRadius: 9))
-            .overlay {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(.white.opacity(0.09), lineWidth: 0.5)
-            }
-
-            Text(filename)
-                .font(.system(size: 9.5, weight: .medium))
-                .foregroundStyle(.white.opacity(0.64))
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .frame(width: 66, alignment: .leading)
-        }
-        .frame(width: 126, alignment: .leading)
-        .task(id: url) {
-            thumbnail = await quickLookThumbnail()
-        }
-    }
-
-    private func quickLookThumbnail() async -> NSImage? {
-        let scale = NSScreen.main?.backingScaleFactor ?? 2
-        let request = QLThumbnailGenerator.Request(
-            fileAt: url,
-            size: CGSize(width: 96, height: 96),
-            scale: scale,
-            representationTypes: [.thumbnail, .lowQualityThumbnail, .icon]
-        )
-        return await withCheckedContinuation { continuation in
-            QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { representation, _ in
-                continuation.resume(returning: representation?.nsImage)
-            }
-        }
-    }
-}
 
 private struct MyspaceQuickLookView: NSViewRepresentable {
     let url: URL
@@ -149,6 +82,34 @@ private struct MyspacePreviewSelection: Identifiable {
     var id: UUID { attachment.id }
 }
 
+/// How a day's Myspace content is viewed: everything, or narrowed to a type.
+enum MyspaceViewFilter: String, CaseIterable, Identifiable {
+    case all
+    case text
+    case images
+    case files
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: "All"
+        case .text: "Text"
+        case .images: "Images"
+        case .files: "Files"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .all: "square.grid.2x2"
+        case .text: "text.alignleft"
+        case .images: "photo"
+        case .files: "doc"
+        }
+    }
+}
+
 struct MyspacePanelView: View {
     let store: MyspaceStore
     let onFilesHeld: () -> Void
@@ -157,6 +118,7 @@ struct MyspacePanelView: View {
     @State private var isDropTargeted = false
     @State private var composerMessage: String?
     @State private var previewSelection: MyspacePreviewSelection?
+    @State private var viewFilter: MyspaceViewFilter = .all
     @FocusState private var composerFocused: Bool
 
     var body: some View {
@@ -166,6 +128,7 @@ struct MyspacePanelView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             } else {
                 composer
+                filterBar
                 thoughtList(store.thoughts.filter { !$0.isReminder })
             }
         }
@@ -376,6 +339,64 @@ struct MyspacePanelView: View {
     }
 
     @ViewBuilder
+    /// Small filter chips: view a day's content as everything, just text,
+    /// just images, or just files.
+    private var filterBar: some View {
+        HStack(spacing: 5) {
+            ForEach(MyspaceViewFilter.allCases) { filter in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.16)) { viewFilter = filter }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: filter.icon)
+                            .font(.system(size: 8.5, weight: .semibold))
+                        Text(filter.title)
+                    }
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white.opacity(viewFilter == filter ? 0.86 : 0.4))
+                    .padding(.horizontal, 8)
+                    .frame(height: 21)
+                    .background(
+                        viewFilter == filter ? .white.opacity(0.1) : .white.opacity(0.03),
+                        in: Capsule()
+                    )
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// One day's attachments, filtered — the material for the media strip.
+    private func stripAttachments(
+        of group: MyspaceDayGroup
+    ) -> [(thought: MyspaceThought, attachment: MyspaceAttachment)] {
+        group.thoughts.flatMap { thought in
+            thought.attachments.map { (thought, $0) }
+        }
+        .filter { pair in
+            switch viewFilter {
+            case .text: false
+            case .all: true
+            case .images: Self.isImageAttachment(pair.attachment)
+            case .files: !Self.isImageAttachment(pair.attachment)
+            }
+        }
+    }
+
+    private static func isImageAttachment(_ attachment: MyspaceAttachment) -> Bool {
+        let ext = (attachment.originalFilename as NSString).pathExtension
+        guard !ext.isEmpty, let type = UTType(filenameExtension: ext) else { return false }
+        return type.conforms(to: .image)
+    }
+
+    private func textThoughts(of group: MyspaceDayGroup) -> [MyspaceThought] {
+        guard viewFilter == .all || viewFilter == .text else { return [] }
+        return group.thoughts.filter { !$0.text.isEmpty }
+    }
+
+    @ViewBuilder
     private func thoughtList(_ thoughts: [MyspaceThought]) -> some View {
         if thoughts.isEmpty {
             emptyState(
@@ -384,24 +405,72 @@ struct MyspacePanelView: View {
                 detail: "Save a thought or drop in a file."
             )
         } else {
-            MyspaceAutoHeightScrollView(maxHeight: 210) {
+            MyspaceAutoHeightScrollView(maxHeight: 230) {
                 // No pinned headers: a sticky header needs an opaque mask,
                 // which reads as a black band over Liquid Glass.
                 LazyVStack(spacing: 11) {
                     ForEach(MyspaceStore.groupThoughtsByDay(thoughts)) { group in
-                        SwiftUI.Section {
-                            VStack(spacing: 7) {
-                                ForEach(group.thoughts) { thought in
-                                    thoughtRow(thought, showsCompletionControl: false)
+                        let media = stripAttachments(of: group)
+                        let texts = textThoughts(of: group)
+                        if !media.isEmpty || !texts.isEmpty {
+                            SwiftUI.Section {
+                                VStack(spacing: 8) {
+                                    if !media.isEmpty {
+                                        mediaStrip(media)
+                                    }
+                                    if !texts.isEmpty {
+                                        VStack(spacing: 7) {
+                                            ForEach(texts) { thought in
+                                                thoughtRow(thought, showsCompletionControl: false)
+                                            }
+                                        }
+                                    }
                                 }
+                            } header: {
+                                dayHeader(group.day)
                             }
-                        } header: {
-                            dayHeader(group.day)
                         }
                     }
                 }
             }
         }
+    }
+
+    /// The day's files as a horizontal gallery: bigger previews than the old
+    /// inline chips, with a light parallax as the strip scrolls.
+    private func mediaStrip(
+        _ items: [(thought: MyspaceThought, attachment: MyspaceAttachment)]
+    ) -> some View {
+        GeometryReader { stripGeo in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(items, id: \.attachment.id) { item in
+                        MyspaceMediaStripCell(
+                            url: store.attachmentURL(for: item.attachment, thoughtID: item.thought.id),
+                            filename: item.attachment.originalFilename,
+                            stripWidth: stripGeo.size.width,
+                            deletable: item.thought.text.isEmpty && item.thought.attachments.count == 1,
+                            onOpen: {
+                                withAnimation(.easeOut(duration: 0.18)) {
+                                    previewSelection = MyspacePreviewSelection(
+                                        attachment: item.attachment,
+                                        url: store.attachmentURL(for: item.attachment, thoughtID: item.thought.id),
+                                        createdAt: item.thought.createdAt
+                                    )
+                                }
+                            },
+                            onDelete: {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    store.deleteThought(id: item.thought.id)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+            .coordinateSpace(name: "myspaceStrip")
+        }
+        .frame(height: 118)
     }
 
     private func dayHeader(_ date: Date) -> some View {
@@ -449,35 +518,8 @@ struct MyspacePanelView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if !thought.attachments.isEmpty {
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 7) {
-                            ForEach(thought.attachments) { attachment in
-                                let attachmentURL = store.attachmentURL(
-                                    for: attachment,
-                                    thoughtID: thought.id
-                                )
-                                Button {
-                                    withAnimation(.easeOut(duration: 0.18)) {
-                                        previewSelection = MyspacePreviewSelection(
-                                            attachment: attachment,
-                                            url: attachmentURL,
-                                            createdAt: thought.createdAt
-                                        )
-                                    }
-                                } label: {
-                                    MyspaceAttachmentPreview(
-                                        url: attachmentURL,
-                                        filename: attachment.originalFilename
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel("Preview \(attachment.originalFilename)")
-                            }
-                        }
-                    }
-                    .scrollIndicators(.hidden)
-                }
+                // Attachments render in the day's media strip (larger,
+                // parallax) — rows carry text and metadata only.
 
                 HStack(spacing: 6) {
                     Label {
@@ -901,3 +943,90 @@ struct RemindersPanelView: View {
 }
 
 /// Async-loading thumbnail for image clips (42px cap keeps rows light).
+
+/// A gallery cell for the day strip: 96×74 QuickLook preview with a subtle
+/// horizontal parallax as the strip scrolls, filename beneath, hover delete
+/// for attachment-only thoughts.
+private struct MyspaceMediaStripCell: View {
+    let url: URL
+    let filename: String
+    let stripWidth: CGFloat
+    let deletable: Bool
+    let onOpen: () -> Void
+    let onDelete: () -> Void
+
+    @State private var thumbnail: NSImage?
+    @State private var hovering = false
+
+    var body: some View {
+        VStack(spacing: 5) {
+            GeometryReader { geo in
+                let mid = geo.frame(in: .named("myspaceStrip")).midX
+                // Parallax: the oversized preview slides against scroll,
+                // clamped so edges never reveal.
+                let offset = max(-9, min(9, (stripWidth / 2 - mid) * 0.07))
+
+                ZStack(alignment: .topTrailing) {
+                    Group {
+                        if let thumbnail {
+                            Image(nsImage: thumbnail)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .scaleEffect(1.22)
+                                .offset(x: offset)
+                        } else {
+                            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .padding(14)
+                        }
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                    if deletable, hovering {
+                        Button(action: onDelete) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.white.opacity(0.85))
+                                .shadow(color: .black.opacity(0.6), radius: 3)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(4)
+                        .accessibilityLabel("Delete")
+                    }
+                }
+            }
+            .frame(width: 96, height: 74)
+            .background(.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(.white.opacity(hovering ? 0.16 : 0.08), lineWidth: 0.5)
+            }
+
+            Text(filename)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(width: 96)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onOpen)
+        .onHover { hovering = $0 }
+        .task(id: url) {
+            let scale = NSScreen.main?.backingScaleFactor ?? 2
+            let request = QLThumbnailGenerator.Request(
+                fileAt: url,
+                size: CGSize(width: 192, height: 148),
+                scale: scale,
+                representationTypes: [.thumbnail, .lowQualityThumbnail]
+            )
+            thumbnail = await withCheckedContinuation { continuation in
+                QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { representation, _ in
+                    continuation.resume(returning: representation?.nsImage)
+                }
+            }
+        }
+    }
+}
