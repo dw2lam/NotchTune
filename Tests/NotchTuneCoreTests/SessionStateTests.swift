@@ -5,6 +5,44 @@ import Testing
 
 struct SessionStateTests {
     @Test
+    func insertAndRemoveSessionsAreAdditiveAndTargeted() {
+        var state = SessionState(
+            sessions: [
+                AgentSession(
+                    id: "real",
+                    title: "Real session",
+                    tool: .claudeCode,
+                    phase: .running,
+                    summary: "Working",
+                    updatedAt: Date(timeIntervalSince1970: 2_000)
+                ),
+            ]
+        )
+
+        let demo = AgentSession(
+            id: "onboarding-tour-demo",
+            title: "Claude Code · demo",
+            tool: .claudeCode,
+            origin: .demo,
+            phase: .waitingForApproval,
+            summary: "Demo approval",
+            updatedAt: Date(timeIntervalSince1970: 2_001)
+        )
+        state.insertSession(demo)
+
+        #expect(state.sessionsByID.count == 2)
+        #expect(state.session(id: "real")?.phase == .running)
+        #expect(state.session(id: "onboarding-tour-demo")?.origin == .demo)
+
+        let removed = state.removeSessions(where: \.isDemoSession)
+        #expect(removed)
+        #expect(state.sessionsByID.count == 1)
+        #expect(state.session(id: "real") != nil)
+        let removedAgain = state.removeSessions(where: \.isDemoSession)
+        #expect(!removedAgain)
+    }
+
+    @Test
     func appliesPermissionAndQuestionEventsToExistingSessions() {
         let startedAt = Date(timeIntervalSince1970: 1_000)
         var state = SessionState()

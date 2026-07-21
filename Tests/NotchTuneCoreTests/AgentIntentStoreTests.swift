@@ -102,6 +102,34 @@ struct AgentIntentStoreTests {
 
     /// Creates a store backed by an ephemeral UserDefaults suite so each test
     /// gets a clean slate without touching production preferences.
+    @Test
+    func onboardingWizardStageOnlyEverAdvances() {
+        let (store, defaults) = makeStore()
+        #expect(store.onboardingWizardStage == 0)
+
+        store.onboardingWizardStage = 3
+        store.onboardingWizardStage = 1
+        #expect(store.onboardingWizardStage == 3)
+
+        let reopened = AgentIntentStore(defaults: defaults)
+        #expect(reopened.onboardingWizardStage == 3)
+    }
+
+    @Test
+    func onboardingTourOutcomePersistsAndClears() {
+        let (store, defaults) = makeStore()
+        #expect(store.onboardingTourOutcome == nil)
+
+        store.onboardingTourOutcome = .skipped
+        #expect(AgentIntentStore(defaults: defaults).onboardingTourOutcome == .skipped)
+
+        store.onboardingTourOutcome = .completed
+        #expect(store.onboardingTourOutcome == .completed)
+
+        store.onboardingTourOutcome = nil
+        #expect(store.onboardingTourOutcome == nil)
+    }
+
     private func makeStore() -> (AgentIntentStore, UserDefaults) {
         let suiteName = "open-island-intent-tests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

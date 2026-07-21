@@ -467,6 +467,20 @@ public struct SessionState: Equatable, Sendable {
         return sessionsByID.count != before
     }
 
+    /// Additive insert (or replace by id) that leaves every other session
+    /// untouched — used by the onboarding tour to seed its demo session
+    /// without clobbering restored or live sessions.
+    public mutating func insertSession(_ session: AgentSession) {
+        upsert(session)
+    }
+
+    @discardableResult
+    public mutating func removeSessions(where predicate: (AgentSession) -> Bool) -> Bool {
+        let before = sessionsByID.count
+        sessionsByID = sessionsByID.filter { _, session in !predicate(session) }
+        return sessionsByID.count != before
+    }
+
     private mutating func upsert(_ session: AgentSession) {
         sessionsByID[session.id] = session
     }

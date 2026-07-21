@@ -42,6 +42,38 @@ public final class AgentIntentStore: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Self.firstLaunchCompletedKey) }
     }
 
+    // MARK: - Onboarding progress
+
+    /// How the guided notch tour ended, if it ever ran to a terminal state.
+    public enum OnboardingTourOutcome: String, Sendable {
+        case completed
+        case skipped
+    }
+
+    /// Highest wizard step index the user has reached, so a re-opened setup
+    /// assistant can resume where they left off. 0 = never advanced.
+    public var onboardingWizardStage: Int {
+        get { defaults.integer(forKey: Self.onboardingWizardStageKey) }
+        set { defaults.set(max(newValue, onboardingWizardStage), forKey: Self.onboardingWizardStageKey) }
+    }
+
+    /// Terminal outcome of the guided tour. `nil` means the tour never reached
+    /// an end state (never started, or the app quit mid-tour) — it is offered
+    /// again only through explicit entry points, never by nagging.
+    public var onboardingTourOutcome: OnboardingTourOutcome? {
+        get {
+            defaults.string(forKey: Self.onboardingTourOutcomeKey)
+                .flatMap(OnboardingTourOutcome.init(rawValue:))
+        }
+        set {
+            if let newValue {
+                defaults.set(newValue.rawValue, forKey: Self.onboardingTourOutcomeKey)
+            } else {
+                defaults.removeObject(forKey: Self.onboardingTourOutcomeKey)
+            }
+        }
+    }
+
     // MARK: - Legacy migration
 
     /// Reconciles intent state with what is actually on disk the first time a
@@ -96,6 +128,8 @@ public final class AgentIntentStore: @unchecked Sendable {
     }
 
     private static let firstLaunchCompletedKey = "firstLaunchCompleted"
+    private static let onboardingWizardStageKey = "onboarding.wizard.stage"
+    private static let onboardingTourOutcomeKey = "onboarding.tour.outcome"
     private static let migrationVersionKey = "agentIntentMigrationVersion"
     private static let currentMigrationVersion = 1
 }
