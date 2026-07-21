@@ -41,6 +41,7 @@ final class OverlayPanelController {
     private var acceptedCurrentFileDrop = false
     private var fileDragEndGeneration: UInt64 = 0
     private var fileDragPresentationSnapshot: FileDragPresentationSnapshot?
+    private var fileDragWatchTask: Task<Void, Never>?
 
     /// Set when the island auto-collapses on mouse-leave; suppresses an
     /// immediate hover-reopen while the cursor lingers over the notch (which
@@ -356,6 +357,8 @@ final class OverlayPanelController {
 
     private func stopEventMonitoring() {
         eventMonitors.stop()
+        fileDragWatchTask?.cancel()
+        fileDragWatchTask = nil
     }
 
     private func handleMouseMoved(_ screenLocation: NSPoint) {
@@ -403,9 +406,41 @@ final class OverlayPanelController {
         }
     }
 
+    /// Watches the mouse while the left button is held. AppKit's global event
+    /// monitors receive NO mouseDragged events once a drag-and-drop session is
+    /// active (the WindowServer drag loop swallows them), so this poll is the
+    /// only reliable way to notice a file drag approaching the closed notch.
+    /// Runs solely while the button is down; each tick is a changeCount read
+    /// until the drag pasteboard actually changes.
+    private func beginFileDragWatch() {
+        fileDragWatchTask?.cancel()
+        let baseline = NSPasteboard(name: .drag).changeCount
+        fileDragWatchTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(80))
+                guard let self, !Task.isCancelled else { return }
+                guard NSEvent.pressedMouseButtons & 1 == 1 else {
+                    self.fileDragEnded()
+                    self.fileDragWatchTask = nil
+                    return
+                }
+                let pasteboard = NSPasteboard(name: .drag)
+                let hasFileURLs = pasteboard.changeCount != baseline
+                    && pasteboard.canReadObject(
+                        forClasses: [NSURL.self],
+                        options: [.urlReadingFileURLsOnly: true]
+                    )
+                guard hasFileURLs else { continue }
+                _ = self.updateFileDrag(screenLocation: NSEvent.mouseLocation, hasFileURLs: true)
+            }
+        }
+    }
+
     private func handleMouseDown(_ screenLocation: NSPoint) {
         guard let model else { return }
         guard !model.isOverlayDisplayFullscreen else { return }
+
+        beginFileDragWatch()
 
         let inClosedSurfaceArea = isPointInClosedSurfaceArea(screenLocation)
 
