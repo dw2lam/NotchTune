@@ -463,7 +463,16 @@ final class OverlayUICoordinator {
 
     // MARK: - Pointer tracking
 
+    /// While true (onboarding's personalize step), the open island stays put:
+    /// outside clicks and pointer exits don't collapse it, so appearance
+    /// changes can be previewed live on the real notch.
+    var keepsIslandOpenForPreview = false
+
     var shouldAutoCollapseOnMouseLeave: Bool {
+        if keepsIslandOpenForPreview {
+            return false
+        }
+
         if ignoresPointerExitDuringHarness {
             return false
         }

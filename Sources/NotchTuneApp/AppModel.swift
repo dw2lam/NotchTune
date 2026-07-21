@@ -1638,6 +1638,25 @@ final class AppModel {
     func notchOpen(reason: NotchOpenReason, surface: IslandSurface = .sessionList()) { overlay.notchOpen(reason: reason, surface: surface) }
     func notchClose() { overlay.notchClose() }
 
+    // MARK: - Onboarding live appearance preview
+
+    /// Opens the REAL island (pinned) so the personalize step previews glass,
+    /// tint, and character changes on the actual notch instead of a mock.
+    func beginAppearanceLivePreview() {
+        overlay.keepsIslandOpenForPreview = true
+        if notchStatus != .opened {
+            notchOpen(reason: .click)
+        }
+    }
+
+    func endAppearanceLivePreview() {
+        guard overlay.keepsIslandOpenForPreview else { return }
+        overlay.keepsIslandOpenForPreview = false
+        if notchStatus == .opened {
+            notchClose()
+        }
+    }
+
     // MARK: - Onboarding tour
 
     /// Starts (or restarts) the guided notch tour. The island closes first so

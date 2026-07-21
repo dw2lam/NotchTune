@@ -18,7 +18,7 @@ final class OverlayPanelController {
     // flanking the physical notch get the extra room; external/top-bar displays
     // get one continuous row.
     nonisolated static let preferredNotchOpenedPanelWidth: CGFloat = 620
-    private static let preferredTopBarOpenedPanelWidth: CGFloat = 600
+    private static let preferredTopBarOpenedPanelWidth: CGFloat = 640
     private static let preferredNotificationPanelWidth: CGFloat = 620
     private static let openedContentWidthPadding: CGFloat = 0
     private static let openedContentBottomPadding: CGFloat = 0
@@ -422,6 +422,9 @@ final class OverlayPanelController {
             model.notchOpen(reason: .click)
         } else if model.notchStatus == .opened {
             if !isPointInExpandedArea(screenLocation) {
+                // Onboarding's live appearance preview pins the island open —
+                // clicks in the wizard window must not collapse it.
+                guard !model.overlay.keepsIslandOpenForPreview else { return }
                 model.notchClose()
                 repostMouseDown(at: screenLocation)
             } else if model.notchOpenReason != .click {

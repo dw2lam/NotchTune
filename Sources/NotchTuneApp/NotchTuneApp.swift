@@ -151,6 +151,9 @@ struct NotchTuneApp: App {
             OnboardingView(model: appDelegate.model)
         }
         .windowResizability(.contentSize)
+        // Sit low on screen so the real notch stays visible above the wizard —
+        // the personalize step and the guided tour both preview up there.
+        .defaultPosition(UnitPoint(x: 0.5, y: 0.82))
     }
 }
 

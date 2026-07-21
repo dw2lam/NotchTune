@@ -341,21 +341,47 @@ struct OnboardingPersonalizeStep: View {
         VStack(alignment: .leading, spacing: 18) {
             OnboardingStepHeading(
                 title: "Make it yours",
-                detail: "Pick the island's character and finish. Every detail stays editable in Personalization."
+                detail: "Your real island is open right now — every change below applies to it instantly."
             )
 
+            livePreviewHint
             characterRow
             glassRow
             tintRow
-            livePillPreview
+        }
+    }
+
+    /// The preview IS the real notch: the island is pinned open while this
+    /// step is visible (`beginAppearanceLivePreview`).
+    private var livePreviewHint: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.up.forward")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(OnboardingTheme.accent)
+            Text("Look up — the open island at the top of your screen is the live preview.")
+                .font(.system(size: 11))
+                .foregroundStyle(OnboardingTheme.secondaryText)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(OnboardingTheme.accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(OnboardingTheme.accent.opacity(0.25), lineWidth: 0.5)
         }
     }
 
     private var characterRow: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Character")
-                .font(.system(size: 11.5, weight: .semibold))
-                .foregroundStyle(OnboardingTheme.secondaryText)
+            HStack(spacing: 6) {
+                Text("Character")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(OnboardingTheme.secondaryText)
+                Text("· lives on the closed pill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(OnboardingTheme.tertiaryText)
+            }
 
             HStack(spacing: 10) {
                 ForEach(IslandCharacter.allCases) { option in
@@ -482,31 +508,6 @@ struct OnboardingPersonalizeStep: View {
         .onboardingCard()
     }
 
-    /// Live closed-pill preview on a mock hardware notch, mirroring the
-    /// Personalization pane's preview stage.
-    private var livePillPreview: some View {
-        ZStack(alignment: .top) {
-            V6ClosedPillShape()
-                .fill(Color.black)
-                .frame(width: 180, height: 32)
-
-            TimelineView(.periodic(from: .now, by: 0.25)) { context in
-                IslandPreviewPill(
-                    mode: .idle,
-                    character: model.islandCharacter,
-                    label: nil,
-                    rightSlot: nil,
-                    layout: .macbook,
-                    physicalNotchWidth: 180,
-                    now: context.date
-                )
-            }
-        }
-        .frame(height: 32)
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.vertical, 14)
-        .onboardingCard()
-    }
 }
 
 // MARK: - Keep running

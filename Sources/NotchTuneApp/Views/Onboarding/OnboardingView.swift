@@ -85,6 +85,21 @@ struct OnboardingView: View {
             if stage > 0, let resumed = Step(rawValue: min(stage, Step.tryLive.rawValue)) {
                 step = resumed
             }
+            if step == .personalize {
+                model.beginAppearanceLivePreview()
+            }
+        }
+        .onChange(of: step) { old, new in
+            // Personalize previews on the REAL notch: pin the island open for
+            // the duration of the step.
+            if new == .personalize {
+                model.beginAppearanceLivePreview()
+            } else if old == .personalize {
+                model.endAppearanceLivePreview()
+            }
+        }
+        .onDisappear {
+            model.endAppearanceLivePreview()
         }
     }
 
