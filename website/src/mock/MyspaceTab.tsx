@@ -101,6 +101,9 @@ export function MyspaceTab({
   onDelete?: (index: number) => void;
 }) {
   const [draft, setDraft] = useState('');
+  const [filter, setFilter] = useState<'All' | 'Text' | 'Images' | 'Files'>('All');
+  const media = thoughts.flatMap((t) => t.attachments ?? []).filter((a) =>
+    filter === 'All' ? true : filter === 'Images' ? a.kind === 'image' : filter === 'Files' ? a.kind !== 'image' : false);
 
   const submit = () => {
     const text = draft.trim();
@@ -135,6 +138,16 @@ export function MyspaceTab({
         </div>
       </div>
 
+      <div className="nt-ms-filters">
+        {(['All', 'Text', 'Images', 'Files'] as const).map((f) => (
+          <button
+            type="button" key={f}
+            className={`nt-ms-fchip ${filter === f ? 'is-on' : ''}`}
+            onClick={() => setFilter(f)}
+          >{f}</button>
+        ))}
+      </div>
+
       {thoughts.length === 0 ? (
         <div className="nt-ms-empty">
           <Inbox />
@@ -144,8 +157,20 @@ export function MyspaceTab({
       ) : (
         <div className="nt-ms-list">
           <MyspaceDayHeader label={dayLabel} />
-          {thoughts.map((t, i) => (
-            <ThoughtRow key={`${t.time}-${i}`} thought={t} onDelete={onDelete ? () => onDelete(i) : undefined} />
+          {filter !== 'Text' && media.length > 0 && (
+            <div className="nt-ms-strip">
+              {media.map((a) => (
+                <span className="nt-ms-tile" key={a.name}>
+                  <span className="nt-ms-tile-art" style={{ background: a.art ?? 'rgba(255,255,255,0.06)' }}>
+                    {!a.art && attachmentGlyph(a.kind)}
+                  </span>
+                  <span className="nt-ms-tile-name">{a.name}</span>
+                </span>
+              ))}
+            </div>
+          )}
+          {(filter === 'All' || filter === 'Text') && thoughts.filter((t) => t.text).map((t, i) => (
+            <ThoughtRow key={`${t.time}-${i}`} thought={{ ...t, attachments: undefined }} onDelete={onDelete ? () => onDelete(i) : undefined} />
           ))}
         </div>
       )}
