@@ -758,24 +758,21 @@ struct IslandPanelView: View {
         if usesNotchAwareOpenedHeader {
             GeometryReader { geometry in
                 let providers = openedUsageProviders
-                let providerGroups = splitUsageProviders(providers)
                 let metrics = openedHeaderMetrics(for: geometry.size.width)
 
                 HStack(spacing: 0) {
-                    usageLaneView(providerGroups.left, alignment: .leading)
+                    // Every usage chip lives together in the left lane. The
+                    // lane ends exactly at the physical notch's left edge
+                    // (openedHeaderMetrics), so overflow fades out there and
+                    // the chips scroll — swipe to move between them.
+                    usageLaneView(providers, alignment: .leading)
                         .frame(width: metrics.leftUsageWidth, alignment: .leading)
 
                     Color.clear
                         .frame(width: metrics.centerGapWidth)
 
-                    HStack(spacing: Self.headerControlSpacing) {
-                        if metrics.rightUsageWidth > 0, !providerGroups.right.isEmpty {
-                            usageLaneView(providerGroups.right, alignment: .trailing)
-                                .frame(width: metrics.rightUsageWidth, alignment: .trailing)
-                        }
-                        openedHeaderButtons
-                    }
-                    .frame(width: metrics.rightLaneWidth, alignment: .trailing)
+                    openedHeaderButtons
+                        .frame(width: metrics.rightLaneWidth, alignment: .trailing)
                 }
                 .padding(.horizontal, openedHeaderHorizontalPadding)
                 .padding(.top, Self.headerTopPadding)

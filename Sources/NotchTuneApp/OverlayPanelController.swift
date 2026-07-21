@@ -1375,11 +1375,19 @@ extension NSScreen {
         }
 
         let notchHeight = islandClosedHeight
-        let leftPadding = auxiliaryTopLeftArea?.width ?? 0
-        let rightPadding = auxiliaryTopRightArea?.width ?? 0
-        let notchWidth = frame.width - leftPadding - rightPadding + 4
 
-        return CGSize(width: notchWidth, height: notchHeight)
+        // Authoritative: the auxiliary areas track the exact cutout at the
+        // user's current scaled resolution, on every notched chassis.
+        if let left = auxiliaryTopLeftArea?.width, left > 0,
+           let right = auxiliaryTopRightArea?.width, right > 0 {
+            return CGSize(width: frame.width - left - right + 4, height: notchHeight)
+        }
+
+        // Fallback: macOS reported a top safe-area inset without auxiliary
+        // areas — estimate from the notched-chassis catalog instead of
+        // degenerating to the full screen width.
+        let estimated = NotchDisplayCatalog.estimatedNotchSize(forPointWidth: frame.width)
+        return CGSize(width: estimated.width, height: notchHeight)
     }
 
     var topStatusBarHeight: CGFloat {
