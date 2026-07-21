@@ -19,10 +19,6 @@ struct GrowingNotchShape: Shape {
     /// whole pill (required for asymmetric wings).
     var compactLeftWingWidth: CGFloat = 0
     var compactNotchGapWidth: CGFloat = 0
-    /// Shifts only the EXPANDED panel left of window center (notched displays
-    /// give the left header lane room for every usage chip); the compact pill
-    /// stays anchored to the physical notch.
-    var expandedLeftShift: CGFloat = 0
 
     var animatableData: AnimatablePair<CGFloat, CGFloat> {
         get { AnimatablePair(progress, compactW) }
@@ -43,7 +39,7 @@ struct GrowingNotchShape: Shape {
         } else {
             compactX = (rect.width - compactW) / 2
         }
-        let expandedX = (rect.width - expandedW) / 2 - expandedLeftShift
+        let expandedX = (rect.width - expandedW) / 2
         // Closed: anchor the notch gap to the physical cutout. Open: center the panel.
         let x = compactX + (expandedX - compactX) * progress
 
@@ -76,7 +72,6 @@ struct NotchSurfaceClipModifier: ViewModifier {
     let compactR: CGFloat
     let compactLeftWingWidth: CGFloat
     let compactNotchGapWidth: CGFloat
-    var expandedLeftShift: CGFloat = 0
 
     func body(content: Content) -> some View {
         if usesMusicNotificationClip {
@@ -94,8 +89,7 @@ struct NotchSurfaceClipModifier: ViewModifier {
                     expandedH: expandedH,
                     compactR: compactR,
                     compactLeftWingWidth: compactLeftWingWidth,
-                    compactNotchGapWidth: compactNotchGapWidth,
-                    expandedLeftShift: expandedLeftShift
+                    compactNotchGapWidth: compactNotchGapWidth
                 )
             )
         }

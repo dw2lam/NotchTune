@@ -516,11 +516,9 @@ final class OverlayPanelController {
         guard let closedRect = closedSurfaceRect(for: model) else { return false }
 
         let activationRect = Self.fileDragActivationRect(closedSurfaceRect: closedRect)
-        let targetScreen = resolveTargetScreen()
         let retentionRect = Self.fileDragRetentionRect(
             notchRect: notchRect,
-            openedWidth: openedPanelWidth(for: targetScreen),
-            leftShift: targetScreen?.isNotchedScreen == true ? IslandChromeMetrics.notchOpenedLeftShift : 0
+            openedWidth: openedPanelWidth(for: resolveTargetScreen())
         )
         let isInsideTarget = Self.shouldPresentFileDragTarget(
             hasFileURLs: hasFileURLs,
@@ -822,11 +820,10 @@ final class OverlayPanelController {
 
     nonisolated static func fileDragRetentionRect(
         notchRect: NSRect,
-        openedWidth: CGFloat,
-        leftShift: CGFloat = 0
+        openedWidth: CGFloat
     ) -> NSRect {
         NSRect(
-            x: notchRect.midX - openedWidth / 2 - leftShift,
+            x: notchRect.midX - openedWidth / 2,
             y: notchRect.maxY - fileDragTargetHeight,
             width: openedWidth,
             height: fileDragTargetHeight
@@ -877,19 +874,12 @@ final class OverlayPanelController {
     /// Always returns the maximum (opened) panel size so the window never
     /// needs to resize.  All visual transitions are driven purely by SwiftUI
     /// inside this fixed-size window.
-    /// Extra symmetric window width on notched displays so the opened panel can
-    /// render left-shifted while the window (and the compact clip's center
-    /// anchor) stays centered on the physical notch.
-    private func openedShiftMargin(for screen: NSScreen) -> CGFloat {
-        screen.isNotchedScreen ? IslandChromeMetrics.notchOpenedLeftShift * 2 : 0
-    }
-
     private func panelSize(for model: AppModel?, on screen: NSScreen) -> CGSize {
         let insets = panelShadowInsets
 
         guard let model else {
             return CGSize(
-                width: openedPanelWidth(for: screen) + openedShiftMargin(for: screen) + Self.openedContentWidthPadding + (insets.horizontal * 2),
+                width: openedPanelWidth(for: screen) + Self.openedContentWidthPadding + (insets.horizontal * 2),
                 height: screen.notchSize.height + Self.openedEmptyStateHeight + Self.openedContentBottomPadding + insets.bottom
             )
         }
@@ -901,7 +891,7 @@ final class OverlayPanelController {
         let height = screen.notchSize.height + max(contentHeight, Self.openedEmptyStateHeight) + Self.openedContentBottomPadding + insets.bottom
 
         return CGSize(
-            width: panelWidth + openedShiftMargin(for: screen) + Self.openedContentWidthPadding + (insets.horizontal * 2),
+            width: panelWidth + Self.openedContentWidthPadding + (insets.horizontal * 2),
             height: height
         )
     }

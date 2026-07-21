@@ -452,11 +452,7 @@ struct IslandPanelView: View {
 
         let outerHorizontalPadding: CGFloat = 0
         let outerBottomPadding: CGFloat = 0
-        // On notched displays the window carries 2× notchOpenedLeftShift of
-        // extra symmetric width; the opened panel is that much narrower than
-        // the window and renders shifted left of the physical notch.
-        let openedLeftShift: CGFloat = isExternalDisplayPlacement ? 0 : IslandChromeMetrics.notchOpenedLeftShift
-        let openedWidth = max(0, layoutWidth - outerHorizontalPadding - openedLeftShift * 2)
+        let openedWidth = max(0, layoutWidth - outerHorizontalPadding)
         let openedHeight = max(closedNotchHeight, layoutHeight - outerBottomPadding)
 
         VStack(spacing: 0) {
@@ -467,7 +463,6 @@ struct IslandPanelView: View {
                 if shouldRenderOpenedSurface {
                     openGlassBackground(width: openedWidth, height: openedHeight)
                         .allowsHitTesting(false)
-                        .offset(x: -openedLeftShift)
                         // Identity change = fresh material render; resolves the
                         // blur fallback left behind by an animated window resize.
                         .id(glassResolveTick)
@@ -477,7 +472,6 @@ struct IslandPanelView: View {
                     if shouldRenderOpenedSurface {
                         openedSurfaceContent(width: openedWidth, height: openedHeight)
                             .allowsHitTesting(usesOpenedVisualState)
-                            .offset(x: -openedLeftShift)
                     }
 
                     v6ClosedSurface(panelContentWidth: resolvedPanelContentWidth)
@@ -511,8 +505,7 @@ struct IslandPanelView: View {
                     expandedH: openedHeight,
                     compactR: closedNotchHeight / 2,
                     compactLeftWingWidth: compactClipLeftWingWidth,
-                    compactNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
-                    expandedLeftShift: openedLeftShift
+                    compactNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth
                 ))
             }
         }
@@ -765,12 +758,8 @@ struct IslandPanelView: View {
         if usesNotchAwareOpenedHeader {
             GeometryReader { geometry in
                 let providers = openedUsageProviders
+                let providerGroups = splitUsageProviders(providers)
                 let metrics = openedHeaderMetrics(for: geometry.size.width)
-                // With the panel left-shifted, the right lane may only fit the
-                // tool buttons — keep every usage chip together on the left.
-                let providerGroups = metrics.rightUsageWidth > 0
-                    ? splitUsageProviders(providers)
-                    : (left: providers, right: [])
 
                 HStack(spacing: 0) {
                     usageLaneView(providerGroups.left, alignment: .leading)
@@ -1605,9 +1594,7 @@ struct IslandPanelView: View {
             )
         }
 
-        // The opened panel renders shifted left of the physical notch on
-        // notched displays (see IslandChromeMetrics.notchOpenedLeftShift).
-        let panelMinX = screen.frame.midX - (totalWidth / 2) - IslandChromeMetrics.notchOpenedLeftShift
+        let panelMinX = screen.frame.midX - (totalWidth / 2)
         let panelMaxX = panelMinX + totalWidth
         let contentMinX = panelMinX + horizontalPadding
         let contentMaxX = panelMaxX - horizontalPadding
