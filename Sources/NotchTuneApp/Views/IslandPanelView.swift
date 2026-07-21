@@ -121,6 +121,11 @@ struct IslandPanelView: View {
     @State private var keepsOpenedSurfaceMounted = false
     @State private var openedSurfaceMountGeneration: UInt64 = 0
     @State private var morphProgress: CGFloat = 0
+
+    /// Bumped after an opened-state window resize settles to force one fresh
+    /// render of the glass backdrop (see `scheduleGlassResolve`).
+    @State private var glassResolveTick = 0
+    @State private var glassResolveDebounce: DispatchWorkItem?
     /// Drives the sliding active-tab pill so it glides between tabs instead of
     /// cross-fading in place.
     @Namespace private var tabIndicatorNamespace
@@ -360,6 +365,14 @@ struct IslandPanelView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // The Liquid Glass material drops to its plain-blur fallback
+            // whenever the panel window animates its frame (dynamic content
+            // height, tab switches) and only resolves back on a re-render —
+            // previously that re-render was the user's next click. Re-resolve
+            // it ourselves once the opened window's geometry settles.
+            .onChange(of: geometry.size.height) { _, newHeight in
+                scheduleGlassResolve(for: newHeight)
+            }
         }
         .ignoresSafeArea()
         .opacity(model.isOverlayDisplayFullscreen ? 0 : 1)
@@ -427,6 +440,9 @@ struct IslandPanelView: View {
                 if shouldRenderOpenedSurface {
                     openGlassBackground(width: openedWidth, height: openedHeight)
                         .allowsHitTesting(false)
+                        // Identity change = fresh material render; resolves the
+                        // blur fallback left behind by an animated window resize.
+                        .id(glassResolveTick)
                 }
 
                 ZStack(alignment: .top) {
@@ -493,6 +509,21 @@ struct IslandPanelView: View {
                 panelContentWidth = newWidth
             }
         }
+    }
+
+    /// Debounced: bump `glassResolveTick` ~0.3s after the last opened-state
+    /// height change so the glass backdrop re-renders exactly once per settle
+    /// (the resize animation streams height changes every frame).
+    private func scheduleGlassResolve(for newHeight: CGFloat) {
+        glassResolveDebounce?.cancel()
+        guard model.notchStatus == .opened, morphProgress == 1 else { return }
+
+        let work = DispatchWorkItem {
+            guard model.notchStatus == .opened else { return }
+            glassResolveTick &+= 1
+        }
+        glassResolveDebounce = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
     }
 
     private func syncOpenedSurfaceMount(with status: NotchStatus, immediate: Bool = false) {
