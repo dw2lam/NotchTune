@@ -406,7 +406,7 @@ public enum CodexHookInstaller {
 
     private static func isLegacyNotchTuneHookCommand(_ command: String) -> Bool {
         let normalized = command.lowercased()
-        if normalized.contains("notchtunehooks") || normalized.contains("vibeislandhooks") {
+        if normalized.contains("notchtunehooks") || normalized.contains("openislandhooks") || normalized.contains("vibeislandhooks") {
             return true
         }
 

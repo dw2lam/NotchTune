@@ -303,7 +303,7 @@ public enum HookHealthCheck {
 
                     // Only check Open Island / Vibe Island commands
                     let normalized = command.lowercased()
-                    guard normalized.contains("notchtunehooks") || normalized.contains("vibeislandhooks")
+                    guard normalized.contains("notchtunehooks") || normalized.contains("openislandhooks") || normalized.contains("vibeislandhooks")
                         || normalized.contains("open-island") || normalized.contains("vibe-island") else {
                         continue
                     }
@@ -341,7 +341,7 @@ public enum HookHealthCheck {
                     let normalized = command.lowercased()
 
                     // Skip Open Island / Vibe Island hooks
-                    if normalized.contains("notchtunehooks") || normalized.contains("vibeislandhooks")
+                    if normalized.contains("notchtunehooks") || normalized.contains("openislandhooks") || normalized.contains("vibeislandhooks")
                         || normalized.contains("open-island") || normalized.contains("vibe-island") {
                         continue
                     }
@@ -401,7 +401,7 @@ public enum HookHealthCheck {
                 for hook in hookEntries {
                     if let command = hook["command"] as? String {
                         let normalized = command.lowercased()
-                        if normalized.contains("notchtunehooks") || normalized.contains("vibeislandhooks") {
+                        if normalized.contains("notchtunehooks") || normalized.contains("openislandhooks") || normalized.contains("vibeislandhooks") {
                             return true
                         }
                     }

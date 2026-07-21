@@ -207,7 +207,7 @@ public enum KimiHookInstaller {
             return false
         }
 
-        return normalized.contains("notchtunehooks")
+        return normalized.contains("notchtunehooks") || normalized.contains("openislandhooks")
             || normalized.contains("vibeislandhooks")
             || normalized.contains("open-island-bridge")
             || normalized.contains("vibe-island-bridge")

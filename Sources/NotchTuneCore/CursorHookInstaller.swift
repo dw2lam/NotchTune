@@ -148,7 +148,7 @@ public enum CursorHookInstaller {
 
     private static func isNotchTuneCursorHookCommand(_ command: String) -> Bool {
         let normalized = command.lowercased()
-        return (normalized.contains("notchtunehooks") || normalized.contains("vibeislandhooks"))
+        return (normalized.contains("notchtunehooks") || normalized.contains("openislandhooks") || normalized.contains("vibeislandhooks"))
             && normalized.contains("cursor")
     }
 

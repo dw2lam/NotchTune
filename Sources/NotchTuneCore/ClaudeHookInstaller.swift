@@ -301,7 +301,7 @@ public enum ClaudeHookInstaller {
 
     private static func isLegacyNotchTuneHookCommand(_ command: String) -> Bool {
         let normalized = command.lowercased()
-        if (normalized.contains("notchtunehooks") || normalized.contains("vibeislandhooks")) && normalized.contains("--source claude") {
+        if (normalized.contains("notchtunehooks") || normalized.contains("openislandhooks") || normalized.contains("vibeislandhooks")) && normalized.contains("--source claude") {
             return true
         }
 
