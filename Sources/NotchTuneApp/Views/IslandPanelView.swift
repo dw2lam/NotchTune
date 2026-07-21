@@ -340,6 +340,24 @@ struct IslandPanelView: View {
 
                 notchContent(availableSize: geometry.size)
                     .frame(maxWidth: .infinity, alignment: .top)
+
+                // Guided-tour coach bubble: below the pill while closed, pinned
+                // near the window's bottom edge (just under the open panel)
+                // while open. The overlay window is always opened-size, so both
+                // positions fit without a second panel.
+                if model.tour.isActive {
+                    TourCoachView(model: model)
+                        .frame(
+                            maxWidth: .infinity,
+                            maxHeight: .infinity,
+                            alignment: usesOpenedVisualState ? .bottom : .top
+                        )
+                        .padding(.bottom, usesOpenedVisualState ? 10 : 0)
+                        .padding(.top, usesOpenedVisualState ? 0 : closedNotchHeight + 16)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: model.tour.phase)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: model.notchStatus)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

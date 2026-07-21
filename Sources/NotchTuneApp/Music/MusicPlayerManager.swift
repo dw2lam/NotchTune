@@ -340,6 +340,10 @@ final class MusicPlayerManager {
         UserDefaults.standard.set("spotify", forKey: Self.connectedAppKey)
     }
 
+    func switchToNone() {
+        UserDefaults.standard.set("none", forKey: Self.connectedAppKey)
+    }
+
     var isMusicEnabled: Bool { connectedAppName != "None" }
 
     var isSpotifyAvailable: Bool {

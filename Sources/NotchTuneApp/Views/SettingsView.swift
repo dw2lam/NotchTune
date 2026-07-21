@@ -178,6 +178,23 @@ struct GeneralSettingsPane: View {
                 }
             }
 
+            Section("Onboarding") {
+                Button("Re-run setup assistant") {
+                    model.showOnboarding()
+                }
+
+                if model.tour.isActive {
+                    Button("End guided tour") {
+                        model.tour.skip()
+                    }
+                } else {
+                    Button(model.onboardingTourOutcome == nil ? "Take the guided tour" : "Replay guided tour") {
+                        model.startOnboardingTour()
+                    }
+                    .disabled(model.isOverlayDisplayFullscreen)
+                }
+            }
+
             Section(lang.t("settings.general.language")) {
                 Picker(lang.t("settings.general.language"), selection: Binding(
                     get: { lang.language },
