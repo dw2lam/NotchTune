@@ -93,7 +93,9 @@ final class AppModel {
     @ObservationIgnored private var clipboardWatcher: ClipboardWatcher?
 
     /// NotchClip-style clipboard history feeding Myspace's Clips list.
-    var clipboardHistoryEnabled = true {
+    /// Opt-in: watching the pasteboard is privacy-sensitive, so it stays off
+    /// until enabled in Settings → General.
+    var clipboardHistoryEnabled = false {
         didSet {
             guard clipboardHistoryEnabled != oldValue else { return }
             UserDefaults.standard.set(clipboardHistoryEnabled, forKey: Self.clipboardHistoryKey)
