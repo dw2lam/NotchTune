@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import './Demo.css';
 import {
   IslandPanel, MusicTab, AgentsTab, ApprovalCard, ClosedPill,
-  type IslandTab, type MockTrack, type MockSession, UsageChip,
+  MyspaceTab, RemindersTab,
+  type IslandTab, type MockTrack, type MockSession,
+  type MockThought, type MockReminder, UsageChip,
 } from '../mock';
 
 /* ============================================================
@@ -34,6 +36,21 @@ const BASE_SESSIONS: MockSession[] = [
 
 const CHARS = ['dino', 'ghost', 'crab', 'duck', 'claude'] as const;
 
+const BASE_THOUGHTS: MockThought[] = [
+  {
+    text: 'final installer art',
+    time: '4:12:08 PM',
+    attachments: [{ name: 'dmg-background@2x.png', ext: 'png', kind: 'image', art: 'linear-gradient(135deg,#2c1e4f,#7a3aa2 55%,#e88b5a)' }],
+  },
+  { text: 'ship the notch update tonight', time: '2:03:41 PM', reminderAt: 'Jul 21, 9:00 AM' },
+];
+
+const BASE_REMINDERS: MockReminder[] = [
+  { text: 'Reply to the App Store review', reminderAt: 'Jul 21, 9:30 AM', created: '4:02:11 PM' },
+  { text: 'Water the monstera', created: '1:38:52 PM' },
+  { text: 'Send the beta build to Sam', reminderAt: 'Jul 20, 5:00 PM', created: '11:14:27 AM', done: true },
+];
+
 export default function Demo() {
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -48,6 +65,8 @@ export default function Demo() {
   const [tint, setTint] = useState(22); /* app default tintStrength (LiquidGlass.swift:44) */
   const [approval, setApproval] = useState(false);
   const [notifMode, setNotifMode] = useState(true);
+  const [thoughts, setThoughts] = useState<MockThought[]>(BASE_THOUGHTS);
+  const [reminders, setReminders] = useState<MockReminder[]>(BASE_REMINDERS);
   const [resolved, setResolved] = useState<'allowed' | 'denied' | null>(null);
   const closeTimer = useRef<number>();
 
@@ -146,7 +165,22 @@ export default function Demo() {
               ambientArt={tab === 'music' && playing && track.art.startsWith('url') ? track.art.slice(4, -1) : undefined}
               showNotchGap
             >
-              {tab === 'music' ? (
+              {tab === 'myspace' ? (
+                <MyspaceTab
+                  thoughts={thoughts}
+                  onSubmit={(text) => setThoughts((t) => [
+                    { text, time: new Date().toLocaleTimeString() }, ...t,
+                  ])}
+                  onDelete={(i) => setThoughts((t) => t.filter((_, idx) => idx !== i))}
+                />
+              ) : tab === 'reminders' ? (
+                <RemindersTab
+                  reminders={reminders}
+                  onToggle={(i) => setReminders((r) => r.map(
+                    (item, idx) => (idx === i ? { ...item, done: !item.done } : item),
+                  ))}
+                />
+              ) : tab === 'music' ? (
                 <MusicTab
                   track={track} playing={playing} position={position}
                   shuffle={shuffle} repeat={repeat}

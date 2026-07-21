@@ -57,3 +57,13 @@ export const HourglassIcon = () => (
 export const ChevronIcon = () => (
   <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" /></svg>
 );
+
+/* square.grid.2x2 — Myspace tab */
+export const GridIcon = () => (
+  <svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z" /></svg>
+);
+
+/* bell — Reminders tab */
+export const BellIcon = () => (
+  <svg viewBox="0 0 24 24"><path d="M12 22a2.3 2.3 0 002.3-2.3H9.7A2.3 2.3 0 0012 22zm7-5.3v-1l-1.7-1.7v-4.3c0-3-1.6-5.5-4.3-6.2V2.7a1.5 1.5 0 10-3 0v.8C7.3 4.2 5.7 6.7 5.7 9.7V14L4 15.7v1h15z" /></svg>
+);

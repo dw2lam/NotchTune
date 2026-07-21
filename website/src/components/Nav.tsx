@@ -4,6 +4,7 @@ import GlassSurface from './GlassSurface';
 
 const LINKS = [
   { label: 'FEATURES', href: '#features' },
+  { label: 'MYSPACE', href: '#myspace' },
   { label: 'CUSTOMIZE', href: '#glass-lab' },
   { label: 'COMPARE', href: '#compare' },
   { label: 'DOWNLOAD', href: '#download' },

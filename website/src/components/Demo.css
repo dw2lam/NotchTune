@@ -57,7 +57,7 @@
 /* opened panel morphs out of the notch: spring(response .5, damping .8) */
 .demo-panel {
   position: absolute; top: 0; left: 50%;
-  width: 520px; max-width: calc(100vw - 48px);
+  width: 620px; max-width: calc(100vw - 48px);
   transform: translateX(-50%) scale(0.42);
   transform-origin: top center;
   opacity: 0;

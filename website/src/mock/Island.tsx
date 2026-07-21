@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import './mock.css';
 import GlassSurface from '../components/GlassSurface';
-import { GearIcon, PowerIcon, TerminalIcon, NoteIcon } from './icons';
+import { BellIcon, GearIcon, GridIcon, PowerIcon, TerminalIcon, NoteIcon } from './icons';
 
 /* ============================================================
    1:1 opened-island shell (IslandPanelView.swift).
@@ -26,7 +26,7 @@ export function UsageChip({ name, window: win, pct, tone = 'ok' }: {
   );
 }
 
-export type IslandTab = 'agents' | 'music';
+export type IslandTab = 'agents' | 'music' | 'myspace' | 'reminders';
 
 export function TabBar({ tab, onTab }: { tab: IslandTab; onTab?: (t: IslandTab) => void }) {
   const barRef = useRef<HTMLDivElement>(null);
@@ -48,20 +48,22 @@ export function TabBar({ tab, onTab }: { tab: IslandTab; onTab?: (t: IslandTab) 
   return (
     <div className="nt-tabbar" ref={barRef}>
       {ind && <span className="nt-tab-ind" style={ind} />}
-      <button
-        type="button" data-tab="agents"
-        className={`nt-tab ${tab === 'agents' ? 'is-on' : ''}`}
-        onClick={() => onTab?.('agents')}
-      >
-        <TerminalIcon /> Agents
-      </button>
-      <button
-        type="button" data-tab="music"
-        className={`nt-tab ${tab === 'music' ? 'is-on' : ''}`}
-        onClick={() => onTab?.('music')}
-      >
-        <NoteIcon /> Music
-      </button>
+      {(
+        [
+          ['agents', 'Agents', <TerminalIcon key="i" />],
+          ['music', 'Music', <NoteIcon key="i" />],
+          ['myspace', 'Myspace', <GridIcon key="i" />],
+          ['reminders', 'Reminders', <BellIcon key="i" />],
+        ] as const
+      ).map(([id, label, icon]) => (
+        <button
+          key={id} type="button" data-tab={id}
+          className={`nt-tab ${tab === id ? 'is-on' : ''}`}
+          onClick={() => onTab?.(id)}
+        >
+          {icon} {label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -125,7 +127,7 @@ export function IslandPanel({
 
   return (
     <GlassSurface
-      width="min(520px, 100%)"
+      width="min(620px, 100%)"
       height="auto"
       borderRadius={22}
       borderWidth={0.03}

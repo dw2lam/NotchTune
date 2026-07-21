@@ -7,3 +7,7 @@ export type { MockSession, SessionState } from './AgentsTab';
 export { ApprovalCard } from './NotificationCard';
 export { ClosedPill, Waveform, PixelSprite, AgentGrid, Marquee } from './ClosedPill';
 export type { PillMode } from './ClosedPill';
+export {
+  MyspaceTab, RemindersTab, MyspaceDropTarget, MyspaceDayHeader, ThoughtRow,
+} from './MyspaceTab';
+export type { MockThought, MockReminder, MockAttachment } from './MyspaceTab';

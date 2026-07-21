@@ -4,6 +4,7 @@ import Nav from './components/Nav';
 import Hero from './components/Hero';
 import Demo from './components/Demo';
 import Features from './components/Features';
+import Myspace from './components/Myspace';
 import Characters from './components/Characters';
 import Personalize from './components/Personalize';
 import Compare from './components/Compare';
@@ -41,6 +42,7 @@ export default function App() {
         <Hero />
         <Demo />
         <Features />
+        <Myspace />
         <Characters />
         <Personalize />
         <Compare />
