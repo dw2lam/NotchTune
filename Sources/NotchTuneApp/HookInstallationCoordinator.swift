@@ -803,8 +803,14 @@ final class HookInstallationCoordinator {
                     let snapshot = try ClaudeUsageLoader.load()
                     return (status: status, snapshot: snapshot, repairedManagedBridge: repairedManagedBridge)
                 }.value
-                self.claudeStatusLineStatus = usageState.status
-                self.claudeUsageSnapshot = usageState.snapshot
+                // @Observable does not diff — only write on real change so an
+                // unchanged snapshot never re-renders usage readouts.
+                if self.claudeStatusLineStatus != usageState.status {
+                    self.claudeStatusLineStatus = usageState.status
+                }
+                if self.claudeUsageSnapshot != usageState.snapshot {
+                    self.claudeUsageSnapshot = usageState.snapshot
+                }
                 if usageState.repairedManagedBridge {
                     self.onStatusMessage?("Recovered the Claude usage bridge after repairing a missing managed script.")
                 }
@@ -822,7 +828,9 @@ final class HookInstallationCoordinator {
                 let snapshot = try await Task.detached(priority: .utility) {
                     try CodexUsageLoader.load()
                 }.value
-                self.codexUsageSnapshot = snapshot
+                if self.codexUsageSnapshot != snapshot {
+                    self.codexUsageSnapshot = snapshot
+                }
             } catch {
                 self.onStatusMessage?("Failed to read Codex usage state: \(error.localizedDescription)")
             }
@@ -837,7 +845,9 @@ final class HookInstallationCoordinator {
                 let snapshot = try await Task.detached(priority: .utility) {
                     try GeminiUsageLoader.load()
                 }.value
-                self.geminiUsageSnapshot = snapshot
+                if self.geminiUsageSnapshot != snapshot {
+                    self.geminiUsageSnapshot = snapshot
+                }
             } catch {
                 self.onStatusMessage?("Failed to read Gemini usage state: \(error.localizedDescription)")
             }
@@ -1154,7 +1164,9 @@ final class HookInstallationCoordinator {
 
             while !Task.isCancelled {
                 self.refreshClaudeUsageState()
-                try? await Task.sleep(for: .seconds(5))
+                // Usage windows move slowly; 20s keeps readouts fresh at a
+                // quarter of the file-IO + status checks of the old 5s loop.
+                try? await Task.sleep(for: .seconds(20))
             }
         }
     }

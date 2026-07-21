@@ -68,8 +68,22 @@ final class ProcessMonitoringCoordinator {
                 let probe = self.terminalSessionAttachmentProbe
                 let resolver = self.terminalJumpTargetResolver
                 let liveSessions = self.state.sessions.filter(\.isTrackedLiveSession)
-                let (snapshots, ghosttyAvail, terminalAvail, jumpTargets) = await Task.detached(priority: .utility) {
+                let (snapshots, ghosttyAvail, terminalAvail, jumpTargets) = await Task.detached(
+                    priority: .utility
+                ) { () -> (
+                    [ActiveProcessSnapshot],
+                    TerminalSessionAttachmentProbe.SnapshotAvailability<TerminalSessionAttachmentProbe.GhosttyTerminalSnapshot>?,
+                    TerminalSessionAttachmentProbe.SnapshotAvailability<TerminalSessionAttachmentProbe.TerminalTabSnapshot>?,
+                    [String: JumpTarget]
+                ) in
                     let s = discovery.discover()
+                    // Idle guard: with no tracked live sessions and no agent
+                    // processes on the system there is nothing to attach —
+                    // skip the AppleScript terminal snapshots entirely (they
+                    // wake Ghostty/Terminal.app on every 2s cycle otherwise).
+                    guard !liveSessions.isEmpty || !s.isEmpty else {
+                        return (s, nil, nil, [:])
+                    }
                     let g = probe.ghosttySnapshotAvailability()
                     let t = probe.terminalSnapshotAvailability()
                     let j = resolver.resolveJumpTargets(for: liveSessions, activeProcesses: s)

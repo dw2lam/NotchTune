@@ -43,9 +43,13 @@ struct UnifiedBars: View {
                 case .running:
                     TimelineView(.animation) { canvas(time: $0.date.timeIntervalSinceReferenceDate) }
                 case .waiting:
-                    TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { canvas(time: $0.date.timeIntervalSinceReferenceDate) }
-                case .idle:
+                    // The cross-pulse cosine reads smooth well below 30fps.
                     TimelineView(.periodic(from: .now, by: 1.0 / 15.0)) { canvas(time: $0.date.timeIntervalSinceReferenceDate) }
+                case .idle:
+                    // Idle's only motion is a 0.15s blink every 3s; 8fps still
+                    // guarantees ≥1 frame inside the blink window while nearly
+                    // halving the 24/7 Canvas redraw cost of the closed pill.
+                    TimelineView(.periodic(from: .now, by: 1.0 / 8.0)) { canvas(time: $0.date.timeIntervalSinceReferenceDate) }
                 }
             }
         }
