@@ -89,6 +89,31 @@ final class AppModel {
     let codexAppServer = CodexAppServerCoordinator()
     let playerManager = MusicPlayerManager()
     let myspaceStore = MyspaceStore()
+    let clipStore = MyspaceClipStore()
+    @ObservationIgnored private var clipboardWatcher: ClipboardWatcher?
+
+    /// NotchClip-style clipboard history feeding Myspace's Clips list.
+    var clipboardHistoryEnabled = true {
+        didSet {
+            guard clipboardHistoryEnabled != oldValue else { return }
+            UserDefaults.standard.set(clipboardHistoryEnabled, forKey: Self.clipboardHistoryKey)
+            updateClipboardWatcher()
+        }
+    }
+
+    private static let clipboardHistoryKey = "myspace.clipboardHistory.enabled"
+
+    func updateClipboardWatcher() {
+        if clipboardHistoryEnabled {
+            if clipboardWatcher == nil {
+                clipboardWatcher = ClipboardWatcher(store: clipStore)
+            }
+            clipboardWatcher?.start()
+        } else {
+            clipboardWatcher?.stop()
+            clipboardWatcher = nil
+        }
+    }
     let updateChecker = UpdateChecker()
 
     var notchStatus: NotchStatus {
@@ -925,6 +950,11 @@ final class AppModel {
         if watchNotificationEnabled {
             startWatchRelay()
         }
+        if let storedClipboardHistory = UserDefaults.standard.object(forKey: Self.clipboardHistoryKey) as? Bool {
+            clipboardHistoryEnabled = storedClipboardHistory
+        }
+        // Watcher starts from applicationDidFinishLaunching — never in init,
+        // so tests constructing AppModel don't poll the real pasteboard.
 
         playerManager.onTrackChange = { [weak self] track in
             guard let self else { return }

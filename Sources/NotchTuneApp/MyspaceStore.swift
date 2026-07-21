@@ -289,7 +289,7 @@ final class MyspaceStore {
     }
 }
 
-private extension JSONEncoder {
+extension JSONEncoder {
     static var myspace: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -298,7 +298,7 @@ private extension JSONEncoder {
     }
 }
 
-private extension JSONDecoder {
+extension JSONDecoder {
     static var myspace: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601

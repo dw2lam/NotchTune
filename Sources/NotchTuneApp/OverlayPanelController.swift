@@ -419,6 +419,7 @@ final class OverlayPanelController {
         Self.dragLog.debug("watch started, baseline=\(baseline)")
         fileDragWatchTask = Task { @MainActor [weak self] in
             var announcedDrag = false
+            var tickCount = 0
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(80))
                 guard let self, !Task.isCancelled else { return }
@@ -429,11 +430,19 @@ final class OverlayPanelController {
                     return
                 }
                 let pasteboard = NSPasteboard(name: .drag)
-                let hasFileURLs = pasteboard.changeCount != baseline
-                    && pasteboard.canReadObject(
-                        forClasses: [NSURL.self],
-                        options: [.urlReadingFileURLsOnly: true]
-                    )
+                // macOS no longer bumps the drag pasteboard's changeCount for
+                // cross-app drags, so probe the CONTENT: types/objects appear
+                // while a real drag session is live.
+                let canRead = pasteboard.canReadObject(
+                    forClasses: [NSURL.self],
+                    options: [.urlReadingFileURLsOnly: true]
+                )
+                tickCount &+= 1
+                if tickCount % 12 == 0 {
+                    let typeCount = pasteboard.types?.count ?? -1
+                    Self.dragLog.debug("held: count=\(pasteboard.changeCount) baseline=\(baseline) types=\(typeCount) canReadFileURL=\(canRead)")
+                }
+                let hasFileURLs = canRead && pasteboard.changeCount != baseline
                 guard hasFileURLs else { continue }
                 if !announcedDrag {
                     announcedDrag = true
