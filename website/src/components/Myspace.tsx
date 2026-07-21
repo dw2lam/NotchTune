@@ -99,8 +99,9 @@ export default function Myspace() {
           <span className="kicker">Clipboard</span>
           <h3>Everything you copy. One glance up.</h3>
           <p>
-            Myspace quietly keeps your clipboard history — text, links, images,
-            and files land in the Clips list the moment you copy them. Click to
+            Flip it on and Myspace keeps your clipboard history — text, links,
+            images, and files land in the Clips list the moment you copy them.
+            Off by default: your pasteboard is yours. Click to
             copy back, drag straight into any app. Local-only, skips password
             managers, and cleans up after itself in three days.
           </p>
