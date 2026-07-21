@@ -5,6 +5,18 @@
         <link>https://github.com/dw2lam/NotchTune/releases</link>
         <description>Signed NotchTune releases.</description>
         <language>en</language>
-        <!-- Items are added by the release workflow. -->
+        <item>
+            <title>Version 2.1.1</title>
+            <sparkle:version>1035</sparkle:version>
+            <sparkle:shortVersionString>2.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <pubDate>Tue, 21 Jul 2026 07:30:00 +0000</pubDate>
+            <enclosure
+                url="https://github.com/dw2lam/NotchTune/releases/download/2.1.1/NotchTune.zip"
+                type="application/octet-stream"
+                sparkle:edSignature="5WvUa5N9JfDBnzVCSWT/mJZqSdKIBGu2unwls5lM/4uDHGN7OKQD/7RUCAObx9ogWLE9teIyINnhtZqbVubVDQ=="
+                length="7867527"
+            />
+        </item>
     </channel>
 </rss>
