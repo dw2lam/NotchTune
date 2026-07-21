@@ -995,9 +995,11 @@ final class OverlayPanelController {
         }
 
         if model.islandActiveTab == .music {
-            // Estimated height for music content:
-            // 150 (image) + 16 (top) + 10 (bottom) + 42 (tab bar + breathing room) + 8 (spacing) + 8 (margin).
-            return 150 + 16 + 10 + 42 + 8 + 8
+            // Music content height:
+            // 166 (album art) + 12 (top pad) + 8 (bottom chin) +
+            // 42 (tab bar + breathing room) + 8 (spacing) + 8 (margin).
+            // Understating this clips the bottom chin off the panel.
+            return 166 + 12 + 8 + 42 + 8 + 8
         }
 
         if model.islandActiveTab == .myspace {
