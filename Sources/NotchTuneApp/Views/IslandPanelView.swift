@@ -1780,16 +1780,6 @@ private struct UsageProviderPresentation: Identifiable {
         peakWindow?.roundedUsedPercentage ?? 0
     }
 
-    var shortTitle: String {
-        switch id {
-        case "claude":
-            "Cl"
-        case "codex":
-            "Cx"
-        default:
-            String(title.prefix(2))
-        }
-    }
 }
 
 private struct UsageWindowPresentation: Identifiable {
