@@ -430,19 +430,23 @@ final class OverlayPanelController {
                     return
                 }
                 let pasteboard = NSPasteboard(name: .drag)
-                // macOS no longer bumps the drag pasteboard's changeCount for
-                // cross-app drags, so probe the CONTENT: types/objects appear
-                // while a real drag session is live.
-                let canRead = pasteboard.canReadObject(
+                // Stale drag data stays readable BETWEEN drags, so a live drag
+                // is "content readable AND changeCount moved past the
+                // mouseDown baseline". Finder writes concrete file URLs; Dock
+                // stacks / browsers write file promises.
+                let canReadURLs = pasteboard.canReadObject(
                     forClasses: [NSURL.self],
                     options: [.urlReadingFileURLsOnly: true]
                 )
+                let canReadPromises = pasteboard.canReadObject(
+                    forClasses: [NSFilePromiseReceiver.self]
+                )
                 tickCount &+= 1
                 if tickCount % 12 == 0 {
-                    let typeCount = pasteboard.types?.count ?? -1
-                    Self.dragLog.debug("held: count=\(pasteboard.changeCount) baseline=\(baseline) types=\(typeCount) canReadFileURL=\(canRead)")
+                    let names = (pasteboard.types ?? []).map(\.rawValue).joined(separator: ",")
+                    Self.dragLog.debug("held: count=\(pasteboard.changeCount) baseline=\(baseline) urls=\(canReadURLs) promises=\(canReadPromises) types=[\(names)]")
                 }
-                let hasFileURLs = canRead && pasteboard.changeCount != baseline
+                let hasFileURLs = (canReadURLs || canReadPromises) && pasteboard.changeCount != baseline
                 guard hasFileURLs else { continue }
                 if !announcedDrag {
                     announcedDrag = true
@@ -642,6 +646,55 @@ final class OverlayPanelController {
             model.lastActionMessage = "Could not hold file: \(error.localizedDescription)"
             return false
         }
+    }
+
+    /// Dock/stack drags (and some apps) deliver FILE PROMISES instead of
+    /// concrete URLs — receive them into a scratch directory, then hold the
+    /// received files like any other drop.
+    fileprivate func acceptPromisedFiles(_ receivers: [NSFilePromiseReceiver]) -> Bool {
+        guard model != nil, canAcceptDroppedFileURLs, !receivers.isEmpty else { return false }
+
+        acceptedCurrentFileDrop = true
+        fileDragEndGeneration &+= 1
+        fileDragPresentationSnapshot = nil
+
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NotchTune-promised-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+
+        let group = DispatchGroup()
+        let queue = OperationQueue()
+        nonisolated(unsafe) var received: [URL] = []
+        let lock = NSLock()
+
+        for receiver in receivers {
+            group.enter()
+            receiver.receivePromisedFiles(atDestination: destination, options: [:], operationQueue: queue) { url, error in
+                if error == nil {
+                    lock.lock()
+                    received.append(url)
+                    lock.unlock()
+                }
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) { [weak self] in
+            guard let self, let model = self.model, !received.isEmpty else {
+                self?.model?.lastActionMessage = "Could not receive the dropped files."
+                return
+            }
+            do {
+                try model.myspaceStore.holdFiles(received)
+                model.islandActiveTab = .myspace
+                model.notchOpen(reason: .click)
+                model.lastActionMessage = "Held \(received.count) file\(received.count == 1 ? "" : "s") in Myspace."
+            } catch {
+                model.lastActionMessage = "Could not hold file: \(error.localizedDescription)"
+            }
+            try? FileManager.default.removeItem(at: destination)
+        }
+        return true
     }
 
     // MARK: - Hover expansion
@@ -1130,7 +1183,11 @@ final class NotchHostingView<Content: View>: NSHostingView<Content> {
 
     required init(rootView: Content) {
         super.init(rootView: rootView)
-        registerForDraggedTypes([.fileURL])
+        // Concrete file URLs (Finder/desktop) AND file promises (Dock stacks,
+        // browsers, Photos) — promise drags never carry .fileURL.
+        registerForDraggedTypes(
+            [.fileURL] + NSFilePromiseReceiver.readableDraggedTypes.map(NSPasteboard.PasteboardType.init)
+        )
         configureTransparency()
     }
 
@@ -1170,15 +1227,25 @@ final class NotchHostingView<Content: View>: NSHostingView<Content> {
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        notchController?.acceptDroppedFileURLs(fileURLs(from: sender)) ?? false
+        let urls = fileURLs(from: sender)
+        if !urls.isEmpty {
+            return notchController?.acceptDroppedFileURLs(urls) ?? false
+        }
+        let receivers = sender.draggingPasteboard.readObjects(
+            forClasses: [NSFilePromiseReceiver.self]
+        ) as? [NSFilePromiseReceiver] ?? []
+        return notchController?.acceptPromisedFiles(receivers) ?? false
     }
 
     private func fileDragOperation(for sender: any NSDraggingInfo) -> NSDragOperation {
         let urls = fileURLs(from: sender)
+        let hasPromises = sender.draggingPasteboard.canReadObject(
+            forClasses: [NSFilePromiseReceiver.self]
+        )
         guard let notchController,
               notchController.updateFileDrag(
                 screenLocation: screenLocation(for: sender),
-                hasFileURLs: !urls.isEmpty
+                hasFileURLs: !urls.isEmpty || hasPromises
               ) else {
             return []
         }
