@@ -65,9 +65,9 @@ export default function Myspace() {
           <span className="kicker">Thoughts</span>
           <h3>A scratchpad that's already open.</h3>
           <p>
-            Drop a thought in without switching apps — type it, dictate it, or pin
-            a file to it. Everything lands in a quiet, day-grouped stream you can
-            skim later. Local-first: your space never leaves your machine.
+            Drop a thought in without switching apps — type it or pin a file to
+            it. Everything lands in a quiet, day-grouped stream you can skim
+            later. Local-first: your space never leaves your machine.
           </p>
           <p className="feature-aside">Go on, try the composer →</p>
         </div>

@@ -270,22 +270,19 @@ struct MyspacePanelView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextEditor(text: $draft)
+            // A vertical-axis TextField instead of TextEditor: the native
+            // placeholder shares the text's exact origin (the TextEditor +
+            // overlay approach drifted), and Return saves like Reminders.
+            TextField("Drop a thought here…", text: $draft, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(2...4)
                 .font(.system(size: 12.5))
                 .foregroundStyle(.white.opacity(0.9))
-                .scrollContentBackground(.hidden)
                 .focused($composerFocused)
-                .frame(minHeight: 44, maxHeight: 62)
-                .overlay(alignment: .topLeading) {
-                    if draft.isEmpty {
-                        Text("Drop a thought here…")
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(.white.opacity(0.28))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 8)
-                            .allowsHitTesting(false)
-                    }
-                }
+                .onSubmit(saveThought)
+                .padding(.horizontal, 3)
+                .padding(.top, 4)
+                .frame(minHeight: 40, alignment: .topLeading)
 
             if !pendingAttachments.isEmpty {
                 ScrollView(.horizontal) {
@@ -299,14 +296,6 @@ struct MyspacePanelView: View {
             }
 
             HStack(spacing: 7) {
-                composerButton(
-                    systemName: "waveform",
-                    help: "Focus this field, then use Whisper, Superwhisper, or macOS Dictation."
-                ) {
-                    composerFocused = true
-                    composerMessage = "Listening for your dictation app…"
-                }
-
                 composerButton(systemName: "paperclip", help: "Attach files") {
                     chooseAttachments()
                 }
@@ -391,11 +380,13 @@ struct MyspacePanelView: View {
             emptyState(
                 icon: "tray",
                 title: "Your space is quiet",
-                detail: "Save a thought, dictate an idea, or drop in a file."
+                detail: "Save a thought or drop in a file."
             )
         } else {
             MyspaceAutoHeightScrollView(maxHeight: 210) {
-                LazyVStack(spacing: 11, pinnedViews: [.sectionHeaders]) {
+                // No pinned headers: a sticky header needs an opaque mask,
+                // which reads as a black band over Liquid Glass.
+                LazyVStack(spacing: 11) {
                     ForEach(MyspaceStore.groupThoughtsByDay(thoughts)) { group in
                         SwiftUI.Section {
                             VStack(spacing: 7) {
@@ -424,7 +415,6 @@ struct MyspacePanelView: View {
                 .frame(height: 0.5)
         }
         .padding(.vertical, 2)
-        .background(V6Palette.ink.opacity(0.92))
     }
 
     private func dayTitle(_ date: Date) -> String {

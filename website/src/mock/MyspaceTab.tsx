@@ -123,7 +123,6 @@ export function MyspaceTab({
           }}
         />
         <div className="nt-ms-actions">
-          <button type="button" className="nt-ms-cbtn" aria-label="Dictate"><AudioWaveform /></button>
           <button type="button" className="nt-ms-cbtn" aria-label="Attach"><Paperclip /></button>
           <span className="nt-ms-spacer" />
           <button
@@ -140,7 +139,7 @@ export function MyspaceTab({
         <div className="nt-ms-empty">
           <Inbox />
           <b>Your space is quiet</b>
-          <span>Save a thought, dictate an idea, or drop in a file.</span>
+          <span>Save a thought or drop in a file.</span>
         </div>
       ) : (
         <div className="nt-ms-list">

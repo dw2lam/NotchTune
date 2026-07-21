@@ -346,6 +346,29 @@ struct IslandPanelView: View {
                 notchContent(availableSize: geometry.size)
                     .frame(maxWidth: .infinity, alignment: .top)
 
+                // File-drag approach hint: an unmistakable tray chip peeking out
+                // under the notch (the pill's own 7% swell hides behind the
+                // physical notch on MacBooks).
+                if model.isFileDragHintReady {
+                    HStack(spacing: 6) {
+                        Image(systemName: "tray.and.arrow.down.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.85))
+                        Text("Drop to hold")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                    .padding(.horizontal, 11)
+                    .frame(height: 24)
+                    .background(Color.black.opacity(0.92), in: Capsule())
+                    .overlay(Capsule().stroke(.white.opacity(0.16), lineWidth: 0.75))
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, closedNotchHeight + 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.32, dampingFraction: 0.72), value: model.isFileDragHintReady)
+                    .allowsHitTesting(false)
+                }
+
                 // Guided-tour coach bubble: below the pill while closed, pinned
                 // near the window's bottom edge (just under the open panel)
                 // while open. The overlay window is always opened-size, so both

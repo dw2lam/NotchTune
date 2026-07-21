@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import os
 import QuartzCore
 import SwiftUI
 import NotchTuneCore
@@ -415,11 +416,14 @@ final class OverlayPanelController {
     private func beginFileDragWatch() {
         fileDragWatchTask?.cancel()
         let baseline = NSPasteboard(name: .drag).changeCount
+        Self.dragLog.debug("watch started, baseline=\(baseline)")
         fileDragWatchTask = Task { @MainActor [weak self] in
+            var announcedDrag = false
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(80))
                 guard let self, !Task.isCancelled else { return }
                 guard NSEvent.pressedMouseButtons & 1 == 1 else {
+                    if announcedDrag { Self.dragLog.debug("watch ended (button up)") }
                     self.fileDragEnded()
                     self.fileDragWatchTask = nil
                     return
@@ -431,10 +435,17 @@ final class OverlayPanelController {
                         options: [.urlReadingFileURLsOnly: true]
                     )
                 guard hasFileURLs else { continue }
+                if !announcedDrag {
+                    announcedDrag = true
+                    let loc = NSEvent.mouseLocation
+                    Self.dragLog.debug("file drag detected at (\(loc.x), \(loc.y))")
+                }
                 _ = self.updateFileDrag(screenLocation: NSEvent.mouseLocation, hasFileURLs: true)
             }
         }
     }
+
+    static let dragLog = Logger(subsystem: "app.notchtune.dev", category: "filedrag")
 
     private func handleMouseDown(_ screenLocation: NSPoint) {
         guard let model else { return }
@@ -518,10 +529,9 @@ final class OverlayPanelController {
             // Approach phase: the drag is near but not on the notch. Hint that
             // the shelf is ready instead of opening.
             let hintRect = Self.fileDragHintRect(closedSurfaceRect: closedRect)
-            setFileDragHint(
-                model.notchStatus == .closed
-                    && Self.rectContainsIncludingEdges(hintRect, point: screenLocation)
-            )
+            let inHintZone = Self.rectContainsIncludingEdges(hintRect, point: screenLocation)
+            Self.dragLog.debug("update loc=(\(screenLocation.x),\(screenLocation.y)) closed=\(String(describing: closedRect)) hint=\(String(describing: hintRect)) inHint=\(inHintZone) status=\(String(describing: model.notchStatus))")
+            setFileDragHint(model.notchStatus == .closed && inHintZone)
             return false
         }
 

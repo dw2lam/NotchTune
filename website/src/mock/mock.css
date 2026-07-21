@@ -593,9 +593,10 @@
 
 .nt-ms-list { display: flex; flex-direction: column; gap: 7px; max-height: 210px; overflow-y: auto; }
 .nt-ms-day {
-  position: sticky; top: 0; z-index: 1;
+  /* scrolls with the list — a sticky header would need an opaque mask,
+     which reads as a black band over the glass (matches the app) */
   display: flex; align-items: center; gap: 7px;
-  padding: 2px 0; background: rgba(0, 0, 0, 0.92);
+  padding: 2px 0;
 }
 .nt-ms-day span {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
