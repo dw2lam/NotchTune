@@ -26,15 +26,38 @@ enum AgentAppIconProvider {
         return resolved
     }
 
+    /// Bundled brand logos for agents that run CLI-only (no installed app to
+    /// pull an icon from). Rasterized from the marketing site's brand SVGs.
+    private static let bundledLogoNames: [String: String] = [
+        "Claude": "agent-logo-claude",
+        "Codex": "agent-logo-codex",
+        "Gemini": "agent-logo-gemini",
+        "Kimi": "agent-logo-kimi",
+        "OpenCode": "agent-logo-opencode",
+        "Qwen": "agent-logo-qwen",
+        "Qwen Code": "agent-logo-qwen",
+    ]
+
     private static func resolve(title: String) -> NSImage? {
-        guard let candidates = bundleIdentifiers[title] else { return nil }
-        for bundleID in candidates {
-            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-                let icon = NSWorkspace.shared.icon(forFile: url.path)
-                icon.size = NSSize(width: 28, height: 28)
-                return icon
+        // Prefer the REAL installed app's icon.
+        if let candidates = bundleIdentifiers[title] {
+            for bundleID in candidates {
+                if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                    let icon = NSWorkspace.shared.icon(forFile: url.path)
+                    icon.size = NSSize(width: 28, height: 28)
+                    return icon
+                }
             }
         }
+
+        // CLI-only agents fall back to the bundled brand logo.
+        if let resource = bundledLogoNames[title],
+           let url = Bundle.appResources.url(forResource: resource, withExtension: "png"),
+           let logo = NSImage(contentsOf: url) {
+            logo.size = NSSize(width: 28, height: 28)
+            return logo
+        }
+
         return nil
     }
 }
