@@ -83,6 +83,7 @@ final class AppModel {
     }
     let hooks = HookInstallationCoordinator()
     let overlay = OverlayUICoordinator()
+    let tour = OnboardingTourController()
     let discovery = SessionDiscoveryCoordinator()
     let monitoring = ProcessMonitoringCoordinator()
     let codexAppServer = CodexAppServerCoordinator()
@@ -172,6 +173,18 @@ final class AppModel {
     var firstLaunchCompleted: Bool {
         get { hooks.intentStore.firstLaunchCompleted }
         set { hooks.intentStore.firstLaunchCompleted = newValue }
+    }
+
+    /// Mirrors `AgentIntentStore.onboardingWizardStage` (monotonic resume point).
+    var onboardingWizardStage: Int {
+        get { hooks.intentStore.onboardingWizardStage }
+        set { hooks.intentStore.onboardingWizardStage = newValue }
+    }
+
+    /// Mirrors `AgentIntentStore.onboardingTourOutcome`.
+    var onboardingTourOutcome: AgentIntentStore.OnboardingTourOutcome? {
+        get { hooks.intentStore.onboardingTourOutcome }
+        set { hooks.intentStore.onboardingTourOutcome = newValue }
     }
 
     /// True if at least one managed hook is currently present on disk.
@@ -1624,6 +1637,70 @@ final class AppModel {
     func toggleOverlay() { overlay.toggleOverlay() }
     func notchOpen(reason: NotchOpenReason, surface: IslandSurface = .sessionList()) { overlay.notchOpen(reason: reason, surface: surface) }
     func notchClose() { overlay.notchClose() }
+
+    // MARK: - Onboarding tour
+
+    /// Starts (or restarts) the guided notch tour. The island closes first so
+    /// the tour always begins from the hover-to-open step.
+    func startOnboardingTour() {
+        if notchStatus == .opened {
+            notchClose()
+        }
+        islandActiveTab = .agents
+        tour.start(model: self)
+    }
+
+    /// Seeds the tour's fake approval session. Additive — real (restored or
+    /// live) sessions are untouched, and `.demo` origin is excluded from every
+    /// registry persistence path, so nothing survives a quit.
+    func insertTourDemoSession() {
+        let now = Date()
+        let demo = AgentSession(
+            id: OnboardingTourController.demoSessionID,
+            title: "Claude Code · demo",
+            tool: .claudeCode,
+            origin: .demo,
+            attachmentState: .attached,
+            phase: .waitingForApproval,
+            summary: "Allow Claude Code to edit Welcome.swift?",
+            updatedAt: now,
+            permissionRequest: PermissionRequest(
+                title: "Approve file edit",
+                summary: "Allow Claude Code to edit Welcome.swift?",
+                affectedPath: "Sources/Welcome.swift",
+                primaryActionTitle: "Allow",
+                secondaryActionTitle: "Deny"
+            ),
+            claudeMetadata: ClaudeSessionMetadata(
+                initialUserPrompt: "Show me around NotchTune.",
+                lastUserPrompt: "Polish the welcome screen copy.",
+                lastAssistantMessage: "Ready to edit Welcome.swift — needs your approval.",
+                currentTool: "Edit",
+                currentToolInputPreview: "Sources/Welcome.swift"
+            )
+        )
+        state.insertSession(demo)
+        selectedSessionID = demo.id
+    }
+
+    func removeTourDemoSession() {
+        let removed = state.removeSessions(where: \.isDemoSession)
+        if removed, selectedSessionID == OnboardingTourController.demoSessionID {
+            selectedSessionID = nil
+            synchronizeSelection()
+        }
+    }
+
+    /// Rewrites the demo session into a small completed win after the user
+    /// resolves its approval.
+    func completeTourDemoSession() {
+        guard var demo = state.session(id: OnboardingTourController.demoSessionID) else { return }
+        demo.phase = .completed
+        demo.permissionRequest = nil
+        demo.summary = "Approvals resolved right from the notch — just like that."
+        demo.updatedAt = Date()
+        state.insertSession(demo)
+    }
     func notchPop() { overlay.notchPop() }
     func presentMusicTrackNotification(track: PlayerTrack) {
         overlay.presentMusicTrackNotification(track: track)
@@ -1802,6 +1879,10 @@ final class AppModel {
         synchronizeSelection()
         refreshOverlayPlacementIfVisible()
 
+        // The onboarding tour's demo session has no live agent behind it —
+        // resolve locally only, never over the bridge.
+        guard !session.isDemoSession else { return }
+
         send(
             .resolvePermission(sessionID: session.id, resolution: resolution),
             userMessage: approved
@@ -1835,6 +1916,9 @@ final class AppModel {
         reconcileNudgeTimers()
         synchronizeSelection()
         refreshOverlayPlacementIfVisible()
+
+        // Demo sessions resolve locally only (see approvePermission(for:approved:)).
+        guard !session.isDemoSession else { return }
 
         send(
             .resolvePermission(sessionID: session.id, resolution: resolution),
