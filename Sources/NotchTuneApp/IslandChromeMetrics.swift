@@ -3,6 +3,11 @@ import CoreGraphics
 enum IslandChromeMetrics {
     static let openedShadowHorizontalInset: CGFloat = 18
     static let openedShadowBottomInset: CGFloat = 22
+    /// On notched MacBook displays the OPENED panel sits shifted left of the
+    /// physical notch, giving the left header lane room for every usage chip
+    /// together. The closed pill stays anchored to the notch; the window is
+    /// widened symmetrically so the compact clip's center anchor is unchanged.
+    static let notchOpenedLeftShift: CGFloat = 84
     static let closedHoverScale: CGFloat = 1.035
     static let notchedClosedMinimumWingReserve: CGFloat = 44
     static let notchedClosedHorizontalPadding: CGFloat = 14
