@@ -79,7 +79,3 @@ extension SBApplication: SpotifyApplication {}
 }
 extension SBObject: SpotifyTrack {}
 
-public enum SpotifyScripting: String {
-    case application = "application"
-    case track = "track"
-}

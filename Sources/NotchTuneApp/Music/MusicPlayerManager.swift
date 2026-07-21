@@ -38,13 +38,6 @@ final class MusicPlayerManager {
     var formattedDuration = MusicPlayerManager.noPlaybackPositionPlaceholder
     var formattedPlaybackPosition = MusicPlayerManager.noPlaybackPositionPlaceholder
 
-    // Volume
-    var volume: CGFloat = 50.0
-    var isDraggingSoundVolumeSlider = false
-
-    // Audio devices
-    var audioDevices = MusicAudioDevice.output.filter { $0.transportType != .virtual }
-
     // Connected app name for display
     var connectedAppName: String { musicApp.appName }
 
@@ -264,7 +257,6 @@ final class MusicPlayerManager {
                 // skip those Apple Events — they'd return identical values.
                 self.pollForTrackChanges()
                 guard self.isPlaying else { return }
-                self.getVolume()
                 self.getCurrentSeekerPosition()
                 self.getPlaybackSettingInfo()
             }
@@ -295,31 +287,6 @@ final class MusicPlayerManager {
         onTrackChange?(updatedPolled)
         updateFormattedDuration()
         fetchAlbumArt(for: updatedPolled)
-    }
-
-    // MARK: - Volume
-
-    func getVolume() { volume = musicApp.volume }
-
-    func setVolume(newVolume: Int) {
-        var clamped = newVolume
-        if clamped > 100 { clamped = 100 }
-        if clamped < 0 { clamped = 0 }
-        musicApp.setVolume(volume: clamped)
-        withAnimation { volume = CGFloat(clamped) }
-    }
-
-    func increaseVolume() { setVolume(newVolume: Int(volume) + 10) }
-    func decreaseVolume() { setVolume(newVolume: Int(volume) - 10) }
-
-    // MARK: - Audio device
-
-    func setOutputDevice(audioDevice: MusicAudioDevice) {
-        do {
-            try MusicAudioDevice.setDefaultDevice(for: .output, device: audioDevice)
-        } catch {
-            notificationSubject.send(MusicAlertItem(title: "Audio device not set", message: "Error setting output device"))
-        }
     }
 
     // MARK: - Open music app

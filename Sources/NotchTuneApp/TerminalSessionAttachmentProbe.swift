@@ -875,26 +875,6 @@ struct TerminalSessionAttachmentProbe {
         return changed ? jumpTarget : nil
     }
 
-    private func ghosttySnapshot(_ snapshot: GhosttyTerminalSnapshot, matches session: AgentSession) -> Bool {
-        guard let jumpTarget = session.jumpTarget else {
-            return false
-        }
-
-        if let sessionID = nonEmptyValue(jumpTarget.terminalSessionID) {
-            return snapshot.sessionID == sessionID
-        }
-
-        if let workingDirectory = nonEmptyValue(jumpTarget.workingDirectory) {
-            return snapshot.workingDirectory == workingDirectory
-        }
-
-        guard let paneTitle = nonEmptyValue(jumpTarget.paneTitle) else {
-            return false
-        }
-
-        return snapshot.title.contains(paneTitle)
-    }
-
     private func terminalSnapshot(_ snapshot: TerminalTabSnapshot, matches session: AgentSession) -> Bool {
         guard let jumpTarget = session.jumpTarget else {
             return false

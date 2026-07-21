@@ -33,7 +33,6 @@ struct MusicPanelView: View {
         .padding(.bottom, 8)
         .onAppear {
             playerManager.startTimer()
-            playerManager.getVolume()
         }
         .onDisappear {
             playerManager.stopTimer()

@@ -1686,15 +1686,6 @@ struct IslandPanelView: View {
         .joined(separator: " · ")
     }
 
-    private func headerPill(_ title: String, tint: Color) -> some View {
-        Text(title)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(.white.opacity(0.08), in: Capsule())
-    }
-
     private func usageColor(for percentage: Double) -> Color {
         switch percentage {
         case 90...:
@@ -2629,31 +2620,8 @@ private struct IslandSessionRow: View {
         return isOpen ? 0.045 : 0.02
     }
 
-    private func compactBadge(
-        _ title: String,
-        presence: IslandSessionPresence,
-        icon: String? = nil
-    ) -> some View {
-        HStack(spacing: 3) {
-            if let icon {
-                Image(systemName: icon)
-                    .font(.system(size: 7.5, weight: .semibold))
-            }
-            Text(title)
-                .font(.system(size: 9, weight: .semibold))
-        }
-        .foregroundStyle(badgeTextColor(for: presence))
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3.5)
-        .background(Color(red: 0.14, green: 0.14, blue: 0.15), in: Capsule())
-    }
-
     private func headlineColor(for presence: IslandSessionPresence) -> Color {
         presence == .inactive ? .white.opacity(0.78) : .white
-    }
-
-    private func badgeTextColor(for presence: IslandSessionPresence) -> Color {
-        presence == .inactive ? .white.opacity(0.42) : .white.opacity(0.56)
     }
 
     private func statusTint(for presence: IslandSessionPresence) -> Color {

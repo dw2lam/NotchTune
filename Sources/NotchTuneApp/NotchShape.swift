@@ -60,35 +60,6 @@ struct GrowingNotchShape: Shape {
 /// Dedicated compact clip for the music track notification. Sized from the
 /// pill's live measurements so long titles can extend the left wing without
 /// cropping album art. Only used while the notification is visible.
-struct MusicNotificationClipShape: Shape {
-    var width: CGFloat
-    var height: CGFloat
-    var leftWingWidth: CGFloat
-    var notchGapWidth: CGFloat
-
-    var animatableData: AnimatablePair<CGFloat, CGFloat> {
-        get { AnimatablePair(width, leftWingWidth) }
-        set {
-            width = newValue.first
-            leftWingWidth = newValue.second
-        }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        guard width > 0, height > 0 else { return Path() }
-
-        let x: CGFloat
-        if notchGapWidth > 0 {
-            x = rect.midX - leftWingWidth - notchGapWidth / 2
-        } else {
-            x = (rect.width - width) / 2
-        }
-
-        let pillRect = CGRect(x: x, y: 0, width: width, height: height)
-        return V6ClosedPillShape(topFilletRadius: 0).path(in: pillRect)
-    }
-}
-
 struct NotchSurfaceClipModifier: ViewModifier {
     let usesMusicNotificationClip: Bool
     let musicClipMetrics: MusicNotificationClipMetrics
@@ -122,92 +93,5 @@ struct NotchSurfaceClipModifier: ViewModifier {
                 )
             )
         }
-    }
-}
-
-// MARK: -
-
-struct NotchShape: Shape {
-    var topCornerRadius: CGFloat
-    var bottomCornerRadius: CGFloat
-
-    var animatableData: AnimatablePair<CGFloat, CGFloat> {
-        get { AnimatablePair(topCornerRadius, bottomCornerRadius) }
-        set {
-            topCornerRadius = newValue.first
-            bottomCornerRadius = newValue.second
-        }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        let f: CGFloat = 8 // top fillet radius
-        let topR = min(topCornerRadius, (rect.width - 2 * f) / 4, rect.height / 4)
-        let botR = min(bottomCornerRadius, (rect.width - 2 * f) / 4, rect.height / 2)
-
-        var path = Path()
-
-        // Start at top-left, at the very edge
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-
-        // Top-left outward concave curve
-        path.addQuadCurve(
-            to: CGPoint(x: rect.minX + f, y: rect.minY + f),
-            control: CGPoint(x: rect.minX + f, y: rect.minY)
-        )
-
-        // Top-left inward curve (concave, mimics notch edge)
-        path.addQuadCurve(
-            to: CGPoint(x: rect.minX + f + topR, y: rect.minY + f + topR),
-            control: CGPoint(x: rect.minX + f + topR, y: rect.minY + f)
-        )
-
-        // Left edge down to bottom-left corner
-        path.addLine(to: CGPoint(x: rect.minX + f + topR, y: rect.maxY - botR))
-
-        // Bottom-left rounded corner
-        path.addQuadCurve(
-            to: CGPoint(x: rect.minX + f + topR + botR, y: rect.maxY),
-            control: CGPoint(x: rect.minX + f + topR, y: rect.maxY)
-        )
-
-        // Bottom edge
-        path.addLine(to: CGPoint(x: rect.maxX - f - topR - botR, y: rect.maxY))
-
-        // Bottom-right rounded corner
-        path.addQuadCurve(
-            to: CGPoint(x: rect.maxX - f - topR, y: rect.maxY - botR),
-            control: CGPoint(x: rect.maxX - f - topR, y: rect.maxY)
-        )
-
-        // Right edge up to top-right inward curve
-        path.addLine(to: CGPoint(x: rect.maxX - f - topR, y: rect.minY + f + topR))
-
-        // Top-right inward curve (concave)
-        path.addQuadCurve(
-            to: CGPoint(x: rect.maxX - f, y: rect.minY + f),
-            control: CGPoint(x: rect.maxX - f - topR, y: rect.minY + f)
-        )
-
-        // Top-right outward concave curve
-        path.addQuadCurve(
-            to: CGPoint(x: rect.maxX, y: rect.minY),
-            control: CGPoint(x: rect.maxX - f, y: rect.minY)
-        )
-
-        path.closeSubpath()
-        return path
-    }
-}
-
-extension NotchShape {
-    /// The opened island uses a concave-top-corner notch shape so it blends
-    /// with the physical MacBook notch on built-in displays. The closed
-    /// state no longer uses this shape — it renders via `V6ClosedPillShape`
-    /// instead.
-    static let openedTopRadius: CGFloat = 22
-    static let openedBottomRadius: CGFloat = 22
-
-    static var opened: NotchShape {
-        NotchShape(topCornerRadius: openedTopRadius, bottomCornerRadius: openedBottomRadius)
     }
 }

@@ -32,14 +32,6 @@ final class OverlayPanelController {
     nonisolated private static let fileDragTargetHeight: CGFloat = 104
     private static let questionCardBaseHeight: CGFloat = 110
     private static let questionCardMaxHeight: CGFloat = 420
-    // Completion card chrome breakdown (everything except the scrollable text):
-    // openedContent vertical padding: 24, card container padding: 28,
-    // card VStack spacing: 14, card header (title+prompt): ~50,
-    // completionBody header ("You:"/Done row): ~42, divider: 1,
-    // text area vertical padding: 28  →  total ≈ 187
-    private static let completionCardChromeHeight: CGFloat = 187
-    private static let completionCardMinHeight: CGFloat = 210
-    private static let completionCardMaxHeight: CGFloat = 400
 
     private var panel: NotchPanel?
     private var eventMonitors = NotchEventMonitors()
@@ -1027,31 +1019,6 @@ final class OverlayPanelController {
         return min(Self.questionCardMaxHeight, max(Self.questionCardBaseHeight, estimated))
     }
 
-    private func completionCardHeight(for model: AppModel) -> CGFloat {
-        guard let session = model.activeIslandCardSession else {
-            return Self.completionCardMinHeight
-        }
-
-        let text = (session.completionAssistantMessageText ?? session.summary)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // Estimate text height using NSString measurement with the actual font.
-        // Available text width ≈ notificationPanelWidth - card horizontal chrome
-        // Card chrome: openedContent padding (18*2) + card padding (16*2) + text padding (14*2) = 96
-        let availableWidth = Self.preferredNotificationPanelWidth - 96
-        let font = NSFont.systemFont(ofSize: 13.5, weight: .medium)
-        let textSize = (text as NSString).boundingRect(
-            with: NSSize(width: availableWidth, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: font]
-        )
-
-        let estimatedHeight = Self.completionCardChromeHeight + ceil(textSize.height)
-        // Use a smaller minimum to avoid blank space when content is short
-        let minHeight: CGFloat = Self.completionCardChromeHeight + 20
-        return min(Self.completionCardMaxHeight, max(minHeight, estimatedHeight))
-    }
-
     // MARK: - Event reposting
 
     private func repostMouseDown(at screenPoint: NSPoint) {
@@ -1173,12 +1140,6 @@ final class NotchHostingView<Content: View>: NSHostingView<Content> {
 
     private func screenLocation(for sender: any NSDraggingInfo) -> NSPoint {
         window?.convertPoint(toScreen: sender.draggingLocation) ?? sender.draggingLocation
-    }
-
-    private func convertToScreen(_ viewPoint: NSPoint) -> NSPoint {
-        guard let window else { return viewPoint }
-        let windowPoint = convert(viewPoint, to: nil)
-        return window.convertPoint(toScreen: windowPoint)
     }
 
     override func viewDidMoveToWindow() {
