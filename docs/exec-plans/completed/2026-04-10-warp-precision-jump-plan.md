@@ -18,34 +18,34 @@
 
 | Path | Responsibility |
 |---|---|
-| `Sources/OpenIslandCore/WarpSQLiteReader.swift` | Read-only SQLite queries against Warp's database. Exposes `lookupPaneUUID(forCwd:)`, `currentFocusedPaneUUID()`, `tabCountInActiveWindow()`. All failures return nil/0 and log once. |
-| `Sources/OpenIslandApp/KeystrokeInjector.swift` | Thin wrapper over `CGEventCreateKeyboardEvent`/`CGEventPost` exposing `sendCmdShiftRightBracket()`. Protocol + default impl for injection in tests. |
-| `Sources/OpenIslandApp/AccessibilityPermissionChecker.swift` | One-function wrapper around `AXIsProcessTrustedWithOptions` so we can detect + graceful-degrade when Accessibility permission is missing. |
-| `Tests/OpenIslandCoreTests/WarpSQLiteReaderTests.swift` | Unit tests using a synthetic warp.sqlite temp-file fixture that reproduces the exact minimal schema we query. |
+| `Sources/NotchTuneCore/WarpSQLiteReader.swift` | Read-only SQLite queries against Warp's database. Exposes `lookupPaneUUID(forCwd:)`, `currentFocusedPaneUUID()`, `tabCountInActiveWindow()`. All failures return nil/0 and log once. |
+| `Sources/NotchTuneApp/KeystrokeInjector.swift` | Thin wrapper over `CGEventCreateKeyboardEvent`/`CGEventPost` exposing `sendCmdShiftRightBracket()`. Protocol + default impl for injection in tests. |
+| `Sources/NotchTuneApp/AccessibilityPermissionChecker.swift` | One-function wrapper around `AXIsProcessTrustedWithOptions` so we can detect + graceful-degrade when Accessibility permission is missing. |
+| `Tests/NotchTuneCoreTests/WarpSQLiteReaderTests.swift` | Unit tests using a synthetic warp.sqlite temp-file fixture that reproduces the exact minimal schema we query. |
 
 **Modified files**
 
 | Path | Change |
 |---|---|
-| `Sources/OpenIslandCore/AgentSession.swift` | Add `warpPaneUUID: String?` field to `JumpTarget` struct (and its init). Backward-compat Codable via `decodeIfPresent`. |
-| `Sources/OpenIslandCore/ClaudeHooks.swift` | Add `warpPaneUUID` field to `ClaudeHookPayload`. Populate it in `withRuntimeContext` when `terminalApp == "Warp"`. Pass it through `defaultJumpTarget`. |
-| `Sources/OpenIslandCore/CodexHooks.swift` | Same three changes as ClaudeHooks. |
-| `Sources/OpenIslandApp/TerminalJumpService.swift` | Add `WarpFocusedPaneReader` / `WarpTabCountReader` / `WarpKeystroker` typealiases + injection points. Add `jumpToWarpPane(_:)` private method. Register `case "dev.warp.Warp-Stable"` in the `jump(to:)` dispatcher. |
-| `Tests/OpenIslandCoreTests/ClaudeHooksTests.swift` | Add tests verifying `withRuntimeContext` populates `warpPaneUUID` when reader stub returns a value, skips lookup when `terminalApp != "Warp"`, and leaves payload unchanged on nil return. |
-| `Tests/OpenIslandCoreTests/CodexHooksTests.swift` | Same. |
-| `Tests/OpenIslandAppTests/TerminalJumpServiceTests.swift` | Add tests for `jumpToWarpPane` covering: already-on-target (zero keystrokes, Warp activated), reaches-target-after-N-cycles, never-reaches-target (caps out gracefully), nil target (degrades to app activation). |
+| `Sources/NotchTuneCore/AgentSession.swift` | Add `warpPaneUUID: String?` field to `JumpTarget` struct (and its init). Backward-compat Codable via `decodeIfPresent`. |
+| `Sources/NotchTuneCore/ClaudeHooks.swift` | Add `warpPaneUUID` field to `ClaudeHookPayload`. Populate it in `withRuntimeContext` when `terminalApp == "Warp"`. Pass it through `defaultJumpTarget`. |
+| `Sources/NotchTuneCore/CodexHooks.swift` | Same three changes as ClaudeHooks. |
+| `Sources/NotchTuneApp/TerminalJumpService.swift` | Add `WarpFocusedPaneReader` / `WarpTabCountReader` / `WarpKeystroker` typealiases + injection points. Add `jumpToWarpPane(_:)` private method. Register `case "dev.warp.Warp-Stable"` in the `jump(to:)` dispatcher. |
+| `Tests/NotchTuneCoreTests/ClaudeHooksTests.swift` | Add tests verifying `withRuntimeContext` populates `warpPaneUUID` when reader stub returns a value, skips lookup when `terminalApp != "Warp"`, and leaves payload unchanged on nil return. |
+| `Tests/NotchTuneCoreTests/CodexHooksTests.swift` | Same. |
+| `Tests/NotchTuneAppTests/TerminalJumpServiceTests.swift` | Add tests for `jumpToWarpPane` covering: already-on-target (zero keystrokes, Warp activated), reaches-target-after-N-cycles, never-reaches-target (caps out gracefully), nil target (degrades to app activation). |
 
 ---
 
 ## Task 1: Add `warpPaneUUID` field to `JumpTarget`
 
 **Files:**
-- Modify: `Sources/OpenIslandCore/AgentSession.swift:114-143`
-- Test: `Tests/OpenIslandCoreTests/SessionStateTests.swift` (add one Codable round-trip test)
+- Modify: `Sources/NotchTuneCore/AgentSession.swift:114-143`
+- Test: `Tests/NotchTuneCoreTests/SessionStateTests.swift` (add one Codable round-trip test)
 
 - [ ] **Step 1: Write failing round-trip Codable test**
 
-Add to `Tests/OpenIslandCoreTests/SessionStateTests.swift` (inside the existing test struct):
+Add to `Tests/NotchTuneCoreTests/SessionStateTests.swift` (inside the existing test struct):
 
 ```swift
 @Test
@@ -78,7 +78,7 @@ Expected: compile error about unknown argument label `warpPaneUUID` in `JumpTarg
 
 - [ ] **Step 3: Add the field to `JumpTarget`**
 
-Edit `Sources/OpenIslandCore/AgentSession.swift` lines 114-143. The existing struct already has `tmuxTarget` and `tmuxSocketPath` — add `warpPaneUUID` alongside them:
+Edit `Sources/NotchTuneCore/AgentSession.swift` lines 114-143. The existing struct already has `tmuxTarget` and `tmuxSocketPath` — add `warpPaneUUID` alongside them:
 
 ```swift
 public struct JumpTarget: Equatable, Codable, Sendable {
@@ -133,7 +133,7 @@ Expected: all existing tests still pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/OpenIslandCore/AgentSession.swift Tests/OpenIslandCoreTests/SessionStateTests.swift
+git add Sources/NotchTuneCore/AgentSession.swift Tests/NotchTuneCoreTests/SessionStateTests.swift
 git commit -m "feat(core): add warpPaneUUID field to JumpTarget
 
 Optional field reserved for Warp precision-jump; nil for all other
@@ -146,13 +146,13 @@ existing decodeIfPresent pattern in AgentSession."
 ## Task 2: Plumb `warpPaneUUID` through `ClaudeHookPayload` and `CodexHookPayload`
 
 **Files:**
-- Modify: `Sources/OpenIslandCore/ClaudeHooks.swift:355-403` (add field + CodingKey) and the `defaultJumpTarget` computed property near line 677
-- Modify: `Sources/OpenIslandCore/CodexHooks.swift` (equivalent field, CodingKey, defaultJumpTarget)
-- Test: `Tests/OpenIslandCoreTests/ClaudeHooksTests.swift`, `Tests/OpenIslandCoreTests/CodexHooksTests.swift`
+- Modify: `Sources/NotchTuneCore/ClaudeHooks.swift:355-403` (add field + CodingKey) and the `defaultJumpTarget` computed property near line 677
+- Modify: `Sources/NotchTuneCore/CodexHooks.swift` (equivalent field, CodingKey, defaultJumpTarget)
+- Test: `Tests/NotchTuneCoreTests/ClaudeHooksTests.swift`, `Tests/NotchTuneCoreTests/CodexHooksTests.swift`
 
 - [ ] **Step 1: Write failing test for Claude**
 
-Add to `Tests/OpenIslandCoreTests/ClaudeHooksTests.swift`:
+Add to `Tests/NotchTuneCoreTests/ClaudeHooksTests.swift`:
 
 ```swift
 @Test
@@ -170,7 +170,7 @@ func claudeDefaultJumpTargetForwardsWarpPaneUUID() {
 
 - [ ] **Step 2: Write equivalent failing test for Codex**
 
-Add to `Tests/OpenIslandCoreTests/CodexHooksTests.swift`:
+Add to `Tests/NotchTuneCoreTests/CodexHooksTests.swift`:
 
 ```swift
 @Test
@@ -196,7 +196,7 @@ Expected: compile error on the unknown argument / property `warpPaneUUID`.
 
 - [ ] **Step 4: Add the field and CodingKey to `ClaudeHookPayload`**
 
-In `Sources/OpenIslandCore/ClaudeHooks.swift`:
+In `Sources/NotchTuneCore/ClaudeHooks.swift`:
 
 1. Add field declaration next to the other `terminal*` fields (around line 364):
    ```swift
@@ -255,7 +255,7 @@ In `Sources/OpenIslandCore/ClaudeHooks.swift`:
 
 - [ ] **Step 5: Make the same change to `CodexHookPayload`**
 
-In `Sources/OpenIslandCore/CodexHooks.swift`, repeat all six sub-steps from Step 4 against the Codex payload type. The `terminalApp` field is already there (added in an earlier change); `warpPaneUUID` slots in beside it.
+In `Sources/NotchTuneCore/CodexHooks.swift`, repeat all six sub-steps from Step 4 against the Codex payload type. The `terminalApp` field is already there (added in an earlier change); `warpPaneUUID` slots in beside it.
 
 Find the `defaultJumpTarget` computed property (around line 266-275) and add `warpPaneUUID: warpPaneUUID` to the `JumpTarget(…)` constructor call.
 
@@ -274,7 +274,7 @@ Expected: all tests pass. Any test that encoded a full `ClaudeHookPayload` and c
 - [ ] **Step 8: Commit**
 
 ```bash
-git add Sources/OpenIslandCore/ClaudeHooks.swift Sources/OpenIslandCore/CodexHooks.swift Tests/OpenIslandCoreTests/ClaudeHooksTests.swift Tests/OpenIslandCoreTests/CodexHooksTests.swift
+git add Sources/NotchTuneCore/ClaudeHooks.swift Sources/NotchTuneCore/CodexHooks.swift Tests/NotchTuneCoreTests/ClaudeHooksTests.swift Tests/NotchTuneCoreTests/CodexHooksTests.swift
 git commit -m "feat(core): plumb warpPaneUUID through Claude and Codex hook payloads
 
 New optional wire field \"warp_pane_uuid\" carries the per-pane
@@ -288,17 +288,17 @@ backward-compatible: legacy payloads without the field decode to nil."
 ## Task 3: `WarpSQLiteReader` — initialization and path resolution
 
 **Files:**
-- Create: `Sources/OpenIslandCore/WarpSQLiteReader.swift`
-- Test: `Tests/OpenIslandCoreTests/WarpSQLiteReaderTests.swift`
+- Create: `Sources/NotchTuneCore/WarpSQLiteReader.swift`
+- Test: `Tests/NotchTuneCoreTests/WarpSQLiteReaderTests.swift`
 
 - [ ] **Step 1: Create the test file with a failing init test**
 
-Create `Tests/OpenIslandCoreTests/WarpSQLiteReaderTests.swift`:
+Create `Tests/NotchTuneCoreTests/WarpSQLiteReaderTests.swift`:
 
 ```swift
 import Foundation
 import Testing
-@testable import OpenIslandCore
+@testable import NotchTuneCore
 
 struct WarpSQLiteReaderTests {
     @Test
@@ -326,7 +326,7 @@ Expected: compile error "no such module/type `WarpSQLiteReader`".
 
 - [ ] **Step 3: Create `WarpSQLiteReader.swift` with init + default path**
 
-Create `Sources/OpenIslandCore/WarpSQLiteReader.swift`:
+Create `Sources/NotchTuneCore/WarpSQLiteReader.swift`:
 
 ```swift
 import Foundation
@@ -364,7 +364,7 @@ Expected: both init tests PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/OpenIslandCore/WarpSQLiteReader.swift Tests/OpenIslandCoreTests/WarpSQLiteReaderTests.swift
+git add Sources/NotchTuneCore/WarpSQLiteReader.swift Tests/NotchTuneCoreTests/WarpSQLiteReaderTests.swift
 git commit -m "feat(core): scaffold WarpSQLiteReader with default-path resolution
 
 Read-only reader over Warp's live SQLite state. This task only lands
@@ -376,12 +376,12 @@ the struct + default-path helper; queries come in subsequent tasks."
 ## Task 4: `WarpSQLiteReader.lookupPaneUUID(forCwd:)`
 
 **Files:**
-- Modify: `Sources/OpenIslandCore/WarpSQLiteReader.swift`
-- Modify: `Tests/OpenIslandCoreTests/WarpSQLiteReaderTests.swift`
+- Modify: `Sources/NotchTuneCore/WarpSQLiteReader.swift`
+- Modify: `Tests/NotchTuneCoreTests/WarpSQLiteReaderTests.swift`
 
 - [ ] **Step 1: Add a SQLite fixture helper to the test file**
 
-Append to `Tests/OpenIslandCoreTests/WarpSQLiteReaderTests.swift` **outside** the test struct:
+Append to `Tests/NotchTuneCoreTests/WarpSQLiteReaderTests.swift` **outside** the test struct:
 
 ```swift
 // MARK: - Fixture
@@ -487,7 +487,7 @@ Expected: compile error (method doesn't exist yet).
 
 - [ ] **Step 4: Implement `lookupPaneUUID`**
 
-In `Sources/OpenIslandCore/WarpSQLiteReader.swift`, append a method to the struct:
+In `Sources/NotchTuneCore/WarpSQLiteReader.swift`, append a method to the struct:
 
 ```swift
     /// Resolves the Warp pane UUID hosting a Claude/Codex agent running in `cwd`.
@@ -551,7 +551,7 @@ Expected: three PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/OpenIslandCore/WarpSQLiteReader.swift Tests/OpenIslandCoreTests/WarpSQLiteReaderTests.swift
+git add Sources/NotchTuneCore/WarpSQLiteReader.swift Tests/NotchTuneCoreTests/WarpSQLiteReaderTests.swift
 git commit -m "feat(core): implement WarpSQLiteReader.lookupPaneUUID
 
 Joins Warp's commands -> blocks tables via the precmd-<session>-<n>
@@ -564,8 +564,8 @@ Codex agent in a given working directory. All failures return nil."
 ## Task 5: `WarpSQLiteReader.currentFocusedPaneUUID` and `tabCountInActiveWindow`
 
 **Files:**
-- Modify: `Sources/OpenIslandCore/WarpSQLiteReader.swift`
-- Modify: `Tests/OpenIslandCoreTests/WarpSQLiteReaderTests.swift`
+- Modify: `Sources/NotchTuneCore/WarpSQLiteReader.swift`
+- Modify: `Tests/NotchTuneCoreTests/WarpSQLiteReaderTests.swift`
 
 - [ ] **Step 1: Write failing tests**
 
@@ -686,7 +686,7 @@ Expected: all tests pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/OpenIslandCore/WarpSQLiteReader.swift Tests/OpenIslandCoreTests/WarpSQLiteReaderTests.swift
+git add Sources/NotchTuneCore/WarpSQLiteReader.swift Tests/NotchTuneCoreTests/WarpSQLiteReaderTests.swift
 git commit -m "feat(core): add currentFocusedPaneUUID and tabCountInActiveWindow
 
 Both queries drive the precision jump cycling loop: the focus check
@@ -698,8 +698,8 @@ is the termination condition, the tab count bounds the retry cap."
 ## Task 6: Wire `WarpSQLiteReader.lookupPaneUUID` into `ClaudeHooks.withRuntimeContext`
 
 **Files:**
-- Modify: `Sources/OpenIslandCore/ClaudeHooks.swift` (in `withRuntimeContext`, around line 920-940 where `inferTerminalApp` is called)
-- Modify: `Tests/OpenIslandCoreTests/ClaudeHooksTests.swift`
+- Modify: `Sources/NotchTuneCore/ClaudeHooks.swift` (in `withRuntimeContext`, around line 920-940 where `inferTerminalApp` is called)
+- Modify: `Tests/NotchTuneCoreTests/ClaudeHooksTests.swift`
 
 - [ ] **Step 1: Add a function-parameter reader stub to `withRuntimeContext`**
 
@@ -761,7 +761,7 @@ Expected: compile error (unknown parameter `warpPaneResolver`).
 
 - [ ] **Step 4: Implement the parameter in `withRuntimeContext`**
 
-In `Sources/OpenIslandCore/ClaudeHooks.swift`, find the convenience `withRuntimeContext()` (no args) that calls the full one, and find the full one that takes `environment`, `currentTTYProvider`, `terminalLocatorProvider`. Modify the full version:
+In `Sources/NotchTuneCore/ClaudeHooks.swift`, find the convenience `withRuntimeContext()` (no args) that calls the full one, and find the full one that takes `environment`, `currentTTYProvider`, `terminalLocatorProvider`. Modify the full version:
 
 ```swift
 public func withRuntimeContext(
@@ -819,7 +819,7 @@ Expected: all tests pass (including the earlier Warp identification tests added 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Sources/OpenIslandCore/ClaudeHooks.swift Tests/OpenIslandCoreTests/ClaudeHooksTests.swift
+git add Sources/NotchTuneCore/ClaudeHooks.swift Tests/NotchTuneCoreTests/ClaudeHooksTests.swift
 git commit -m "feat(core): resolve Warp pane UUID in ClaudeHooks.withRuntimeContext
 
 On hook events in Warp, query Warp's SQLite to find the pane_uuid
@@ -833,21 +833,21 @@ resolver parameter for testability; non-Warp terminals skip lookup."
 ## Task 7: Wire the same resolver into `CodexHooks.withRuntimeContext`
 
 **Files:**
-- Modify: `Sources/OpenIslandCore/CodexHooks.swift` (find its `withRuntimeContext` equivalent)
-- Modify: `Tests/OpenIslandCoreTests/CodexHooksTests.swift` (there may not be one yet — if so, see Step 1)
+- Modify: `Sources/NotchTuneCore/CodexHooks.swift` (find its `withRuntimeContext` equivalent)
+- Modify: `Tests/NotchTuneCoreTests/CodexHooksTests.swift` (there may not be one yet — if so, see Step 1)
 
 - [ ] **Step 1: Locate Codex's runtime-context method**
 
-Read `Sources/OpenIslandCore/CodexHooks.swift` and find the method equivalent to Claude's `withRuntimeContext`. Based on earlier exploration it's around line 389-460 and invokes `inferTerminalApp(from: environment)` (line 394). Confirm the method signature before continuing.
+Read `Sources/NotchTuneCore/CodexHooks.swift` and find the method equivalent to Claude's `withRuntimeContext`. Based on earlier exploration it's around line 389-460 and invokes `inferTerminalApp(from: environment)` (line 394). Confirm the method signature before continuing.
 
 - [ ] **Step 2: Write failing test**
 
-If `Tests/OpenIslandCoreTests/CodexHooksTests.swift` does not exist yet, create it with the standard header:
+If `Tests/NotchTuneCoreTests/CodexHooksTests.swift` does not exist yet, create it with the standard header:
 
 ```swift
 import Foundation
 import Testing
-@testable import OpenIslandCore
+@testable import NotchTuneCore
 
 struct CodexHooksTests {
     @Test
@@ -913,7 +913,7 @@ Expected: compile error.
 
 - [ ] **Step 4: Add the parameter and the Warp-guarded call**
 
-In `Sources/OpenIslandCore/CodexHooks.swift`, modify the full `withRuntimeContext` (around line 386) and its convenience overload (around line 378):
+In `Sources/NotchTuneCore/CodexHooks.swift`, modify the full `withRuntimeContext` (around line 386) and its convenience overload (around line 378):
 
 1. Full method signature — add `warpPaneResolver` with a real default:
 
@@ -971,7 +971,7 @@ Expected: all green.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Sources/OpenIslandCore/CodexHooks.swift Tests/OpenIslandCoreTests/CodexHooksTests.swift
+git add Sources/NotchTuneCore/CodexHooks.swift Tests/NotchTuneCoreTests/CodexHooksTests.swift
 git commit -m "feat(core): resolve Warp pane UUID in CodexHooks.withRuntimeContext
 
 Codex parity with Claude: the same injectable warpPaneResolver is
@@ -983,16 +983,16 @@ invoked only when the classifier resolves terminalApp to \"Warp\"."
 ## Task 8: `KeystrokeInjector` for `Cmd+Shift+]`
 
 **Files:**
-- Create: `Sources/OpenIslandApp/KeystrokeInjector.swift`
-- Test: `Tests/OpenIslandAppTests/KeystrokeInjectorTests.swift`
+- Create: `Sources/NotchTuneApp/KeystrokeInjector.swift`
+- Test: `Tests/NotchTuneAppTests/KeystrokeInjectorTests.swift`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `Tests/OpenIslandAppTests/KeystrokeInjectorTests.swift`:
+Create `Tests/NotchTuneAppTests/KeystrokeInjectorTests.swift`:
 
 ```swift
 import XCTest
-@testable import OpenIslandApp
+@testable import NotchTuneApp
 
 final class KeystrokeInjectorTests: XCTestCase {
     func testDefaultInjectorPostsCmdShiftRightBracketWithoutCrashing() {
@@ -1029,7 +1029,7 @@ Expected: compile error (protocol and default impl do not exist).
 
 - [ ] **Step 3: Create the implementation file**
 
-Create `Sources/OpenIslandApp/KeystrokeInjector.swift`:
+Create `Sources/NotchTuneApp/KeystrokeInjector.swift`:
 
 ```swift
 import Foundation
@@ -1078,7 +1078,7 @@ Expected: PASS. (The "no crash" test will emit a single keystroke to whoever has
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/OpenIslandApp/KeystrokeInjector.swift Tests/OpenIslandAppTests/KeystrokeInjectorTests.swift
+git add Sources/NotchTuneApp/KeystrokeInjector.swift Tests/NotchTuneAppTests/KeystrokeInjectorTests.swift
 git commit -m "feat(app): add KeystrokeInjector protocol with Cmd+Shift+] implementation
 
 Thin wrapper over CGEventPost for the Warp \"next tab\" shortcut,
@@ -1091,16 +1091,16 @@ in unit tests. Requires macOS Accessibility permission at runtime."
 ## Task 9: `AccessibilityPermissionChecker`
 
 **Files:**
-- Create: `Sources/OpenIslandApp/AccessibilityPermissionChecker.swift`
-- Test: `Tests/OpenIslandAppTests/AccessibilityPermissionCheckerTests.swift`
+- Create: `Sources/NotchTuneApp/AccessibilityPermissionChecker.swift`
+- Test: `Tests/NotchTuneAppTests/AccessibilityPermissionCheckerTests.swift`
 
 - [ ] **Step 1: Write failing test**
 
-Create `Tests/OpenIslandAppTests/AccessibilityPermissionCheckerTests.swift`:
+Create `Tests/NotchTuneAppTests/AccessibilityPermissionCheckerTests.swift`:
 
 ```swift
 import XCTest
-@testable import OpenIslandApp
+@testable import NotchTuneApp
 
 final class AccessibilityPermissionCheckerTests: XCTestCase {
     func testCheckerReportsBoolWithoutCrashing() {
@@ -1134,7 +1134,7 @@ Expected: compile error.
 
 - [ ] **Step 3: Create the implementation**
 
-Create `Sources/OpenIslandApp/AccessibilityPermissionChecker.swift`:
+Create `Sources/NotchTuneApp/AccessibilityPermissionChecker.swift`:
 
 ```swift
 import Foundation
@@ -1167,7 +1167,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/OpenIslandApp/AccessibilityPermissionChecker.swift Tests/OpenIslandAppTests/AccessibilityPermissionCheckerTests.swift
+git add Sources/NotchTuneApp/AccessibilityPermissionChecker.swift Tests/NotchTuneAppTests/AccessibilityPermissionCheckerTests.swift
 git commit -m "feat(app): add AccessibilityPermissionChecker wrapper
 
 Protocol + AXIsProcessTrusted default impl. Production code can
@@ -1182,8 +1182,8 @@ check; tests inject a stub."
 This task combines the new handler implementation and its registration in the `jump(to:)` switch. They must land together because the tests call `service.jump(to:)` which routes through the dispatcher.
 
 **Files:**
-- Modify: `Sources/OpenIslandApp/TerminalJumpService.swift` — add new typealiases, init parameters, the `jumpToWarpPane` private method, AND the dispatcher case.
-- Modify: `Tests/OpenIslandAppTests/TerminalJumpServiceTests.swift`
+- Modify: `Sources/NotchTuneApp/TerminalJumpService.swift` — add new typealiases, init parameters, the `jumpToWarpPane` private method, AND the dispatcher case.
+- Modify: `Tests/NotchTuneAppTests/TerminalJumpServiceTests.swift`
 
 - [ ] **Step 1: Write failing tests for the three main paths**
 
@@ -1356,7 +1356,7 @@ func testWarpJumpWithoutAccessibilityPermissionFallsBackToAppActivation() throws
 }
 
 // Helper type used by the tests above. `KeystrokeInjectorSpy` is already
-// defined at file scope in Tests/OpenIslandAppTests/KeystrokeInjectorTests.swift
+// defined at file scope in Tests/NotchTuneAppTests/KeystrokeInjectorTests.swift
 // from Task 8 — do NOT redeclare it here, the test target is a single
 // module and duplicates will fail to compile. Just reference it.
 
@@ -1370,7 +1370,7 @@ final class ReadSequenceBox: @unchecked Sendable {
 }
 ```
 
-Before running Step 2, confirm that `KeystrokeInjectorSpy` in `Tests/OpenIslandAppTests/KeystrokeInjectorTests.swift` is at file scope (not nested inside `final class KeystrokeInjectorTests`) and has `internal` access. If Task 8 placed it nested or fileprivate, promote it before continuing this task.
+Before running Step 2, confirm that `KeystrokeInjectorSpy` in `Tests/NotchTuneAppTests/KeystrokeInjectorTests.swift` is at file scope (not nested inside `final class KeystrokeInjectorTests`) and has `internal` access. If Task 8 placed it nested or fileprivate, promote it before continuing this task.
 
 - [ ] **Step 2: Run tests to see failure**
 
@@ -1380,7 +1380,7 @@ Expected: compile errors (unknown init params, no `jumpToWarpPane` method, missi
 
 - [ ] **Step 3: Add new typealiases + init parameters to `TerminalJumpService`**
 
-In `Sources/OpenIslandApp/TerminalJumpService.swift`, just after the existing typealiases (around line 10), add:
+In `Sources/NotchTuneApp/TerminalJumpService.swift`, just after the existing typealiases (around line 10), add:
 
 ```swift
     typealias WarpFocusedPaneReader = @Sendable () -> String?
@@ -1500,7 +1500,7 @@ Expected: all existing tests still pass.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add Sources/OpenIslandApp/TerminalJumpService.swift Tests/OpenIslandAppTests/TerminalJumpServiceTests.swift
+git add Sources/NotchTuneApp/TerminalJumpService.swift Tests/NotchTuneAppTests/TerminalJumpServiceTests.swift
 git commit -m "feat(app): precision jump to Warp tab via SQLite polling + keystroke cycle
 
 New private method TerminalJumpService.jumpToWarpPane dispatched from
@@ -1528,14 +1528,14 @@ get the real WarpSQLiteReader and DefaultKeystrokeInjector by default."
 
 ```bash
 swift build 2>&1 | tail -5
-swift run OpenIslandApp &
+swift run NotchTuneApp &
 ```
 
 If `/Applications/Open Island.app` is running, quit it first (`osascript -e 'quit app "Open Island"'`) so there's no bridge-socket collision.
 
 - [ ] **Step 2: Grant Accessibility permission**
 
-Open **System Settings → Privacy & Security → Accessibility**. If `OpenIslandApp` is listed, toggle it on. If not, trigger a jump attempt from Open Island first (which will cause macOS to add it to the list) and come back.
+Open **System Settings → Privacy & Security → Accessibility**. If `NotchTuneApp` is listed, toggle it on. If not, trigger a jump attempt from Open Island first (which will cause macOS to add it to the list) and come back.
 
 - [ ] **Step 3: Set up the multi-tab scenario**
 
@@ -1566,7 +1566,7 @@ Open **System Settings → Privacy & Security → Accessibility**. If `OpenIslan
 
 - [ ] **Step 6: Verify fallbacks**
 
-1. **No permission**: temporarily disable OpenIslandApp in System Settings → Accessibility. Click jump. Expected: Warp activates, no cycling, Open Island toast/log says "Grant Accessibility permission to enable precision jump."
+1. **No permission**: temporarily disable NotchTuneApp in System Settings → Accessibility. Click jump. Expected: Warp activates, no cycling, Open Island toast/log says "Grant Accessibility permission to enable precision jump."
 2. **Re-enable permission** and continue.
 3. **Close a Claude tab** while the session is still in Open Island's list. Click jump for the closed session. Expected: cycling runs the full cap, then returns "Activated Warp but could not confirm precision focus." — never crashes.
 
@@ -1598,7 +1598,7 @@ git commit -m "docs: changelog entry for Warp precision jump"
 
 - [ ] **Step 10: Final manual validation**
 
-After committing, run a final smoke test: `swift run OpenIslandApp` with three Claude tabs in Warp, click jump on each in turn, verify all three land on the right tab. If anything regressed, investigate before pushing.
+After committing, run a final smoke test: `swift run NotchTuneApp` with three Claude tabs in Warp, click jump on each in turn, verify all three land on the right tab. If anything regressed, investigate before pushing.
 
 ---
 

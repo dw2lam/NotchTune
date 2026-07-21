@@ -22,7 +22,7 @@ That combination makes it behave like a generic top-center floating window, not 
 
 ### 1. The code picks the wrong screen
 
-Current positioning logic in `Sources/OpenIslandApp/OverlayPanelController.swift`:
+Current positioning logic in `Sources/NotchTuneApp/OverlayPanelController.swift`:
 
 ```swift
 let screen = NSScreen.main ?? NSScreen.screens.first

@@ -32,8 +32,8 @@ public_key="$(
   .build/artifacts/sparkle/Sparkle/bin/generate_keys \
     --account NotchTune -p
 )"
-OPEN_ISLAND_VERSION=<version> \
-OPEN_ISLAND_EDDSA_PUBLIC_KEY="$public_key" \
+NOTCHTUNE_VERSION=<version> \
+NOTCHTUNE_EDDSA_PUBLIC_KEY="$public_key" \
 zsh scripts/package-app.sh
 ```
 
@@ -162,7 +162,7 @@ GitHub Actions to sign the update archive.
 
 ## Signing (future)
 
-When `OPEN_ISLAND_SIGN_IDENTITY` is set, `package-app.sh` handles codesign + notarization automatically. At that point:
+When `NOTCHTUNE_SIGN_IDENTITY` is set, `package-app.sh` handles codesign + notarization automatically. At that point:
 
 1. Remove the "Installation Section" Gatekeeper instructions from future release notes.
 2. Add `--verify` step to the checklist.

@@ -1,8 +1,8 @@
-# 为 Open Island 做贡献
+# 为 NotchTune 做贡献
 
 <strong>中文</strong> | <a href="CONTRIBUTING.md">English</a>
 
-感谢你对 Open Island 项目的关注与贡献！
+感谢你对 NotchTune 项目的关注与贡献！
 
 ---
 
@@ -33,14 +33,14 @@
 <summary>点击展开 prompt</summary>
 
 ```
-我在使用 Open Island (https://github.com/Octane0411/open-vibe-island) 时遇到了问题。
+我在使用 Open Island (https://github.com/dw2lam/NotchTune) 时遇到了问题。
 
 请帮我提交一个 GitHub issue，步骤如下：
 
 1. 收集我的环境信息：
    - 运行 `sw_vers` 获取 macOS 版本
    - 运行 `swift --version` 获取 Swift 版本
-   - 检查 Open Island 是否在运行：`ps aux | grep -i "open.island\|OpenIslandApp" | grep -v grep`
+   - 检查 NotchTune 是否在运行：`ps aux | grep -i "open.island\|NotchTuneApp" | grep -v grep`
    - 获取应用版本：`defaults read ~/Applications/Open\ Island\ Dev.app/Contents/Info.plist CFBundleShortVersionString 2>/dev/null || echo "unknown"`
    - 检查我正在使用的终端
 
@@ -67,7 +67,7 @@
 <summary>点击展开 prompt</summary>
 
 ```
-我想为 Open Island (https://github.com/Octane0411/open-vibe-island) 提一个功能建议。
+我想为 Open Island (https://github.com/dw2lam/NotchTune) 提一个功能建议。
 
 请帮我提交一个 GitHub issue，步骤如下：
 
@@ -94,7 +94,7 @@
 
 ### 项目简介
 
-Open Island 是一个原生 macOS 应用，作为 AI 编程代理的桌面伴侣。它驻留在刘海/顶栏区域，监控本地代理会话、展示权限请求、回答问题，并提供"跳转回"对应终端上下文的能力。完全本地运行，无需服务端。
+NotchTune 是一个原生 macOS 应用，作为 AI 编程代理的桌面伴侣。它驻留在刘海/顶栏区域，监控本地代理会话、展示权限请求、回答问题，并提供"跳转回"对应终端上下文的能力。完全本地运行，无需服务端。
 
 **支持的代理**: Codex, Claude Code
 
@@ -116,10 +116,10 @@ swift build
 swift test
 
 # 运行应用
-swift run OpenIslandApp
+swift run NotchTuneApp
 
 # 构建 Hook 可执行文件（Release）
-swift build -c release --product OpenIslandHooks
+swift build -c release --product NotchTuneHooks
 ```
 
 也可以在 Xcode 中打开 `Package.swift`，直接构建和运行应用。

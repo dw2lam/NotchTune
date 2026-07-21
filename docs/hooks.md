@@ -1,6 +1,6 @@
 # Hook System
 
-OpenIsland receives hook events from AI agents (Codex / Claude Code / Gemini CLI / Antigravity) via the `OpenIslandHooks` CLI. The CLI forwards payloads to the app over a Unix socket and, when necessary, writes a directive back to stdout so the agent can act on it (e.g. block a tool call).
+NotchTune receives hook events from AI agents (Codex / Claude Code / Gemini CLI / Antigravity) via the `NotchTuneHooks` CLI. The CLI forwards payloads to the app over a Unix socket and, when necessary, writes a directive back to stdout so the agent can act on it (e.g. block a tool call).
 
 ## Architecture
 
@@ -8,13 +8,13 @@ OpenIsland receives hook events from AI agents (Codex / Claude Code / Gemini CLI
 Agent (Codex / Claude Code / Gemini CLI / Antigravity)
   │  stdin: JSON payload
   ▼
-OpenIslandHooks CLI  (--source codex | --source claude | --source gemini | --source antigravity)
+NotchTuneHooks CLI  (--source codex | --source claude | --source gemini | --source antigravity)
   │  Unix socket
   ▼
 BridgeServer → AppModel → UI
   │  BridgeResponse
   ▼
-OpenIslandHooks CLI
+NotchTuneHooks CLI
   │  stdout: JSON directive (only when a response is needed)
   ▼
 Agent
@@ -24,20 +24,20 @@ Agent
 
 ## Skip Hooks For Delegated Control
 
-Set `OPEN_ISLAND_SKIP_HOOKS=1` on a child agent process when another local controller intentionally owns permission handling for that run. The hook CLI exits immediately without reading or forwarding the payload, so the agent continues without Open Island UI intervention.
+Set `NOTCHTUNE_SKIP_HOOKS=1` on a child agent process when another local controller intentionally owns permission handling for that run. The hook CLI exits immediately without reading or forwarding the payload, so the agent continues without Open Island UI intervention.
 
 `VIBE_ISLAND_SKIP=1` is also recognized as a legacy compatibility alias.
 
 This is meant for per-process launches. Do not set it globally unless you want Open Island hooks disabled for every agent started from that environment.
 
-**Entry point**: [`Sources/OpenIslandHooks/main.swift`](../Sources/OpenIslandHooks/main.swift)
+**Entry point**: [`Sources/NotchTuneHooks/main.swift`](../Sources/NotchTuneHooks/main.swift)
 
 ---
 
 ## Codex Hooks (`--source codex`)
 
 **Payload type**: `CodexHookPayload`  
-**Source**: [`Sources/OpenIslandCore/CodexHooks.swift`](../Sources/OpenIslandCore/CodexHooks.swift)
+**Source**: [`Sources/NotchTuneCore/CodexHooks.swift`](../Sources/NotchTuneCore/CodexHooks.swift)
 
 ### Events
 
@@ -99,7 +99,7 @@ All other events require no stdout response.
 ## Claude Code Hooks (`--source claude`)
 
 **Payload type**: `ClaudeHookPayload`  
-**Source**: [`Sources/OpenIslandCore/ClaudeHooks.swift`](../Sources/OpenIslandCore/ClaudeHooks.swift)
+**Source**: [`Sources/NotchTuneCore/ClaudeHooks.swift`](../Sources/NotchTuneCore/ClaudeHooks.swift)
 
 ### Events
 
@@ -221,11 +221,11 @@ Setting `interrupt: true` terminates the current agent turn immediately.
 ## Gemini CLI Hooks (`--source gemini`)
 
 **Payload type**: `GeminiHookPayload`  
-**Source**: [`Sources/OpenIslandCore/GeminiHooks.swift`](../Sources/OpenIslandCore/GeminiHooks.swift)
+**Source**: [`Sources/NotchTuneCore/GeminiHooks.swift`](../Sources/NotchTuneCore/GeminiHooks.swift)
 
 ### Events
 
-| `hook_event_name` | When it fires | Current OpenIsland behavior |
+| `hook_event_name` | When it fires | Current NotchTune behavior |
 |---|---|---|
 | `SessionStart` | Session starts or resumes | Creates or restores the Gemini session, title, jump target, and transcript metadata |
 | `BeforeAgent` | Gemini starts handling a prompt / turn | Marks the session running, updates prompt text, refreshes terminal metadata |
@@ -257,7 +257,7 @@ Setting `interrupt: true` terminates the current agent turn immediately.
 
 ### Current feature coverage
 
-- Session lifecycle ingestion for Gemini CLI via `OpenIslandHooks --source gemini`
+- Session lifecycle ingestion for Gemini CLI via `NotchTuneHooks --source gemini`
 - Session list and island visibility updates from Gemini hook events
 - Prompt / response metadata capture for completion cards and session details
 - Terminal jump metadata enrichment for Terminal.app, iTerm2, Ghostty, and other supported terminals
@@ -265,8 +265,8 @@ Setting `interrupt: true` terminates the current agent turn immediately.
 
 ### Current limitations
 
-- Gemini hooks are currently treated as fire-and-forget. OpenIsland does not send Gemini-specific approval or modification directives back to stdout.
-- Gemini hook payloads sometimes include a duplicated copy of the final response body, often with whitespace-only differences. OpenIsland applies a best-effort compatibility pass before rendering completion content, but the result is not guaranteed to be perfect for every response shape.
+- Gemini hooks are currently treated as fire-and-forget. NotchTune does not send Gemini-specific approval or modification directives back to stdout.
+- Gemini hook payloads sometimes include a duplicated copy of the final response body, often with whitespace-only differences. NotchTune applies a best-effort compatibility pass before rendering completion content, but the result is not guaranteed to be perfect for every response shape.
 - Gemini support is currently limited to the hook events and UI/session behaviors listed above. It does not yet match the richer permission / interaction flows available for Claude Code or OpenCode.
 
 ---
@@ -274,17 +274,17 @@ Setting `interrupt: true` terminates the current agent turn immediately.
 ## Antigravity Hooks (`--source antigravity`)
 
 **Payload type**: `AntigravityHookPayload`  
-**Source**: [`Sources/OpenIslandCore/AntigravityHooks.swift`](../Sources/OpenIslandCore/AntigravityHooks.swift)
+**Source**: [`Sources/NotchTuneCore/AntigravityHooks.swift`](../Sources/NotchTuneCore/AntigravityHooks.swift)
 
 Antigravity ships its own (non–Claude-format) hook payload, so it is decoded by
 `AntigravityHookPayload` rather than `ClaudeHookPayload`. Unlike Codex / Claude
-Code, OpenIsland does **not** auto-install Antigravity hooks — point Antigravity's
-hook configuration at the OpenIslandHooks binary with `--source antigravity` and
+Code, NotchTune does **not** auto-install Antigravity hooks — point Antigravity's
+hook configuration at the NotchTuneHooks binary with `--source antigravity` and
 it will start forwarding events.
 
 ### Events
 
-| `hook_event_name` | When it fires | Current OpenIsland behavior |
+| `hook_event_name` | When it fires | Current NotchTune behavior |
 |---|---|---|
 | `SessionStart` | Session starts or resumes | Creates or restores the Antigravity session, title, jump target, and transcript metadata |
 | `BeforeAgent` | Antigravity starts handling a prompt / turn | Marks the session running and updates the current prompt / tool |
@@ -331,9 +331,9 @@ For iTerm, Terminal, and Ghostty the process additionally runs an AppleScript qu
 
 | File | Responsibility |
 |---|---|
-| [`Sources/OpenIslandHooks/main.swift`](../Sources/OpenIslandHooks/main.swift) | Hook CLI entry point — routes to Codex, Claude, or Gemini path |
-| [`Sources/OpenIslandCore/CodexHooks.swift`](../Sources/OpenIslandCore/CodexHooks.swift) | Codex payload model, output encoder, terminal detection |
-| [`Sources/OpenIslandCore/ClaudeHooks.swift`](../Sources/OpenIslandCore/ClaudeHooks.swift) | Claude Code payload model, directive types, output encoder |
-| [`Sources/OpenIslandCore/GeminiHooks.swift`](../Sources/OpenIslandCore/GeminiHooks.swift) | Gemini CLI payload model, terminal detection, metadata helpers |
-| [`Sources/OpenIslandCore/BridgeServer.swift`](../Sources/OpenIslandCore/BridgeServer.swift) | Unix socket server — handles incoming hook payloads |
-| [`Sources/OpenIslandCore/BridgeTransport.swift`](../Sources/OpenIslandCore/BridgeTransport.swift) | Protocol codec and envelope types |
+| [`Sources/NotchTuneHooks/main.swift`](../Sources/NotchTuneHooks/main.swift) | Hook CLI entry point — routes to Codex, Claude, or Gemini path |
+| [`Sources/NotchTuneCore/CodexHooks.swift`](../Sources/NotchTuneCore/CodexHooks.swift) | Codex payload model, output encoder, terminal detection |
+| [`Sources/NotchTuneCore/ClaudeHooks.swift`](../Sources/NotchTuneCore/ClaudeHooks.swift) | Claude Code payload model, directive types, output encoder |
+| [`Sources/NotchTuneCore/GeminiHooks.swift`](../Sources/NotchTuneCore/GeminiHooks.swift) | Gemini CLI payload model, terminal detection, metadata helpers |
+| [`Sources/NotchTuneCore/BridgeServer.swift`](../Sources/NotchTuneCore/BridgeServer.swift) | Unix socket server — handles incoming hook payloads |
+| [`Sources/NotchTuneCore/BridgeTransport.swift`](../Sources/NotchTuneCore/BridgeTransport.swift) | Protocol codec and envelope types |

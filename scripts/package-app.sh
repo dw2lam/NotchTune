@@ -8,44 +8,44 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-app_name="${OPEN_ISLAND_APP_NAME:-NotchTune}"
-bundle_identifier="${OPEN_ISLAND_BUNDLE_ID:-app.openisland.dev}"
-version="${OPEN_ISLAND_VERSION:-2.1.0}"
-build_number="${OPEN_ISLAND_BUILD_NUMBER:-$(git -C "$repo_root" rev-list --count HEAD 2>/dev/null || echo 1)}"
-package_root="${OPEN_ISLAND_PACKAGE_ROOT:-$repo_root/output/package}"
-bundle_dir="${OPEN_ISLAND_BUNDLE_DIR:-$package_root/$app_name.app}"
-zip_path="${OPEN_ISLAND_ZIP_PATH:-$package_root/$app_name.zip}"
-dmg_path="${OPEN_ISLAND_DMG_PATH:-$package_root/$app_name.dmg}"
-signing_identity="${OPEN_ISLAND_SIGN_IDENTITY:-}"
-notary_profile="${OPEN_ISLAND_NOTARY_PROFILE:-}"
-sparkle_public_key="${OPEN_ISLAND_EDDSA_PUBLIC_KEY:-}"
+app_name="${NOTCHTUNE_APP_NAME:-NotchTune}"
+bundle_identifier="${NOTCHTUNE_BUNDLE_ID:-app.notchtune.dev}"
+version="${NOTCHTUNE_VERSION:-${OPEN_ISLAND_VERSION:-2.1.0}}"
+build_number="${NOTCHTUNE_BUILD_NUMBER:-$(git -C "$repo_root" rev-list --count HEAD 2>/dev/null || echo 1)}"
+package_root="${NOTCHTUNE_PACKAGE_ROOT:-$repo_root/output/package}"
+bundle_dir="${NOTCHTUNE_BUNDLE_DIR:-$package_root/$app_name.app}"
+zip_path="${NOTCHTUNE_ZIP_PATH:-$package_root/$app_name.zip}"
+dmg_path="${NOTCHTUNE_DMG_PATH:-$package_root/$app_name.dmg}"
+signing_identity="${NOTCHTUNE_SIGN_IDENTITY:-}"
+notary_profile="${NOTCHTUNE_NOTARY_PROFILE:-}"
+sparkle_public_key="${NOTCHTUNE_EDDSA_PUBLIC_KEY:-}"
 
 if [[ -z "$sparkle_public_key" ]]; then
-    echo "ERROR: OPEN_ISLAND_EDDSA_PUBLIC_KEY is required for Sparkle-enabled packages." >&2
+    echo "ERROR: NOTCHTUNE_EDDSA_PUBLIC_KEY is required for Sparkle-enabled packages." >&2
     echo "Run Sparkle's generate_keys --account NotchTune, then pass the printed public key." >&2
     exit 1
 fi
 
 brand_script="$repo_root/scripts/generate_brand_icons.py"
 dmg_bg_script="$repo_root/scripts/generate_dmg_background.py"
-entitlements_path="$repo_root/config/packaging/OpenIslandApp.entitlements"
+entitlements_path="$repo_root/config/packaging/NotchTuneApp.entitlements"
 
 cd "$repo_root"
 
 arch_flags=()
-if [[ "${OPEN_ISLAND_UNIVERSAL:-false}" == "true" ]]; then
+if [[ "${NOTCHTUNE_UNIVERSAL:-false}" == "true" ]]; then
     arch_flags=(--arch arm64 --arch x86_64)
 fi
 
-swift build -c release "${arch_flags[@]}" --product OpenIslandApp
-swift build -c release "${arch_flags[@]}" --product OpenIslandHooks
-swift build -c release "${arch_flags[@]}" --product OpenIslandSetup
+swift build -c release "${arch_flags[@]}" --product NotchTuneApp
+swift build -c release "${arch_flags[@]}" --product NotchTuneHooks
+swift build -c release "${arch_flags[@]}" --product NotchTuneSetup
 
 build_bin_dir="$(swift build -c release "${arch_flags[@]}" --show-bin-path)"
-app_binary="$build_bin_dir/OpenIslandApp"
-hooks_binary="$build_bin_dir/OpenIslandHooks"
-setup_binary="$build_bin_dir/OpenIslandSetup"
-brand_icon="$repo_root/Assets/Brand/OpenIsland.icns"
+app_binary="$build_bin_dir/NotchTuneApp"
+hooks_binary="$build_bin_dir/NotchTuneHooks"
+setup_binary="$build_bin_dir/NotchTuneSetup"
+brand_icon="$repo_root/Assets/Brand/NotchTune.icns"
 
 python3 "$brand_script"
 python3 "$dmg_bg_script"
@@ -54,9 +54,9 @@ rm -rf "$bundle_dir" "$zip_path" "$dmg_path"
 mkdir -p "$bundle_dir/Contents/MacOS" "$bundle_dir/Contents/Helpers" "$bundle_dir/Contents/Resources" "$bundle_dir/Contents/Frameworks"
 
 cp "$app_binary" "$bundle_dir/Contents/MacOS/$app_name"
-cp "$hooks_binary" "$bundle_dir/Contents/Helpers/OpenIslandHooks"
-cp "$setup_binary" "$bundle_dir/Contents/Helpers/OpenIslandSetup"
-cp "$brand_icon" "$bundle_dir/Contents/Resources/OpenIsland.icns"
+cp "$hooks_binary" "$bundle_dir/Contents/Helpers/NotchTuneHooks"
+cp "$setup_binary" "$bundle_dir/Contents/Helpers/NotchTuneSetup"
+cp "$brand_icon" "$bundle_dir/Contents/Resources/NotchTune.icns"
 
 # Copy Sparkle.framework for auto-update support.
 sparkle_framework="$repo_root/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
@@ -69,7 +69,7 @@ fi
 # Copy SPM resource bundle into Contents/Resources/ so the .app root stays
 # clean for code signing (no unsealed contents). Our custom
 # resource_bundle_accessor.swift searches Bundle.main.resourceURL first.
-spm_resource_bundle="$build_bin_dir/OpenIsland_OpenIslandApp.bundle"
+spm_resource_bundle="$build_bin_dir/NotchTune_NotchTuneApp.bundle"
 if [[ -d "$spm_resource_bundle" ]]; then
     cp -R "$spm_resource_bundle" "$bundle_dir/Contents/Resources/"
 else
@@ -78,8 +78,8 @@ fi
 
 chmod +x \
     "$bundle_dir/Contents/MacOS/$app_name" \
-    "$bundle_dir/Contents/Helpers/OpenIslandHooks" \
-    "$bundle_dir/Contents/Helpers/OpenIslandSetup"
+    "$bundle_dir/Contents/Helpers/NotchTuneHooks" \
+    "$bundle_dir/Contents/Helpers/NotchTuneSetup"
 
 # Add rpath so the binary can find Sparkle.framework in Contents/Frameworks/.
 install_name_tool -add_rpath @loader_path/../Frameworks "$bundle_dir/Contents/MacOS/$app_name" 2>/dev/null || true
@@ -96,7 +96,7 @@ cat > "$bundle_dir/Contents/Info.plist" <<EOF
     <key>CFBundleExecutable</key>
     <string>$app_name</string>
     <key>CFBundleIconFile</key>
-    <string>OpenIsland</string>
+    <string>NotchTune</string>
     <key>CFBundleIdentifier</key>
     <string>$bundle_identifier</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -131,10 +131,10 @@ plutil -lint "$bundle_dir/Contents/Info.plist" >/dev/null
 verify_errors=0
 for required in \
     "Contents/MacOS/$app_name" \
-    "Contents/Helpers/OpenIslandHooks" \
-    "Contents/Helpers/OpenIslandSetup" \
-    "Contents/Resources/OpenIsland.icns" \
-    "Contents/Resources/OpenIsland_OpenIslandApp.bundle" \
+    "Contents/Helpers/NotchTuneHooks" \
+    "Contents/Helpers/NotchTuneSetup" \
+    "Contents/Resources/NotchTune.icns" \
+    "Contents/Resources/NotchTune_NotchTuneApp.bundle" \
 ; do
     if [[ ! -e "$bundle_dir/$required" ]]; then
         echo "ERROR: missing required file: $required" >&2
@@ -194,9 +194,9 @@ if [[ -n "$signing_identity" ]]; then
     fi
 
     codesign --force --options runtime --timestamp --sign "$signing_identity" \
-        "$bundle_dir/Contents/Helpers/OpenIslandHooks"
+        "$bundle_dir/Contents/Helpers/NotchTuneHooks"
     codesign --force --options runtime --timestamp --sign "$signing_identity" \
-        "$bundle_dir/Contents/Helpers/OpenIslandSetup"
+        "$bundle_dir/Contents/Helpers/NotchTuneSetup"
 
     codesign \
         --force \
@@ -215,8 +215,8 @@ else
         done
         codesign --force --sign - "$sparkle_fw" 2>/dev/null || true
     fi
-    codesign --force --sign - "$bundle_dir/Contents/Helpers/OpenIslandHooks" 2>/dev/null || true
-    codesign --force --sign - "$bundle_dir/Contents/Helpers/OpenIslandSetup" 2>/dev/null || true
+    codesign --force --sign - "$bundle_dir/Contents/Helpers/NotchTuneHooks" 2>/dev/null || true
+    codesign --force --sign - "$bundle_dir/Contents/Helpers/NotchTuneSetup" 2>/dev/null || true
     codesign --force --sign - "$bundle_dir" 2>/dev/null || true
 fi
 

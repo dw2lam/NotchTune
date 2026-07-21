@@ -4,9 +4,9 @@ This repository can now produce a local macOS app bundle from the Swift package 
 
 ## Current Shape
 
-- `zsh scripts/package-app.sh` builds `OpenIslandApp`, `OpenIslandHooks`, and `OpenIslandSetup` in release mode.
+- `zsh scripts/package-app.sh` builds `NotchTuneApp`, `NotchTuneHooks`, and `NotchTuneSetup` in release mode.
 - The script creates `output/package/Open Island.app`.
-- The bundle embeds helper binaries inside `Contents/Helpers/` so the app can still locate `OpenIslandHooks` after it leaves the repository checkout.
+- The bundle embeds helper binaries inside `Contents/Helpers/` so the app can still locate `NotchTuneHooks` after it leaves the repository checkout.
 - The script also creates `output/package/Open Island.zip` for local sharing or later notarization.
 
 ## Unsigned First
@@ -40,17 +40,17 @@ Or right-click the app → **Open** → click **Open** to bypass the block once.
 When a signing identity is available, pass it in with environment variables:
 
 ```bash
-OPEN_ISLAND_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+NOTCHTUNE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
 zsh scripts/package-app.sh
 ```
 
-The script signs the helper binaries and app bundle, then also signs the DMG itself (required for notarization). Entitlements are declared in `config/packaging/OpenIslandApp.entitlements`.
+The script signs the helper binaries and app bundle, then also signs the DMG itself (required for notarization). Entitlements are declared in `config/packaging/NotchTuneApp.entitlements`.
 
 If a `notarytool` keychain profile is already stored, the same script notarizes and staples in the correct order (app bundle first so the stapled bundle is embedded in the DMG, then the DMG):
 
 ```bash
-OPEN_ISLAND_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-OPEN_ISLAND_NOTARY_PROFILE="open-island-notary" \
+NOTCHTUNE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+NOTCHTUNE_NOTARY_PROFILE="open-island-notary" \
 zsh scripts/package-app.sh
 ```
 
@@ -60,12 +60,12 @@ That path expects `xcrun notarytool store-credentials` to have been run ahead of
 
 The script accepts these environment variables:
 
-- `OPEN_ISLAND_APP_NAME`
-- `OPEN_ISLAND_BUNDLE_ID`
-- `OPEN_ISLAND_VERSION`
-- `OPEN_ISLAND_BUILD_NUMBER`
-- `OPEN_ISLAND_PACKAGE_ROOT`
-- `OPEN_ISLAND_BUNDLE_DIR`
-- `OPEN_ISLAND_ZIP_PATH`
-- `OPEN_ISLAND_SIGN_IDENTITY`
-- `OPEN_ISLAND_NOTARY_PROFILE`
+- `NOTCHTUNE_APP_NAME`
+- `NOTCHTUNE_BUNDLE_ID`
+- `NOTCHTUNE_VERSION`
+- `NOTCHTUNE_BUILD_NUMBER`
+- `NOTCHTUNE_PACKAGE_ROOT`
+- `NOTCHTUNE_BUNDLE_DIR`
+- `NOTCHTUNE_ZIP_PATH`
+- `NOTCHTUNE_SIGN_IDENTITY`
+- `NOTCHTUNE_NOTARY_PROFILE`

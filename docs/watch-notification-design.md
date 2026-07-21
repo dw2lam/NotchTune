@@ -131,7 +131,7 @@ Claude Code / Codex
     │
     │  Hook (stdin/stdout)
     ↓
-OpenIslandHooks (CLI)
+NotchTuneHooks (CLI)
     │
     │  Unix socket
     ↓
@@ -140,13 +140,13 @@ BridgeServer (macOS app 内, 已有)
     │  AppModel 状态变更
     ↓
 WatchHTTPEndpoint (新增, macOS 端)
-    │  - Bonjour 广播 _openisland._tcp
+    │  - Bonjour 广播 _notchtune._tcp
     │  - /events (SSE 实时推送)
     │  - /resolution (接收操作回传)
     │
     │  HTTP (局域网, 同一 WiFi)
     ↓
-iPhone App (OpenIslandMobile)
+iPhone App (NotchTuneMobile)
     │  - Bonjour 发现 Mac
     │  - SSE 接收事件 → 本地通知
     │  - WCSession 中继到 Watch
@@ -221,7 +221,7 @@ POST /resolution
 Mac                              iPhone
  │                                 │
  │  1. Bonjour 广播                │
- │  _openisland._tcp               │
+ │  _notchtune._tcp               │
  │  TXT: { name: "王的MacBook Pro" } │
  │ ──────────────────────────────→ │
  │                                 │  2. 发现 Mac，显示设备名
@@ -264,14 +264,14 @@ Mac                              iPhone
 
 | Target | 类型 | 职责 |
 |---|---|---|
-| `OpenIslandMobile` | iOS App | Bonjour 发现 Mac、SSE 接收事件、本地通知、WCSession 中继到 Watch |
-| `OpenIslandShared` | 共享 Framework | 消息类型定义、编解码，macOS 和 iOS 共用 |
+| `NotchTuneMobile` | iOS App | Bonjour 发现 Mac、SSE 接收事件、本地通知、WCSession 中继到 Watch |
+| `NotchTuneShared` | 共享 Framework | 消息类型定义、编解码，macOS 和 iOS 共用 |
 
 **不需要独立 watchOS App target**（v1）。Watch 通知通过 iOS app 的 `UNNotificationCategory` + `UNNotificationAction` 实现，利用系统自动镜像。
 
 ### macOS 端改动
 
-在 `OpenIslandApp` 中新增 `WatchHTTPEndpoint`：
+在 `NotchTuneApp` 中新增 `WatchHTTPEndpoint`：
 
 ```swift
 /// 在 macOS app 内启动一个轻量 HTTP server，通过 Bonjour 广播服务。
@@ -279,7 +279,7 @@ Mac                              iPhone
 class WatchHTTPEndpoint {
     let appModel: AppModel
 
-    // Bonjour 广播 _openisland._tcp
+    // Bonjour 广播 _notchtune._tcp
     func startAdvertising() { ... }
 
     // SSE: 当 session phase 变为 waitingForApproval / waitingForAnswer / completed 时推送事件
@@ -290,7 +290,7 @@ class WatchHTTPEndpoint {
 }
 ```
 
-### iOS App（OpenIslandMobile）
+### iOS App（NotchTuneMobile）
 
 **极简，但有足够内容过审：**
 
@@ -335,14 +335,14 @@ let permissionCategory = UNNotificationCategory(
 
 ### Step 1: macOS 端 — WatchHTTPEndpoint
 - 在 macOS app 内用 `NWListener` 起一个 HTTP server
-- 注册 Bonjour 服务 `_openisland._tcp`
+- 注册 Bonjour 服务 `_notchtune._tcp`
 - 实现 `/events` SSE 端点：监听 `AppModel` 的 session phase 变化，推送 JSON 事件
 - 实现 `/resolution` POST 端点：接收决策，调用 `AppModel` 执行
 - **可以纯 Mac 端开发和测试**（用 curl 模拟 iPhone 连接验证 SSE 推送）
 
 ### Step 2: iOS App — 骨架 + Bonjour 发现 + 配对
-- 新建 Xcode project（OpenIslandMobile）
-- 用 `NWBrowser` 搜索 `_openisland._tcp`，发现 Mac 后显示设备名
+- 新建 Xcode project（NotchTuneMobile）
+- 用 `NWBrowser` 搜索 `_notchtune._tcp`，发现 Mac 后显示设备名
 - 实现配对流程：用户选择 Mac → 输入 4 位配对码 → 获取 session token
 - 连接 SSE，控制台打印收到的事件
 - **验证 Mac ↔ iPhone 通信链路 + 配对机制**

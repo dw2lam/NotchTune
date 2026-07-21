@@ -33,8 +33,9 @@ clean_glob() {
     done
 }
 
-echo "==> Quit Open Island if running"
+echo "==> Quit NotchTune if running"
 if ! $DRY_RUN; then
+    pkill -x NotchTuneApp 2>/dev/null || true
     pkill -x OpenIslandApp 2>/dev/null || true
     sleep 0.5
 fi
@@ -42,7 +43,7 @@ fi
 uid="$(id -u)"
 
 echo ""
-echo "==> Cleaning Open Island artifacts"
+echo "==> Cleaning NotchTune artifacts"
 
 # --- Hook configurations ---
 echo "--- Hook configs ---"
@@ -199,11 +200,13 @@ fi
 
 # --- Installed hooks binary ---
 echo "--- Hooks binary ---"
+clean_path ~/Library/Application\ Support/NotchTune
 clean_path ~/Library/Application\ Support/OpenIsland
 clean_path ~/Library/Application\ Support/VibeIsland
 
 # --- Status line scripts ---
 echo "--- Status line ---"
+clean_path ~/.notchtune
 clean_path ~/.open-island
 clean_path ~/.vibe-island
 
@@ -226,7 +229,7 @@ clean_path ~/Applications/Open\ Island\ Dev.app
 # --- UserDefaults ---
 echo "--- UserDefaults ---"
 # Find the bundle ID used by the app
-for bid in app.openisland.dev app.vibeisland.dev; do
+for bid in app.notchtune.dev app.openisland.dev app.vibeisland.dev; do
     plist=~/Library/Preferences/${bid}.plist
     if [[ -e "$plist" ]]; then
         if $DRY_RUN; then

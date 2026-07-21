@@ -17,9 +17,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-HOOK_SCRIPT="$SCRIPT_DIR/open-island-hooks.py"
+HOOK_SCRIPT="$SCRIPT_DIR/notchtune-hooks.py"
 REMOTE_BIN_DIR=".local/bin"
-REMOTE_HOOK_PATH="\$HOME/$REMOTE_BIN_DIR/open-island-hooks.py"
+REMOTE_HOOK_PATH="\$HOME/$REMOTE_BIN_DIR/notchtune-hooks.py"
 
 if [ $# -lt 1 ]; then
     echo "Usage: $0 user@host"
@@ -30,10 +30,10 @@ REMOTE="$1"
 LOCAL_UID=$(id -u)
 SOCKET_NAME="open-island-${LOCAL_UID}.sock"
 
-echo "==> Deploying open-island-hooks.py to $REMOTE ..."
+echo "==> Deploying notchtune-hooks.py to $REMOTE ..."
 ssh "$REMOTE" "mkdir -p ~/$REMOTE_BIN_DIR"
-scp "$HOOK_SCRIPT" "$REMOTE:~/$REMOTE_BIN_DIR/open-island-hooks.py"
-ssh "$REMOTE" "chmod +x ~/$REMOTE_BIN_DIR/open-island-hooks.py"
+scp "$HOOK_SCRIPT" "$REMOTE:~/$REMOTE_BIN_DIR/notchtune-hooks.py"
+ssh "$REMOTE" "chmod +x ~/$REMOTE_BIN_DIR/notchtune-hooks.py"
 
 echo ""
 echo "==> Configuring Claude Code hooks on $REMOTE ..."
@@ -41,7 +41,7 @@ echo "==> Configuring Claude Code hooks on $REMOTE ..."
 # Use the *local* UID in the socket path so the remote hook connects to the
 # forwarded socket created by the local Open Island app.  The heredoc is
 # unquoted so that $SOCKET_NAME is expanded.
-HOOK_CMD="OPEN_ISLAND_SOCKET_PATH=/tmp/$SOCKET_NAME python3 ~/.local/bin/open-island-hooks.py --source claude"
+HOOK_CMD="NOTCHTUNE_SOCKET_PATH=/tmp/$SOCKET_NAME python3 ~/.local/bin/notchtune-hooks.py --source claude"
 HOOK_ENTRY="{\"matcher\": \"\", \"hooks\": [{\"type\": \"command\", \"command\": \"$HOOK_CMD\"}]}"
 HOOKS_JSON=$(cat <<ENDJSON
 {

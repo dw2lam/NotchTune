@@ -11,20 +11,20 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
 timestamp="$(date +%Y%m%d-%H%M%S)"
-artifact_dir="${OPEN_ISLAND_HARNESS_ARTIFACT_DIR:-$repo_root/output/harness/smoke-$timestamp}"
+artifact_dir="${NOTCHTUNE_HARNESS_ARTIFACT_DIR:-$repo_root/output/harness/smoke-$timestamp}"
 
-export OPEN_ISLAND_HARNESS_SCENARIO="${OPEN_ISLAND_HARNESS_SCENARIO:-approvalCard}"
-export OPEN_ISLAND_HARNESS_PRESENT_OVERLAY="${OPEN_ISLAND_HARNESS_PRESENT_OVERLAY:-1}"
-export OPEN_ISLAND_HARNESS_START_BRIDGE="${OPEN_ISLAND_HARNESS_START_BRIDGE:-0}"
-export OPEN_ISLAND_HARNESS_BOOT_ANIMATION="${OPEN_ISLAND_HARNESS_BOOT_ANIMATION:-0}"
-export OPEN_ISLAND_HARNESS_CAPTURE_DELAY_SECONDS="${OPEN_ISLAND_HARNESS_CAPTURE_DELAY_SECONDS:-1}"
-export OPEN_ISLAND_HARNESS_AUTO_EXIT_SECONDS="${OPEN_ISLAND_HARNESS_AUTO_EXIT_SECONDS:-2}"
-export OPEN_ISLAND_HARNESS_ARTIFACT_DIR="$artifact_dir"
+export NOTCHTUNE_HARNESS_SCENARIO="${NOTCHTUNE_HARNESS_SCENARIO:-approvalCard}"
+export NOTCHTUNE_HARNESS_PRESENT_OVERLAY="${NOTCHTUNE_HARNESS_PRESENT_OVERLAY:-1}"
+export NOTCHTUNE_HARNESS_START_BRIDGE="${NOTCHTUNE_HARNESS_START_BRIDGE:-0}"
+export NOTCHTUNE_HARNESS_BOOT_ANIMATION="${NOTCHTUNE_HARNESS_BOOT_ANIMATION:-0}"
+export NOTCHTUNE_HARNESS_CAPTURE_DELAY_SECONDS="${NOTCHTUNE_HARNESS_CAPTURE_DELAY_SECONDS:-1}"
+export NOTCHTUNE_HARNESS_AUTO_EXIT_SECONDS="${NOTCHTUNE_HARNESS_AUTO_EXIT_SECONDS:-2}"
+export NOTCHTUNE_HARNESS_ARTIFACT_DIR="$artifact_dir"
 
 mkdir -p "$artifact_dir"
 
-echo "Launching OpenIslandApp smoke scenario '${OPEN_ISLAND_HARNESS_SCENARIO}' for ${OPEN_ISLAND_HARNESS_AUTO_EXIT_SECONDS}s"
-swift run OpenIslandApp
+echo "Launching NotchTuneApp smoke scenario '${NOTCHTUNE_HARNESS_SCENARIO}' for ${NOTCHTUNE_HARNESS_AUTO_EXIT_SECONDS}s"
+swift run NotchTuneApp
 
 report_path="$artifact_dir/report.json"
 if [[ ! -f "$report_path" ]]; then
@@ -55,4 +55,4 @@ subprocess.run(
 PY
 
 echo "Artifacts written to $artifact_dir"
-echo "OpenIslandApp smoke passed"
+echo "NotchTuneApp smoke passed"

@@ -37,9 +37,9 @@ Go to **Settings → Secrets and variables → Actions** in the repository and a
 You can also build signed locally:
 
 ```bash
-export OPEN_ISLAND_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
-export OPEN_ISLAND_NOTARY_PROFILE="open-island-notary"
-export OPEN_ISLAND_VERSION="0.2.0"
+export NOTCHTUNE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+export NOTCHTUNE_NOTARY_PROFILE="open-island-notary"
+export NOTCHTUNE_VERSION="0.2.0"
 
 # First, store notarization credentials (one-time):
 xcrun notarytool store-credentials "open-island-notary" \

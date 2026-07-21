@@ -129,8 +129,8 @@ git push origin --delete <branch-name>
 
 Good parallel split:
 
-- `feat/island-visual-polish`: `Sources/OpenIslandApp/Views/*`
-- `fix/codex-hook-installer`: `Sources/OpenIslandCore/CodexHookInstaller.swift`
+- `feat/island-visual-polish`: `Sources/NotchTuneApp/Views/*`
+- `fix/codex-hook-installer`: `Sources/NotchTuneCore/CodexHookInstaller.swift`
 - `investigate/jump-accuracy`: terminal jump diagnostics and docs
 
 Bad split:

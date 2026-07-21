@@ -5,7 +5,7 @@ This directory contains the current NotchTune icon assets for macOS app packagin
 Structure:
 
 - `Source/` keeps raw brand source assets that should not be treated as generated runtime output.
-- `AppIcon.appiconset/`, `OpenIsland.iconset/`, and `OpenIsland.icns` are generated packaging assets.
+- `AppIcon.appiconset/`, `NotchTune.iconset/`, and `NotchTune.icns` are generated packaging assets.
 - `Internal/` contains small derived assets for in-app surfaces.
 
 Generation workflow:
@@ -13,7 +13,7 @@ Generation workflow:
 - regenerate everything with `python3 scripts/generate_brand_icons.py`
 - the script outputs:
   - `AppIcon.appiconset/` for future asset-catalog use
-  - `OpenIsland.iconset/` and `OpenIsland.icns` for manual macOS bundle packaging
+  - `NotchTune.iconset/` and `NotchTune.icns` for manual macOS bundle packaging
   - `Internal/color/` for in-app colored usage
   - `Internal/template/` for monochrome template-style usage
   - `Internal/badge/` for small boxed icon treatments

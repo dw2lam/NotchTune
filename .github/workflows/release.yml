@@ -27,16 +27,16 @@ jobs:
 
       - name: Build
         run: |
-          swift build -c release --product OpenIslandApp
-          swift build -c release --product OpenIslandHooks
-          swift build -c release --product OpenIslandSetup
+          swift build -c release --product NotchTuneApp
+          swift build -c release --product NotchTuneHooks
+          swift build -c release --product NotchTuneSetup
 
       - name: Package app
         env:
-          OPEN_ISLAND_VERSION: ${{ steps.version.outputs.version }}
-          OPEN_ISLAND_EDDSA_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
+          NOTCHTUNE_VERSION: ${{ steps.version.outputs.version }}
+          NOTCHTUNE_EDDSA_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
         run: |
-          test -n "$OPEN_ISLAND_EDDSA_PUBLIC_KEY" || {
+          test -n "$NOTCHTUNE_EDDSA_PUBLIC_KEY" || {
             echo "SPARKLE_PUBLIC_KEY is not configured" >&2
             exit 1
           }

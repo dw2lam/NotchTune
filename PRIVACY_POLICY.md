@@ -4,7 +4,7 @@
 
 ## English
 
-Open Island ("the App") is a companion app for AI coding agents. We are committed to protecting your privacy.
+NotchTune ("the App") is a companion app for AI coding agents. We are committed to protecting your privacy.
 
 ### Data Collection
 
@@ -30,7 +30,7 @@ https://github.com/Octane0411/open-vibe-island/issues
 
 ## 中文
 
-Open Island（"本应用"）是一款 AI 编程助手的配套应用。我们致力于保护您的隐私。
+NotchTune（"本应用"）是一款 AI 编程助手的配套应用。我们致力于保护您的隐私。
 
 ### 数据收集
 

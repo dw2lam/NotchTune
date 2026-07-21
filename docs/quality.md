@@ -23,17 +23,17 @@ The repository harness exists to make a round of work mechanically checkable. Th
 
 ## Smoke Mode
 
-`scripts/smoke-dev-app.sh` sets harness environment variables before launching `OpenIslandApp`.
+`scripts/smoke-dev-app.sh` sets harness environment variables before launching `NotchTuneApp`.
 
-The smoke path is intentionally aimed at the repository executable, not `~/Applications/Open Island Dev.app`. The dev bundle remains useful for manual end-to-end OSS verification, but harness automation should target the current branch's `OpenIslandApp` binary so the verification result matches the checked-out code exactly.
+The smoke path is intentionally aimed at the repository executable, not `~/Applications/Open Island Dev.app`. The dev bundle remains useful for manual end-to-end OSS verification, but harness automation should target the current branch's `NotchTuneApp` binary so the verification result matches the checked-out code exactly.
 
-- `OPEN_ISLAND_HARNESS_SCENARIO` selects a case from `IslandDebugScenario`
-- `OPEN_ISLAND_HARNESS_PRESENT_OVERLAY` mirrors the scenario onto the real island overlay
-- `OPEN_ISLAND_HARNESS_START_BRIDGE` skips live socket setup when disabled
-- `OPEN_ISLAND_HARNESS_BOOT_ANIMATION` disables the normal boot animation for deterministic runs
-- `OPEN_ISLAND_HARNESS_CAPTURE_DELAY_SECONDS` controls when artifact capture runs after launch
-- `OPEN_ISLAND_HARNESS_AUTO_EXIT_SECONDS` terminates the app automatically after the selected duration
-- `OPEN_ISLAND_HARNESS_ARTIFACT_DIR` selects the output directory for `report.json`, `timeline.json`, `runtime.log`, PNG captures, and `.ax.json` accessibility snapshots
+- `NOTCHTUNE_HARNESS_SCENARIO` selects a case from `IslandDebugScenario`
+- `NOTCHTUNE_HARNESS_PRESENT_OVERLAY` mirrors the scenario onto the real island overlay
+- `NOTCHTUNE_HARNESS_START_BRIDGE` skips live socket setup when disabled
+- `NOTCHTUNE_HARNESS_BOOT_ANIMATION` disables the normal boot animation for deterministic runs
+- `NOTCHTUNE_HARNESS_CAPTURE_DELAY_SECONDS` controls when artifact capture runs after launch
+- `NOTCHTUNE_HARNESS_AUTO_EXIT_SECONDS` terminates the app automatically after the selected duration
+- `NOTCHTUNE_HARNESS_ARTIFACT_DIR` selects the output directory for `report.json`, `timeline.json`, `runtime.log`, PNG captures, and `.ax.json` accessibility snapshots
 
 The default smoke path writes artifacts under `output/harness/`.
 

@@ -18,7 +18,7 @@ macOS (local)                         Remote server
                                    └────────────────────┘
 ```
 
-SSH's `RemoteForward` tunnels the Unix socket from your Mac to the remote server. The Python hook client (`open-island-hooks.py`) connects to the forwarded socket, and the bridge protocol works identically to the local case.
+SSH's `RemoteForward` tunnels the Unix socket from your Mac to the remote server. The Python hook client (`notchtune-hooks.py`) connects to the forwarded socket, and the bridge protocol works identically to the local case.
 
 ## Prerequisites
 
@@ -36,7 +36,7 @@ Run the automated setup script:
 ```
 
 This will:
-1. Copy `open-island-hooks.py` to the remote server (`~/.local/bin/`)
+1. Copy `notchtune-hooks.py` to the remote server (`~/.local/bin/`)
 2. Configure Claude Code hooks in `~/.claude/settings.json` on the remote
 3. Print the SSH config snippet you need
 
@@ -45,8 +45,8 @@ This will:
 ### 1. Deploy the hook script
 
 ```bash
-scp scripts/open-island-hooks.py user@myserver:~/.local/bin/
-ssh user@myserver chmod +x ~/.local/bin/open-island-hooks.py
+scp scripts/notchtune-hooks.py user@myserver:~/.local/bin/
+ssh user@myserver chmod +x ~/.local/bin/notchtune-hooks.py
 ```
 
 ### 2. Configure Claude Code hooks on the remote
@@ -56,16 +56,16 @@ Edit `~/.claude/settings.json` on the remote server:
 ```json
 {
   "hooks": {
-    "PreToolUse": [{ "type": "command", "command": "python3 ~/.local/bin/open-island-hooks.py --source claude" }],
-    "PostToolUse": [{ "type": "command", "command": "python3 ~/.local/bin/open-island-hooks.py --source claude" }],
-    "SessionStart": [{ "type": "command", "command": "python3 ~/.local/bin/open-island-hooks.py --source claude" }],
-    "SessionEnd": [{ "type": "command", "command": "python3 ~/.local/bin/open-island-hooks.py --source claude" }],
-    "PermissionRequest": [{ "type": "command", "command": "python3 ~/.local/bin/open-island-hooks.py --source claude" }],
-    "Notification": [{ "type": "command", "command": "python3 ~/.local/bin/open-island-hooks.py --source claude" }],
-    "Stop": [{ "type": "command", "command": "python3 ~/.local/bin/open-island-hooks.py --source claude" }],
-    "UserPromptSubmit": [{ "type": "command", "command": "python3 ~/.local/bin/open-island-hooks.py --source claude" }],
-    "SubagentStart": [{ "type": "command", "command": "python3 ~/.local/bin/open-island-hooks.py --source claude" }],
-    "SubagentStop": [{ "type": "command", "command": "python3 ~/.local/bin/open-island-hooks.py --source claude" }]
+    "PreToolUse": [{ "type": "command", "command": "python3 ~/.local/bin/notchtune-hooks.py --source claude" }],
+    "PostToolUse": [{ "type": "command", "command": "python3 ~/.local/bin/notchtune-hooks.py --source claude" }],
+    "SessionStart": [{ "type": "command", "command": "python3 ~/.local/bin/notchtune-hooks.py --source claude" }],
+    "SessionEnd": [{ "type": "command", "command": "python3 ~/.local/bin/notchtune-hooks.py --source claude" }],
+    "PermissionRequest": [{ "type": "command", "command": "python3 ~/.local/bin/notchtune-hooks.py --source claude" }],
+    "Notification": [{ "type": "command", "command": "python3 ~/.local/bin/notchtune-hooks.py --source claude" }],
+    "Stop": [{ "type": "command", "command": "python3 ~/.local/bin/notchtune-hooks.py --source claude" }],
+    "UserPromptSubmit": [{ "type": "command", "command": "python3 ~/.local/bin/notchtune-hooks.py --source claude" }],
+    "SubagentStart": [{ "type": "command", "command": "python3 ~/.local/bin/notchtune-hooks.py --source claude" }],
+    "SubagentStop": [{ "type": "command", "command": "python3 ~/.local/bin/notchtune-hooks.py --source claude" }]
   }
 }
 ```
@@ -132,7 +132,7 @@ Then set the socket path explicitly on the remote machine so the hook can find i
 
 ```bash
 # Add to ~/.zshrc on remote Mac
-export OPEN_ISLAND_SOCKET_PATH=/tmp/open-island-<remote-uid>.sock
+export NOTCHTUNE_SOCKET_PATH=/tmp/open-island-<remote-uid>.sock
 export VIBE_ISLAND_SOCKET_PATH=/tmp/open-island-<remote-uid>.sock
 ```
 
@@ -165,5 +165,5 @@ Ensure the remote UID in the socket filename matches your local UID. If they dif
 RemoteForward /tmp/open-island-remote.sock /tmp/open-island-501.sock
 
 # On remote, set env var (add to ~/.bashrc):
-export OPEN_ISLAND_SOCKET_PATH=/tmp/open-island-remote.sock
+export NOTCHTUNE_SOCKET_PATH=/tmp/open-island-remote.sock
 ```

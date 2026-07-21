@@ -1,0 +1,244 @@
+/* Common */
+"app.name" = "NotchTune";
+"app.name.oss" = "NotchTune OSS";
+"app.description" = "macOS companion for AI coding agents";
+
+/* Settings - Tab Labels */
+"settings.tab.general" = "General";
+"settings.tab.display" = "Display";
+"settings.tab.sound" = "Sound";
+"settings.tab.shortcuts" = "Shortcuts";
+"settings.tab.lab" = "Lab";
+"settings.tab.about" = "About";
+"settings.tab.updates" = "Updates";
+
+/* Settings - Section Headers */
+"settings.section.system" = "System";
+"settings.section.advanced" = "Advanced";
+
+/* Settings - General */
+"settings.general.launchAtLogin" = "Launch at Login";
+"settings.general.monitor" = "Monitor";
+"settings.general.automatic" = "Automatic";
+"settings.general.behavior" = "Behavior";
+"settings.general.hideFullscreen" = "Hide in fullscreen";
+"settings.general.autoHideNoSessions" = "Auto-hide without active sessions";
+"settings.general.autoCollapse" = "Auto-collapse on mouse exit";
+"settings.general.hideDockIcon" = "Hide icon in Dock";
+"settings.general.hapticFeedback" = "Haptic feedback on hover";
+"settings.general.suppressFrontmostNotifications" = "Suppress notifications for focused sessions";
+"settings.general.showCodexUsage" = "Show Codex usage";
+"settings.general.completionReply" = "Reply from completion card";
+"settings.general.cliHooks" = "CLI Hooks";
+"settings.general.activated" = "Activated";
+"settings.general.install" = "Install";
+"settings.general.uninstall" = "Uninstall";
+"settings.general.uninstallConfirmTitle" = "Uninstall Hooks?";
+"settings.general.uninstallConfirmAction" = "Uninstall";
+"settings.general.uninstallConfirmMessage.claude" = "This will remove NotchTune hooks from Claude Code. You can reinstall them at any time.";
+"settings.general.uninstallConfirmMessage.codex" = "This will remove NotchTune hooks from Codex. You can reinstall them at any time.";
+"settings.general.uninstallConfirmMessage.claudeUsage" = "This will remove the Claude usage bridge. You can reinstall it at any time.";
+"settings.general.cancel" = "Cancel";
+"settings.general.language" = "Language";
+"settings.general.languageSystem" = "System";
+"settings.general.languageEnglish" = "English";
+"settings.general.languageChinese" = "Chinese (Simplified)";
+"settings.general.languageTraditionalChinese" = "Chinese (Traditional)";
+
+/* Settings - Personalization (v6) */
+"settings.tab.appearance" = "Personalization";
+"settings.appearance.preview" = "Preview";
+"settings.appearance.preview.external" = "External";
+"settings.appearance.preview.macbook" = "MacBook";
+"settings.appearance.state.idle" = "idle";
+"settings.appearance.state.running" = "running";
+"settings.appearance.state.waiting" = "waiting";
+"settings.appearance.state.auto.on" = "auto ✓";
+"settings.appearance.state.auto.off" = "auto";
+"settings.appearance.rightSlot.title" = "01 · Right slot";
+"settings.appearance.rightSlot.note" = "What shows on the right of the closed island.";
+"settings.appearance.rightSlot.count" = "Count";
+"settings.appearance.rightSlot.agents" = "Agents";
+"settings.appearance.rightSlot.none" = "None";
+"settings.appearance.centerLabel.title" = "02 · Center label";
+"settings.appearance.centerLabel.note" = "External displays only — the physical notch covers this space on MacBook.";
+"settings.appearance.centerLabel.agentAction" = "Agent · action";
+"settings.appearance.centerLabel.sessionName" = "Session name";
+"settings.appearance.centerLabel.off" = "Off";
+"settings.appearance.notchPart.title" = "Notch";
+"settings.appearance.sessionListPart.title" = "Session list";
+"settings.appearance.sessionPreview" = "Preview";
+"settings.appearance.profile.title" = "Display profile";
+"settings.appearance.profile.note" = "Choose which screen type you are configuring. NotchTune applies the matching profile automatically when the overlay moves.";
+"settings.appearance.profile.external.title" = "External display";
+"settings.appearance.profile.external.note" = "Top-bar fallback without the MacBook notch corners.";
+"settings.appearance.profile.macbook.title" = "MacBook notch";
+"settings.appearance.profile.macbook.note" = "Built-in notch surface with notch-aware geometry.";
+"settings.appearance.usageDisplay.title" = "02 · Usage";
+"settings.appearance.usageDisplay.note" = "Controls whether the opened island shows compact agent usage.";
+"settings.appearance.usageDisplay.hidden" = "Hidden";
+"settings.appearance.usageDisplay.compact" = "Compact";
+"settings.appearance.stateIndicator.title" = "03 · Session state";
+"settings.appearance.stateIndicator.note" = "How rows show running, waiting, and completed state.";
+"settings.appearance.stateIndicator.animatedDot" = "Animated dot";
+"settings.appearance.stateIndicator.bar" = "Bar";
+"settings.appearance.stateIndicator.glyph" = "Glyph";
+"settings.appearance.stateIndicator.tint" = "Tint";
+"settings.appearance.sessionGroup.title" = "04 · Session grouping";
+"settings.appearance.sessionGroup.note" = "Optional sections for the expanded session list.";
+"settings.appearance.sessionGroup.none" = "None";
+"settings.appearance.sessionGroup.state" = "State";
+"settings.appearance.sessionGroup.agent" = "Agent";
+"settings.appearance.sessionGroup.project" = "Project";
+"settings.appearance.sessionSort.title" = "05 · Session sorting";
+"settings.appearance.sessionSort.note" = "Choose the default order inside the expanded list.";
+"settings.appearance.sessionSort.attention" = "Attention";
+"settings.appearance.sessionSort.lastUpdate" = "Last update";
+"settings.appearance.staleThreshold.title" = "06 · Done timeout";
+"settings.appearance.staleThreshold.note" = "Completed sessions move to the low-priority idle presentation after this time.";
+"settings.appearance.staleThreshold.twoMinutes" = "2 min";
+"settings.appearance.staleThreshold.fiveMinutes" = "5 min";
+"settings.appearance.staleThreshold.tenMinutes" = "10 min";
+"settings.appearance.staleThreshold.twentyMinutes" = "20 min";
+"settings.appearance.staleThreshold.never" = "Never";
+"settings.appearance.preview.permissionNeeded" = "Permission needed";
+"settings.appearance.preview.agentEditing" = "Claude · editing";
+"settings.appearance.preview.approveShellCommand" = "Approve shell command";
+"settings.appearance.preview.promptImplementPlan" = "You: implement the plan";
+"settings.appearance.preview.waitingForAnswer" = "Waiting for answer";
+"settings.appearance.preview.promptChooseNotificationCopy" = "You: choose notification copy";
+"settings.appearance.preview.editingSessionListPreview" = "Editing session list preview";
+"settings.appearance.preview.promptTightenSettingsUI" = "You: tighten the settings UI";
+"settings.appearance.preview.replyAvailable" = "Reply available";
+"settings.appearance.preview.promptSummarizeDesignBundle" = "You: summarize the design bundle";
+"settings.appearance.preview.completedEarlier" = "Completed earlier";
+"settings.appearance.preview.permissionBody" = "$ npm run build";
+"settings.appearance.preview.pickOrTypeAnswer" = "Pick or type an answer";
+"settings.appearance.autoHide.title" = "Auto-hide when inactive";
+"settings.appearance.autoHide.note" = "Hide the island when there are no active agents or music playing. Hover the top of the screen to peek.";
+"settings.appearance.autoHide.enabled" = "Enable Auto-hide";
+
+/* Settings - Display */
+"settings.display.monitor" = "Monitor";
+"settings.display.position" = "Display Position";
+"settings.display.diagnostics" = "Diagnostics";
+"settings.display.currentScreen" = "Current Screen";
+"settings.display.layoutMode" = "Layout Mode";
+
+/* Settings - Sound */
+"settings.sound.notifications" = "Notification Sounds";
+"settings.sound.mute" = "Mute";
+"settings.sound.selectSound" = "Select Sound";
+"settings.sound.systemSounds" = "System Sounds";
+"settings.sound.customSounds" = "Custom Sounds";
+"settings.sound.addCustomSound" = "Add Custom Sound…";
+"settings.sound.chooseCustomSound" = "Choose Custom Sound";
+"settings.sound.noCustomSounds" = "No custom sounds added yet.";
+
+
+/* Settings - Setup */
+"settings.tab.setup" = "Setup";
+"setup.section.binary" = "Hook Binary";
+"setup.claudeConfigDir.section" = "Claude Config Directory";
+"setup.claudeConfigDir.title" = "Config Directory";
+"setup.claudeConfigDir.choose" = "Choose…";
+"setup.claudeConfigDir.reset" = "Reset";
+"setup.claudeConfigDir.footer" = "For users who run Claude Code with CLAUDE_CONFIG_DIR. Leave default unless you use a custom config path.";
+"setup.section.hooks" = "CLI Hooks";
+"setup.section.usage" = "Usage Bridge";
+"setup.section.permissions" = "Permissions";
+"setup.binaryReady" = "Ready";
+"setup.binaryMissing" = "Not found — build NotchTuneHooks first";
+"setup.hookReady" = "Hooks installed";
+"setup.hookMissing" = "Hooks not installed";
+"setup.usageBridge" = "Claude Usage Bridge";
+"setup.usageBridgeReady" = "Installed";
+"setup.usageBridgeDesc" = "Tracks Claude API usage locally";
+"setup.optional" = "Optional";
+"setup.permissionsTitle" = "Accessibility";
+"setup.permissionsDesc" = "NotchTune may need Accessibility permission to detect terminal windows. Grant it in System Settings → Privacy & Security → Accessibility.";
+"setup.installAll" = "Install All";
+"setup.banner.noHooks.title" = "Get started with NotchTune";
+"setup.banner.noHooks.message" = "Install hooks for the agents you use below — NotchTune will start monitoring those sessions.";
+"setup.revealConfigLocation" = "Reveal config in Finder";
+"setup.section.diagnostics" = "Hook Diagnostics";
+"setup.diagnostics.notRun" = "Health check not yet run.";
+"setup.diagnostics.runCheck" = "Run Check";
+"setup.diagnostics.recheck" = "Re-check";
+"setup.diagnostics.repair" = "Repair Hooks";
+"setup.diagnostics.allHealthy" = "All hooks are healthy.";
+
+/* Settings - Placeholder */
+"settings.shortcuts.comingSoon" = "Keyboard shortcuts coming soon.";
+"settings.lab.comingSoon" = "Experimental features coming soon.";
+
+/* Settings - About */
+"settings.about.version" = "Version %@";
+"settings.about.checkForUpdates" = "Check for Updates…";
+"settings.about.quitApp" = "Quit NotchTune";
+"settings.updates.softwareUpdate" = "Software Update";
+"settings.updates.currentVersion" = "Current version";
+"settings.updates.build" = "Build";
+"settings.updates.availableVersion" = "Available version";
+"settings.updates.checkForUpdates" = "Check for Updates…";
+"settings.updates.releaseNotes" = "View Releases";
+"settings.updates.automaticDetail" = "NotchTune checks for updates automatically. Updates are downloaded only when you choose to install them.";
+"island.quit.confirmTitle" = "Quit NotchTune?";
+"island.quit.confirmAction" = "Quit";
+"island.quit.confirmMessage" = "Are you sure you want to quit?";
+
+/* Settings - Update */
+"settings.update.available" = "v%@ Available — Update";
+
+/* Island Panel - Bootstrap */
+"island.checkingTerminals" = "Checking open terminal sessions";
+"island.terminalOwnership" = "NotchTune will show live agents after terminal ownership is confirmed";
+"island.noTerminals" = "No open terminal sessions";
+"island.startAgent" = "Start a coding agent in your terminal";
+"island.recentSessions" = "Recent sessions are kept here until the terminal is open again";
+"island.hint.installHooks" = "No agent hooks installed — sessions won't surface events. Tap to set up.";
+
+/* Island Panel - Session List */
+"island.sessionList.title" = "Sessions";
+"island.sessionOverview.total" = "total";
+"island.sessionOverview.waiting" = "waiting";
+"island.sessionOverview.waitingCompact" = "wait";
+"island.sessionOverview.running" = "running";
+"island.sessionOverview.runningCompact" = "run";
+"island.sessionOverview.done" = "done";
+"island.sessionOverview.idle" = "idle";
+"island.section.sessions" = "Sessions";
+"island.section.needsApproval" = "Needs approval";
+"island.section.needsAnswer" = "Needs answer";
+"island.section.inProgress" = "In progress";
+"island.section.justDone" = "Just done";
+"island.section.idle" = "Idle";
+"island.showAll" = "Show all %lld sessions";
+"island.collapseList" = "Collapse list";
+"island.usageWaiting" = "Usage waiting";
+
+/* Island Panel - Approval */
+"approval.toolPermissionRequested" = "Tool permission requested";
+"approval.deny" = "No";
+"approval.allowOnce" = "Yes";
+"approval.alwaysAllow" = "Always Allow (%@)";
+
+
+/* Island Panel - Subagents & Tasks */
+"subagents.title" = "Subagents (%lld)";
+"subagents.completed" = "Completed";
+"tasks.summary" = "Tasks (%lld completed, %lld in progress, %lld pending)";
+
+/* Island Panel - Question */
+"question.submit" = "Submit Answers";
+"question.answerNeeded" = "Answer needed";
+"question.otherPlaceholder" = "Type your answer…";
+"question.sendReply" = "Send reply";
+"question.sendAnswer" = "Send answer";
+
+/* Island Panel - Completion */
+"completion.done" = "Done";
+"completion.replyPlaceholder" = "Reply to %@…";
+
+/* Window Titles */
+"window.settings" = "NotchTune Settings";

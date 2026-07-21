@@ -48,13 +48,13 @@ Notchi auto-writes hook configuration into the tool's settings and installs a bu
 
 Open Island already has the beginning of the Codex side:
 
-- [Sources/OpenIslandCore/CodexHooks.swift](/Users/wangruobing/Personal/open-island/Sources/OpenIslandCore/CodexHooks.swift)
-- [Sources/OpenIslandHooks/main.swift](/Users/wangruobing/Personal/open-island/Sources/OpenIslandHooks/main.swift)
+- [Sources/NotchTuneCore/CodexHooks.swift](/Users/wangruobing/Personal/open-island/Sources/NotchTuneCore/CodexHooks.swift)
+- [Sources/NotchTuneHooks/main.swift](/Users/wangruobing/Personal/open-island/Sources/NotchTuneHooks/main.swift)
 
 The next step is to add a native installer that:
 
 - detects Codex config presence
-- installs the `OpenIslandHooks` executable or a thin wrapper script
+- installs the `NotchTuneHooks` executable or a thin wrapper script
 - patches the relevant hook entries safely
 - can report installed / missing / broken status in the app
 
@@ -91,9 +91,9 @@ Notchi demonstrates that a narrow first integration is enough to ship. Open Isla
 
 The current shared model and bridge transport already point in the right direction:
 
-- [Sources/OpenIslandCore/AgentEvent.swift](/Users/wangruobing/Personal/open-island/Sources/OpenIslandCore/AgentEvent.swift)
-- [Sources/OpenIslandCore/BridgeTransport.swift](/Users/wangruobing/Personal/open-island/Sources/OpenIslandCore/BridgeTransport.swift)
-- [Sources/OpenIslandCore/SessionState.swift](/Users/wangruobing/Personal/open-island/Sources/OpenIslandCore/SessionState.swift)
+- [Sources/NotchTuneCore/AgentEvent.swift](/Users/wangruobing/Personal/open-island/Sources/NotchTuneCore/AgentEvent.swift)
+- [Sources/NotchTuneCore/BridgeTransport.swift](/Users/wangruobing/Personal/open-island/Sources/NotchTuneCore/BridgeTransport.swift)
+- [Sources/NotchTuneCore/SessionState.swift](/Users/wangruobing/Personal/open-island/Sources/NotchTuneCore/SessionState.swift)
 
 That should remain the center of gravity.
 

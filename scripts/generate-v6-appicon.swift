@@ -4,7 +4,7 @@
 // Produces a single 1024×1024 PNG at Assets/Brand/app-icon-v6.png. That
 // image is the sole "master" — the Python pipeline
 // (scripts/generate_brand_icons.py) resizes it into every
-// AppIcon.appiconset slot and then composes OpenIsland.icns. Re-run this
+// AppIcon.appiconset slot and then composes NotchTune.icns. Re-run this
 // script after any design tweak, then run the Python pipeline.
 //
 // Spec (from design/v6-bundle, components/logos_v7.jsx -> AppIcon_BarDot):

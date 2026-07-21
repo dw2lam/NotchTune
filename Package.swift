@@ -3,27 +3,27 @@
 import PackageDescription
 
 let package = Package(
-    name: "OpenIsland",
+    name: "NotchTune",
     defaultLocalization: "en",
     platforms: [
         .macOS(.v14),
     ],
     products: [
         .library(
-            name: "OpenIslandCore",
-            targets: ["OpenIslandCore"]
+            name: "NotchTuneCore",
+            targets: ["NotchTuneCore"]
         ),
         .executable(
-            name: "OpenIslandHooks",
-            targets: ["OpenIslandHooks"]
+            name: "NotchTuneHooks",
+            targets: ["NotchTuneHooks"]
         ),
         .executable(
-            name: "OpenIslandSetup",
-            targets: ["OpenIslandSetup"]
+            name: "NotchTuneSetup",
+            targets: ["NotchTuneSetup"]
         ),
         .executable(
-            name: "OpenIslandApp",
-            targets: ["OpenIslandApp"]
+            name: "NotchTuneApp",
+            targets: ["NotchTuneApp"]
         ),
     ],
     dependencies: [
@@ -32,20 +32,20 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "OpenIslandCore"
+            name: "NotchTuneCore"
         ),
         .executableTarget(
-            name: "OpenIslandHooks",
-            dependencies: ["OpenIslandCore"]
+            name: "NotchTuneHooks",
+            dependencies: ["NotchTuneCore"]
         ),
         .executableTarget(
-            name: "OpenIslandSetup",
-            dependencies: ["OpenIslandCore"]
+            name: "NotchTuneSetup",
+            dependencies: ["NotchTuneCore"]
         ),
         .executableTarget(
-            name: "OpenIslandApp",
+            name: "NotchTuneApp",
             dependencies: [
-                "OpenIslandCore",
+                "NotchTuneCore",
                 .product(name: "MarkdownUI", package: "swift-markdown-ui"),
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
@@ -54,12 +54,12 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "OpenIslandCoreTests",
-            dependencies: ["OpenIslandCore"]
+            name: "NotchTuneCoreTests",
+            dependencies: ["NotchTuneCore"]
         ),
         .testTarget(
-            name: "OpenIslandAppTests",
-            dependencies: ["OpenIslandApp", "OpenIslandCore"]
+            name: "NotchTuneAppTests",
+            dependencies: ["NotchTuneApp", "NotchTuneCore"]
         ),
     ]
 )

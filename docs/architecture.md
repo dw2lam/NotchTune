@@ -6,10 +6,10 @@ The project is a single Swift package with four targets:
 
 | Target | Role |
 |---|---|
-| **OpenIslandApp** | SwiftUI + AppKit shell — menu bar extra, overlay panel (notch/top-bar), settings. Entry point: `OpenIslandApp.swift` with `AppModel` as the central `@Observable` state owner. |
-| **OpenIslandCore** | Shared library — models (`AgentSession`, `AgentEvent`, `SessionState`), bridge transport (Unix socket IPC with JSON line protocol), hook models/installers, transcript discovery, session persistence/registry. |
-| **OpenIslandHooks** | Lightweight CLI executable invoked by agent hooks. Reads hook payload from stdin, forwards to app bridge via Unix socket, writes blocking JSON to stdout only when island denies a `PreToolUse`. |
-| **OpenIslandSetup** | Installer CLI for managing `~/.codex/config.toml` and `hooks.json`. |
+| **NotchTuneApp** | SwiftUI + AppKit shell — menu bar extra, overlay panel (notch/top-bar), settings. Entry point: `NotchTuneApp.swift` with `AppModel` as the central `@Observable` state owner. |
+| **NotchTuneCore** | Shared library — models (`AgentSession`, `AgentEvent`, `SessionState`), bridge transport (Unix socket IPC with JSON line protocol), hook models/installers, transcript discovery, session persistence/registry. |
+| **NotchTuneHooks** | Lightweight CLI executable invoked by agent hooks. Reads hook payload from stdin, forwards to app bridge via Unix socket, writes blocking JSON to stdout only when island denies a `PreToolUse`. |
+| **NotchTuneSetup** | Installer CLI for managing `~/.codex/config.toml` and `hooks.json`. |
 
 ## Data Flow
 
@@ -19,13 +19,13 @@ The project is a single Swift package with four targets:
 Agent
   │  stdin: JSON payload
   ▼
-OpenIslandHooks CLI  (--source codex | --source claude | ...)
+NotchTuneHooks CLI  (--source codex | --source claude | ...)
   │  Unix socket
   ▼
 BridgeServer → AppModel → UI
   │  BridgeResponse
   ▼
-OpenIslandHooks CLI
+NotchTuneHooks CLI
   │  stdout: JSON directive (only when a response is needed)
   ▼
 Agent

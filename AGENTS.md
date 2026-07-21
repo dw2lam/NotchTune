@@ -6,7 +6,7 @@ This file defines the working agreement for the coding agent in this repository.
 
 **NotchTune** is the product name for this repo — a native macOS notch / top-bar companion for music (Spotify, Apple Music) and terminal-native AI agents. See [README.md](README.md) for highlights, supported integrations, install, and dev commands.
 
-Swift package targets still use legacy `OpenIsland*` names (`OpenIslandApp`, `OpenIslandCore`, `OpenIslandHooks`, `OpenIslandSetup`). Use **NotchTune** in user-facing copy and docs; use the Swift target names when building or editing code.
+Swift package targets still use legacy `NotchTune*` names (`NotchTuneApp`, `NotchTuneCore`, `NotchTuneHooks`, `NotchTuneSetup`). Use **NotchTune** in user-facing copy and docs; use the Swift target names when building or editing code.
 
 ## Goal
 
@@ -70,7 +70,7 @@ See [docs/worktree-workflow.md](docs/worktree-workflow.md) for the concrete comm
 
 - Keep product scope in `docs/product.md`. Do not duplicate the supported agent, terminal, or IDE matrix here.
 - Do not broaden supported tools, runtimes, platforms, or environments unless the user explicitly asks.
-- Keep hook behavior aligned with `docs/hooks.md` and the implementation in `Sources/OpenIslandCore`.
+- Keep hook behavior aligned with `docs/hooks.md` and the implementation in `Sources/NotchTuneCore`.
 
 ## Integration Guardrails
 
@@ -83,13 +83,13 @@ See [docs/worktree-workflow.md](docs/worktree-workflow.md) for the concrete comm
 ## App Targets And Naming
 
 - **Product / release app:** `NotchTune.app` (see [README.md](README.md) for install and distribution).
-- **Dev bundle:** `~/Applications/NotchTune Dev.app` — local wrapper around the repo-built `OpenIslandApp` binary, not a separate product line.
-- **Canonical runtime target:** `OpenIslandApp` (`swift run OpenIslandApp`, Xcode app target, or `zsh scripts/launch-dev-app.sh`).
+- **Dev bundle:** `~/Applications/NotchTune Dev.app` — local wrapper around the repo-built `NotchTuneApp` binary, not a separate product line.
+- **Canonical runtime target:** `NotchTuneApp` (`swift run NotchTuneApp`, Xcode app target, or `zsh scripts/launch-dev-app.sh`).
 - Use `NotchTune Dev.app` for manual verification when bundle semantics, LaunchServices, or installed-hook behavior matter.
 - When the user asks to launch or restart NotchTune, refresh the dev bundle first with `zsh scripts/launch-dev-app.sh` instead of only running `open -na`. Opening the bundle alone can relaunch a stale binary.
 - For work that touches Accessibility, Automation, precision jump, or other macOS TCC-sensitive behavior, run `zsh scripts/setup-dev-signing.sh` once before repeated manual verification so the dev bundle keeps a stable local signing identity.
 - Use `scripts/harness.sh smoke` or `scripts/smoke-dev-app.sh` only for deterministic harness runs; those commands intentionally launch the repo executable directly rather than the installed dev bundle.
-- Hook helpers ship as `OpenIslandHooks` and `OpenIslandSetup`; the dev bundle copies them into `Contents/Helpers/`.
+- Hook helpers ship as `NotchTuneHooks` and `NotchTuneSetup`; the dev bundle copies them into `Contents/Helpers/`.
 
 ## Verification
 
@@ -107,7 +107,7 @@ Unless the user says otherwise, the agent should finish each completed round in 
 
 ## NotchTune UI Memory
 
-Reference for agents working on NotchTune's notch / island / music UI (see [README.md](README.md) — *Dynamic notch switching*, *Music controls*, *Agent monitoring*). Implementation lives in the `OpenIslandApp` target; state flows through `AppModel` → `OverlayUICoordinator` → `IslandPanelView`.
+Reference for agents working on NotchTune's notch / island / music UI (see [README.md](README.md) — *Dynamic notch switching*, *Music controls*, *Agent monitoring*). Implementation lives in the `NotchTuneApp` target; state flows through `AppModel` → `OverlayUICoordinator` → `IslandPanelView`.
 
 ### Notch states
 

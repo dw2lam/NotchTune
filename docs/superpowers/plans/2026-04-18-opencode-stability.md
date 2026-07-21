@@ -13,7 +13,7 @@
 ### Task 1: Create OpenCodeSessionRegistry
 
 **Files:**
-- Create: `Sources/OpenIslandCore/OpenCodeSessionRegistry.swift`
+- Create: `Sources/NotchTuneCore/OpenCodeSessionRegistry.swift`
 
 - [ ] **Step 1: Implement OpenCodeTrackedSessionRecord and OpenCodeSessionRegistry**
 
@@ -137,7 +137,7 @@ public final class OpenCodeSessionRegistry: @unchecked Sendable {
 - [ ] **Step 2: Commit**
 
 ```bash
-git add Sources/OpenIslandCore/OpenCodeSessionRegistry.swift
+git add Sources/NotchTuneCore/OpenCodeSessionRegistry.swift
 git commit -m "feat: add OpenCodeSessionRegistry for session persistence"
 ```
 
@@ -146,7 +146,7 @@ git commit -m "feat: add OpenCodeSessionRegistry for session persistence"
 ### Task 2: Integrate into SessionDiscoveryCoordinator
 
 **Files:**
-- Modify: `Sources/OpenIslandApp/SessionDiscoveryCoordinator.swift`
+- Modify: `Sources/NotchTuneApp/SessionDiscoveryCoordinator.swift`
 
 - [ ] **Step 1: Add OpenCode fields to StartupDiscoveryPayload**
 
@@ -263,7 +263,7 @@ git commit -m "feat: add OpenCodeSessionRegistry for session persistence"
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Sources/OpenIslandApp/SessionDiscoveryCoordinator.swift
+git add Sources/NotchTuneApp/SessionDiscoveryCoordinator.swift
 git commit -m "feat: integrate OpenCode session persistence into SessionDiscoveryCoordinator"
 ```
 
@@ -272,8 +272,8 @@ git commit -m "feat: integrate OpenCode session persistence into SessionDiscover
 ### Task 3: Update AppModel and ProcessMonitoringCoordinator
 
 **Files:**
-- Modify: `Sources/OpenIslandApp/AppModel.swift`
-- Modify: `Sources/OpenIslandApp/ProcessMonitoringCoordinator.swift`
+- Modify: `Sources/NotchTuneApp/AppModel.swift`
+- Modify: `Sources/NotchTuneApp/ProcessMonitoringCoordinator.swift`
 
 - [ ] **Step 1: Call scheduleOpenCodeSessionPersistence in AppModel**
 
@@ -300,7 +300,7 @@ Modify `AppModel.swift` in `handleOpenCodeHook`:
 - [ ] **Step 4: Commit**
 
 ```bash
-git add Sources/OpenIslandApp/AppModel.swift Sources/OpenIslandApp/ProcessMonitoringCoordinator.swift
+git add Sources/NotchTuneApp/AppModel.swift Sources/NotchTuneApp/ProcessMonitoringCoordinator.swift
 git commit -m "feat: mark OpenCode sessions as hook-managed and trigger persistence"
 ```
 

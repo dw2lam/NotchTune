@@ -144,7 +144,7 @@ return "Activated Warp but could not confirm precision focus (target pane may ha
 
 ### New files
 
-**`Sources/OpenIslandCore/WarpSQLiteReader.swift`** (~150 lines)
+**`Sources/NotchTuneCore/WarpSQLiteReader.swift`** (~150 lines)
 
 Encapsulates all SQLite access. Uses libsqlite3 via Swift's C interop (no new dependency — libsqlite3 is in the macOS SDK). Offers:
 
@@ -155,7 +155,7 @@ Encapsulates all SQLite access. Uses libsqlite3 via Swift's C interop (no new de
 - Resolves the database path via `FileManager.default.url(for: .libraryDirectory, in: .userDomainMask, appropriateFor: nil, create: false)` and then into the known Group Container subpath.
 - All failures (file missing, schema mismatch, query error) log once and return nil. No throws escape.
 
-**`Sources/OpenIslandApp/AccessibilityPermissionCoordinator.swift`** (~80 lines)
+**`Sources/NotchTuneApp/AccessibilityPermissionCoordinator.swift`** (~80 lines)
 
 - `isTrusted() -> Bool` wrapping `AXIsProcessTrustedWithOptions(nil as CFDictionary?)`
 - `requestTrustAndOpenSettings()` — calls `AXIsProcessTrustedWithOptions` with the `kAXTrustedCheckOptionPrompt` key, then opens `x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility` if still denied
@@ -163,13 +163,13 @@ Encapsulates all SQLite access. Uses libsqlite3 via Swift's C interop (no new de
 
 ### Modified files
 
-**`Sources/OpenIslandCore/JumpTarget.swift`** — add one field:
+**`Sources/NotchTuneCore/JumpTarget.swift`** — add one field:
 ```swift
 public var warpPaneUUID: String?
 ```
 Stable field; backward-compatible decoding (nil default).
 
-**`Sources/OpenIslandCore/ClaudeHooks.swift`** — in `withRuntimeContext`, after the existing `terminalApp` inference:
+**`Sources/NotchTuneCore/ClaudeHooks.swift`** — in `withRuntimeContext`, after the existing `terminalApp` inference:
 ```swift
 if payload.terminalApp == "Warp", payload.jumpTarget.warpPaneUUID == nil {
     payload.jumpTarget.warpPaneUUID = WarpSQLiteReader.shared.lookupPaneUUID(forCwd: payload.cwd)
@@ -177,9 +177,9 @@ if payload.terminalApp == "Warp", payload.jumpTarget.warpPaneUUID == nil {
 ```
 Guard on `terminalApp == "Warp"` so non-Warp hosts incur zero cost.
 
-**`Sources/OpenIslandCore/CodexHooks.swift`** — same addition, so Codex sessions in Warp get the same precision jump. (Open Code can follow in a separate slice if we want to limit scope.)
+**`Sources/NotchTuneCore/CodexHooks.swift`** — same addition, so Codex sessions in Warp get the same precision jump. (Open Code can follow in a separate slice if we want to limit scope.)
 
-**`Sources/OpenIslandApp/TerminalJumpService.swift`** — in the `switch descriptor.bundleIdentifier` at line ~200, add:
+**`Sources/NotchTuneApp/TerminalJumpService.swift`** — in the `switch descriptor.bundleIdentifier` at line ~200, add:
 ```swift
 case "dev.warp.Warp-Stable":
     if try jumpToWarpPane(target) {
@@ -188,12 +188,12 @@ case "dev.warp.Warp-Stable":
 ```
 and implement `jumpToWarpPane(_:)` as a private method that performs the Phase 2 algorithm. It depends on `WarpSQLiteReader` (Core) and a new `KeystrokeInjector` helper.
 
-**`Sources/OpenIslandApp/KeystrokeInjector.swift`** (new, ~40 lines) — thin wrapper around `CGEventCreateKeyboardEvent` / `CGEventPost` with a single public method `sendCmdShiftRightBracket()`. Isolated so it's easy to mock in tests.
+**`Sources/NotchTuneApp/KeystrokeInjector.swift`** (new, ~40 lines) — thin wrapper around `CGEventCreateKeyboardEvent` / `CGEventPost` with a single public method `sendCmdShiftRightBracket()`. Isolated so it's easy to mock in tests.
 
 ### Test changes
 
-- `Tests/OpenIslandCoreTests/WarpSQLiteReaderTests.swift` (new) — creates a temp SQLite database seeded with synthetic `windows`/`tabs`/`pane_nodes`/`terminal_panes`/`commands`/`blocks` rows reproducing the real schema, then asserts `lookupPaneUUID` and `currentFocusedPaneUUID` return the expected values for various scenarios (single window single tab, multiple tabs, non-Warp cwd, nonexistent file, etc.)
-- `Tests/OpenIslandAppTests/TerminalJumpServiceTests.swift` — add tests for the Warp branch using an injected `WarpSQLiteReader` protocol stub and a `KeystrokeInjector` spy. Cover: already-at-target (no keystrokes), reaches-target-after-2-cycles, never-reaches-target (falls through cleanly).
+- `Tests/NotchTuneCoreTests/WarpSQLiteReaderTests.swift` (new) — creates a temp SQLite database seeded with synthetic `windows`/`tabs`/`pane_nodes`/`terminal_panes`/`commands`/`blocks` rows reproducing the real schema, then asserts `lookupPaneUUID` and `currentFocusedPaneUUID` return the expected values for various scenarios (single window single tab, multiple tabs, non-Warp cwd, nonexistent file, etc.)
+- `Tests/NotchTuneAppTests/TerminalJumpServiceTests.swift` — add tests for the Warp branch using an injected `WarpSQLiteReader` protocol stub and a `KeystrokeInjector` spy. Cover: already-at-target (no keystrokes), reaches-target-after-2-cycles, never-reaches-target (falls through cleanly).
 
 ## Verification path
 
@@ -203,7 +203,7 @@ and implement `jumpToWarpPane(_:)` as a private method that performs the Phase 2
 
 ### Manual verification (the real test)
 1. In a fresh Warp window, open 4 tabs each with a different Claude Code session in a different cwd.
-2. Launch the development `OpenIslandApp` build.
+2. Launch the development `NotchTuneApp` build.
 3. Grant Accessibility permission when prompted.
 4. Click jump on the 2nd session in the Open Island session list while the 4th session is currently focused in Warp.
 5. Observe: Warp activates, tab bar flickers through the cycles, comes to rest on the 2nd session's tab. Total elapsed < 500ms.

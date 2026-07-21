@@ -27,7 +27,7 @@ Brief English summary of this release.
 **Or via Homebrew | 或使用 Homebrew**:
 
 ```bash
-brew install --cask octane0411/tap/openisland
+brew install --cask octane0411/tap/notchtune
 ```
 
 > This build is signed and notarized with Apple Developer ID. You can open it directly without any security workaround.

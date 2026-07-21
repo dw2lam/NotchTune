@@ -12,21 +12,21 @@ done
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 brand_script="$repo_root/scripts/generate_brand_icons.py"
-brand_icon="$repo_root/Assets/Brand/OpenIsland.icns"
+brand_icon="$repo_root/Assets/Brand/NotchTune.icns"
 bundle_dir="$HOME/Applications/NotchTune Dev.app"
 plist_path="$bundle_dir/Contents/Info.plist"
 bundle_binary="$bundle_dir/Contents/MacOS/NotchTune Dev"
 
 cd "$repo_root"
 
-swift build -c debug --product OpenIslandApp
-swift build -c debug --product OpenIslandHooks
-swift build -c debug --product OpenIslandSetup
+swift build -c debug --product NotchTuneApp
+swift build -c debug --product NotchTuneHooks
+swift build -c debug --product NotchTuneSetup
 
 build_root="$(swift build -c debug --show-bin-path)"
-app_binary="$build_root/OpenIslandApp"
-hooks_binary="$build_root/OpenIslandHooks"
-setup_binary="$build_root/OpenIslandSetup"
+app_binary="$build_root/NotchTuneApp"
+hooks_binary="$build_root/NotchTuneHooks"
+setup_binary="$build_root/NotchTuneSetup"
 
 python3 "$brand_script"
 if [ "$skip_setup" = false ]; then
@@ -45,26 +45,26 @@ pkill -9 -f "Open Island Dev" 2>/dev/null || true
 sleep 2
 
 # Remove the pre-rename executable so stale copies don't linger in the bundle.
-rm -f "$bundle_dir/Contents/MacOS/OpenIslandApp"
+rm -f "$bundle_dir/Contents/MacOS/NotchTuneApp"
 command cp "$app_binary" "$bundle_binary"
-command cp "$hooks_binary" "$bundle_dir/Contents/Helpers/OpenIslandHooks"
-command cp "$setup_binary" "$bundle_dir/Contents/Helpers/OpenIslandSetup"
-command cp "$brand_icon" "$bundle_dir/Contents/Resources/OpenIsland.icns"
+command cp "$hooks_binary" "$bundle_dir/Contents/Helpers/NotchTuneHooks"
+command cp "$setup_binary" "$bundle_dir/Contents/Helpers/NotchTuneSetup"
+command cp "$brand_icon" "$bundle_dir/Contents/Resources/NotchTune.icns"
 sparkle_framework="$repo_root/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 if [ -d "$sparkle_framework" ]; then
     rm -rf "$bundle_dir/Contents/Frameworks/Sparkle.framework"
     command cp -R "$sparkle_framework" "$bundle_dir/Contents/Frameworks/"
 fi
-chmod +x "$bundle_binary" "$bundle_dir/Contents/Helpers/OpenIslandHooks" "$bundle_dir/Contents/Helpers/OpenIslandSetup"
+chmod +x "$bundle_binary" "$bundle_dir/Contents/Helpers/NotchTuneHooks" "$bundle_dir/Contents/Helpers/NotchTuneSetup"
 
 # Add rpath so the binary can find Sparkle.framework in Contents/Frameworks/.
 install_name_tool -add_rpath @loader_path/../Frameworks "$bundle_binary" 2>/dev/null || true
 
 # Copy SPM resource bundle to .app root — SPM's generated Bundle.module accessor
 # searches Bundle.main.bundleURL (the .app root), NOT Contents/Resources/.
-resource_bundle="$build_root/OpenIsland_OpenIslandApp.bundle"
+resource_bundle="$build_root/NotchTune_NotchTuneApp.bundle"
 if [ -d "$resource_bundle" ]; then
-    rm -rf "$bundle_dir/OpenIsland_OpenIslandApp.bundle"
+    rm -rf "$bundle_dir/NotchTune_NotchTuneApp.bundle"
     command cp -R "$resource_bundle" "$bundle_dir/"
 fi
 
@@ -79,11 +79,11 @@ cat > "$plist_path" <<EOF
     <key>CFBundleExecutable</key>
     <string>NotchTune Dev</string>
     <key>CFBundleIdentifier</key>
-    <string>app.openisland.dev</string>
+    <string>app.notchtune.dev</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleIconFile</key>
-    <string>OpenIsland</string>
+    <string>NotchTune</string>
     <key>CFBundleName</key>
     <string>NotchTune Dev</string>
     <key>CFBundlePackageType</key>
@@ -110,7 +110,7 @@ EOF
 # Bundle.module falls back to the hardcoded .build/ path, so
 # localization still works. (Release builds use package-app.sh which
 # has its own resource bundle handling.)
-resource_bundle_name="OpenIsland_OpenIslandApp.bundle"
+resource_bundle_name="NotchTune_NotchTuneApp.bundle"
 root_bundle="$bundle_dir/$resource_bundle_name"
 resources_bundle="$bundle_dir/Contents/Resources/$resource_bundle_name"
 if [ -d "$root_bundle" ] && [ ! -L "$root_bundle" ]; then
@@ -141,7 +141,7 @@ else
     echo
 fi
 
-entitlements_file="$repo_root/config/packaging/OpenIslandApp.entitlements"
+entitlements_file="$repo_root/config/packaging/NotchTuneApp.entitlements"
 if [ -f "$entitlements_file" ]; then
     codesign --force --deep --sign "$sign_identity" --entitlements "$entitlements_file" "$bundle_dir"
 else
