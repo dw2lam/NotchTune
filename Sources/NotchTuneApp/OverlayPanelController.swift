@@ -1185,9 +1185,11 @@ final class NotchHostingView<Content: View>: NSHostingView<Content> {
         super.init(rootView: rootView)
         // Concrete file URLs (Finder/desktop) AND file promises (Dock stacks,
         // browsers, Photos) — promise drags never carry .fileURL.
-        registerForDraggedTypes(
-            [.fileURL] + NSFilePromiseReceiver.readableDraggedTypes.map(NSPasteboard.PasteboardType.init)
-        )
+        var dragTypes: [NSPasteboard.PasteboardType] = [.fileURL]
+        dragTypes.append(contentsOf: NSFilePromiseReceiver.readableDraggedTypes.map {
+            NSPasteboard.PasteboardType($0)
+        })
+        registerForDraggedTypes(dragTypes)
         configureTransparency()
     }
 
