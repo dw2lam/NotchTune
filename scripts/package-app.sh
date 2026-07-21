@@ -10,7 +10,7 @@ fi
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 app_name="${NOTCHTUNE_APP_NAME:-NotchTune}"
 bundle_identifier="${NOTCHTUNE_BUNDLE_ID:-app.notchtune.dev}"
-version="${NOTCHTUNE_VERSION:-${OPEN_ISLAND_VERSION:-2.1.0}}"
+version="${NOTCHTUNE_VERSION:-${OPEN_ISLAND_VERSION:-2.1.1}}"
 build_number="${NOTCHTUNE_BUILD_NUMBER:-$(git -C "$repo_root" rev-list --count HEAD 2>/dev/null || echo 1)}"
 package_root="${NOTCHTUNE_PACKAGE_ROOT:-$repo_root/output/package}"
 bundle_dir="${NOTCHTUNE_BUNDLE_DIR:-$package_root/$app_name.app}"
