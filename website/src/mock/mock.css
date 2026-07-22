@@ -609,6 +609,9 @@
 .nt .nt-ms-submit:disabled { opacity: 0.35; cursor: default; }
 
 .nt-ms-list { display: flex; flex-direction: column; gap: 7px; max-height: 210px; overflow-y: auto; }
+/* flex children of the scrolling list must keep natural height —
+   otherwise the media strip squashes before overflow scrolls */
+.nt-ms-list > * { flex-shrink: 0; }
 .nt-ms-day {
   /* scrolls with the list — a sticky header would need an opaque mask,
      which reads as a black band over the glass (matches the app) */
@@ -736,7 +739,7 @@
   background: rgba(255, 255, 255, 0.03); cursor: pointer;
 }
 .nt .nt-ms-fchip.is-on { color: rgba(255, 255, 255, 0.86); background: rgba(255, 255, 255, 0.1); }
-.nt-ms-strip { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.nt-ms-strip { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; flex-shrink: 0; }
 .nt-ms-tile { display: flex; flex-direction: column; gap: 5px; width: 96px; flex: none; }
 .nt-ms-tile-art {
   width: 96px; height: 74px; border-radius: 10px;
