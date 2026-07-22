@@ -1,4 +1,4 @@
-export { IslandPanel, TabBar, UsageChip, TourCoach } from './Island';
+export { IslandPanel, TabBar, UsageChip } from './Island';
 export type { IslandTab, UsageTone } from './Island';
 export { MusicTab, AlbumArt } from './MusicTab';
 export type { MockTrack } from './MusicTab';

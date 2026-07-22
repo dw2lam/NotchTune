@@ -171,7 +171,8 @@ export default function Demo() {
       <div
         ref={sceneRef}
         className="demo-scene reveal"
-        data-open={open || dragPhase === 'catch'}
+        data-open={open}
+        data-catching={dragPhase === 'catch'}
         onClick={(e) => {
           if (!(e.target as HTMLElement).closest('.demo-anchor')) { setPinned(false); setOpen(false); }
         }}
@@ -188,7 +189,7 @@ export default function Demo() {
         >
           {dragPhase === 'hint' && (
             <div className="demo-drop-hint">
-              <svg viewBox="0 0 24 24"><path d="M19 13v6a1 1 0 01-1 1H6a1 1 0 01-1-1v-6h2v5h10v-5h2zM12 3l4.5 4.5-1.42 1.42L13 6.83V15h-2V6.83L8.92 8.92 7.5 7.5 12 3z" transform="rotate(180 12 12)" /></svg>
+              <svg viewBox="0 0 24 24"><path d="M12 2a1 1 0 011 1v6.59l2.3-2.3 1.4 1.42L12 13.4 7.3 8.7l1.4-1.41L11 9.6V3a1 1 0 011-1zM3 13h4.2l1.2 2.4h7.2L16.8 13H21a1 1 0 011 1v6a2 2 0 01-2 2H4a2 2 0 01-2-2v-6a1 1 0 011-1z" /></svg>
               Drop to hold
             </div>
           )}
@@ -199,7 +200,14 @@ export default function Demo() {
               <ClosedPill layout="notch" mode={pillMode} />
             )}
           </div>
-          <div className="demo-panel" onClick={(e) => e.stopPropagation()}>
+          {dragPhase === 'catch' && (
+            <div className="demo-panel demo-drop-panel">
+              <div className="nt nt-island nt-plainglass">
+                <MyspaceDropTarget />
+              </div>
+            </div>
+          )}
+          <div className="demo-panel" onClick={(e) => e.stopPropagation()} style={dragPhase === 'catch' ? { opacity: 0 } : undefined}>
             <IslandPanel
               usage={<><UsageChip name="Claude" window="5h" pct={41} /><UsageChip name="Codex" window="5h" pct={78} /></>}
               tab={tab}
@@ -209,9 +217,7 @@ export default function Demo() {
               ambientArt={tab === 'music' && playing && track.art.startsWith('url') ? track.art.slice(4, -1) : undefined}
               showNotchGap
             >
-              {dragPhase === 'catch' ? (
-                <MyspaceDropTarget />
-              ) : tab === 'myspace' ? (
+              {tab === 'myspace' ? (
                 <MyspaceTab
                   thoughts={thoughts}
                   onSubmit={(text) => setThoughts((t) => [
