@@ -590,9 +590,23 @@ final class OverlayUICoordinator {
             return
         }
 
+        // Already showing this exact card as a notification: its content may
+        // have changed (approval → completed), so discard the stale measured
+        // height, but don't replay the sound or restart the open animation.
+        guard !isAlreadyPresentingNotificationSurface(surface) else {
+            appModel?.measuredNotificationContentHeight = 0
+            return
+        }
+
         appModel?.measuredNotificationContentHeight = 0
         NotificationSoundService.playNotification(isMuted: isSoundMuted)
         notchOpen(reason: .notification, surface: surface)
+    }
+
+    private func isAlreadyPresentingNotificationSurface(_ surface: IslandSurface) -> Bool {
+        notchStatus == .opened
+            && notchOpenReason == .notification
+            && islandSurface == surface
     }
 
     func shouldPreserveCurrentNotificationSurface(against candidate: IslandSurface) -> Bool {
