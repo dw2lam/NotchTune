@@ -599,19 +599,39 @@ public final class BridgeServer: @unchecked Sendable {
             ensureSessionExists(for: payload)
             synchronizeJumpTarget(for: payload)
             synchronizeCodexMetadata(for: payload)
-            let summary = payload.lastAssistantMessage ?? payload.assistantMessagePreview ?? "Codex completed the turn."
-
-            emit(
-                .sessionCompleted(
-                    SessionCompleted(
-                        sessionID: payload.sessionID,
-                        summary: summary,
-                        timestamp: .now
-                    )
-                )
-            )
+            emit(Self.codexStopEvent(for: payload, timestamp: .now))
             send(.response(.acknowledged), to: clientID)
         }
+    }
+
+    /// The event a Codex `Stop` hook maps to.
+    ///
+    /// `stop_hook_active == true` means this `Stop` fired while a stop hook
+    /// was already driving the turn (a continuation of the same turn), not a
+    /// fresh completion the user should be bumped about. Those still settle
+    /// the session to `.completed` so state stays consistent, but through
+    /// `activityUpdated`, which is not a notification-bearing event.
+    static func codexStopEvent(for payload: CodexHookPayload, timestamp: Date) -> AgentEvent {
+        let summary = payload.lastAssistantMessage ?? payload.assistantMessagePreview ?? "Codex completed the turn."
+
+        if payload.stopHookActive == true {
+            return .activityUpdated(
+                SessionActivityUpdated(
+                    sessionID: payload.sessionID,
+                    summary: summary,
+                    phase: .completed,
+                    timestamp: timestamp
+                )
+            )
+        }
+
+        return .sessionCompleted(
+            SessionCompleted(
+                sessionID: payload.sessionID,
+                summary: summary,
+                timestamp: timestamp
+            )
+        )
     }
 
     private func handleClaudeHook(_ payload: ClaudeHookPayload, from clientID: UUID) {
