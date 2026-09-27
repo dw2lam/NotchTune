@@ -464,6 +464,17 @@ final class AppModel {
         set { updateAppearancePreferences(for: activeAppearanceProfile) { $0.character = newValue } }
     }
 
+    /// Closed-island density for the active display profile. The harness can
+    /// pin it per run (`NOTCHTUNE_HARNESS_ISLAND_DENSITY`) without touching the
+    /// persisted preference.
+    var islandDensity: IslandDensity {
+        get { islandDensityHarnessOverride ?? appearancePreferences(for: activeAppearanceProfile).density }
+        set { updateAppearancePreferences(for: activeAppearanceProfile) { $0.density = newValue } }
+    }
+
+    @ObservationIgnored
+    var islandDensityHarnessOverride: IslandDensity?
+
     var islandUsageDisplay: IslandUsageDisplay {
         get { appearancePreferences(for: activeAppearanceProfile).usageDisplay }
         set { updateAppearancePreferences(for: activeAppearanceProfile) { $0.usageDisplay = newValue } }
@@ -537,6 +548,7 @@ final class AppModel {
         defaults.set(preferences.rightSlot.rawValue, forKey: Self.appearanceDefaultsKey(profile, "rightSlot"))
         defaults.set(preferences.centerLabel.rawValue, forKey: Self.appearanceDefaultsKey(profile, "centerLabel"))
         defaults.set(preferences.character.rawValue, forKey: Self.appearanceDefaultsKey(profile, "character"))
+        defaults.set(preferences.density.rawValue, forKey: Self.appearanceDefaultsKey(profile, "density"))
         defaults.set(preferences.autoHideWhenInactive, forKey: Self.appearanceDefaultsKey(profile, "autoHideWhenInactive"))
         defaults.set(preferences.usageDisplay.rawValue, forKey: Self.appearanceDefaultsKey(profile, "usageDisplay"))
         defaults.set(preferences.sessionStateIndicator.rawValue, forKey: Self.appearanceDefaultsKey(profile, "stateIndicator"))
@@ -677,6 +689,10 @@ final class AppModel {
                 rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "character"))
                     ?? ""
             ) ?? .dino,
+            density: IslandDensity(
+                rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "density"))
+                    ?? ""
+            ) ?? .regular,
             autoHideWhenInactive: defaults.bool(forKey: appearanceDefaultsKey(profile, "autoHideWhenInactive")),
             usageDisplay: IslandUsageDisplay(
                 rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "usageDisplay"))

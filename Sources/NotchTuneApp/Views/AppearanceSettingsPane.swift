@@ -152,6 +152,7 @@ struct AppearanceSettingsPane: View {
         VStack(alignment: .leading, spacing: 18) {
             partHeader(title: lang.t("settings.appearance.notchPart.title"))
             previewSection
+            densitySection
             rightSlotSection
             centerLabelSection
 
@@ -209,9 +210,45 @@ struct AppearanceSettingsPane: View {
         }
     }
 
+    /// The screen the editing profile describes: the notched built-in panel
+    /// for `.notch`, any external display for `.topBar`. Drives the preview's
+    /// real cutout width and closed height instead of a hard-coded 180×32.
+    private var previewScreen: NSScreen? {
+        let screens = NSScreen.screens
+        switch editingProfile {
+        case .notch:
+            return screens.first(where: { $0.isNotchedScreen })
+        case .topBar:
+            return screens.first(where: { !$0.isNotchedScreen })
+        }
+    }
+
+    private var previewPhysicalNotchWidth: CGFloat {
+        if editingProfile == .notch, let screen = previewScreen {
+            return screen.notchSize.width
+        }
+        return NSScreen.externalDisplayNotchWidth
+    }
+
+    private var previewPillHeight: CGFloat {
+        let density = editingPreferences.density
+        if let screen = previewScreen {
+            return screen.closedIslandHeight(density: density)
+        }
+        // No matching display attached: use the catalog default (14" Pro at
+        // default scaling) or a standard 24pt menu bar.
+        return NSScreen.computeClosedIslandHeight(
+            density: density,
+            isNotched: editingProfile == .notch,
+            safeAreaInsetsTop: editingProfile == .notch ? 32 : 0,
+            catalogNotchHeight: editingProfile == .notch ? 32 : nil,
+            menuBarHeight: 24
+        )
+    }
+
     private var previewStage: some View {
-        let physicalNotchW: CGFloat = 180
-        let pillHeight: CGFloat = 32
+        let physicalNotchW = previewPhysicalNotchWidth
+        let pillHeight = previewPillHeight
 
         return ZStack(alignment: .top) {
             if previewLayout == .macbook {
@@ -230,13 +267,38 @@ struct AppearanceSettingsPane: View {
                     label: previewLabel,
                     rightSlot: previewRightContent,
                     layout: previewLayout,
+                    height: pillHeight,
                     physicalNotchWidth: physicalNotchW,
                     now: context.date
                 )
             }
         }
+        .environment(\.islandChromeMetrics, .metrics(for: editingPreferences.density))
         .frame(height: pillHeight)
         .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    // MARK: - Density
+
+    @ViewBuilder
+    private var densitySection: some View {
+        sectionHeader(
+            title: lang.t("settings.appearance.density.title"),
+            note: lang.t("settings.appearance.density.note")
+        )
+
+        HStack(spacing: 12) {
+            ForEach(IslandDensity.allCases) { option in
+                optionCard(
+                    selected: editingPreferences.density == option,
+                    title: title(for: option)
+                ) {
+                    model.updateAppearancePreferences(for: editingProfile) { $0.density = option }
+                } icon: {
+                    DensityPreview(option: option)
+                }
+            }
+        }
     }
 
     private var previewControls: some View {
@@ -793,6 +855,13 @@ struct AppearanceSettingsPane: View {
         case .bar:         lang.t("settings.appearance.stateIndicator.bar")
         case .glyph:       lang.t("settings.appearance.stateIndicator.glyph")
         case .tint:        lang.t("settings.appearance.stateIndicator.tint")
+        }
+    }
+
+    private func title(for option: IslandDensity) -> String {
+        switch option {
+        case .regular: lang.t("settings.appearance.density.regular")
+        case .compact: lang.t("settings.appearance.density.compact")
         }
     }
 
@@ -1736,5 +1805,29 @@ private struct SessionSortPreview: View {
                 ("3", 42, V6Palette.paper.opacity(0.22)),
             ]
         }
+    }
+}
+
+/// Option-card icon for the density picker: a miniature closed pill drawn
+/// with the real metrics for that density, so the card previews the actual
+/// glyph / padding trim rather than a label.
+private struct DensityPreview: View {
+    let option: IslandDensity
+
+    var body: some View {
+        let metrics = IslandChromeMetrics.metrics(for: option)
+        let height: CGFloat = option == .compact ? 24 : 32
+        V6ClosedPill(
+            mode: .idle,
+            character: .dino,
+            label: nil,
+            rightSlot: .count(3),
+            layout: .external,
+            height: height,
+            minWidth: 70,
+            glyphPaused: true
+        )
+        .environment(\.islandChromeMetrics, metrics)
+        .frame(height: height)
     }
 }

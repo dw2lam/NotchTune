@@ -54,10 +54,21 @@ enum IslandAppearanceDisplayProfile: String, CaseIterable, Identifiable, Sendabl
     var id: String { rawValue }
 }
 
+/// How much room the closed island takes. `regular` is the shipped v6 pill;
+/// `compact` trims the chrome (glyph, album art, paddings, wing reserve) so the
+/// pill hugs the physical notch / menu bar instead of standing proud of it.
+enum IslandDensity: String, CaseIterable, Identifiable, Sendable {
+    case regular
+    case compact
+
+    var id: String { rawValue }
+}
+
 struct IslandAppearancePreferences: Equatable, Sendable {
     var rightSlot: IslandRightSlot = .count
     var centerLabel: IslandCenterLabel = .agentAction
     var character: IslandCharacter = .dino
+    var density: IslandDensity = .regular
     var autoHideWhenInactive: Bool = false
     var usageDisplay: IslandUsageDisplay = .compact
     var sessionStateIndicator: IslandSessionStateIndicator = .animatedDot

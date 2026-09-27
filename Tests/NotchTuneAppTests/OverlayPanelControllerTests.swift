@@ -54,13 +54,13 @@ struct OverlayPanelControllerTests {
             isNotchedDisplay: true,
             notchStatus: .closed
         )
-        #expect(width == CGFloat(224 + (IslandChromeMetrics.notchedClosedWingReserve() * 2)))
+        #expect(width == CGFloat(224 + (IslandChromeMetrics.regular.notchedClosedWingReserve() * 2)))
     }
 
     @Test
     func notchedWingReserveGrowsForDenseAgentTiles() {
-        let reserve = IslandChromeMetrics.notchedClosedWingReserve(rightSlotWidth: 38)
-        #expect(reserve > IslandChromeMetrics.notchedClosedMinimumWingReserve)
+        let reserve = IslandChromeMetrics.regular.notchedClosedWingReserve(rightSlotWidth: 38)
+        #expect(reserve > IslandChromeMetrics.regular.notchedClosedMinimumWingReserve)
         #expect(reserve == 60)
     }
 
@@ -84,7 +84,7 @@ struct OverlayPanelControllerTests {
             isNotchedDisplay: true,
             notchStatus: .popping
         )
-        #expect(width == CGFloat(224 + (IslandChromeMetrics.notchedClosedWingReserve() * 2) + 18))
+        #expect(width == CGFloat(224 + (IslandChromeMetrics.regular.notchedClosedWingReserve() * 2) + 18))
     }
 
     @Test
@@ -276,28 +276,146 @@ struct OverlayPanelControllerTests {
         #expect(model.islandActiveTab == .reminders)
     }
 
-    // MARK: - islandClosedHeight
+    // MARK: - closedIslandHeight (single source of truth for the closed pill)
 
     @Test
-    func islandClosedHeightClampsToNotchHeightWhenSmallerThanMenuBar() {
-        // Simulates MacBook Air M2: physical notch ≈ 34 pt, menu bar reserved ≈ 37 pt.
-        // Must return 34 (the smaller value) so the island sits flush with the notch.
-        let height = NSScreen.computeIslandClosedHeight(safeAreaInsetsTop: 34, topStatusBarHeight: 37)
+    func notchedHeightTrustsSafeAreaWhenItMatchesTheCutout() {
+        // 14" Pro at default scaling: safe area 32, catalog 32.
+        let height = NSScreen.computeClosedIslandHeight(
+            density: .regular,
+            isNotched: true,
+            safeAreaInsetsTop: 32,
+            catalogNotchHeight: 32,
+            menuBarHeight: 32
+        )
+        #expect(height == 32)
+    }
+
+    @Test
+    func notchedHeightClampsToTheCatalogCutoutWhenTheMenuBarStandsTaller() {
+        // Enlarged menu bar reports a 37pt safe area over a 32pt cutout: the
+        // pill must not stand below the physical notch.
+        for density in IslandDensity.allCases {
+            let height = NSScreen.computeClosedIslandHeight(
+                density: density,
+                isNotched: true,
+                safeAreaInsetsTop: 37,
+                catalogNotchHeight: 32,
+                menuBarHeight: 37
+            )
+            #expect(height == 32)
+        }
+    }
+
+    @Test
+    func notchedHeightToleratesOnePointOfCatalogRounding() {
+        // A 1pt disagreement is rounding noise; clamping it would open a seam.
+        let height = NSScreen.computeClosedIslandHeight(
+            density: .compact,
+            isNotched: true,
+            safeAreaInsetsTop: 33,
+            catalogNotchHeight: 32,
+            menuBarHeight: 33
+        )
+        #expect(height == 33)
+    }
+
+    @Test
+    func notchedHeightNeverGoesBelowTheSafeAreaWhenTheCatalogIsTaller() {
+        // Auto-hide menu bar / smaller runtime inset than the catalog: keep
+        // the runtime value (matches the old "no visible gap" rule).
+        let height = NSScreen.computeClosedIslandHeight(
+            density: .regular,
+            isNotched: true,
+            safeAreaInsetsTop: 34,
+            catalogNotchHeight: 37,
+            menuBarHeight: 37
+        )
         #expect(height == 34)
     }
 
     @Test
-    func islandClosedHeightUsesNotchHeightEvenWhenMenuBarIsShorter() {
-        // When menu bar reserved < notch (e.g. auto-hide menu bar), the island must
-        // still match the physical notch height to avoid a visible gap.
-        let height = NSScreen.computeIslandClosedHeight(safeAreaInsetsTop: 37, topStatusBarHeight: 34)
-        #expect(height == 37)
+    func notchedHeightFallsBackToTheCatalogWithoutASafeArea() {
+        // Auxiliary areas only (no safe-area inset reported).
+        let height = NSScreen.computeClosedIslandHeight(
+            density: .regular,
+            isNotched: true,
+            safeAreaInsetsTop: 0,
+            catalogNotchHeight: 38,
+            menuBarHeight: 24
+        )
+        #expect(height == 38)
     }
 
     @Test
-    func islandClosedHeightFallsBackToMenuBarHeightOnNonNotchScreen() {
-        // Non-notch screen: safeAreaInsets.top == 0, fall back to topStatusBarHeight.
-        let height = NSScreen.computeIslandClosedHeight(safeAreaInsetsTop: 0, topStatusBarHeight: 24)
-        #expect(height == 24)
+    func externalHeightIsTheRealMenuBarNotThePhantom38() {
+        let regular = NSScreen.computeClosedIslandHeight(
+            density: .regular,
+            isNotched: false,
+            safeAreaInsetsTop: 0,
+            catalogNotchHeight: nil,
+            menuBarHeight: 24
+        )
+        #expect(regular == 24)
+
+        let large = NSScreen.computeClosedIslandHeight(
+            density: .regular,
+            isNotched: false,
+            safeAreaInsetsTop: 0,
+            catalogNotchHeight: nil,
+            menuBarHeight: 30
+        )
+        #expect(large == 30)
+    }
+
+    @Test
+    func externalCompactHeightCapsAt24AndFloorsAt22() {
+        let usual = NSScreen.computeClosedIslandHeight(
+            density: .compact,
+            isNotched: false,
+            safeAreaInsetsTop: 0,
+            catalogNotchHeight: nil,
+            menuBarHeight: 24
+        )
+        #expect(usual == 24)
+
+        let large = NSScreen.computeClosedIslandHeight(
+            density: .compact,
+            isNotched: false,
+            safeAreaInsetsTop: 0,
+            catalogNotchHeight: nil,
+            menuBarHeight: 30
+        )
+        #expect(large == 24)
+
+        let degenerate = NSScreen.computeClosedIslandHeight(
+            density: .compact,
+            isNotched: false,
+            safeAreaInsetsTop: 0,
+            catalogNotchHeight: nil,
+            menuBarHeight: 0
+        )
+        #expect(degenerate == 22)
+    }
+
+    @Test
+    func closedHitAreaWidthFollowsTheDensityMetrics() {
+        let regular = OverlayPanelController.closedPanelWidth(
+            notchWidth: 224,
+            isNotchedDisplay: true,
+            notchStatus: .closed,
+            metrics: .regular
+        )
+        let compact = OverlayPanelController.closedPanelWidth(
+            notchWidth: 224,
+            isNotchedDisplay: true,
+            notchStatus: .closed,
+            metrics: .compact
+        )
+        // Regular: glyph 24 + padding 14 + gap 8 = 46 (> the 44 floor).
+        // Compact: 18 + 10 + 6 = 34 → the 36 floor wins.
+        #expect(regular == CGFloat(224 + 46 * 2))
+        #expect(compact == CGFloat(224 + 36 * 2))
+        #expect(compact < regular)
     }
 }

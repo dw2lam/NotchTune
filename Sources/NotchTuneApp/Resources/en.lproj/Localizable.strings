@@ -65,6 +65,10 @@
 "settings.appearance.centerLabel.agentAction" = "Agent · action";
 "settings.appearance.centerLabel.sessionName" = "Session name";
 "settings.appearance.centerLabel.off" = "Off";
+"settings.appearance.density.title" = "Density";
+"settings.appearance.density.note" = "Regular keeps the standard pill. Compact trims the glyph, paddings and wings so the closed island hugs the notch or menu bar.";
+"settings.appearance.density.regular" = "Regular";
+"settings.appearance.density.compact" = "Compact";
 "settings.appearance.notchPart.title" = "Notch";
 "settings.appearance.sessionListPart.title" = "Session list";
 "settings.appearance.sessionPreview" = "Preview";

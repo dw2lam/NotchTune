@@ -32,6 +32,7 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
 
             model.ignoresPointerExitDuringHarness = harnessLaunchConfiguration.scenario != nil
             model.disablesOverlayEventMonitoringDuringHarness = harnessLaunchConfiguration.scenario != nil
+            model.islandDensityHarnessOverride = harnessLaunchConfiguration.islandDensity
             model.startIfNeeded(
                 startBridge: harnessLaunchConfiguration.shouldStartBridge,
                 shouldPerformBootAnimation: harnessLaunchConfiguration.shouldPerformBootAnimation,
@@ -47,7 +48,11 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
             }
 
             // Hide all windows on launch — settings opens on demand only.
-            NotchTuneAppDelegate.hideAllAppWindows()
+            // Harness scenarios keep the overlay panel they just presented,
+            // otherwise the capture finds no visible window to snapshot.
+            if harnessLaunchConfiguration.scenario == nil {
+                NotchTuneAppDelegate.hideAllAppWindows()
+            }
 
             harnessRuntimeMonitor.recordMilestone("bootstrapCompleted")
 

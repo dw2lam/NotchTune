@@ -233,6 +233,8 @@ struct V6ClosedPill: View {
     /// Changes to trigger a one-shot jump on the glyph (idle-session nudge).
     var nudgeTrigger: UUID? = nil
 
+    @Environment(\.islandChromeMetrics) private var metrics
+
     var body: some View {
         switch layout {
         case .external: externalBody
@@ -252,7 +254,7 @@ struct V6ClosedPill: View {
     // MARK: External (fluid)
 
     private var externalBody: some View {
-        let glyphW: CGFloat = 24
+        let glyphW: CGFloat = metrics.closedGlyphSize
         let labelW = label.map { V6CenterLabelView.intrinsicWidth(of: $0) } ?? 0
         let rightW = rightSlot.map { V6RightSlotView.intrinsicWidth(of: $0) } ?? 0
 
@@ -268,8 +270,8 @@ struct V6ClosedPill: View {
             )
 
             HStack(spacing: 0) {
-                UnifiedBars(mode: mode, size: 24, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
-                    .frame(width: glyphW, height: 24)
+                UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
+                    .frame(width: glyphW, height: glyphW)
 
                 if let label {
                     V6CenterLabelView(text: label)
@@ -302,8 +304,9 @@ struct V6ClosedPill: View {
 
     private var macbookBody: some View {
         let rightWidth = rightSlot.map { V6RightSlotView.intrinsicWidth(of: $0) } ?? 0
-        let wingReserve = IslandChromeMetrics.notchedClosedWingReserve(rightSlotWidth: rightWidth)
+        let wingReserve = metrics.notchedClosedWingReserve(rightSlotWidth: rightWidth)
         let outer = wingReserve + physicalNotchWidth + wingReserve
+        let glyphW = metrics.closedGlyphSize
 
         return ZStack {
             IslandSurfaceBackground(
@@ -313,11 +316,11 @@ struct V6ClosedPill: View {
 
             HStack(spacing: 0) {
                 HStack {
-                    UnifiedBars(mode: mode, size: 24, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
-                        .frame(width: 24, height: 24)
+                    UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
+                        .frame(width: glyphW, height: glyphW)
                     Spacer(minLength: 0)
                 }
-                .padding(.leading, IslandChromeMetrics.notchedClosedHorizontalPadding)
+                .padding(.leading, metrics.notchedClosedHorizontalPadding)
                 .frame(width: wingReserve)
 
                 Color.clear
@@ -328,7 +331,7 @@ struct V6ClosedPill: View {
                         Spacer(minLength: 0)
                         V6RightSlotView(content: rightSlot)
                     }
-                    .padding(.trailing, IslandChromeMetrics.notchedClosedHorizontalPadding)
+                    .padding(.trailing, metrics.notchedClosedHorizontalPadding)
                     .frame(width: wingReserve)
                 } else {
                     Color.clear
@@ -445,77 +448,12 @@ private struct MusicNotificationMarqueeText: View {
     }
 }
 
-enum MusicTrackNotificationMetrics {
-    static let albumArtWidth: CGFloat = V6ClosedMusicSurfaceMetrics.albumArtSize
-    static let minimumTextWidth: CGFloat = 48
-    static let maximumTextWidth: CGFloat = 300
-    static let measurementFudge: CGFloat = 14
-    /// Rendered widths of the trailing glyphs, shared so the notch wing-reserve
-    /// math (IslandChromeMetrics) stays in lockstep with the actual views.
-    static let waveformWidth: CGFloat = 20
-    static let playIconWidth: CGFloat = 18
-
-    static func estimatedOuterWidth(
-        for layout: V6ClosedLayout,
-        track: PlayerTrack,
-        physicalNotchWidth: CGFloat,
-        panelContentWidth: CGFloat = .greatestFiniteMagnitude
-    ) -> CGFloat {
-        switch layout {
-        case .external:
-            return min(estimatedExternalWidth(track: track), panelContentWidth)
-        case .macbook:
-            let leftWing = IslandChromeMetrics.notchedMusicNotificationLeftWingReserve(
-                title: track.title,
-                artist: track.artist,
-                panelContentWidth: panelContentWidth,
-                physicalNotchWidth: physicalNotchWidth
-            )
-            let rightWing = IslandChromeMetrics.notchedMusicNotificationRightWingReserve()
-            return leftWing + physicalNotchWidth + rightWing
-        }
-    }
-
-    static func estimatedTextBlockWidth(title: String, artist: String) -> CGFloat {
-        let natural = max(intrinsicTitleWidth(title), intrinsicArtistWidth(artist))
-        return min(max(natural, minimumTextWidth), maximumTextWidth)
-    }
-
-    static func estimatedExternalWidth(track: PlayerTrack) -> CGFloat {
-        let artWidth: CGFloat = albumArtWidth
-        let contentGap: CGFloat = 8
-        let playWidth: CGFloat = playIconWidth
-        let textWidth = estimatedTextBlockWidth(title: track.title, artist: track.artist)
-        return IslandChromeMetrics.notchedMusicLeadingPadding
-            + artWidth
-            + contentGap
-            + textWidth
-            + contentGap
-            + playWidth
-            + IslandChromeMetrics.notchedMusicTrailingPadding
-    }
-
-    static func intrinsicTitleWidth(_ text: String) -> CGFloat {
-        guard !text.isEmpty else { return 0 }
-        let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)
-        return ceil((text as NSString).size(withAttributes: [.font: font]).width) + measurementFudge
-    }
-
-    static func intrinsicArtistWidth(_ text: String) -> CGFloat {
-        guard !text.isEmpty else { return 0 }
-        let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .medium)
-        return ceil((text as NSString).size(withAttributes: [.font: font]).width) + measurementFudge
-    }
-}
-
 enum V6ClosedMusicSurfacePhase: Equatable {
     case notification
     case compact
 }
 
 enum V6ClosedMusicSurfaceMetrics {
-    static let albumArtSize: CGFloat = 22
-    static let albumArtCornerRadius: CGFloat = 5
     static let morphAnimation = Animation.easeInOut(duration: 0.58)
 }
 
@@ -565,6 +503,8 @@ struct V6ClosedMusicSurface: View {
     /// Liquid Glass material for the surface background. `nil` renders solid ink.
     var glass: ResolvedGlass? = nil
 
+    @Environment(\.islandChromeMetrics) private var metrics
+
     private var isNotification: Bool { phase == .notification }
 
     var body: some View {
@@ -580,21 +520,21 @@ struct V6ClosedMusicSurface: View {
     // MARK: MacBook
 
     private var macbookBody: some View {
-        let textWidth = IslandChromeMetrics.notchedMusicNotificationLeftTextWidth(
+        let textWidth = metrics.notchedMusicNotificationLeftTextWidth(
             title: track.title,
             artist: track.artist,
             panelContentWidth: panelContentWidth,
             physicalNotchWidth: physicalNotchWidth
         )
-        let notificationLeftWing = IslandChromeMetrics.notchedMusicNotificationLeftWingReserve(
+        let notificationLeftWing = metrics.notchedMusicNotificationLeftWingReserve(
             title: track.title,
             artist: track.artist,
             panelContentWidth: panelContentWidth,
             physicalNotchWidth: physicalNotchWidth
         )
-        let compactLeftWing = IslandChromeMetrics.notchedCompactMusicLeftWingReserve()
-        let compactRightWing = IslandChromeMetrics.notchedCompactMusicRightWingReserve()
-        let notificationRightWing = IslandChromeMetrics.notchedMusicNotificationRightWingReserve()
+        let compactLeftWing = metrics.notchedCompactMusicLeftWingReserve()
+        let compactRightWing = metrics.notchedCompactMusicRightWingReserve()
+        let notificationRightWing = metrics.notchedMusicNotificationRightWingReserve()
         let leftWing = isNotification ? notificationLeftWing : compactLeftWing
         let rightWing = isNotification ? notificationRightWing : compactRightWing
         let outer = leftWing + physicalNotchWidth + rightWing
@@ -627,12 +567,12 @@ struct V6ClosedMusicSurface: View {
 
     private var musicLeadingInset: some View {
         Color.clear
-            .frame(width: IslandChromeMetrics.notchedMusicLeadingPadding)
+            .frame(width: metrics.notchedMusicLeadingPadding)
     }
 
     private var musicTrailingInset: some View {
         Color.clear
-            .frame(width: IslandChromeMetrics.notchedMusicTrailingPadding)
+            .frame(width: metrics.notchedMusicTrailingPadding)
     }
 
     private func macbookLeftWing(leftWing: CGFloat, textWidth: CGFloat) -> some View {
@@ -640,7 +580,7 @@ struct V6ClosedMusicSurface: View {
             musicLeadingInset
 
             if isNotification {
-                HStack(spacing: IslandChromeMetrics.notchedClosedContentGap) {
+                HStack(spacing: metrics.notchedClosedContentGap) {
                     sharedAlbumArt
                         .layoutPriority(1)
 
@@ -703,11 +643,11 @@ struct V6ClosedMusicSurface: View {
 
     private var externalRenderedTextWidth: CGFloat {
         let chrome: CGFloat =
-            IslandChromeMetrics.notchedMusicLeadingPadding
-            + V6ClosedMusicSurfaceMetrics.albumArtSize
-            + IslandChromeMetrics.notchedClosedContentGap
-            + IslandChromeMetrics.notchedMusicTrailingPadding
-            + MusicTrackNotificationMetrics.playIconWidth
+            metrics.notchedMusicLeadingPadding
+            + metrics.albumArtSize
+            + metrics.notchedClosedContentGap
+            + metrics.notchedMusicTrailingPadding
+            + metrics.playIconWidth
         let available = panelContentWidth - chrome
         let maxText = min(
             MusicTrackNotificationMetrics.maximumTextWidth,
@@ -715,7 +655,7 @@ struct V6ClosedMusicSurface: View {
         )
         return min(
             maxText,
-            MusicTrackNotificationMetrics.estimatedTextBlockWidth(
+            metrics.estimatedTextBlockWidth(
                 title: track.title,
                 artist: track.artist
             )
@@ -723,7 +663,7 @@ struct V6ClosedMusicSurface: View {
     }
 
     private var externalBody: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: metrics.notchedClosedContentGap) {
             musicLeadingInset
 
             sharedAlbumArt
@@ -777,27 +717,27 @@ struct V6ClosedMusicSurface: View {
     private var sharedAlbumArt: some View {
         MusicClosedAlbumArtThumbnail(
             nsImage: albumArtNSImage,
-            size: V6ClosedMusicSurfaceMetrics.albumArtSize,
-            cornerRadius: V6ClosedMusicSurfaceMetrics.albumArtCornerRadius
+            size: metrics.albumArtSize,
+            cornerRadius: metrics.albumArtCornerRadius
         )
     }
 
     private func notificationTextBlock(maxWidth: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: metrics.notificationTextSpacing) {
             MusicNotificationMarqueeText(
                 text: track.title,
-                font: .system(size: 11, weight: .semibold, design: .monospaced),
-                nsFont: NSFont.monospacedSystemFont(ofSize: 11, weight: .bold),
+                font: metrics.notificationTitleFont,
+                nsFont: metrics.notificationTitleNSFont,
                 foregroundStyle: V6Palette.paper,
-                lineHeight: 14,
+                lineHeight: metrics.notificationTitleLineHeight,
                 maxWidth: maxWidth
             )
             MusicNotificationMarqueeText(
                 text: track.artist,
-                font: .system(size: 10, weight: .medium, design: .monospaced),
-                nsFont: NSFont.monospacedSystemFont(ofSize: 10, weight: .medium),
+                font: metrics.notificationArtistFont,
+                nsFont: metrics.notificationArtistNSFont,
                 foregroundStyle: V6Palette.paper.opacity(0.55),
-                lineHeight: 12,
+                lineHeight: metrics.notificationArtistLineHeight,
                 maxWidth: maxWidth
             )
         }
@@ -806,10 +746,10 @@ struct V6ClosedMusicSurface: View {
 
     private var playStateIcon: some View {
         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-            .font(.system(size: 10, weight: .bold))
+            .font(.system(size: metrics.playIconFontSize, weight: .bold))
             .foregroundStyle(track.avgAlbumColor)
-            .frame(width: MusicTrackNotificationMetrics.playIconWidth,
-                   height: MusicTrackNotificationMetrics.playIconWidth)
+            .frame(width: metrics.playIconWidth,
+                   height: metrics.playIconWidth)
     }
 }
 
@@ -817,13 +757,15 @@ struct MusicWaveformView: View {
     let isPlaying: Bool
     let color: Color
 
+    @Environment(\.islandChromeMetrics) private var metrics
+
     var body: some View {
         HStack(spacing: 2) {
             ForEach(0..<4, id: \.self) { index in
                 MusicWaveformBar(index: index, isPlaying: isPlaying, color: color)
             }
         }
-        .frame(width: MusicTrackNotificationMetrics.waveformWidth, height: 14)
+        .frame(width: metrics.waveformWidth, height: metrics.waveformHeight)
     }
 }
 
@@ -890,6 +832,7 @@ struct IslandPreviewPill: View {
     let label: String?
     let rightSlot: IslandRightSlotContent?
     let layout: V6ClosedLayout
+    var height: CGFloat = 32
     let physicalNotchWidth: CGFloat
     let now: Date
 
@@ -900,6 +843,7 @@ struct IslandPreviewPill: View {
             label: label,
             rightSlot: rightSlot,
             layout: layout,
+            height: height,
             physicalNotchWidth: physicalNotchWidth
         )
         .frame(maxWidth: .infinity, alignment: .center)

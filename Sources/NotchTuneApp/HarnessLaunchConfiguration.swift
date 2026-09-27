@@ -8,9 +8,13 @@ struct HarnessLaunchConfiguration {
     let captureDelay: TimeInterval?
     let autoExitAfter: TimeInterval?
     let artifactDirectoryURL: URL?
+    /// Pins the closed-island density for this run without touching the
+    /// persisted preference (`NOTCHTUNE_HARNESS_ISLAND_DENSITY=regular|compact`).
+    let islandDensity: IslandDensity?
 
     init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         scenario = Self.scenarioValue(from: environment["NOTCHTUNE_HARNESS_SCENARIO"])
+        islandDensity = Self.densityValue(from: environment["NOTCHTUNE_HARNESS_ISLAND_DENSITY"])
         presentOverlay = Self.boolValue(
             environment["NOTCHTUNE_HARNESS_PRESENT_OVERLAY"],
             default: false
@@ -46,6 +50,21 @@ struct HarnessLaunchConfiguration {
 
         return IslandDebugScenario.allCases.first { scenario in
             scenario.rawValue.caseInsensitiveCompare(normalized) == .orderedSame
+        }
+    }
+
+    private static func densityValue(from rawValue: String?) -> IslandDensity? {
+        guard let rawValue else {
+            return nil
+        }
+
+        let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            return nil
+        }
+
+        return IslandDensity.allCases.first { density in
+            density.rawValue.caseInsensitiveCompare(normalized) == .orderedSame
         }
     }
 
