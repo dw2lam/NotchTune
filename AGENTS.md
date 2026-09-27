@@ -175,6 +175,8 @@ flowchart TD
 
 Rendered by `V6ClosedPill` in `IslandPanelView.v6ClosedSurface`.
 
+**Live activity (widened pill)** — `IslandLiveActivity.resolve` (pure, in `IslandLiveActivity.swift`) picks what the pill says; per-profile pref `liveActivity` = off / events / active (default). Priority: needs approval/answer (amber/yellow title + command/question + waiting timer) → 4s finished peek (`finishedPeekSessionID`, set when a completion settles through `NotificationCoalescer`, character hops) → working (agent · workspace over the activity phrase + turn timer from `runningSince`, `.active` only). MacBook: asymmetric wings (text wing ≤196pt, timer wing tight) with the notch gap kept on the cutout via `macbookNotchAlignmentOffsetX`; hover area mirrors the wider wing (`measuredClosedSurfaceWidth`). External: one-line pill (`externalPillWidth`) that fits a 24pt menu bar. Harness scenario `closedNeedsApproval`.
+
 ### Music notification pill
 
 **Trigger:** `MusicPlayerManager.onTrackChange` → `AppModel.presentMusicTrackNotification` → `OverlayUICoordinator.presentMusicTrackNotification`.
@@ -237,7 +239,9 @@ Where:
 | `.agents` | Session list (`islandSessionSections`), grouping/sort from appearance prefs; install-hooks hint; jump/actions per session |
 | `.music` | `MusicPanelView` — album art, track details, transport, seeker, volume (Spotify / Apple Music via `MusicPlayerManager`) |
 
-**Agent notification mode:** opened via `presentNotificationSurface` with `notchOpenReason == .notification` and actionable session ID — shows focused card (no scroll), auto-collapses on pointer leave or after 10s unless user hovers in.
+**Agent notification mode:** opened via `presentNotificationSurface` with `notchOpenReason == .notification` and actionable session ID. No tab bar. Completions render `CompletionToastView` (≤20% of screen height, 3-line plain-text excerpt, Jump/Reply/All sessions, rotates queued completions); approval/question cards are capped at 42% and scroll inside (`NotificationSurfaceMetrics`). Bumps are coalesced by `NotificationCoalescer` (1.5s settle, tool+cwd groups, 20s cooldown → subtle). Keyboard: ⌘Y/⌘N/⇧⌘Y approve/deny/always, ⌘1–9 + ⏎ for questions, ⏎/⌘J jump, ⌘R reply, ⌘[ ⌘] rotate, Esc dismiss (`NotificationCardKeyCommand`). Toasts auto-collapse after 6s unless hovered.
+
+**Liquid Glass controls:** opened-panel controls use `IslandGlassControls.swift` (glass capsules/circles, `IslandRadius` 6/10/14) on macOS 26+ when open-panel glass is on, else the solid-ink look. The harness `overlay.png` cannot draw `.glassEffect`; set `NOTCHTUNE_HARNESS_COMPOSITED=1` for `overlay-composited.png`.
 
 **Interactions:** click closed pill → `notchOpen(.click)`; hover (when enabled) → `notchOpen(.hover)` after `AppModel.hoverOpenDelay`; toggle closes.
 
