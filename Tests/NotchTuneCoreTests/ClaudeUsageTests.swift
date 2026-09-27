@@ -4,6 +4,25 @@ import Testing
 
 struct ClaudeUsageTests {
     @Test
+    func modelScopedWeeklyWindowsAreParsedAndNamed() {
+        let payload: [String: Any] = [
+            "five_hour": ["used_percentage": 7],
+            "seven_day": ["used_percentage": 83],
+            "seven_day_fable": ["used_percentage": 32, "resets_at": 1_760_500_000],
+            "seven_day_opus_4": ["utilization": 12.4],
+            "seven_day_": ["used_percentage": 1],
+            "seven_day_note": "not a window",
+        ]
+
+        let windows = ClaudeUsageLoader.modelWeeklyWindows(in: payload)
+
+        #expect(windows?.map(\.model) == ["fable", "opus_4"])
+        #expect(windows?.map(\.displayName) == ["Fable", "Opus 4"])
+        #expect(windows?.first?.window.roundedUsedPercentage == 32)
+        #expect(ClaudeUsageLoader.modelWeeklyWindows(in: ["seven_day": ["used_percentage": 1]]) == nil)
+    }
+
+    @Test
     func claudeUsageLoaderParsesCachedRateLimits() throws {
         let rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("open-island-claude-usage-\(UUID().uuidString)", isDirectory: true)

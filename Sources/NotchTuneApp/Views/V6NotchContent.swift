@@ -233,6 +233,9 @@ struct V6ClosedPill: View {
     /// Changes to trigger a one-shot jump on the glyph (idle-session nudge).
     var nudgeTrigger: UUID? = nil
 
+    /// "Color by agent": the character's tint; `nil` keeps the paper ink.
+    var glyphTint: Color? = nil
+
     /// MacBook mode only — when set, the wings widen to `liveWingWidth` and
     /// carry the activity's text + timer instead of the glyph/right slot.
     var liveActivity: IslandLiveActivity? = nil
@@ -271,7 +274,7 @@ struct V6ClosedPill: View {
             )
 
             HStack(spacing: 0) {
-                UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
+                UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger, tint: glyphTint ?? UnifiedBars.paperInk)
                     .frame(width: glyphW, height: glyphW)
 
                 LiveActivityInlineText(activity: activity, metrics: metrics)
@@ -304,7 +307,7 @@ struct V6ClosedPill: View {
 
             HStack(spacing: 0) {
                 HStack(spacing: metrics.notchedClosedContentGap) {
-                    UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
+                    UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger, tint: glyphTint ?? UnifiedBars.paperInk)
                         .frame(width: glyphW, height: glyphW)
 
                     LiveActivityTextBlock(activity: activity, metrics: metrics)
@@ -362,7 +365,7 @@ struct V6ClosedPill: View {
             )
 
             HStack(spacing: 0) {
-                UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
+                UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger, tint: glyphTint ?? UnifiedBars.paperInk)
                     .frame(width: glyphW, height: glyphW)
 
                 if let label {
@@ -408,7 +411,7 @@ struct V6ClosedPill: View {
 
             HStack(spacing: 0) {
                 HStack {
-                    UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
+                    UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger, tint: glyphTint ?? UnifiedBars.paperInk)
                         .frame(width: glyphW, height: glyphW)
                     Spacer(minLength: 0)
                 }

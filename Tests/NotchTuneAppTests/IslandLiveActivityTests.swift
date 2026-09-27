@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import NotchTuneApp
 import NotchTuneCore
@@ -147,6 +148,28 @@ struct IslandLiveActivityModelTests {
     init() {
         ["appearance.island.v8.notch.liveActivity", "appearance.island.v8.topBar.liveActivity"]
             .forEach(UserDefaults.standard.removeObject(forKey:))
+    }
+
+    @Test
+    func colorByAgentTintsTheCharacterWithTheSessionsBrandColor() {
+        let keys = ["appearance.island.v8.notch.colorByAgent", "appearance.island.v8.topBar.colorByAgent"]
+        keys.forEach(UserDefaults.standard.removeObject(forKey:))
+        defer { keys.forEach(UserDefaults.standard.removeObject(forKey:)) }
+
+        let model = AppModel()
+        var session = AgentSession(
+            id: "s", title: "Codex · s", tool: .codex, origin: .live,
+            attachmentState: .attached, phase: .running, summary: "Running", updatedAt: .now
+        )
+        session.isProcessAlive = true
+        model.state = SessionState(sessions: [session])
+        #expect(model.islandClosedGlyphTint == nil)
+
+        for profile in IslandAppearanceDisplayProfile.allCases {
+            model.updateAppearancePreferences(for: profile) { $0.colorByAgent = true }
+        }
+        #expect(model.islandClosedGlyphTint == Color(hex: AgentTool.codex.brandColorHex))
+        #expect(AppModel().appearancePreferences(for: .notch).colorByAgent)
     }
 
     @Test

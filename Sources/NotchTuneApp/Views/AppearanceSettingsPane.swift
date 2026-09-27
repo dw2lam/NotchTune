@@ -143,6 +143,41 @@ struct AppearanceSettingsPane: View {
                     }
                 }
             }
+
+            Toggle(isOn: Binding(
+                get: { editingPreferences.colorByAgent },
+                set: { value in
+                    model.updateAppearancePreferences(for: editingProfile) { $0.colorByAgent = value }
+                }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(lang.t("settings.appearance.colorByAgent.title"))
+                    Text(lang.t("settings.appearance.colorByAgent.note"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+
+            if editingPreferences.colorByAgent {
+                HStack(spacing: 14) {
+                    ForEach([AgentTool.codex, .claudeCode, .geminiCLI, .cursor], id: \.self) { tool in
+                        HStack(spacing: 6) {
+                            UnifiedBars(
+                                mode: .idle,
+                                size: 20,
+                                character: editingPreferences.character,
+                                tint: Color(hex: tool.brandColorHex) ?? UnifiedBars.paperInk
+                            )
+                            .frame(width: 22, height: 22)
+                            Text(tool.displayName)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.leading, 2)
+            }
         }
     }
 

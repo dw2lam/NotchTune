@@ -26,7 +26,8 @@
 "settings.general.autoCollapse" = "Auto-collapse on mouse exit";
 "settings.general.hideDockIcon" = "Hide icon in Dock";
 "settings.general.hapticFeedback" = "Haptic feedback on hover";
-"settings.general.suppressFrontmostNotifications" = "Suppress notifications for focused sessions";
+"settings.general.suppressFrontmostNotifications" = "Smart suppression";
+"settings.general.suppressFrontmostNotifications.note" = "Don't open the notch when the agent's terminal tab is already in focus. Finishes still show a quiet peek in the pill.";
 "settings.general.showCodexUsage" = "Show Codex usage";
 "settings.general.completionReply" = "Reply from completion card";
 "settings.general.cliHooks" = "CLI Hooks";
@@ -258,3 +259,6 @@
 
 /* Window Titles */
 "window.settings" = "NotchTune Settings";
+
+"settings.appearance.colorByAgent.title" = "Color by agent";
+"settings.appearance.colorByAgent.note" = "Tint the character with the agent it's showing: Codex blue, Claude orange, Gemini green.";

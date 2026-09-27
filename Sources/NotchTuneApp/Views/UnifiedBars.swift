@@ -23,7 +23,9 @@ struct UnifiedBars: View {
     /// Changes to trigger a one-shot "jump" bounce (idle-session nudge).
     var nudgeTrigger: UUID? = nil
     /// Ink color for bars / tick. Defaults to the v6 paper ink.
-    var tint: Color = Color(red: 0xf1 / 255.0, green: 0xea / 255.0, blue: 0xd9 / 255.0)
+    var tint: Color = UnifiedBars.paperInk
+
+    static let paperInk = Color(red: 0xf1 / 255.0, green: 0xea / 255.0, blue: 0xd9 / 255.0)
 
     private static let box: CGFloat = 24
 

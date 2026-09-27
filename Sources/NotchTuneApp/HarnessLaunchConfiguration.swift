@@ -11,10 +11,17 @@ struct HarnessLaunchConfiguration {
     /// Pins the closed-island density for this run without touching the
     /// persisted preference (`NOTCHTUNE_HARNESS_ISLAND_DENSITY=regular|compact`).
     let islandDensity: IslandDensity?
+    /// Seeds sample Claude + Codex usage so the header usage cycler renders
+    /// (`NOTCHTUNE_HARNESS_SAMPLE_USAGE=1`).
+    let seedsSampleUsage: Bool
 
     init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         scenario = Self.scenarioValue(from: environment["NOTCHTUNE_HARNESS_SCENARIO"])
         islandDensity = Self.densityValue(from: environment["NOTCHTUNE_HARNESS_ISLAND_DENSITY"])
+        seedsSampleUsage = Self.boolValue(
+            environment["NOTCHTUNE_HARNESS_SAMPLE_USAGE"],
+            default: false
+        )
         presentOverlay = Self.boolValue(
             environment["NOTCHTUNE_HARNESS_PRESENT_OVERLAY"],
             default: false

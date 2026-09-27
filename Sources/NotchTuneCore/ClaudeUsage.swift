@@ -14,19 +14,42 @@ public struct ClaudeUsageWindow: Equatable, Codable, Sendable {
     }
 }
 
+/// A model-scoped weekly limit (`seven_day_<model>` in the rate-limit payload),
+/// e.g. the separate Opus / Fable weekly cap.
+public struct ClaudeModelUsageWindow: Equatable, Codable, Sendable, Identifiable {
+    public var model: String
+    public var window: ClaudeUsageWindow
+
+    public init(model: String, window: ClaudeUsageWindow) {
+        self.model = model
+        self.window = window
+    }
+
+    public var id: String { model }
+
+    /// "fable" → "Fable", "opus_4" → "Opus 4".
+    public var displayName: String {
+        model.split(separator: "_").map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
+    }
+}
+
 public struct ClaudeUsageSnapshot: Equatable, Codable, Sendable {
     public var fiveHour: ClaudeUsageWindow?
     public var sevenDay: ClaudeUsageWindow?
     public var cachedAt: Date?
+    /// Per-model weekly caps, when the payload carries them.
+    public var modelWeekly: [ClaudeModelUsageWindow]?
 
     public init(
         fiveHour: ClaudeUsageWindow?,
         sevenDay: ClaudeUsageWindow?,
-        cachedAt: Date? = nil
+        cachedAt: Date? = nil,
+        modelWeekly: [ClaudeModelUsageWindow]? = nil
     ) {
         self.fiveHour = fiveHour
         self.sevenDay = sevenDay
         self.cachedAt = cachedAt
+        self.modelWeekly = modelWeekly
     }
 
     public var isEmpty: Bool {
@@ -58,7 +81,8 @@ public enum ClaudeUsageLoader {
         let snapshot = ClaudeUsageSnapshot(
             fiveHour: usageWindow(for: "five_hour", in: payload),
             sevenDay: usageWindow(for: "seven_day", in: payload),
-            cachedAt: cachedAt
+            cachedAt: cachedAt,
+            modelWeekly: modelWeeklyWindows(in: payload)
         )
 
         return snapshot.isEmpty ? nil : snapshot
@@ -83,6 +107,18 @@ public enum ClaudeUsageLoader {
         }
 
         return nil
+    }
+
+    static func modelWeeklyWindows(in payload: [String: Any]) -> [ClaudeModelUsageWindow]? {
+        let prefix = "seven_day_"
+        let windows = payload.keys
+            .filter { $0.hasPrefix(prefix) && $0.count > prefix.count }
+            .sorted()
+            .compactMap { key -> ClaudeModelUsageWindow? in
+                guard let window = usageWindow(for: key, in: payload) else { return nil }
+                return ClaudeModelUsageWindow(model: String(key.dropFirst(prefix.count)), window: window)
+            }
+        return windows.isEmpty ? nil : windows
     }
 
     private static func usageWindow(for key: String, in payload: [String: Any]) -> ClaudeUsageWindow? {

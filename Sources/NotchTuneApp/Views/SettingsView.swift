@@ -221,10 +221,13 @@ struct GeneralSettingsPane: View {
                     get: { model.completionReplyEnabled },
                     set: { model.completionReplyEnabled = $0 }
                 ))
-                Toggle(lang.t("settings.general.suppressFrontmostNotifications"), isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { model.suppressFrontmostNotifications },
                     set: { model.suppressFrontmostNotifications = $0 }
-                ))
+                )) {
+                    Text(lang.t("settings.general.suppressFrontmostNotifications"))
+                    Text(lang.t("settings.general.suppressFrontmostNotifications.note"))
+                }
             }
 
             Section("Getting Started") {

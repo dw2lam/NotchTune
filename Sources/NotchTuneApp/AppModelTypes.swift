@@ -68,6 +68,9 @@ struct IslandAppearancePreferences: Equatable, Sendable {
     var rightSlot: IslandRightSlot = .count
     var centerLabel: IslandCenterLabel = .agentAction
     var character: IslandCharacter = .dino
+    /// Tint the character with the active agent's brand color (Codex blue,
+    /// Claude orange, …) instead of the paper ink.
+    var colorByAgent: Bool = false
     var density: IslandDensity = .regular
     var liveActivity: IslandLiveActivityMode = .active
     var autoHideWhenInactive: Bool = false

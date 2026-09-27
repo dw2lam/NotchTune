@@ -115,6 +115,9 @@ struct IslandPanelView: View {
 
     @State private var isHovering = false
     @State private var showingQuitConfirmation = false
+    @State private var isHoveringUsage = false
+    /// Which provider the header usage cycler shows; clicking steps it.
+    @AppStorage("island.usage.selectedProvider") private var selectedUsageProviderID = ""
     @State private var closedPillWidth: CGFloat = 0
     @State private var panelContentWidth: CGFloat = 484
     @State private var measuredMusicClipMetrics = MusicNotificationClipMetrics()
@@ -386,7 +389,19 @@ struct IslandPanelView: View {
             controlCount: Self.headerControlCount,
             buttonSize: Self.headerControlButtonSize,
             spacing: Self.headerControlSpacing
-        )
+        ) + modelWeeklyUsageWidth
+    }
+
+    /// Room the per-model weekly caps take ahead of the header buttons.
+    private var modelWeeklyUsageWidth: CGFloat {
+        let font = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .bold)
+        return modelWeeklyUsage.reduce(0) { total, window in
+            var text = "\(window.label) \(window.roundedUsedPercentage)%"
+            if let resetsAt = window.resetsAt, let remaining = compactRemaining(until: resetsAt) {
+                text += " \(remaining)"
+            }
+            return total + IslandLiveActivity.textWidth(text, font: font) + 4 + Self.headerControlSpacing
+        }
     }
 
     nonisolated static func headerControlStripWidth(
@@ -690,6 +705,7 @@ struct IslandPanelView: View {
                     glass: model.glassSettings.closedGlass(layout: layout),
                     glyphPaused: closedGlyphPaused,
                     nudgeTrigger: model.nudgeTrigger,
+                    glyphTint: model.islandClosedGlyphTint,
                     liveActivity: liveActivity,
                     liveLeftWingWidth: layout == .macbook ? liveActivityLeftWingWidth : 0,
                     liveRightWingWidth: layout == .macbook ? liveActivityRightWingWidth : 0
@@ -890,6 +906,14 @@ struct IslandPanelView: View {
 
     private var openedHeaderButtons: some View {
         HStack(spacing: Self.headerControlSpacing) {
+            ForEach(modelWeeklyUsage) { window in
+                usageWindowText(window, showsReset: true)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.trailing, 4)
+                    .help("\(window.label) weekly limit")
+            }
+
             headerIconButton(systemName: "gearshape.fill", tint: .white.opacity(0.62)) {
                 model.showSettings()
             }
@@ -1441,11 +1465,6 @@ struct IslandPanelView: View {
         let overview = sessionOverviewItems(referenceDate: referenceDate)
 
         return HStack(spacing: 8) {
-            Text(lang.t("island.sessionList.title").uppercased())
-                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                .tracking(1.4)
-                .foregroundStyle(V6Palette.paper.opacity(0.55))
-
             ViewThatFits(in: .horizontal) {
                 sessionOverviewView(overview, compact: false)
                 sessionOverviewView(overview, compact: true)
@@ -1455,22 +1474,13 @@ struct IslandPanelView: View {
         }
         .padding(.leading, sessionListSideInset)
         .padding(.trailing, sessionListSideInset)
-        .frame(height: 36)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(.white.opacity(0.055))
-                .frame(height: 1)
-        }
+        .frame(height: 24)
+        .padding(.bottom, 2)
     }
 
     private var sessionPanelFooter: some View {
         Color.clear
-            .frame(height: 10)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(.white.opacity(0.055))
-                .frame(height: 1)
-        }
+            .frame(height: 8)
     }
 
     private func sessionOverviewItems(referenceDate: Date) -> [SessionOverviewItem] {
@@ -1526,7 +1536,8 @@ struct IslandPanelView: View {
             }
 
             Text(sessionOverviewMetricTitle(item, compact: compact))
-                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                .font(.system(size: 11, weight: .medium))
+                .monospacedDigit()
                 .foregroundStyle(item.tint == nil ? V6Palette.paper.opacity(0.34) : V6Palette.paper.opacity(0.48))
         }
     }
@@ -1544,9 +1555,8 @@ struct IslandPanelView: View {
             Circle()
                 .fill(sectionTint(for: section))
                 .frame(width: 7, height: 7)
-            Text(sessionSectionTitle(for: section).uppercased())
-                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                .tracking(0.4)
+            Text(sessionSectionTitle(for: section))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(sectionLabelColor(for: section))
             Text("\(section.sessions.count)")
                 .font(.system(size: 10.5, weight: .medium, design: .monospaced))
@@ -1556,13 +1566,7 @@ struct IslandPanelView: View {
         .padding(.leading, sessionListSideInset)
         .padding(.trailing, sessionListSideInset)
         .padding(.top, 10)
-        .padding(.bottom, 7)
-        .background(Color.white.opacity(0.008))
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(.white.opacity(0.055))
-                .frame(height: 1)
-        }
+        .padding(.bottom, 4)
     }
 
     private func sectionTint(for section: IslandSessionSection) -> Color {
@@ -1596,11 +1600,7 @@ struct IslandPanelView: View {
         let providers = openedUsageProviders
 
         if providers.isEmpty == false {
-            ViewThatFits(in: .horizontal) {
-                compactUsageSummaryView(providers, leading: .fullName)
-                compactUsageSummaryView(providers, leading: .appIcon)
-                scrollableUsageLane(providers)
-            }
+            usageCycler(providers)
         } else {
             Color.clear
         }
@@ -1726,13 +1726,135 @@ struct IslandPanelView: View {
             Color.clear
                 .frame(maxWidth: .infinity)
         } else {
-            ViewThatFits(in: .horizontal) {
-                compactUsageSummaryView(providers, leading: .fullName)
-                compactUsageSummaryView(providers, leading: .appIcon)
-                scrollableUsageLane(providers)
-            }
-            .frame(maxWidth: .infinity, alignment: alignment)
+            usageCycler(providers)
+                .frame(maxWidth: .infinity, alignment: alignment)
         }
+    }
+
+    /// One provider's windows at a time ("5h 0% | 7d 83%"); a click steps to
+    /// the next provider, so the header never has to widen for more agents.
+    @ViewBuilder
+    private func usageCycler(_ providers: [UsageProviderPresentation]) -> some View {
+        let index = providers.firstIndex { $0.id == selectedUsageProviderID } ?? 0
+        let provider = providers[index]
+
+        Button {
+            let next = providers[(index + 1) % providers.count]
+            withAnimation(.smooth(duration: 0.28)) {
+                selectedUsageProviderID = next.id
+            }
+        } label: {
+            HStack(spacing: 7) {
+                ViewThatFits(in: .horizontal) {
+                    usageProviderLine(provider, leading: .appIcon, showsResets: true)
+                    usageProviderLine(provider, leading: .appIcon)
+                    usageProviderLine(provider, leading: .appIcon, peakOnly: true)
+                }
+                .id(provider.id)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .move(edge: .top).combined(with: .opacity)
+                ))
+
+                if providers.count > 1 {
+                    HStack(spacing: 3) {
+                        ForEach(providers.indices, id: \.self) { dot in
+                            Circle()
+                                .fill(.white.opacity(dot == index ? 0.62 : 0.2))
+                                .frame(width: 4, height: 4)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule().fill(.white.opacity(isHoveringUsage ? 0.07 : 0))
+            )
+            .contentShape(Capsule())
+            .clipped()
+        }
+        .buttonStyle(.plain)
+        .onHover { isHoveringUsage = $0 }
+        .help(providers.count > 1
+            ? "\(usageHelpText(for: provider)) — click for \(providers[(index + 1) % providers.count].title)"
+            : usageHelpText(for: provider))
+        .accessibilityIdentifier("island-usage-cycler")
+    }
+
+    private func usageWindowText(_ window: UsageWindowPresentation, showsReset: Bool) -> some View {
+        HStack(spacing: 4) {
+            Text(window.label)
+                .foregroundStyle(.white.opacity(0.62))
+            Text("\(window.roundedUsedPercentage)%")
+                .foregroundStyle(usageColor(for: window.usedPercentage))
+            if showsReset, let resetsAt = window.resetsAt,
+               let remaining = compactRemaining(until: resetsAt) {
+                Text(remaining)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.34))
+            }
+        }
+        .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+    }
+
+    /// "4h43m", "1d5h", "12m" — the reset countdown after a usage window.
+    private func compactRemaining(until date: Date) -> String? {
+        let seconds = Int(date.timeIntervalSinceNow)
+        guard seconds > 0 else { return nil }
+        let days = seconds / 86_400
+        let hours = (seconds % 86_400) / 3_600
+        let minutes = (seconds % 3_600) / 60
+        if days > 0 { return hours > 0 ? "\(days)d\(hours)h" : "\(days)d" }
+        if hours > 0 { return "\(hours)h\(minutes)m" }
+        return "\(max(1, minutes))m"
+    }
+
+    /// Per-model weekly caps ("Fable 32% 1d5h") for the header's right lane.
+    private var modelWeeklyUsage: [UsageWindowPresentation] {
+        guard model.islandUsageDisplay == .compact,
+              let windows = model.claudeUsageSnapshot?.modelWeekly else { return [] }
+        return windows.map {
+            UsageWindowPresentation(
+                id: "claude-model-\($0.model)",
+                label: $0.displayName,
+                usedPercentage: $0.window.usedPercentage,
+                resetsAt: $0.window.resetsAt
+            )
+        }
+    }
+
+    private func usageProviderLine(
+        _ provider: UsageProviderPresentation,
+        leading: UsageChipLeading,
+        showsResets: Bool = false,
+        peakOnly: Bool = false
+    ) -> some View {
+        HStack(spacing: 6) {
+            if leading == .appIcon,
+               let icon = AgentAppIconProvider.icon(forProviderTitle: provider.title) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 15, height: 15)
+                    .accessibilityLabel(provider.title)
+            } else {
+                Text(provider.title)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.74))
+            }
+
+            let windows = peakOnly ? Array(provider.peakWindow.map { [$0] } ?? []) : provider.windows
+            ForEach(Array(windows.enumerated()), id: \.element.id) { offset, window in
+                if offset > 0 {
+                    Rectangle()
+                        .fill(.white.opacity(0.18))
+                        .frame(width: 1, height: 11)
+                }
+                usageWindowText(window, showsReset: showsResets)
+            }
+        }
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     /// Last-resort usage presentation when even short titles overflow the lane:
@@ -2052,17 +2174,29 @@ private struct IslandSessionRow: View {
                 }
             }
         }
-        .background(rowFillColor(for: presence))
+        .background {
+            if presentation == .list {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(rowFillColor(for: presence))
+                    .padding(.horizontal, max(4, sideInset - 8))
+                    .padding(.vertical, 1)
+            } else {
+                rowFillColor(for: presence)
+            }
+        }
         .overlay {
             if isFlashing {
-                (Color(hex: session.tool.brandColorHex) ?? .blue)
-                    .opacity(0.18)
+                RoundedRectangle(cornerRadius: presentation == .list ? 12 : 0, style: .continuous)
+                    .fill((Color(hex: session.tool.brandColorHex) ?? .blue).opacity(0.18))
+                    .padding(.horizontal, presentation == .list ? max(4, sideInset - 8) : 0)
             }
         }
         .overlay(alignment: .top) {
-            Rectangle()
-                .fill(.white.opacity(0.045))
-                .frame(height: 1)
+            if presentation == .notification {
+                Rectangle()
+                    .fill(.white.opacity(0.045))
+                    .frame(height: 1)
+            }
         }
         .overlay(alignment: .leading) {
             if showsLeadingStatusBar {
@@ -2089,7 +2223,146 @@ private struct IslandSessionRow: View {
         }
     }
 
+    @ViewBuilder
     private func rowSummary(presence: IslandSessionPresence, showsDetail: Bool) -> some View {
+        if presentation == .list {
+            listRowSummary(presence: presence, showsDetail: showsDetail)
+        } else {
+            notificationRowSummary(presence: presence, showsDetail: showsDetail)
+        }
+    }
+
+    /// Hover list row: status indicator centred on a title + one-line
+    /// subtitle, flat agent tag and age pill on the title line. No dividers,
+    /// no chevron — the whole row jumps to the terminal.
+    private func listRowSummary(presence: IslandSessionPresence, showsDetail: Bool) -> some View {
+        HStack(alignment: .center, spacing: Self.listIndicatorGap) {
+            if showsLeadingStatusIndicator {
+                statusIndicator(for: presence)
+                    .frame(width: Self.listIndicatorWidth)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .center, spacing: 8) {
+                    Text(summaryHeadlineText)
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .foregroundStyle(titleColor(for: presence))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Spacer(minLength: 10)
+
+                    HStack(spacing: 6) {
+                        listAgentTag
+                        if session.isRemote {
+                            listPill("SSH")
+                        }
+                        if let terminal = session.spotlightTerminalBadge {
+                            listPill(terminal)
+                        }
+                        listPill(session.spotlightAgeBadge, minWidth: 38)
+                        if let onDismiss {
+                            DismissButton(action: onDismiss)
+                        }
+                    }
+                    .fixedSize()
+                }
+
+                if showsDetail {
+                    listSubtitleLines(presence: presence)
+                }
+            }
+        }
+        .padding(.leading, rowLeadingInset)
+        .padding(.trailing, sideInset)
+        .padding(.vertical, 9)
+        .help(session.spotlightTerminalLabel ?? "")
+    }
+
+    @ViewBuilder
+    private func listSubtitleLines(presence: IslandSessionPresence) -> some View {
+        let subtle = V6Palette.paper.opacity(presence == .inactive ? 0.36 : 0.5)
+
+        if session.phase == .running, let prompt = session.spotlightPromptText {
+            Text(listPromptLine(prompt))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(V6Palette.paper.opacity(0.74))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+
+        if let subtitle = listSubtitleText {
+            Text(session.phase == .running ? listActivityLine(subtitle) : AttributedString(subtitle))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(subtle)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+    }
+
+    /// "You:" in the dim ink, the prompt itself a step brighter.
+    private func listPromptLine(_ prompt: String) -> AttributedString {
+        var label = AttributedString("You: ")
+        label.foregroundColor = V6Palette.paper.opacity(0.42)
+        return label + AttributedString(CompletionPreviewText.plain(prompt))
+    }
+
+    /// "Editing AppModel.swift" with the verb in the running tint.
+    private func listActivityLine(_ phrase: String) -> AttributedString {
+        let parts = phrase.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+        guard let verb = parts.first else { return AttributedString(phrase) }
+        var head = AttributedString(String(verb))
+        head.foregroundColor = IslandDesignPalette.Status.running
+        guard parts.count > 1 else { return head }
+        return head + AttributedString(" " + parts[1])
+    }
+
+    private static let listIndicatorWidth: CGFloat = 20
+    private static let listIndicatorGap: CGFloat = 12
+
+    /// One plain-text line: what a running agent is doing right now, or the
+    /// first line of its last reply. Attention rows carry their own card.
+    private var listSubtitleText: String? {
+        if session.phase.requiresAttention, shouldShowEmbeddedDetailBody {
+            return nil
+        }
+
+        let raw: String?
+        if session.phase == .running,
+           let tool = session.currentToolName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !tool.isEmpty {
+            raw = IslandLiveActivity.activityPhrase(tool: tool, session: session)
+        } else {
+            raw = session.spotlightActivityLineText ?? expandedActivityLineText
+        }
+
+        guard let raw else { return nil }
+        let plain = CompletionPreviewText.plain(raw)
+        return plain.isEmpty ? nil : plain
+    }
+
+    private var listAgentTag: some View {
+        let tint = Color(hex: session.tool.brandColorHex) ?? V6Palette.paper
+        return Text(session.completionReplyRecipientName)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+    }
+
+    private func listPill(_ title: String, minWidth: CGFloat = 0) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .medium))
+            .monospacedDigit()
+            .foregroundStyle(V6Palette.paper.opacity(0.55))
+            .frame(minWidth: max(0, minWidth - 14))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+    }
+
+    private func notificationRowSummary(presence: IslandSessionPresence, showsDetail: Bool) -> some View {
         HStack(alignment: .top, spacing: 10) {
             if showsLeadingStatusIndicator {
                 statusIndicator(for: presence)
@@ -2156,7 +2429,8 @@ private struct IslandSessionRow: View {
             .padding(.bottom, 10)
         }
 
-        if !shouldShowEmbeddedDetailBody,
+        if presentation == .notification,
+           !shouldShowEmbeddedDetailBody,
            let activityLine = session.spotlightActivityLineText ?? expandedActivityLineText {
             Text(activityLine)
                 .font(.system(size: 11, weight: .medium))
@@ -2355,7 +2629,7 @@ private struct IslandSessionRow: View {
         case .tint:
             sideInset
         case .animatedDot, .glyph:
-            sideInset + 30
+            sideInset + Self.listIndicatorWidth + Self.listIndicatorGap
         }
     }
 
@@ -2443,7 +2717,7 @@ private struct IslandSessionRow: View {
         if session.phase == .completed {
             return isActionable && completionHasExpandedBody
         }
-        return session.phase == .running && runningDetailText != nil
+        return presentation == .notification && session.phase == .running && runningDetailText != nil
     }
 
     private var completionHasExpandedBody: Bool {

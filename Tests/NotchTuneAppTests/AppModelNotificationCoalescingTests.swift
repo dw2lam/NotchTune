@@ -19,7 +19,10 @@ struct AppModelNotificationCoalescingTests {
     }
 
     private func makeModel(frontmost: @escaping @Sendable (AgentSession) async -> Bool = { _ in false }) -> AppModel {
-        let model = AppModel(isNotificationSessionAlreadyFrontmost: frontmost)
+        let model = AppModel(
+            isNotificationSessionAlreadyFrontmost: frontmost,
+            frontmostBundleIdentifierProvider: { nil }
+        )
         model.isSoundMuted = true
         model.notchStatus = .closed
         model.notchOpenReason = nil

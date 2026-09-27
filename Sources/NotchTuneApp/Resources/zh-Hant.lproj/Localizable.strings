@@ -26,7 +26,8 @@
 "settings.general.autoCollapse" = "滑鼠離開時自動收起";
 "settings.general.hideDockIcon" = "在 Dock 中隱藏圖示";
 "settings.general.hapticFeedback" = "懸停時震動回饋";
-"settings.general.suppressFrontmostNotifications" = "前台工作階段不彈出通知";
+"settings.general.suppressFrontmostNotifications" = "智慧免打擾";
+"settings.general.suppressFrontmostNotifications.note" = "目前正在檢視該代理的終端機分頁時，不自動展開瀏海。完成時仍會在膠囊中輕提示。";
 "settings.general.showCodexUsage" = "顯示 Codex 用量";
 "settings.general.completionReply" = "在完成卡片中回覆";
 "settings.general.cliHooks" = "CLI Hooks";
@@ -257,3 +258,6 @@
 
 /* Window Titles */
 "window.settings" = "NotchTune 設定";
+
+"settings.appearance.colorByAgent.title" = "依代理著色";
+"settings.appearance.colorByAgent.note" = "角色顏色跟隨目前代理：Codex 藍色、Claude 橘色、Gemini 綠色。";

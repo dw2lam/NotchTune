@@ -603,6 +603,7 @@ final class AppModel {
         defaults.set(preferences.rightSlot.rawValue, forKey: Self.appearanceDefaultsKey(profile, "rightSlot"))
         defaults.set(preferences.centerLabel.rawValue, forKey: Self.appearanceDefaultsKey(profile, "centerLabel"))
         defaults.set(preferences.character.rawValue, forKey: Self.appearanceDefaultsKey(profile, "character"))
+        defaults.set(preferences.colorByAgent, forKey: Self.appearanceDefaultsKey(profile, "colorByAgent"))
         defaults.set(preferences.density.rawValue, forKey: Self.appearanceDefaultsKey(profile, "density"))
         defaults.set(preferences.liveActivity.rawValue, forKey: Self.appearanceDefaultsKey(profile, "liveActivity"))
         defaults.set(preferences.autoHideWhenInactive, forKey: Self.appearanceDefaultsKey(profile, "autoHideWhenInactive"))
@@ -745,6 +746,7 @@ final class AppModel {
                 rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "character"))
                     ?? ""
             ) ?? .dino,
+            colorByAgent: defaults.bool(forKey: appearanceDefaultsKey(profile, "colorByAgent")),
             density: IslandDensity(
                 rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "density"))
                     ?? ""
@@ -1376,6 +1378,17 @@ final class AppModel {
         return .idle
     }
 
+    /// The character's tint when "Color by agent" is on: the brand color of
+    /// the agent the pill is about (live activity first, then the spotlight
+    /// session). `nil` keeps the paper ink.
+    var islandClosedGlyphTint: Color? {
+        guard appearancePreferences(for: activeAppearanceProfile).colorByAgent else { return nil }
+        let session = islandLiveActivity.flatMap { state.session(id: $0.sessionID) }
+            ?? islandClosedSpotlight
+        guard let session else { return nil }
+        return Color(hex: session.tool.brandColorHex)
+    }
+
     /// The spotlight session powering the center label (if any). Attention
     /// sessions first, then the most recent running one, then whatever's
     /// first.
@@ -1927,6 +1940,27 @@ final class AppModel {
     var shouldDeferTimedNotificationAutoCollapse: Bool { overlay.shouldDeferTimedNotificationAutoCollapse }
     var hasPendingNotificationAutoCollapse: Bool { overlay.hasPendingNotificationAutoCollapse }
 
+    /// Harness-only: fixed usage numbers so captures show the header cycler.
+    func seedHarnessSampleUsage() {
+        let now = Date.now
+        hooks.claudeUsageSnapshot = ClaudeUsageSnapshot(
+            fiveHour: ClaudeUsageWindow(usedPercentage: 12, resetsAt: now.addingTimeInterval(3 * 3_600)),
+            sevenDay: ClaudeUsageWindow(usedPercentage: 83, resetsAt: now.addingTimeInterval(29 * 3_600)),
+            modelWeekly: [
+                ClaudeModelUsageWindow(model: "fable", window: ClaudeUsageWindow(usedPercentage: 32, resetsAt: now.addingTimeInterval(29 * 3_600)))
+            ]
+        )
+        hooks.codexUsageSnapshot = CodexUsageSnapshot(
+            sourceFilePath: "harness",
+            capturedAt: now,
+            windows: [
+                CodexUsageWindow(key: "primary", label: "5h", usedPercentage: 41, leftPercentage: 59, windowMinutes: 300, resetsAt: now.addingTimeInterval(7_200)),
+                CodexUsageWindow(key: "secondary", label: "7d", usedPercentage: 22, leftPercentage: 78, windowMinutes: 10_080, resetsAt: now.addingTimeInterval(86_400 * 4)),
+            ]
+        )
+        showCodexUsage = true
+    }
+
     func loadDebugSnapshot(
         _ snapshot: IslandDebugSnapshot,
         presentOverlay: Bool = false,
@@ -2451,7 +2485,9 @@ final class AppModel {
                 return
             }
 
-            let isFrontmost = await self.isNotificationSessionAlreadyFrontmost(session)
+            // Tab-precise for Ghostty / Terminal / iTerm, app-level for Warp,
+            // IDEs and anything else the probe can't see into.
+            let isFrontmost = await self.isOwningTerminalFocused(session)
             guard !Task.isCancelled,
                   self.notificationSurfaceIsEligibleForPresentation(surface, ingress: ingress) else {
                 return
