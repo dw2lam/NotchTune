@@ -261,3 +261,5 @@
 
 "settings.appearance.colorByAgent.title" = "依代理著色";
 "settings.appearance.colorByAgent.note" = "角色顏色跟隨目前代理：Codex 藍色、Claude 橘色、Gemini 綠色。";
+"settings.appearance.topCurve.title" = "瀏海頂部弧線";
+"settings.appearance.topCurve.note" = "瀏海與螢幕頂部相接處向外彎出，收合與展開時皆生效。";

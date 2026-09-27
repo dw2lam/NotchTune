@@ -604,6 +604,7 @@ final class AppModel {
         defaults.set(preferences.centerLabel.rawValue, forKey: Self.appearanceDefaultsKey(profile, "centerLabel"))
         defaults.set(preferences.character.rawValue, forKey: Self.appearanceDefaultsKey(profile, "character"))
         defaults.set(preferences.colorByAgent, forKey: Self.appearanceDefaultsKey(profile, "colorByAgent"))
+        defaults.set(preferences.topCurve, forKey: Self.appearanceDefaultsKey(profile, "topCurve"))
         defaults.set(preferences.density.rawValue, forKey: Self.appearanceDefaultsKey(profile, "density"))
         defaults.set(preferences.liveActivity.rawValue, forKey: Self.appearanceDefaultsKey(profile, "liveActivity"))
         defaults.set(preferences.autoHideWhenInactive, forKey: Self.appearanceDefaultsKey(profile, "autoHideWhenInactive"))
@@ -747,6 +748,7 @@ final class AppModel {
                     ?? ""
             ) ?? .dino,
             colorByAgent: defaults.bool(forKey: appearanceDefaultsKey(profile, "colorByAgent")),
+            topCurve: defaults.object(forKey: appearanceDefaultsKey(profile, "topCurve")) as? Bool ?? true,
             density: IslandDensity(
                 rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "density"))
                     ?? ""
@@ -1376,6 +1378,12 @@ final class AppModel {
         if sessions.contains(where: { $0.phase.requiresAttention }) { return .waiting }
         if sessions.contains(where: { $0.phase == .running })       { return .running }
         return .idle
+    }
+
+    /// Whether the notch draws its outward top curve on the active display.
+    var islandNotchTopCurve: Bool {
+        get { appearancePreferences(for: activeAppearanceProfile).topCurve }
+        set { updateAppearancePreferences(for: activeAppearanceProfile) { $0.topCurve = newValue } }
     }
 
     /// The character's tint when "Color by agent" is on: the brand color of

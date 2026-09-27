@@ -73,12 +73,12 @@ extension AgentSession {
 
 // MARK: - Animations
 
-// Open: a slightly slower, softly-settling spring so the pill flows out into
-// the panel like a drop of liquid spreading, rather than snapping open.
-private let openAnimation  = Animation.spring(response: 0.5, dampingFraction: 0.8)
-// Eased but prompt: a smooth collapse that still clears quickly so the
-// translucent glass panel doesn't appear to linger open.
-private let closeAnimation = Animation.spring(response: 0.38, dampingFraction: 0.86)
+// Open: the whole surface (background, outline, ears) grows out of the pill as
+// one shape on a soft spring with a whisper of overshoot.
+private let openAnimation  = Animation.spring(response: 0.42, dampingFraction: 0.8)
+// Close: critically damped, so the panel melts back into the pill without a
+// bounce at the end.
+private let closeAnimation = Animation.spring(response: 0.4, dampingFraction: 1.0)
 private let popAnimation   = Animation.spring(response: 0.35, dampingFraction: 0.65)
 private let openedSurfaceUnmountDelay: TimeInterval = 0.42
 
@@ -483,6 +483,7 @@ struct IslandPanelView: View {
         .preferredColorScheme(.dark)
         .environment(\.islandChromeMetrics, chromeMetrics)
         .environment(\.islandControlGlass, model.glassSettings.usesGlassControls)
+        .environment(\.islandNotchEarRadius, closedEarRadius)
         .alert(model.lang.t("island.quit.confirmTitle"), isPresented: $showingQuitConfirmation) {
             Button(model.lang.t("island.quit.confirmAction"), role: .destructive) {
                 model.quitApplication()
@@ -591,7 +592,9 @@ struct IslandPanelView: View {
                     expandedH: openedHeight,
                     compactR: closedNotchHeight / 2,
                     compactLeftWingWidth: compactClipLeftWingWidth,
-                    compactNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth
+                    compactNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
+                    compactEarRadius: closedEarRadius,
+                    expandedEarRadius: openedEarRadius
                 ))
             }
         }
@@ -800,8 +803,12 @@ struct IslandPanelView: View {
     /// fading out only on close.
     @ViewBuilder
     private func openGlassBackground(width openedWidth: CGFloat, height openedHeight: CGFloat) -> some View {
-        let surfaceShape = openedSurfaceShape
+        let surfaceShape = morphShape(openedWidth: openedWidth, openedHeight: openedHeight)
         IslandSurfaceBackground(shape: surfaceShape, glass: model.glassSettings.openGlass)
+            .overlay {
+                surfaceShape
+                    .stroke(Color.white.opacity(0.07), lineWidth: 1)
+            }
             .frame(width: openedWidth, height: openedHeight)
             .overlay {
                 if model.islandActiveTab == .music && model.playerManager.isRunning && !model.playerManager.track.isEmpty() {
@@ -813,11 +820,36 @@ struct IslandPanelView: View {
                         .clipShape(surfaceShape)
                 }
             }
-            .opacity(usesOpenedVisualState ? 1 : 0)
-            .animation(
-                usesOpenedVisualState ? nil : .easeInOut(duration: 0.22),
-                value: usesOpenedVisualState
-            )
+            // No fade either way: the surface starts as the pill's own
+            // outline and shrinks back onto it exactly, so it is always either
+            // the panel or hidden under the solid pill. (A fade here left a
+            // translucent ghost behind the pill at the tail of the close.)
+    }
+
+    /// The one outline the surface morphs through: closed pill (anchored on
+    /// the physical notch) → opened panel, with the outward top curve.
+    private func morphShape(openedWidth: CGFloat, openedHeight: CGFloat) -> GrowingNotchShape {
+        GrowingNotchShape(
+            progress: morphProgress,
+            compactW: closedSurfaceClipWidth,
+            compactH: closedNotchHeight,
+            expandedW: openedWidth,
+            expandedH: openedHeight,
+            compactR: closedNotchHeight / 2,
+            expandedR: OpenedIslandSurfaceShape.openedBottomRadius,
+            compactLeftWingWidth: compactClipLeftWingWidth,
+            compactNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
+            compactEarRadius: closedEarRadius,
+            expandedEarRadius: openedEarRadius
+        )
+    }
+
+    private var closedEarRadius: CGFloat {
+        model.islandNotchTopCurve ? IslandChromeMetrics.closedEarRadius : 0
+    }
+
+    private var openedEarRadius: CGFloat {
+        model.islandNotchTopCurve ? IslandChromeMetrics.openedEarRadius : 0
     }
 
     /// The opened panel content (header + tab content). Lives INSIDE the morph
@@ -838,10 +870,7 @@ struct IslandPanelView: View {
         .id(usesNotchAwareOpenedHeader)
         .frame(width: openedWidth, height: openedHeight, alignment: .top)
         .clipShape(surfaceShape)
-        .overlay {
-            surfaceShape
-                .stroke(Color.white.opacity(0.07), lineWidth: 1)
-        }
+        .scaleEffect(usesOpenedVisualState ? 1 : 0.97, anchor: .top)
         .opacity(usesOpenedVisualState ? 1 : 0)
         .animation(
             usesOpenedVisualState

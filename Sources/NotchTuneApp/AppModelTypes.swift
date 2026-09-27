@@ -71,6 +71,9 @@ struct IslandAppearancePreferences: Equatable, Sendable {
     /// Tint the character with the active agent's brand color (Codex blue,
     /// Claude orange, …) instead of the paper ink.
     var colorByAgent: Bool = false
+    /// Outward curve where the notch meets the top of the screen, closed and
+    /// opened (the flared "ears" of a hardware notch).
+    var topCurve: Bool = true
     var density: IslandDensity = .regular
     var liveActivity: IslandLiveActivityMode = .active
     var autoHideWhenInactive: Bool = false

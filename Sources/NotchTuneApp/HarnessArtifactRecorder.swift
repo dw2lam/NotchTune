@@ -219,6 +219,68 @@ enum HarnessArtifactRecorder {
         return bitmap.representation(using: .png, properties: [:])
     }
 
+    /// `NOTCHTUNE_HARNESS_FILMSTRIP=1`: close the notch, then sample the
+    /// window at ~30 fps while it opens and again while it closes, into
+    /// `<artifacts>/filmstrip/{open,close}-NN.png`. Captures run off the main
+    /// thread so they don't stall the animation they're sampling.
+    static func recordFilmstrip(model: AppModel, directoryURL: URL) {
+        guard let window = orderedVisibleWindows().first else { return }
+        let windowNumber = UInt32(window.windowNumber)
+        // Fixed capture rect (CG global coords, top-left origin): a `.null`
+        // rect crops each frame to its visible pixels, which shifts frames.
+        let primaryHeight = NSScreen.screens.first?.frame.maxY ?? 0
+        let bounds = CGRect(
+            x: window.frame.minX,
+            y: primaryHeight - window.frame.maxY,
+            width: window.frame.width,
+            height: window.frame.height
+        )
+        let dir = directoryURL.appendingPathComponent("filmstrip", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        model.notchClose()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            captureBurst(windowNumber: windowNumber, bounds: bounds, directory: dir, prefix: "open")
+            model.notchOpen(reason: .click)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                captureBurst(windowNumber: windowNumber, bounds: bounds, directory: dir, prefix: "close")
+                model.notchClose()
+            }
+        }
+    }
+
+    nonisolated private static func captureBurst(
+        windowNumber: UInt32,
+        bounds: CGRect,
+        directory: URL,
+        prefix: String,
+        frames: Int = 27,
+        interval: TimeInterval = 1.0 / 30.0
+    ) {
+        DispatchQueue.global(qos: .userInteractive).async {
+            typealias Fn = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
+            guard let handle = dlopen(nil, RTLD_NOW),
+                  let sym = dlsym(handle, "CGWindowListCreateImage") else { return }
+            let capture = unsafeBitCast(sym, to: Fn.self)
+            let start = Date()
+            var images: [(Int, CGImage)] = []
+            for index in 0..<frames {
+                let target = start.addingTimeInterval(Double(index) * interval)
+                let wait = target.timeIntervalSinceNow
+                if wait > 0 { Thread.sleep(forTimeInterval: wait) }
+                if let image = capture(bounds, 1 << 3, windowNumber, 1 << 3)?.takeRetainedValue() {
+                    let ms = Int(Date().timeIntervalSince(start) * 1000)
+                    images.append((ms, image))
+                }
+            }
+            for (offset, entry) in images.enumerated() {
+                let data = NSBitmapImageRep(cgImage: entry.1).representation(using: .png, properties: [:])
+                let name = String(format: "%@-%02d-%04dms.png", prefix, offset, entry.0)
+                try? data?.write(to: directory.appendingPathComponent(name))
+            }
+        }
+    }
+
     private static func compositedPNGData(for window: NSWindow) -> Data? {
         typealias Fn = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
         guard let handle = dlopen(nil, RTLD_NOW),

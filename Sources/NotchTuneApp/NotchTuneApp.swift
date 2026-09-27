@@ -74,6 +74,10 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                         launchedAt: launchedAt,
                         runtimeMonitor: harnessRuntimeMonitor
                     )
+                    if ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_FILMSTRIP"] == "1",
+                       let directoryURL = harnessLaunchConfiguration.artifactDirectoryURL {
+                        HarnessArtifactRecorder.recordFilmstrip(model: model, directoryURL: directoryURL)
+                    }
                 }
             }
 

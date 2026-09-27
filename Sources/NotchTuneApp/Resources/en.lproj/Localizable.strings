@@ -262,3 +262,5 @@
 
 "settings.appearance.colorByAgent.title" = "Color by agent";
 "settings.appearance.colorByAgent.note" = "Tint the character with the agent it's showing: Codex blue, Claude orange, Gemini green.";
+"settings.appearance.topCurve.title" = "Notch top curve";
+"settings.appearance.topCurve.note" = "Flare the notch outward where it meets the top of the screen, closed and opened.";

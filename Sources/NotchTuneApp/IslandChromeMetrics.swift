@@ -14,6 +14,10 @@ struct IslandChromeMetrics: Equatable, Sendable {
 
     static let openedShadowHorizontalInset: CGFloat = 18
     static let openedShadowBottomInset: CGFloat = 22
+    /// Outward top-curve radii (closed pill → opened panel). The opened one
+    /// must stay under `openedShadowHorizontalInset`: the ears draw into it.
+    static let closedEarRadius: CGFloat = 6
+    static let openedEarRadius: CGFloat = 14
 
     // MARK: Resolved sets
 

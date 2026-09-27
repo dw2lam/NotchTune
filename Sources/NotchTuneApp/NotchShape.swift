@@ -19,6 +19,11 @@ struct GrowingNotchShape: Shape {
     /// whole pill (required for asymmetric wings).
     var compactLeftWingWidth: CGFloat = 0
     var compactNotchGapWidth: CGFloat = 0
+    /// Outward top curve ("ears"): concave flares where the surface meets the
+    /// screen's top edge, drawn OUTSIDE the body so they never eat content
+    /// width. Interpolates closed → opened with `progress`; 0 disables.
+    var compactEarRadius: CGFloat = 0
+    var expandedEarRadius: CGFloat = 0
 
     var animatableData: AnimatablePair<CGFloat, CGFloat> {
         get { AnimatablePair(progress, compactW) }
@@ -31,7 +36,8 @@ struct GrowingNotchShape: Shape {
     func path(in rect: CGRect) -> Path {
         let w = compactW + (expandedW - compactW) * progress
         let h = compactH + (expandedH - compactH) * progress
-        let r = compactR + (expandedR - compactR) * progress
+        let r = min(compactR + (expandedR - compactR) * progress, h / 2, w / 2)
+        let e = max(0, min(compactEarRadius + (expandedEarRadius - compactEarRadius) * progress, h - r))
 
         let compactX: CGFloat
         if compactNotchGapWidth > 0 {
@@ -43,15 +49,35 @@ struct GrowingNotchShape: Shape {
         // Closed: anchor the notch gap to the physical cutout. Open: center the panel.
         let x = compactX + (expandedX - compactX) * progress
 
-        return Path { p in
-            p.move(to: CGPoint(x: x, y: 0))
-            p.addLine(to: CGPoint(x: x + w, y: 0))
+        return Self.surfacePath(x: x, width: w, height: h, bottomRadius: r, earRadius: e)
+    }
+
+    /// Flat top edge (flared outward by `earRadius`), straight sides, rounded
+    /// bottom. Shared by the morph clip, the growing background and the
+    /// closed pill so all three trace the same outline.
+    static func surfacePath(
+        x: CGFloat,
+        width w: CGFloat,
+        height h: CGFloat,
+        bottomRadius r: CGFloat,
+        earRadius e: CGFloat
+    ) -> Path {
+        Path { p in
+            p.move(to: CGPoint(x: x - e, y: 0))
+            p.addLine(to: CGPoint(x: x + w + e, y: 0))
+            if e > 0 {
+                p.addQuadCurve(to: CGPoint(x: x + w, y: e), control: CGPoint(x: x + w, y: 0))
+            }
             p.addLine(to: CGPoint(x: x + w, y: h - r))
             p.addArc(center: CGPoint(x: x + w - r, y: h - r),
                      radius: r, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
             p.addLine(to: CGPoint(x: x + r, y: h))
             p.addArc(center: CGPoint(x: x + r, y: h - r),
                      radius: r, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+            p.addLine(to: CGPoint(x: x, y: e))
+            if e > 0 {
+                p.addQuadCurve(to: CGPoint(x: x - e, y: 0), control: CGPoint(x: x, y: 0))
+            }
             p.closeSubpath()
         }
     }
@@ -72,6 +98,8 @@ struct NotchSurfaceClipModifier: ViewModifier {
     let compactR: CGFloat
     let compactLeftWingWidth: CGFloat
     let compactNotchGapWidth: CGFloat
+    var compactEarRadius: CGFloat = 0
+    var expandedEarRadius: CGFloat = 0
 
     func body(content: Content) -> some View {
         if usesMusicNotificationClip {
@@ -89,7 +117,9 @@ struct NotchSurfaceClipModifier: ViewModifier {
                     expandedH: expandedH,
                     compactR: compactR,
                     compactLeftWingWidth: compactLeftWingWidth,
-                    compactNotchGapWidth: compactNotchGapWidth
+                    compactNotchGapWidth: compactNotchGapWidth,
+                    compactEarRadius: compactEarRadius,
+                    expandedEarRadius: expandedEarRadius
                 )
             )
         }

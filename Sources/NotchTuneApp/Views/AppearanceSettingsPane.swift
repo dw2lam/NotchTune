@@ -188,6 +188,7 @@ struct AppearanceSettingsPane: View {
             partHeader(title: lang.t("settings.appearance.notchPart.title"))
             previewSection
             densitySection
+            topCurveSection
             liveActivitySection
             rightSlotSection
             centerLabelSection
@@ -310,11 +311,29 @@ struct AppearanceSettingsPane: View {
             }
         }
         .environment(\.islandChromeMetrics, .metrics(for: editingPreferences.density))
+        .environment(\.islandNotchEarRadius, editingPreferences.topCurve ? IslandChromeMetrics.closedEarRadius : 0)
         .frame(height: pillHeight)
         .frame(maxWidth: .infinity, alignment: .center)
     }
 
     // MARK: - Density
+
+    private var topCurveSection: some View {
+        Toggle(isOn: Binding(
+            get: { editingPreferences.topCurve },
+            set: { value in
+                model.updateAppearancePreferences(for: editingProfile) { $0.topCurve = value }
+            }
+        )) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(lang.t("settings.appearance.topCurve.title"))
+                Text(lang.t("settings.appearance.topCurve.note"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .toggleStyle(.switch)
+    }
 
     private var liveActivitySection: some View {
         VStack(alignment: .leading, spacing: 12) {

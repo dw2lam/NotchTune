@@ -9,8 +9,23 @@ import SwiftUI
 struct V6ClosedPillShape: Shape {
     var cornerRadius: CGFloat?
     var topFilletRadius: CGFloat = 8
+    /// Outward top curve drawn OUTSIDE `rect` (the pill keeps its full body
+    /// width). Only used with `topFilletRadius == 0`.
+    var outwardEarRadius: CGFloat = 0
 
     func path(in rect: CGRect) -> Path {
+        if outwardEarRadius > 0, topFilletRadius == 0 {
+            let r = min(cornerRadius ?? rect.height / 2, rect.width / 2, rect.height)
+            return GrowingNotchShape.surfacePath(
+                x: rect.minX,
+                width: rect.width,
+                height: rect.height,
+                bottomRadius: r,
+                earRadius: min(outwardEarRadius, max(0, rect.height - r))
+            )
+            .offsetBy(dx: 0, dy: rect.minY)
+        }
+
         let f = topFilletRadius
         let r = min(cornerRadius ?? rect.height / 2, (rect.width - 2 * f) / 2, rect.height)
         var path = Path()
@@ -62,4 +77,16 @@ struct V6ClosedPillShape: Shape {
 enum V6Palette {
     static let ink = Color.black
     static let paper = Color(red: 0xf1 / 255.0, green: 0xea / 255.0, blue: 0xd9 / 255.0)
+}
+
+private struct IslandNotchEarRadiusKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    /// Closed-pill outward top curve radius; 0 when "Notch top curve" is off.
+    var islandNotchEarRadius: CGFloat {
+        get { self[IslandNotchEarRadiusKey.self] }
+        set { self[IslandNotchEarRadiusKey.self] = newValue }
+    }
 }

@@ -210,6 +210,7 @@ struct V6CenterLabelView: View {
 /// Pure view — takes all parameters explicitly so it can be reused for the
 /// live settings preview and the real island.
 struct V6ClosedPill: View {
+    @Environment(\.islandNotchEarRadius) private var notchEarRadius
     var mode: UnifiedBars.Mode
     var character: IslandCharacter = .dino
     var label: String?          // suppressed automatically in MacBook layout
@@ -269,7 +270,7 @@ struct V6ClosedPill: View {
 
         return ZStack {
             IslandSurfaceBackground(
-                shape: V6ClosedPillShape(topFilletRadius: 0),
+                shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
                 glass: glass
             )
 
@@ -301,7 +302,7 @@ struct V6ClosedPill: View {
 
         return ZStack {
             IslandSurfaceBackground(
-                shape: V6ClosedPillShape(topFilletRadius: 0),
+                shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
                 glass: glass
             )
 
@@ -360,7 +361,7 @@ struct V6ClosedPill: View {
 
         return ZStack {
             IslandSurfaceBackground(
-                shape: V6ClosedPillShape(topFilletRadius: 0),
+                shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
                 glass: glass
             )
 
@@ -405,7 +406,7 @@ struct V6ClosedPill: View {
 
         return ZStack {
             IslandSurfaceBackground(
-                shape: V6ClosedPillShape(topFilletRadius: 0),
+                shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
                 glass: glass
             )
 
@@ -586,6 +587,7 @@ private struct MusicClosedAlbumArtThumbnail: View {
 /// Unified closed music surface. Morphs between the transient track notification
 /// (title/artist) and the persistent compact view (album art + waveform).
 struct V6ClosedMusicSurface: View {
+    @Environment(\.islandNotchEarRadius) private var notchEarRadius
     let track: PlayerTrack
     let albumArtNSImage: NSImage
     let isPlaying: Bool
@@ -636,7 +638,7 @@ struct V6ClosedMusicSurface: View {
 
         return ZStack(alignment: .topLeading) {
             IslandSurfaceBackground(
-                shape: V6ClosedPillShape(topFilletRadius: 0),
+                shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
                 glass: glass
             )
 
@@ -785,7 +787,7 @@ struct V6ClosedMusicSurface: View {
         .fixedSize(horizontal: true, vertical: true)
         .background {
             IslandSurfaceBackground(
-                shape: V6ClosedPillShape(topFilletRadius: 0),
+                shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
                 glass: glass
             )
         }

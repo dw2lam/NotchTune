@@ -262,3 +262,5 @@
 
 "settings.appearance.colorByAgent.title" = "按代理着色";
 "settings.appearance.colorByAgent.note" = "角色颜色跟随当前代理：Codex 蓝色、Claude 橙色、Gemini 绿色。";
+"settings.appearance.topCurve.title" = "刘海顶部弧线";
+"settings.appearance.topCurve.note" = "刘海与屏幕顶部相接处向外弯出，收起和展开时都生效。";
