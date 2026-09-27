@@ -2517,20 +2517,30 @@ private struct IslandSessionRow: View {
                     .fill(Color.white.opacity(0.045))
             )
 
+            // Key hints only where the shortcuts work: the notification card
+            // (see NotificationCardKeyCommand).
+            let showsKeyHints = presentation == .notification
             HStack(spacing: 8) {
-                Button(session.permissionRequest?.secondaryActionTitle ?? lang.t("approval.deny")) { onApprove?(.deny) }
-                    .buttonStyle(IslandActionButtonStyle(kind: .secondary, expands: true))
-                Button(session.permissionRequest?.primaryActionTitle ?? lang.t("approval.allowOnce")) { onApprove?(.allowOnce) }
-                    .buttonStyle(IslandActionButtonStyle(kind: .warning, expands: true))
+                Button { onApprove?(.deny) } label: {
+                    NotificationKeyHintedTitle(
+                        session.permissionRequest?.secondaryActionTitle ?? lang.t("approval.deny"),
+                        keys: showsKeyHints ? "⌘N" : nil
+                    )
+                }
+                .buttonStyle(IslandActionButtonStyle(kind: .secondary, expands: true))
+                Button { onApprove?(.allowOnce) } label: {
+                    NotificationKeyHintedTitle(
+                        session.permissionRequest?.primaryActionTitle ?? lang.t("approval.allowOnce"),
+                        keys: showsKeyHints ? "⌘Y" : nil
+                    )
+                }
+                .buttonStyle(IslandActionButtonStyle(kind: .warning, expands: true))
                 if let toolName = session.permissionRequest?.toolName {
-                    Button(lang.t("approval.alwaysAllow", toolName)) {
-                        let rule = ClaudePermissionRuleValue(toolName: toolName)
-                        let update = ClaudePermissionUpdate.addRules(
-                            destination: .session,
-                            rules: [rule],
-                            behavior: .allow
+                    Button { onApprove?(.alwaysAllow(toolName: toolName)) } label: {
+                        NotificationKeyHintedTitle(
+                            lang.t("approval.alwaysAllow", toolName),
+                            keys: showsKeyHints ? "⇧⌘Y" : nil
                         )
-                        onApprove?(.allowWithUpdates([update]))
                     }
                     .buttonStyle(IslandActionButtonStyle(kind: .primary, expands: true))
                 }
@@ -2544,6 +2554,7 @@ private struct IslandSessionRow: View {
         StructuredQuestionPromptView(
             prompt: session.questionPrompt,
             lang: lang,
+            keyboardSessionID: presentation == .notification ? session.id : nil,
             onAnswer: { onAnswer?($0) }
         )
     }
@@ -2867,6 +2878,9 @@ private struct IslandSessionRow: View {
 private struct StructuredQuestionPromptView: View {
     let prompt: QuestionPrompt?
     var lang: LanguageManager = .shared
+    /// Set when this prompt is the notification card: it then takes ⌘1…⌘9
+    /// and Return from `NotificationCardKeyCommand` and shows the ⏎ hint.
+    var keyboardSessionID: String?
     let onAnswer: (QuestionPromptResponse) -> Void
 
     @State private var selections: [String: Set<String>] = [:]
@@ -2874,6 +2888,8 @@ private struct StructuredQuestionPromptView: View {
     @State private var typedReply: String = ""
     @State private var hoveredOptionKey: String?
     @Environment(\.islandControlGlass) private var usesGlassControls
+    /// Question the last ⌘-number pick landed on.
+    @State private var keyboardQuestionIndex: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2895,8 +2911,10 @@ private struct StructuredQuestionPromptView: View {
 
                 quickReplyField
 
-                Button(submitButtonTitle) {
+                Button {
                     submitAnswer()
+                } label: {
+                    NotificationKeyHintedTitle(submitButtonTitle, keys: submitKeyHint)
                 }
                 .buttonStyle(IslandActionButtonStyle(kind: canSubmit ? .primary : .secondary, expands: true))
                 .disabled(!canSubmit)
@@ -2913,6 +2931,54 @@ private struct StructuredQuestionPromptView: View {
             RoundedRectangle(cornerRadius: IslandRadius.card, style: .continuous)
                 .strokeBorder(.white.opacity(0.05))
         )
+        .onReceive(NotificationCenter.default.publisher(for: .notificationCardKeyCommand)) { notification in
+            guard let keyboardSessionID,
+                  let command = NotificationCardKeyCommandBus.command(from: notification, sessionID: keyboardSessionID) else {
+                return
+            }
+            handleKeyboardCommand(command)
+        }
+    }
+
+    // MARK: - Keyboard (notification card only)
+
+    private var submitKeyHint: String? {
+        keyboardSessionID != nil && canSubmit ? "⏎" : nil
+    }
+
+    private func handleKeyboardCommand(_ command: NotificationCardKeyCommand) {
+        switch command {
+        case let .pickOption(optionIndex):
+            let questions = structuredQuestions
+            guard !questions.isEmpty else { return }
+            let questionIndex = keyboardTargetQuestionIndex(in: questions)
+            let question = questions[questionIndex]
+            guard question.options.indices.contains(optionIndex) else { return }
+            withAnimation(.easeInOut(duration: 0.12)) {
+                toggle(option: question.options[optionIndex].label, for: question)
+            }
+            keyboardQuestionIndex = questionIndex
+        case .submit:
+            if canSubmit {
+                submitAnswer()
+            }
+        default:
+            break
+        }
+    }
+
+    /// ⌘-number picks land on a multi-select question the user is still
+    /// working through, else on the first unanswered question, else on the
+    /// question picked last (so ⌘2 after ⌘1 changes a single-select answer).
+    private func keyboardTargetQuestionIndex(in questions: [QuestionPromptItem]) -> Int {
+        let last = keyboardQuestionIndex.flatMap { questions.indices.contains($0) ? $0 : nil }
+        if let last, questions[last].multiSelect {
+            return last
+        }
+        if let firstUnanswered = questions.firstIndex(where: { selectedLabels(for: $0).isEmpty }) {
+            return firstUnanswered
+        }
+        return last ?? 0
     }
 
     // MARK: - Per-question row
@@ -3048,8 +3114,10 @@ private struct StructuredQuestionPromptView: View {
         VStack(alignment: .leading, spacing: 8) {
             quickReplyField
 
-            Button(lang.t("question.submit")) {
+            Button {
                 submitAnswer()
+            } label: {
+                NotificationKeyHintedTitle(lang.t("question.submit"), keys: submitKeyHint)
             }
             .buttonStyle(IslandActionButtonStyle(kind: canSubmit ? .primary : .secondary, expands: true))
             .disabled(!canSubmit)

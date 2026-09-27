@@ -183,6 +183,19 @@ struct NotificationCoalescer: Sendable {
         return .present
     }
 
+    // MARK: Focus-aware downgrade
+
+    /// What a bump that would `.present` becomes when the session's own
+    /// terminal / IDE is already frontmost (and the user has
+    /// `suppressFrontmostNotifications` on). A completion bounces the pill
+    /// (`.subtle`: pop + flash) instead of opening the toast — the user is
+    /// looking at the result already. Approvals and questions keep the
+    /// setting's contract and stay out of the way (`.suppress`): the agent's
+    /// own prompt is on screen in front of them.
+    static func decisionForFrontmostSession(isCompletion: Bool) -> NotificationBumpDecision {
+        isCompletion ? .subtle : .suppress
+    }
+
     // MARK: Bookkeeping
 
     private func isWithinGroupCooldown(_ group: NotificationGroupKey, now: Date) -> Bool {
