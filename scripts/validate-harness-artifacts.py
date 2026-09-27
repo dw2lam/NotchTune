@@ -197,8 +197,10 @@ def main() -> None:
         )
         # The closed pill's right slot may be the dot grid (no text), so only
         # the ×N badge variant exposes a count; accept either.
-        if text_values and not any("9" in value for value in text_values):
-            fail("closed scenario is missing the live session count value")
+        # The pill shows either the ×N count badge, the dot grid (no text), or
+        # a live activity naming the running agent.
+        if text_values and not any("9" in value or "Codex" in value for value in text_values):
+            fail("closed scenario is missing the live session count or live activity")
 
     elif scenario == "closedNeedsApproval":
         if notch_status != "closed":
