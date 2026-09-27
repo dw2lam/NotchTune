@@ -545,15 +545,11 @@ final class OverlayPanelController {
     private func beginFileDragWatch() {
         fileDragWatchTask?.cancel()
         let baseline = NSPasteboard(name: .drag).changeCount
-        Self.dragLog.debug("watch started, baseline=\(baseline)")
         fileDragWatchTask = Task { @MainActor [weak self] in
-            var announcedDrag = false
-            var tickCount = 0
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(80))
                 guard let self, !Task.isCancelled else { return }
                 guard NSEvent.pressedMouseButtons & 1 == 1 else {
-                    if announcedDrag { Self.dragLog.debug("watch ended (button up)") }
                     self.fileDragEnded()
                     self.fileDragWatchTask = nil
                     return
@@ -570,24 +566,12 @@ final class OverlayPanelController {
                 let canReadPromises = pasteboard.canReadObject(
                     forClasses: [NSFilePromiseReceiver.self]
                 )
-                tickCount &+= 1
-                if tickCount % 12 == 0 {
-                    let names = (pasteboard.types ?? []).map(\.rawValue).joined(separator: ",")
-                    Self.dragLog.debug("held: count=\(pasteboard.changeCount) baseline=\(baseline) urls=\(canReadURLs) promises=\(canReadPromises) types=[\(names)]")
-                }
                 let hasFileURLs = (canReadURLs || canReadPromises) && pasteboard.changeCount != baseline
                 guard hasFileURLs else { continue }
-                if !announcedDrag {
-                    announcedDrag = true
-                    let loc = NSEvent.mouseLocation
-                    Self.dragLog.debug("file drag detected at (\(loc.x), \(loc.y))")
-                }
                 _ = self.updateFileDrag(screenLocation: NSEvent.mouseLocation, hasFileURLs: true)
             }
         }
     }
-
-    static let dragLog = Logger(subsystem: "app.notchtune.dev", category: "filedrag")
 
     private func handleMouseDown(_ screenLocation: NSPoint) {
         guard let model else { return }
@@ -672,7 +656,6 @@ final class OverlayPanelController {
             // the shelf is ready instead of opening.
             let hintRect = Self.fileDragHintRect(closedSurfaceRect: closedRect)
             let inHintZone = Self.rectContainsIncludingEdges(hintRect, point: screenLocation)
-            Self.dragLog.debug("update loc=(\(screenLocation.x),\(screenLocation.y)) closed=\(String(describing: closedRect)) hint=\(String(describing: hintRect)) inHint=\(inHintZone) status=\(String(describing: model.notchStatus))")
             setFileDragHint(model.notchStatus == .closed && inHintZone)
             return false
         }

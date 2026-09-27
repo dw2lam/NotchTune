@@ -164,10 +164,13 @@ struct AppModelNotificationCoalescingTests {
         model.notchClose()
         model.completionFlashSessionID = nil
         complete(model, id: "thread-3")
+        // Checked before the settle wait: the flash clears itself after 2s,
+        // which a loaded full-suite run can outlast.
+        #expect(model.completionFlashSessionID == "thread-3")
         try await waitForSettle(model, opened: false)
 
         #expect(model.notchStatus == .closed)
-        #expect(model.completionFlashSessionID == "thread-3")
+        #expect(model.notchOpenReason == nil)
     }
 
     @Test
