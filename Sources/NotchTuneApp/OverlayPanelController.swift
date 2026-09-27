@@ -893,11 +893,12 @@ final class OverlayPanelController {
     nonisolated static func closedPanelWidth(
         notchWidth: CGFloat,
         isNotchedDisplay: Bool,
-        notchStatus: NotchStatus
+        notchStatus: NotchStatus,
+        metrics: IslandChromeMetrics = .regular
     ) -> CGFloat {
         let popBonus: CGFloat = notchStatus == .popping ? 18 : 0
         if isNotchedDisplay {
-            return notchWidth + (IslandChromeMetrics.notchedClosedWingReserve() * 2) + popBonus
+            return notchWidth + (metrics.notchedClosedWingReserve() * 2) + popBonus
         }
         return 360 + popBonus
     }
@@ -963,7 +964,8 @@ final class OverlayPanelController {
         return Self.closedPanelWidth(
             notchWidth: notchWidth,
             isNotchedDisplay: isNotched,
-            notchStatus: model.notchStatus
+            notchStatus: model.notchStatus,
+            metrics: .metrics(for: model.islandDensity)
         )
     }
 

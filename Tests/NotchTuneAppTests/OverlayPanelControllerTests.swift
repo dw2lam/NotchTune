@@ -54,13 +54,13 @@ struct OverlayPanelControllerTests {
             isNotchedDisplay: true,
             notchStatus: .closed
         )
-        #expect(width == CGFloat(224 + (IslandChromeMetrics.notchedClosedWingReserve() * 2)))
+        #expect(width == CGFloat(224 + (IslandChromeMetrics.regular.notchedClosedWingReserve() * 2)))
     }
 
     @Test
     func notchedWingReserveGrowsForDenseAgentTiles() {
-        let reserve = IslandChromeMetrics.notchedClosedWingReserve(rightSlotWidth: 38)
-        #expect(reserve > IslandChromeMetrics.notchedClosedMinimumWingReserve)
+        let reserve = IslandChromeMetrics.regular.notchedClosedWingReserve(rightSlotWidth: 38)
+        #expect(reserve > IslandChromeMetrics.regular.notchedClosedMinimumWingReserve)
         #expect(reserve == 60)
     }
 
@@ -84,7 +84,7 @@ struct OverlayPanelControllerTests {
             isNotchedDisplay: true,
             notchStatus: .popping
         )
-        #expect(width == CGFloat(224 + (IslandChromeMetrics.notchedClosedWingReserve() * 2) + 18))
+        #expect(width == CGFloat(224 + (IslandChromeMetrics.regular.notchedClosedWingReserve() * 2) + 18))
     }
 
     @Test

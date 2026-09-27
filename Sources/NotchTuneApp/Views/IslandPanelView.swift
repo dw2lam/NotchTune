@@ -162,13 +162,30 @@ struct IslandPanelView: View {
         }
     }
 
+    /// Closed-island metrics for the active density. Also injected into the
+    /// environment at the root so the pill views read the same set.
+    private var chromeMetrics: IslandChromeMetrics {
+        .metrics(for: model.islandDensity)
+    }
+
     private var targetOverlayScreen: NSScreen? {
+        let screens = NSScreen.screens
         if let targetScreenID = model.overlay.overlayPlacementDiagnostics?.targetScreenID,
-           let screen = NSScreen.screens.first(where: { screenID(for: $0) == targetScreenID }) {
+           let screen = screens.first(where: { screenID(for: $0) == targetScreenID }) {
             return screen
         }
 
-        return NSScreen.main ?? NSScreen.screens.first
+        // Diagnostics are not populated until the first placement pass. Mirror
+        // the controller's resolution (explicit display choice, then the main
+        // screen) so the closed height never briefly comes from a different
+        // screen than the one the panel lands on.
+        let selectionID = model.overlayDisplaySelectionID
+        if selectionID != OverlayDisplayOption.automaticID,
+           let screen = screens.first(where: { screenID(for: $0) == selectionID }) {
+            return screen
+        }
+
+        return NSScreen.main ?? screens.first
     }
 
     private var isShowingMusicNotification: Bool {
@@ -192,7 +209,7 @@ struct IslandPanelView: View {
     }
 
     private var musicNotificationRightWingWidth: CGFloat {
-        IslandChromeMetrics.notchedMusicNotificationRightWingReserve()
+        chromeMetrics.notchedMusicNotificationRightWingReserve()
     }
 
     /// Closed music surfaces draw their own pill; parent `GrowingNotchShape` uses
@@ -206,13 +223,13 @@ struct IslandPanelView: View {
             return measuredMusicClipMetrics
         }
         guard let track = model.musicNotificationTrack else { return .init() }
-        let leftWing = IslandChromeMetrics.notchedMusicNotificationLeftWingReserve(
+        let leftWing = chromeMetrics.notchedMusicNotificationLeftWingReserve(
             title: track.title,
             artist: track.artist,
             panelContentWidth: panelContentWidth,
             physicalNotchWidth: macbookPhysicalNotchWidth
         )
-        let outer = MusicTrackNotificationMetrics.estimatedOuterWidth(
+        let outer = chromeMetrics.estimatedMusicOuterWidth(
             for: isExternalDisplayPlacement ? .external : .macbook,
             track: track,
             physicalNotchWidth: macbookPhysicalNotchWidth,
@@ -228,21 +245,21 @@ struct IslandPanelView: View {
     private var compactClipLeftWingWidth: CGFloat {
         guard !isExternalDisplayPlacement else { return 0 }
         if isShowingCompactMusicView {
-            return IslandChromeMetrics.notchedCompactMusicLeftWingReserve()
+            return chromeMetrics.notchedCompactMusicLeftWingReserve()
         }
         let rightSlotWidth = model.islandClosedRightSlotContent()
             .map { V6RightSlotView.intrinsicWidth(of: $0) } ?? 0
-        return IslandChromeMetrics.notchedClosedWingReserve(rightSlotWidth: rightSlotWidth)
+        return chromeMetrics.notchedClosedWingReserve(rightSlotWidth: rightSlotWidth)
     }
 
     private var compactClipRightWingWidth: CGFloat {
         guard !isExternalDisplayPlacement else { return 0 }
         if isShowingCompactMusicView {
-            return IslandChromeMetrics.notchedCompactMusicRightWingReserve()
+            return chromeMetrics.notchedCompactMusicRightWingReserve()
         }
         let rightSlotWidth = model.islandClosedRightSlotContent()
             .map { V6RightSlotView.intrinsicWidth(of: $0) } ?? 0
-        return IslandChromeMetrics.notchedClosedWingReserve(rightSlotWidth: rightSlotWidth)
+        return chromeMetrics.notchedClosedWingReserve(rightSlotWidth: rightSlotWidth)
     }
 
     private var macbookNotchAlignmentOffsetX: CGFloat {
@@ -251,8 +268,8 @@ struct IslandPanelView: View {
             return -(musicNotificationLeftWingWidth - musicNotificationRightWingWidth) / 2
         }
         if isShowingCompactMusicView {
-            let leftWing = IslandChromeMetrics.notchedCompactMusicLeftWingReserve()
-            let rightWing = IslandChromeMetrics.notchedCompactMusicRightWingReserve()
+            let leftWing = chromeMetrics.notchedCompactMusicLeftWingReserve()
+            let rightWing = chromeMetrics.notchedCompactMusicRightWingReserve()
             return -(leftWing - rightWing) / 2
         }
         return -(compactClipLeftWingWidth - compactClipRightWingWidth) / 2
@@ -264,7 +281,7 @@ struct IslandPanelView: View {
         }
         let rightSlotWidth = model.islandClosedRightSlotContent()
             .map { V6RightSlotView.intrinsicWidth(of: $0) } ?? 0
-        let wingReserve = IslandChromeMetrics.notchedClosedWingReserve(rightSlotWidth: rightSlotWidth)
+        let wingReserve = chromeMetrics.notchedClosedWingReserve(rightSlotWidth: rightSlotWidth)
         return wingReserve * 2 + macbookPhysicalNotchWidth
     }
 
@@ -278,11 +295,11 @@ struct IslandPanelView: View {
             if closedPillWidth > 0 { return closedPillWidth }
             if isExternalDisplayPlacement {
                 return min(
-                    MusicTrackNotificationMetrics.estimatedExternalWidth(track: model.playerManager.track),
+                    chromeMetrics.estimatedExternalMusicWidth(track: model.playerManager.track),
                     panelContentWidth
                 )
             }
-            return IslandChromeMetrics.notchedCompactMusicOuterWidth(
+            return chromeMetrics.notchedCompactMusicOuterWidth(
                 physicalNotchWidth: macbookPhysicalNotchWidth
             )
         }
@@ -401,6 +418,7 @@ struct IslandPanelView: View {
         .opacity(model.isOverlayDisplayFullscreen ? 0 : 1)
         .allowsHitTesting(!model.isOverlayDisplayFullscreen)
         .preferredColorScheme(.dark)
+        .environment(\.islandChromeMetrics, chromeMetrics)
         .alert(model.lang.t("island.quit.confirmTitle"), isPresented: $showingQuitConfirmation) {
             Button(model.lang.t("island.quit.confirmAction"), role: .destructive) {
                 model.quitApplication()
@@ -655,7 +673,7 @@ struct IslandPanelView: View {
 
     private func seedClosedPillWidthForMusicNotification(track: PlayerTrack) {
         let layout: V6ClosedLayout = isExternalDisplayPlacement ? .external : .macbook
-        let estimatedWidth = MusicTrackNotificationMetrics.estimatedOuterWidth(
+        let estimatedWidth = chromeMetrics.estimatedMusicOuterWidth(
             for: layout,
             track: track,
             physicalNotchWidth: macbookPhysicalNotchWidth,
