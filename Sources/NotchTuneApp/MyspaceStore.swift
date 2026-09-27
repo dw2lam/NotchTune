@@ -310,7 +310,7 @@ enum MyspaceReminderService {
     static let notificationPrefix = "notchtune.myspace."
 
     static func schedule(thought: MyspaceThought, at date: Date) {
-        guard date > .now else { return }
+        guard date > .now, Bundle.main.bundleIdentifier != nil else { return }
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { return }

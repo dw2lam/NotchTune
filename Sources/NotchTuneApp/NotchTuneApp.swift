@@ -11,8 +11,12 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
     private lazy var harnessRuntimeMonitor = HarnessRuntimeMonitor(launchedAt: launchedAt)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        UNUserNotificationCenter.current().delegate = self
-        model.myspaceStore.restorePendingReminders()
+        // UNUserNotificationCenter throws (bundleProxyForCurrentProcess is nil)
+        // when the binary runs unbundled, e.g. `swift run` in the harness.
+        if Bundle.main.bundleIdentifier != nil {
+            UNUserNotificationCenter.current().delegate = self
+            model.myspaceStore.restorePendingReminders()
+        }
         model.updateChecker.startIfNeeded()
         ProcessInfo.processInfo.disableAutomaticTermination(
             "NotchTune should remain active while monitoring local agent sessions."
