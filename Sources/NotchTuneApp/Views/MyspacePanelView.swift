@@ -515,6 +515,7 @@ struct MyspacePanelView: View {
                         .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(.white.opacity(0.86))
                         .lineLimit(3)
+                        .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
@@ -543,20 +544,34 @@ struct MyspacePanelView: View {
                 .foregroundStyle(.white.opacity(0.3))
             }
 
-            Button {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    store.deleteThought(id: thought.id)
+            HStack(spacing: 8) {
+                if !thought.text.isEmpty {
+                    // Copies the full text, even when the row truncates it.
+                    CopyTextButton(text: thought.text, accessibilityLabel: "Copy thought")
                 }
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.25))
+
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        store.deleteThought(id: thought.id)
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.white.opacity(0.25))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Delete thought")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Delete thought")
         }
         .padding(9)
         .background(.white.opacity(0.024), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .contextMenu {
+            if !thought.text.isEmpty {
+                Button("Copy") {
+                    MyspaceClipboard.copy(thought.text)
+                }
+            }
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(.white.opacity(0.065), lineWidth: 0.5)
