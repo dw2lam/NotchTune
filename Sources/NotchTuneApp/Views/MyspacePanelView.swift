@@ -869,6 +869,7 @@ struct RemindersPanelView: View {
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(.white.opacity(isArchived ? 0.58 : 0.86))
                     .strikethrough(isArchived, color: .white.opacity(0.28))
+                    .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(spacing: 6) {
@@ -894,20 +895,29 @@ struct RemindersPanelView: View {
                 .foregroundStyle(.white.opacity(0.3))
             }
 
-            Button {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    store.deleteThought(id: reminder.id)
+            HStack(spacing: 8) {
+                CopyTextButton(text: reminder.text, accessibilityLabel: "Copy reminder")
+
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        store.deleteThought(id: reminder.id)
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.white.opacity(0.25))
                 }
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.25))
+                .buttonStyle(.plain)
+                .accessibilityLabel("Delete reminder")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Delete reminder")
         }
         .padding(9)
         .background(.white.opacity(0.024), in: RoundedRectangle(cornerRadius: 10))
+        .contextMenu {
+            Button("Copy") {
+                MyspaceClipboard.copy(reminder.text)
+            }
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(.white.opacity(0.065), lineWidth: 0.5)
@@ -1028,5 +1038,56 @@ private struct MyspaceMediaStripCell: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Copy
+
+enum MyspaceClipboard {
+    /// Replaces the pasteboard contents with `text`. Empty or whitespace-only
+    /// text is ignored so a stray click never clears the clipboard.
+    @discardableResult
+    static func copy(_ text: String, to pasteboard: NSPasteboard = .general) -> Bool {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+        pasteboard.clearContents()
+        return pasteboard.setString(text, forType: .string)
+    }
+}
+
+/// Small copy icon that confirms with a checkmark for a moment after copying.
+private struct CopyTextButton: View {
+    let text: String
+    var accessibilityLabel = "Copy"
+
+    @State private var didCopy = false
+    @State private var resetTask: Task<Void, Never>?
+
+    var body: some View {
+        Button {
+            guard MyspaceClipboard.copy(text) else { return }
+            withAnimation(.easeOut(duration: 0.15)) { didCopy = true }
+            resetTask?.cancel()
+            resetTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1.2))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeIn(duration: 0.2)) { didCopy = false }
+            }
+        } label: {
+            Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
+                .font(.system(size: 9, weight: didCopy ? .bold : .regular))
+                .foregroundStyle(
+                    didCopy
+                        ? IslandDesignPalette.Status.completed.opacity(0.9)
+                        : .white.opacity(0.25)
+                )
+                .frame(width: 12, height: 12)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .help(didCopy ? "Copied" : "Copy")
+        .accessibilityLabel(didCopy ? "Copied" : accessibilityLabel)
+        .onDisappear { resetTask?.cancel() }
     }
 }
