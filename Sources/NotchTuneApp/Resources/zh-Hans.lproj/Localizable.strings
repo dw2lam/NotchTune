@@ -65,6 +65,10 @@
 "settings.appearance.centerLabel.agentAction" = "代理 · 动作";
 "settings.appearance.centerLabel.sessionName" = "会话名";
 "settings.appearance.centerLabel.off" = "关闭";
+"settings.appearance.density.title" = "密度";
+"settings.appearance.density.note" = "常规保留标准胶囊。紧凑会缩小图标、内边距和两翼，让收起的岛屿贴合刘海或菜单栏。";
+"settings.appearance.density.regular" = "常规";
+"settings.appearance.density.compact" = "紧凑";
 "settings.appearance.notchPart.title" = "刘海";
 "settings.appearance.sessionListPart.title" = "会话列表";
 "settings.appearance.sessionPreview" = "预览";
