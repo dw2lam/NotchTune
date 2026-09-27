@@ -661,6 +661,17 @@ final class OverlayUICoordinator {
         notchClose()
     }
 
+    /// Esc on a notification card: collapse it without acting on it (a
+    /// pending approval or question stays pending in the session list).
+    func dismissNotificationCard() {
+        guard notchStatus == .opened,
+              notchOpenReason == .notification else {
+            return
+        }
+
+        notchClose()
+    }
+
     func dismissOverlayForJump() {
         guard isOverlayVisible else {
             return

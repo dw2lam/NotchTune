@@ -988,6 +988,7 @@ final class AppModel {
             self?.nextUnseenCompletedSessionID
         }
         overlay.onNotificationSurfaceShown = { [weak self] sessionID in
+            self?.notificationCardShownAt = Date()
             self?.markCompletionToastShown(for: sessionID)
         }
         overlay.isSoundMutedAccessor = { [weak self] in
@@ -1185,6 +1186,11 @@ final class AppModel {
     }
 
     var completionFlashSessionID: String?
+
+    /// When the current notification card appeared (open or rotate). Keyboard
+    /// control uses it to keep a bare Return from approving a card the user
+    /// has not had time to read.
+    @ObservationIgnored var notificationCardShownAt: Date?
 
     var musicNotificationTrack: PlayerTrack?
 

@@ -43,6 +43,10 @@ final class OverlayPanelController {
     private var fileDragEndGeneration: UInt64 = 0
     private var fileDragPresentationSnapshot: FileDragPresentationSnapshot?
     private var fileDragWatchTask: Task<Void, Never>?
+    private var keyDownMonitor: Any?
+    /// Last key the panel saw that was not a notification-card command, so
+    /// a bare Return can tell "typing into the panel" from "deliberate".
+    private var lastUnmappedKeyAt: Date?
 
     /// Set when the island auto-collapses on mouse-leave; suppresses an
     /// immediate hover-reopen while the cursor lingers over the notch (which
@@ -209,7 +213,125 @@ final class OverlayPanelController {
         panel.contentView = hostingView
 
         computeNotchRect(screen: resolveTargetScreen())
+        installKeyMonitorIfNeeded()
         return panel
+    }
+
+    // MARK: - Notification card keyboard control
+
+    /// Local key monitor for the notification cards (see
+    /// `NotificationCardKeyCommand`). It only acts while this panel is key
+    /// and a notification card is on screen; everything else, and every key
+    /// typed into a card's text field, passes through untouched.
+    private func installKeyMonitorIfNeeded() {
+        guard keyDownMonitor == nil else { return }
+        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            // Local monitors run on the main thread.
+            nonisolated(unsafe) let keyEvent = event
+            let consumed = MainActor.assumeIsolated {
+                self?.consumeNotificationCardKey(keyEvent) ?? false
+            }
+            return consumed ? nil : event
+        }
+    }
+
+    /// Returns `true` when the key ran a card command and must not reach
+    /// the responder chain.
+    private func consumeNotificationCardKey(_ event: NSEvent) -> Bool {
+        guard let panel,
+              event.window === panel,
+              panel.isKeyWindow,
+              let model,
+              let card = model.keyboardNotificationCard else {
+            return false
+        }
+
+        let now = Date()
+        let isEditingText = Self.isEditingText(panel.firstResponder)
+        let context = NotificationCardKeyCommand.Context(
+            card: card.kind,
+            isEditingText: isEditingText,
+            cardAge: model.notificationCardAge(now: now),
+            timeSinceUnmappedKey: lastUnmappedKeyAt.map { now.timeIntervalSince($0) } ?? .infinity
+        )
+
+        guard let command = NotificationCardKeyCommand.resolve(Self.keyInput(from: event), context: context) else {
+            if !isEditingText {
+                lastUnmappedKeyAt = now
+            }
+            return false
+        }
+
+        guard model.performNotificationCardKeyCommand(command) else {
+            return false
+        }
+
+        if command == .openReply {
+            focusFirstTextFieldSoon()
+        }
+        return true
+    }
+
+    nonisolated static func keyInput(from event: NSEvent) -> NotificationCardKeyInput {
+        keyInput(
+            keyCode: event.keyCode,
+            characters: event.charactersIgnoringModifiers ?? "",
+            modifierFlags: event.modifierFlags,
+            isRepeat: event.isARepeat
+        )
+    }
+
+    nonisolated static func keyInput(
+        keyCode: UInt16,
+        characters: String,
+        modifierFlags: NSEvent.ModifierFlags,
+        isRepeat: Bool
+    ) -> NotificationCardKeyInput {
+        let flags = modifierFlags.intersection(.deviceIndependentFlagsMask)
+        var modifiers: NotificationCardKeyInput.Modifiers = []
+        if flags.contains(.command) { modifiers.insert(.command) }
+        if flags.contains(.shift) { modifiers.insert(.shift) }
+        if flags.contains(.option) { modifiers.insert(.option) }
+        if flags.contains(.control) { modifiers.insert(.control) }
+        return NotificationCardKeyInput(
+            keyCode: keyCode,
+            characters: characters,
+            modifiers: modifiers,
+            isRepeat: isRepeat
+        )
+    }
+
+    /// A card text field (reply / "Other") is being edited: its field
+    /// editor is the panel's first responder.
+    private static func isEditingText(_ responder: NSResponder?) -> Bool {
+        guard let textView = responder as? NSTextView else { return false }
+        return textView.isEditable
+    }
+
+    /// ⌘R swaps the toast's action row for the reply field; focus it once
+    /// SwiftUI has inserted it so the user can type straight away.
+    private func focusFirstTextFieldSoon(attempt: Int = 0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            guard let self, let panel = self.panel, panel.isKeyWindow else { return }
+            if let field = Self.firstEditableTextField(in: panel.contentView) {
+                panel.makeFirstResponder(field)
+            } else if attempt < 4 {
+                self.focusFirstTextFieldSoon(attempt: attempt + 1)
+            }
+        }
+    }
+
+    private static func firstEditableTextField(in view: NSView?) -> NSTextField? {
+        guard let view else { return nil }
+        if let field = view as? NSTextField, field.isEditable, !field.isHidden {
+            return field
+        }
+        for subview in view.subviews {
+            if let field = firstEditableTextField(in: subview) {
+                return field
+            }
+        }
+        return nil
     }
 
     // MARK: - Positioning
