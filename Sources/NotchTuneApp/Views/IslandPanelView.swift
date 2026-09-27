@@ -783,8 +783,11 @@ struct IslandPanelView: View {
         (targetOverlayScreen ?? NSScreen.screens.first(where: { $0.isNotchedScreen }))?.notchSize.width ?? NSScreen.externalDisplayNotchWidth
     }
 
+    /// Single source of truth shared with the controller's `notchRect`:
+    /// `NSScreen.closedIslandHeight(density:)`.
     private var closedNotchHeight: CGFloat {
-        (targetOverlayScreen ?? NSScreen.screens.first(where: { $0.isNotchedScreen }))?.islandClosedHeight ?? 24
+        (targetOverlayScreen ?? NSScreen.screens.first(where: { $0.isNotchedScreen }))?
+            .closedIslandHeight(density: model.islandDensity) ?? 24
     }
 
     @ViewBuilder

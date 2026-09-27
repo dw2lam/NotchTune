@@ -304,11 +304,15 @@ final class OverlayPanelController {
             return
         }
 
-        let notchSize = screen.notchSize
+        // Width tracks the physical cutout (or the simulated one on external
+        // displays); height is the drawn closed-pill height for the active
+        // density, so the hit area never stands taller than the pill itself.
+        let notchWidth = screen.notchSize.width
+        let closedHeight = screen.closedIslandHeight(density: model?.islandDensity ?? .regular)
         let screenFrame = screen.frame
-        let notchX = screenFrame.midX - notchSize.width / 2
-        let notchY = screenFrame.maxY - notchSize.height
-        notchRect = NSRect(x: notchX, y: notchY, width: notchSize.width, height: notchSize.height)
+        let notchX = screenFrame.midX - notchWidth / 2
+        let notchY = screenFrame.maxY - closedHeight
+        notchRect = NSRect(x: notchX, y: notchY, width: notchWidth, height: closedHeight)
     }
 
     private func resolveTargetScreen(preferredScreenID: String? = nil) -> NSScreen? {
@@ -1437,30 +1441,40 @@ extension NSScreen {
     /// doesn't feel disproportionately wide when the black rectangle is
     /// fully visible (not hidden behind a physical notch).
     static let externalDisplayNotchWidth: CGFloat = 190
-    static let externalDisplayNotchHeight: CGFloat = 38
 
+    /// Floor for the closed pill on a non-notched display. A menu bar is
+    /// never reported shorter than this in practice; it also guards the
+    /// `topStatusBarHeight` fallback against a degenerate 0.
+    static let minimumExternalClosedHeight: CGFloat = 22
+    /// Compact density caps the external pill here even when the menu bar is
+    /// taller (accessibility "large" menu bar), so the pill stays a slim strip
+    /// at the top of the bar instead of filling it.
+    static let compactExternalClosedHeightCap: CGFloat = 24
+
+    /// Width of the physical cutout (or the simulated one on external
+    /// displays). Height is the regular-density closed island height — see
+    /// `closedIslandHeight(density:)`, the single source of truth for both the
+    /// drawn pill and the pointer hit area.
     var notchSize: CGSize {
-        guard isNotchedScreen else {
-            return CGSize(
-                width: Self.externalDisplayNotchWidth,
-                height: Self.externalDisplayNotchHeight
-            )
-        }
+        CGSize(width: notchWidth, height: islandClosedHeight)
+    }
 
-        let notchHeight = islandClosedHeight
+    private var notchWidth: CGFloat {
+        guard isNotchedScreen else {
+            return Self.externalDisplayNotchWidth
+        }
 
         // Authoritative: the auxiliary areas track the exact cutout at the
         // user's current scaled resolution, on every notched chassis.
         if let left = auxiliaryTopLeftArea?.width, left > 0,
            let right = auxiliaryTopRightArea?.width, right > 0 {
-            return CGSize(width: frame.width - left - right + 4, height: notchHeight)
+            return frame.width - left - right + 4
         }
 
         // Fallback: macOS reported a top safe-area inset without auxiliary
         // areas — estimate from the notched-chassis catalog instead of
         // degenerating to the full screen width.
-        let estimated = NotchDisplayCatalog.estimatedNotchSize(forPointWidth: frame.width)
-        return CGSize(width: estimated.width, height: notchHeight)
+        return NotchDisplayCatalog.estimatedNotchSize(forPointWidth: frame.width).width
     }
 
     var topStatusBarHeight: CGFloat {
@@ -1476,29 +1490,73 @@ extension NSScreen {
         return 24
     }
 
+    /// Regular-density closed island height. Prefer
+    /// `closedIslandHeight(density:)` wherever the active density is known.
     var islandClosedHeight: CGFloat {
-        NSScreen.computeIslandClosedHeight(
+        closedIslandHeight(density: .regular)
+    }
+
+    /// The closed island height for this screen — the ONE number the SwiftUI
+    /// pill (`IslandPanelView.closedNotchHeight`) and the controller's
+    /// `notchRect` / closed hit areas both read.
+    func closedIslandHeight(density: IslandDensity) -> CGFloat {
+        NSScreen.computeClosedIslandHeight(
+            density: density,
+            isNotched: isNotchedScreen,
             safeAreaInsetsTop: safeAreaInsets.top,
-            topStatusBarHeight: topStatusBarHeight
+            catalogNotchHeight: isNotchedScreen
+                ? NotchDisplayCatalog.estimatedNotchHeight(forPointSize: frame.size)
+                : nil,
+            menuBarHeight: topStatusBarHeight
         )
     }
 
-    /// Pure helper so the height selection logic can be unit-tested without real screen hardware.
+    /// Tolerance before the catalog cutout height overrides the runtime safe
+    /// area. A 1pt disagreement is rounding noise (and clamping it would open
+    /// a visible seam under the notch); anything larger means the menu bar is
+    /// standing taller than the physical cutout and the pill should not.
+    static let notchCutoutClampTolerance: CGFloat = 1
+
+    /// Pure helper so the height rule can be unit-tested without real screens.
     ///
-    /// On notch screens, use `safeAreaInsetsTop` directly — the island must match the
-    /// physical notch height exactly so it sits flush with the notch bottom edge.
-    /// Previously this used `min(safeAreaInsetsTop, topStatusBarHeight)`, but when the
-    /// menu bar reserved area is smaller than the notch (e.g. auto-hide menu bar, or
-    /// certain display configurations), the island ended up shorter than the physical
-    /// notch, leaving a visible gap.
-    /// On non-notch screens (`safeAreaInsetsTop == 0`), use `topStatusBarHeight` directly.
-    static func computeIslandClosedHeight(
+    /// Notched displays: the runtime safe-area inset is authoritative for
+    /// where the cutout ends, but it is clamped to the catalog cutout height
+    /// (32pt Pro / 30pt Air at default scaling, scaled with the desktop width)
+    /// whenever it exceeds it by more than `notchCutoutClampTolerance` — the
+    /// pill must sit flush with the notch bottom, never below it. With no
+    /// safe-area inset (auxiliary areas only) the catalog height is used.
+    /// Both densities share this rule: a pill shorter than the cutout would
+    /// expose the notch corners, so compact cannot go lower.
+    ///
+    /// Non-notched displays: the real menu-bar height (`topStatusBarHeight`,
+    /// floor `minimumExternalClosedHeight`). Compact additionally caps at
+    /// `compactExternalClosedHeightCap`. There is no phantom 38pt any more —
+    /// the hit area matches the drawn pill.
+    static func computeClosedIslandHeight(
+        density: IslandDensity,
+        isNotched: Bool,
         safeAreaInsetsTop: CGFloat,
-        topStatusBarHeight: CGFloat
+        catalogNotchHeight: CGFloat?,
+        menuBarHeight: CGFloat
     ) -> CGFloat {
-        if safeAreaInsetsTop > 0 {
+        if isNotched {
+            let cutout = (catalogNotchHeight ?? 0) > 0 ? catalogNotchHeight : nil
+            guard safeAreaInsetsTop > 0 else {
+                return cutout ?? max(menuBarHeight, minimumExternalClosedHeight)
+            }
+            guard let cutout else { return safeAreaInsetsTop }
+            if safeAreaInsetsTop > cutout + notchCutoutClampTolerance {
+                return cutout
+            }
             return safeAreaInsetsTop
         }
-        return topStatusBarHeight
+
+        let menuBar = max(menuBarHeight, minimumExternalClosedHeight)
+        switch density {
+        case .regular:
+            return menuBar
+        case .compact:
+            return min(menuBar, compactExternalClosedHeightCap)
+        }
     }
 }
