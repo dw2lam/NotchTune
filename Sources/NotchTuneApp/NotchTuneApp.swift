@@ -32,6 +32,7 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
 
             model.ignoresPointerExitDuringHarness = harnessLaunchConfiguration.scenario != nil
             model.disablesOverlayEventMonitoringDuringHarness = harnessLaunchConfiguration.scenario != nil
+            model.islandDensityHarnessOverride = harnessLaunchConfiguration.islandDensity
             model.startIfNeeded(
                 startBridge: harnessLaunchConfiguration.shouldStartBridge,
                 shouldPerformBootAnimation: harnessLaunchConfiguration.shouldPerformBootAnimation,
