@@ -419,6 +419,7 @@ struct IslandPanelView: View {
         .allowsHitTesting(!model.isOverlayDisplayFullscreen)
         .preferredColorScheme(.dark)
         .environment(\.islandChromeMetrics, chromeMetrics)
+        .environment(\.islandControlGlass, model.glassSettings.usesGlassControls)
         .alert(model.lang.t("island.quit.confirmTitle"), isPresented: $showingQuitConfirmation) {
             Button(model.lang.t("island.quit.confirmAction"), role: .destructive) {
                 model.quitApplication()
@@ -841,6 +842,10 @@ struct IslandPanelView: View {
                 showingQuitConfirmation = true
             }
         }
+        .islandGlassContainer(
+            enabled: model.glassSettings.usesGlassControls,
+            spacing: Self.headerControlSpacing
+        )
     }
 
     private func headerIconButton(
@@ -852,11 +857,12 @@ struct IslandPanelView: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(tint)
                 .frame(width: Self.headerControlButtonSize, height: Self.headerControlButtonSize)
-                .background(.white.opacity(0.08), in: Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(IslandGlassIconButtonStyle(
+            fallbackFill: .white.opacity(0.08),
+            foreground: model.glassSettings.usesGlassControls ? .white.opacity(0.78) : tint
+        ))
         .accessibilityLabel(accessibilityLabel ?? systemName)
     }
 
@@ -959,35 +965,68 @@ struct IslandPanelView: View {
 
             Spacer()
         }
+        // One container so the sliding glass pill samples and blends as a
+        // single native control while it travels between tabs.
+        .islandGlassContainer(enabled: model.glassSettings.usesGlassControls, spacing: 4)
     }
 
     private func tabButton(label: String, systemImage: String, tab: IslandTab) -> some View {
         Button {
             withAnimation(.smooth(duration: 0.35, extraBounce: 0.1)) { model.islandActiveTab = tab }
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 10, weight: .semibold))
-                Text(label)
-                    .font(.system(size: 11, weight: .medium))
+            tabPill(
+                HStack(spacing: 4) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 10, weight: .semibold))
+                    Text(label)
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundStyle(tabForeground(isSelected: model.islandActiveTab == tab))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .frame(minHeight: Self.tabHitTargetHeight),
+                isSelected: model.islandActiveTab == tab
+            )
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("island-tab-\(tab.rawValue)")
+    }
+
+    /// The active-tab pill. Only the active tab owns it, so it travels with the
+    /// selection instead of fading in place:
+    /// - glass: the active label itself becomes a Liquid Glass capsule; the
+    ///   shared `glassEffectID` inside the tab bar's `GlassEffectContainer`
+    ///   morphs the glass from the old tab to the new one. (The glass has to
+    ///   sit on the label, not in `.background`, or the container composites
+    ///   it over the text.)
+    /// - legacy: a white-opacity capsule slid with `matchedGeometryEffect`.
+    @ViewBuilder
+    private func tabPill<Label: View>(_ label: Label, isSelected: Bool) -> some View {
+        if model.glassSettings.usesGlassControls, #available(macOS 26.0, *) {
+            if isSelected {
+                label
+                    .glassEffect(.regular.interactive(), in: Capsule())
+                    .glassEffectID("islandTabIndicator", in: tabIndicatorNamespace)
+            } else {
+                label
             }
-            .foregroundStyle(model.islandActiveTab == tab ? .white : .white.opacity(0.4))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .frame(minHeight: Self.tabHitTargetHeight)
-            .background {
-                // Only the active tab owns the pill; matchedGeometryEffect makes
-                // it slide to the newly-selected tab rather than fade in place.
-                if model.islandActiveTab == tab {
+        } else {
+            label.background {
+                if isSelected {
                     Capsule()
                         .fill(Color.white.opacity(0.12))
                         .matchedGeometryEffect(id: "islandTabIndicator", in: tabIndicatorNamespace)
                 }
             }
-            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("island-tab-\(tab.rawValue)")
+    }
+
+    private func tabForeground(isSelected: Bool) -> Color {
+        if isSelected { return .white }
+        // Unselected labels sit straight on the glass; lift them a touch so they
+        // stay legible over bright wallpapers.
+        return .white.opacity(model.glassSettings.usesGlassControls ? 0.5 : 0.4)
     }
 
     private var agentsContent: some View {
@@ -1046,10 +1085,10 @@ struct IslandPanelView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
                     .fill(Color.accentColor.opacity(0.14))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
                             .stroke(Color.accentColor.opacity(0.35), lineWidth: 0.5)
                     )
             )
@@ -1783,11 +1822,14 @@ struct IslandPanelView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(.white.opacity(0.055), in: Capsule())
-        .overlay(
-            Capsule()
-                .strokeBorder(.white.opacity(0.06), lineWidth: 1)
-        )
+        .islandChipBackground(Capsule(), usesGlass: model.glassSettings.usesGlassControls) { chip in
+            chip
+                .background(.white.opacity(0.055), in: Capsule())
+                .overlay(
+                    Capsule()
+                        .strokeBorder(.white.opacity(0.06), lineWidth: 1)
+                )
+        }
         .help(usageHelpText(for: provider))
     }
 
@@ -1918,6 +1960,7 @@ private struct IslandSessionRow: View {
 
     @State private var isHighlighted = false
     @State private var detailOverride: Bool?
+    @Environment(\.islandControlGlass) private var usesGlassControls
     @State private var replyText: String = ""
 
     var body: some View {
@@ -2143,18 +2186,30 @@ private struct IslandSessionRow: View {
             .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
             .foregroundStyle(tint.opacity(notificationChromeOpacity))
             .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(tint.opacity(notificationBadgeFillOpacity), in: Capsule())
-            .overlay(Capsule().stroke(tint.opacity(notificationBadgeStrokeOpacity), lineWidth: 1))
+            .padding(.vertical, 4)
+            .islandChipBackground(Capsule(), usesGlass: usesGlassControls, tint: tint) { chip in
+                chip
+                    .background(tint.opacity(notificationBadgeFillOpacity), in: Capsule())
+                    .overlay(Capsule().stroke(tint.opacity(notificationBadgeStrokeOpacity), lineWidth: 1))
+            }
     }
 
     private func sideBadge(_ title: String) -> some View {
         Text(title)
             .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-            .foregroundStyle(V6Palette.paper.opacity(presentation == .notification ? 0.52 : 0.7))
+            .foregroundStyle(V6Palette.paper.opacity(sideBadgeForegroundOpacity))
             .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(.white.opacity(presentation == .notification ? 0.045 : 0.06), in: Capsule())
+            .padding(.vertical, 4)
+            .islandChipBackground(Capsule(), usesGlass: usesGlassControls) { chip in
+                chip.background(.white.opacity(presentation == .notification ? 0.045 : 0.06), in: Capsule())
+            }
+    }
+
+    private var sideBadgeForegroundOpacity: Double {
+        if usesGlassControls {
+            return presentation == .notification ? 0.66 : 0.76
+        }
+        return presentation == .notification ? 0.52 : 0.7
     }
 
     private var summaryPromptLineText: String? {
@@ -2354,15 +2409,15 @@ private struct IslandSessionRow: View {
                     .foregroundStyle(.white.opacity(0.82))
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
                             .fill(Color.white.opacity(0.045))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
                             .strokeBorder(.white.opacity(0.06))
                     )
             }
@@ -2393,12 +2448,12 @@ private struct IslandSessionRow: View {
                         .lineLimit(1)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
             .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
                     .fill(Color.white.opacity(0.045))
             )
 
@@ -2442,8 +2497,8 @@ private struct IslandSessionRow: View {
                     Markdown(completionMessageText)
                         .markdownTheme(.completionCard)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                 }
             } else {
                 completionEmptyState
@@ -2458,11 +2513,11 @@ private struct IslandSessionRow: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: IslandRadius.card, style: .continuous)
                 .fill(Color.white.opacity(completionCardFillOpacity))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: IslandRadius.card, style: .continuous)
                 .strokeBorder(.white.opacity(completionCardStrokeOpacity))
         )
     }
@@ -2491,8 +2546,8 @@ private struct IslandSessionRow: View {
 
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
@@ -2516,8 +2571,8 @@ private struct IslandSessionRow: View {
             .buttonStyle(.plain)
             .disabled(replyText.trimmingCharacters(in: .whitespaces).isEmpty)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
     private func submitReply() {
@@ -2758,9 +2813,10 @@ private struct StructuredQuestionPromptView: View {
     @State private var freeformTexts: [String: String] = [:]
     @State private var typedReply: String = ""
     @State private var hoveredOptionKey: String?
+    @Environment(\.islandControlGlass) private var usesGlassControls
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             if showsPromptTitle {
                 Text(promptTitle)
                     .font(.system(size: 13, weight: .semibold))
@@ -2786,15 +2842,15 @@ private struct StructuredQuestionPromptView: View {
                 .disabled(!canSubmit)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: IslandRadius.card, style: .continuous)
                 .fill(Color.white.opacity(0.03))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: IslandRadius.card, style: .continuous)
                 .strokeBorder(.white.opacity(0.05))
         )
     }
@@ -2846,11 +2902,11 @@ private struct StructuredQuestionPromptView: View {
                         .foregroundStyle(isSelected ? .black.opacity(0.82) : V6Palette.paper.opacity(0.42))
                         .frame(width: 22, height: 20)
                         .background(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            RoundedRectangle(cornerRadius: IslandRadius.chip, style: .continuous)
                                 .fill(isSelected ? V6Palette.paper.opacity(0.88) : Color.white.opacity(0.045))
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            RoundedRectangle(cornerRadius: IslandRadius.chip, style: .continuous)
                                 .strokeBorder(.white.opacity(isSelected ? 0 : 0.08))
                         )
 
@@ -2876,8 +2932,8 @@ private struct StructuredQuestionPromptView: View {
                     }
                 }
                 .contentShape(Rectangle())
-                .padding(.vertical, 5)
-                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 12)
             }
             .buttonStyle(.plain)
 
@@ -2887,14 +2943,20 @@ private struct StructuredQuestionPromptView: View {
                 freeformField(for: option, question: question)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(optionFillColor(isSelected: isSelected, isHovered: isHovered))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(optionStrokeColor(isSelected: isSelected, isHovered: isHovered))
-        )
+        .background {
+            let tile = RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
+            if usesGlassControls, isSelected || isHovered {
+                // Selected / hovered tiles lift onto a glass bezel so the choice
+                // reads like a native selected control on the glass panel.
+                IslandGlassBezel(shape: tile, tint: nil, isEmphasized: isSelected)
+            } else {
+                tile
+                    .fill(optionFillColor(isSelected: isSelected, isHovered: isHovered))
+                    .overlay(
+                        tile.strokeBorder(optionStrokeColor(isSelected: isSelected, isHovered: isHovered))
+                    )
+            }
+        }
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.12)) {
                 hoveredOptionKey = hovering ? key : (hoveredOptionKey == key ? nil : hoveredOptionKey)
@@ -2919,7 +2981,7 @@ private struct StructuredQuestionPromptView: View {
         )
         .frame(height: 22)
         .padding(.vertical, 6)
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
     }
 
     private var freeformAnswerBody: some View {
@@ -2949,14 +3011,14 @@ private struct StructuredQuestionPromptView: View {
                 )
                 .frame(height: 30)
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 12)
             .padding(.vertical, 4)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
                     .fill(Color.white.opacity(0.035))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
                     .strokeBorder(.white.opacity(0.055))
             )
         }
@@ -3234,20 +3296,34 @@ private extension String {
 private struct IslandCompactButtonStyle: ButtonStyle {
     var tint: Color
 
+    @Environment(\.islandControlGlass) private var usesGlass
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let label = configuration.label
             .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(tint == .secondary ? .white.opacity(0.7) : tint)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                (tint == .secondary ? Color.white.opacity(0.08) : tint.opacity(0.15)),
-                in: Capsule()
-            )
-            .opacity(configuration.isPressed ? 0.7 : 1)
+            .foregroundStyle(tint == .secondary ? .white.opacity(usesGlass ? 0.8 : 0.7) : tint)
+            .padding(.horizontal, usesGlass ? 12 : 10)
+            .padding(.vertical, usesGlass ? 4 : 5)
+
+        if usesGlass, LiquidGlass.isSupported {
+            label
+                .islandGlass(in: Capsule(), tint: tint == .secondary ? nil : tint.opacity(0.18))
+                .opacity(configuration.isPressed ? 0.8 : 1)
+        } else {
+            label
+                .background(
+                    (tint == .secondary ? Color.white.opacity(0.08) : tint.opacity(0.15)),
+                    in: Capsule()
+                )
+                .opacity(configuration.isPressed ? 0.7 : 1)
+        }
     }
 }
 
+/// Approval / question actions. On a glass panel every kind is a Liquid Glass
+/// capsule: `.secondary` (Deny) is plain glass, `.warning` (Allow) keeps its warm
+/// orange as a prominent tint, `.primary` (Always / Submit) is paper-tinted.
+/// Without glass it renders the original solid rounded-rect buttons unchanged.
 private struct IslandActionButtonStyle: ButtonStyle {
     enum Kind {
         case primary
@@ -3259,8 +3335,70 @@ private struct IslandActionButtonStyle: ButtonStyle {
     var expands = false
 
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.islandControlGlass) private var usesGlass
+
+    private static let warm = Color(red: 0.85, green: 0.55, blue: 0.15)
 
     func makeBody(configuration: Configuration) -> some View {
+        if usesGlass, LiquidGlass.isSupported {
+            glassBody(configuration)
+        } else {
+            legacyBody(configuration)
+        }
+    }
+
+    // MARK: Glass
+
+    private func glassBody(_ configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(glassForeground)
+            .lineLimit(1)
+            .frame(maxWidth: expands ? .infinity : nil)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .contentShape(Capsule())
+            .islandGlass(
+                in: Capsule(),
+                tint: glassTint(configuration.isPressed),
+                interactive: isEnabled
+            )
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+
+    private var glassForeground: Color {
+        guard isEnabled else {
+            return V6Palette.paper.opacity(0.4)
+        }
+
+        switch kind {
+        case .primary:
+            return .black.opacity(0.86)
+        case .warning:
+            return .white
+        case .secondary:
+            return V6Palette.paper.opacity(0.9)
+        }
+    }
+
+    private func glassTint(_ isPressed: Bool) -> Color? {
+        guard isEnabled else { return nil }
+
+        let pressedFactor: Double = isPressed ? 0.8 : 1
+        switch kind {
+        case .primary:
+            return V6Palette.paper.opacity(0.86 * pressedFactor)
+        case .warning:
+            return Self.warm.opacity(0.9 * pressedFactor)
+        case .secondary:
+            return isPressed ? .white.opacity(0.08) : nil
+        }
+    }
+
+    // MARK: Legacy (macOS < 26, or glass turned off)
+
+    private func legacyBody(_ configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 11.8, weight: .semibold))
             .foregroundStyle(foregroundColor)
@@ -3268,9 +3406,9 @@ private struct IslandActionButtonStyle: ButtonStyle {
             .frame(maxWidth: expands ? .infinity : nil)
             .padding(.horizontal, 13)
             .padding(.vertical, 8)
-            .background(backgroundColor(configuration.isPressed), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(backgroundColor(configuration.isPressed), in: RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
                     .strokeBorder(strokeColor, lineWidth: 1)
             )
             .opacity(configuration.isPressed ? 0.82 : 1)
@@ -3300,7 +3438,7 @@ private struct IslandActionButtonStyle: ButtonStyle {
         case .primary:
             return V6Palette.paper.opacity(0.86)
         case .warning:
-            return Color(red: 0.85, green: 0.55, blue: 0.15).opacity(0.42)
+            return Self.warm.opacity(0.42)
         case .secondary:
             return .white.opacity(0.07)
         }
@@ -3316,7 +3454,7 @@ private struct IslandActionButtonStyle: ButtonStyle {
         case .primary:
             return V6Palette.paper.opacity(pressedFactor)
         case .warning:
-            return Color(red: 0.85, green: 0.55, blue: 0.15).opacity(pressedFactor)
+            return Self.warm.opacity(pressedFactor)
         case .secondary:
             return Color.white.opacity(isPressed ? 0.11 : 0.065)
         }
