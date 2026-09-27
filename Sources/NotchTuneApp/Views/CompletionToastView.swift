@@ -325,6 +325,8 @@ struct CompletionToastView: View {
 
 // MARK: - Button styles
 
+/// Toast actions. Liquid Glass capsules on a glass panel (Jump = paper-tinted
+/// prominent glass, Reply = plain glass); the original solid capsules otherwise.
 private struct ToastButtonStyle: ButtonStyle {
     enum Kind {
         case primary
@@ -333,16 +335,44 @@ private struct ToastButtonStyle: ButtonStyle {
 
     let kind: Kind
 
+    @Environment(\.islandControlGlass) private var usesGlass
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(foreground)
-            .padding(.horizontal, 10)
-            .frame(height: 24)
-            .background(background.opacity(configuration.isPressed ? 0.7 : 1), in: Capsule())
-            .overlay(Capsule().strokeBorder(stroke, lineWidth: 1))
-            .contentShape(Capsule())
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+        if usesGlass, LiquidGlass.isSupported {
+            configuration.label
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(glassForeground)
+                .padding(.horizontal, 12)
+                .frame(height: 24)
+                .contentShape(Capsule())
+                .islandGlass(in: Capsule(), tint: glassTint(configuration.isPressed))
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+        } else {
+            configuration.label
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(foreground)
+                .padding(.horizontal, 10)
+                .frame(height: 24)
+                .background(background.opacity(configuration.isPressed ? 0.7 : 1), in: Capsule())
+                .overlay(Capsule().strokeBorder(stroke, lineWidth: 1))
+                .contentShape(Capsule())
+                .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+        }
+    }
+
+    private var glassForeground: Color {
+        switch kind {
+        case .primary: V6Palette.ink.opacity(0.9)
+        case .secondary: V6Palette.paper.opacity(0.9)
+        }
+    }
+
+    private func glassTint(_ isPressed: Bool) -> Color? {
+        switch kind {
+        case .primary: V6Palette.paper.opacity(isPressed ? 0.7 : 0.86)
+        case .secondary: isPressed ? .white.opacity(0.08) : nil
+        }
     }
 
     private var foreground: Color {
@@ -367,11 +397,18 @@ private struct ToastButtonStyle: ButtonStyle {
     }
 }
 
+/// Small circular toast controls (queue chevrons, cancel reply).
 private struct ToastIconButtonStyle: ButtonStyle {
+    @Environment(\.islandControlGlass) private var usesGlass
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(V6Palette.paper.opacity(configuration.isPressed ? 0.9 : 0.55))
-            .background(.white.opacity(configuration.isPressed ? 0.14 : 0.06), in: Circle())
-            .contentShape(Circle())
+        IslandGlassIconDisc(
+            label: configuration.label,
+            isPressed: configuration.isPressed,
+            fallbackFill: .white.opacity(0.06),
+            fallbackPressedFill: .white.opacity(0.14),
+            foreground: V6Palette.paper.opacity(usesGlass ? 0.72 : 0.55),
+            pressedForeground: V6Palette.paper.opacity(0.9)
+        )
     }
 }

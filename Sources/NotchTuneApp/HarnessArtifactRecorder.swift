@@ -117,6 +117,11 @@ enum HarnessArtifactRecorder {
             let imageName = imageFileName(for: window, ordinal: windows.count + 1)
             let imageURL = directoryURL.appendingPathComponent(imageName)
             try imageData.write(to: imageURL)
+            if ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_COMPOSITED"] == "1",
+               let composited = compositedPNGData(for: window) {
+                try composited.write(to: directoryURL.appendingPathComponent(
+                    imageName.replacingOccurrences(of: ".png", with: "-composited.png")))
+            }
 
             let accessibilityFileName = accessibilityFileName(for: window, ordinal: windows.count + 1)
             let viewAccessibilitySnapshot = snapshotViewAccessibilityTree(for: window)
@@ -212,6 +217,17 @@ enum HarnessArtifactRecorder {
         bitmap.size = bounds.size
         contentView.cacheDisplay(in: bounds, to: bitmap)
         return bitmap.representation(using: .png, properties: [:])
+    }
+
+    private static func compositedPNGData(for window: NSWindow) -> Data? {
+        typealias Fn = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
+        guard let handle = dlopen(nil, RTLD_NOW),
+              let sym = dlsym(handle, "CGWindowListCreateImage") else { return nil }
+        let fn = unsafeBitCast(sym, to: Fn.self)
+        // optionIncludingWindow = 1 << 3, bestResolution = 1 << 3 image option
+        guard let image = fn(.null, 1 << 3, UInt32(window.windowNumber), 1 << 3)?.takeRetainedValue() else { return nil }
+        let rep = NSBitmapImageRep(cgImage: image)
+        return rep.representation(using: .png, properties: [:])
     }
 
     private static func imageFileName(for window: NSWindow, ordinal: Int) -> String {
