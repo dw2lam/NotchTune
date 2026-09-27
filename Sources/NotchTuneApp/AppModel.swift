@@ -358,6 +358,24 @@ final class AppModel {
     /// notch could never tell "actively working" from "done". Keyed by session id.
     @ObservationIgnored private var antigravitySettleTimers: [String: Task<Void, Never>] = [:]
 
+    /// Coalesces bump-worthy agent events (approvals, questions, completions)
+    /// so a burst of Codex turns yields one notch open + sound, not five.
+    /// Pure logic lives in `NotificationCoalescer`; the settle timers it asks
+    /// for live here, keyed by notification group.
+    @ObservationIgnored private var notificationCoalescer = NotificationCoalescer()
+    @ObservationIgnored private var completionSettleTimers: [NotificationGroupKey: Task<Void, Never>] = [:]
+
+    /// Windows for notification coalescing. Settable so tests can shrink the
+    /// settle window; a future settings round can back this with defaults.
+    var notificationCoalescingPolicy: NotificationCoalescingPolicy {
+        get { notificationCoalescer.policy }
+        set {
+            notificationCoalescer.policy = newValue
+            notificationCoalescer.reset()
+            cancelAllCompletionSettleTimers()
+        }
+    }
+
     /// Bumped to fire a one-shot character jump when an idle session is nudged.
     var nudgeTrigger: UUID?
 
@@ -2087,6 +2105,11 @@ final class AppModel {
             return state.session(id: payload.sessionID)?.phase == .completed
         }()
 
+        // Phase before the event lands, so a repeated approval/question for a
+        // session that is already waiting in that phase can be told apart
+        // from a fresh request (see `NotificationCoalescer.decideRequest`).
+        let priorPhase: SessionPhase? = event.sessionID.flatMap { state.session(id: $0)?.phase }
+
         // Guard: don't let rollout events downgrade a session from completed
         // back to running. The bridge's sessionCompleted is authoritative; the
         // rollout watcher may have read the JSONL before task_complete was
@@ -2121,12 +2144,14 @@ final class AppModel {
             cancelAntigravitySettleTimer(for: p.sessionID)
         }
 
+        // The pill flash is the "subtle" completion signal: immediate, silent,
+        // and shown for every fresh completion. Whether the notch also opens
+        // (with sound) is decided by the coalescer below, after the settle
+        // window, through the single presentation path — so completions honour
+        // `suppressFrontmostNotifications` like approvals and questions do.
         if case let .sessionCompleted(payload) = event, !wasAlreadyCompleted, payload.isInterrupt != true, payload.isSessionEnd != true {
             completionFlashSessionID = payload.sessionID
-            if notchStatus == .closed, (ingress == .bridge || !isResolvingInitialLiveSessions) {
-                notchOpen(reason: .notification, surface: .sessionList(actionableSessionID: payload.sessionID))
-            }
-            
+
             // Clear the flash after a delay
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(2))
@@ -2148,53 +2173,169 @@ final class AppModel {
         discovery.scheduleOpenCodeSessionPersistence()
         discovery.scheduleCursorSessionPersistence()
 
-        // Push relevant events to the Watch/iPhone via the relay
-        if let relay = watchRelay {
-            let eventSessionID: String? = {
-                switch event {
-                case let .sessionStarted(p): return p.sessionID
-                case let .activityUpdated(p): return p.sessionID
-                case let .permissionRequested(p): return p.sessionID
-                case let .questionAsked(p): return p.sessionID
-                case let .sessionCompleted(p): return p.sessionID
-                case let .jumpTargetUpdated(p): return p.sessionID
-                case let .sessionMetadataUpdated(p): return p.sessionID
-                case let .claudeSessionMetadataUpdated(p): return p.sessionID
-                case let .geminiSessionMetadataUpdated(p): return p.sessionID
-                case let .antigravitySessionMetadataUpdated(p): return p.sessionID
-                case let .openCodeSessionMetadataUpdated(p): return p.sessionID
-                case let .cursorSessionMetadataUpdated(p): return p.sessionID
-                case let .jumpTargetSynchronized(p): return p.sessionID
-                case let .actionableStateResolved(p): return p.sessionID
-                }
-            }()
-            let session = eventSessionID.flatMap { state.session(id: $0) }
-            relay.notifyEvent(event, session: session)
+        // Push events to the Watch/iPhone via the relay. Bump-worthy events
+        // (approvals, questions, completions) go through the coalescer
+        // instead so the watch doesn't buzz once per Codex sub-turn either.
+        if let relay = watchRelay, !event.isCoalescedNotificationEvent(wasAlreadyCompleted: wasAlreadyCompleted) {
+            relay.notifyEvent(event, session: event.sessionID.flatMap { state.session(id: $0) })
         }
 
         if updateLastActionMessage {
             lastActionMessage = describe(event)
         }
 
-        if let surface = IslandSurface.notificationSurface(for: event) {
-            scheduleNotificationSurfacePresentationIfNeeded(
-                surface,
-                wasAlreadyCompleted: wasAlreadyCompleted,
-                ingress: ingress
-            )
-        }
+        coalesceNotification(
+            for: event,
+            priorPhase: priorPhase,
+            wasAlreadyCompleted: wasAlreadyCompleted,
+            ingress: ingress
+        )
 
         // Tear down nudges for sessions that left their attention phase.
         reconcileNudgeTimers()
     }
 
-    private func scheduleNotificationSurfacePresentationIfNeeded(
-        _ surface: IslandSurface,
+    // MARK: - Notification coalescing
+
+    /// Routes a freshly applied event through `NotificationCoalescer` and acts
+    /// on its decision: `.present` opens the notification surface (via the
+    /// single, frontmost-aware presentation path) and pushes to the watch
+    /// relay; `.subtle` leaves only the pill flash; `.suppress` does nothing.
+    /// Completions are held for the settle window first; any running or
+    /// attention signal in the same group cancels the hold.
+    private func coalesceNotification(
+        for event: AgentEvent,
+        priorPhase: SessionPhase?,
         wasAlreadyCompleted: Bool,
         ingress: TrackedEventIngress
     ) {
-        guard !wasAlreadyCompleted,
-              notificationSurfaceIsEligibleForPresentation(surface, ingress: ingress),
+        guard let sessionID = event.sessionID,
+              let session = state.session(id: sessionID) else {
+            return
+        }
+        let group = NotificationGroupKey(session: session)
+        let now = Date()
+
+        switch event {
+        case let .sessionCompleted(payload):
+            guard !wasAlreadyCompleted,
+                  payload.isInterrupt != true,
+                  payload.isSessionEnd != true,
+                  ingress == .bridge || !isResolvingInitialLiveSessions else {
+                if payload.isInterrupt == true {
+                    // The user stopped the agent themselves — they're present.
+                    cancelPendingCompletion(in: group)
+                }
+                return
+            }
+            notificationCoalescer.holdCompletion(payload, group: group, now: now)
+            armCompletionSettleTimer(for: group, ingress: ingress)
+
+        case .permissionRequested, .questionAsked:
+            // The session is asking for the user; whatever sibling completion
+            // was pending is not the end of the task.
+            cancelPendingCompletion(in: group)
+
+            let surface = IslandSurface.sessionList(actionableSessionID: sessionID)
+            let decision = notificationCoalescer.decideRequest(
+                group: group,
+                isRepeatOfPendingRequest: priorPhase == session.phase,
+                isAlreadyPresented: isNotificationSurfaceCurrentlyPresented(surface),
+                now: now
+            )
+            guard decision == .present else { return }
+            watchRelay?.notifyEvent(event, session: session)
+            scheduleNotificationSurfacePresentationIfNeeded(surface, ingress: ingress)
+
+        default:
+            // Any signal that leaves the session active again (a new prompt,
+            // a tool call, a sibling thread starting) means the group's task
+            // is still going: drop the pending completion bump.
+            if session.phase == .running || session.phase.requiresAttention {
+                cancelPendingCompletion(in: group)
+            }
+        }
+    }
+
+    private func armCompletionSettleTimer(for group: NotificationGroupKey, ingress: TrackedEventIngress) {
+        completionSettleTimers[group]?.cancel()
+        let settleSeconds = notificationCoalescer.policy.completionSettleSeconds
+        completionSettleTimers[group] = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(settleSeconds))
+            guard let self, !Task.isCancelled else { return }
+            self.completionSettleTimers[group] = nil
+            self.settleCompletion(in: group, ingress: ingress)
+        }
+    }
+
+    private func settleCompletion(in group: NotificationGroupKey, ingress: TrackedEventIngress) {
+        let pendingSessionID = notificationCoalescer.pendingCompletion(in: group)?.payload.sessionID
+        let surface = IslandSurface.sessionList(actionableSessionID: pendingSessionID)
+        guard let settled = notificationCoalescer.settleCompletion(
+            in: group,
+            isAlreadyPresented: isNotificationSurfaceCurrentlyPresented(surface),
+            now: Date()
+        ) else {
+            return
+        }
+
+        // The session may have moved on during the settle window (e.g. a
+        // late running signal that raced the timer); only a session that is
+        // still completed gets surfaced.
+        guard let session = state.session(id: settled.payload.sessionID),
+              session.phase == .completed else {
+            return
+        }
+
+        switch settled.decision {
+        case .present:
+            watchRelay?.notifyEvent(.sessionCompleted(settled.payload), session: session)
+            scheduleNotificationSurfacePresentationIfNeeded(surface, ingress: ingress)
+        case .subtle:
+            // The pill flash already ran when the completion arrived. Re-arm
+            // it so the settled completion still gets its silent cue.
+            completionFlashSessionID = settled.payload.sessionID
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(2))
+                guard let self, self.completionFlashSessionID == settled.payload.sessionID else { return }
+                self.completionFlashSessionID = nil
+            }
+        case .suppress:
+            break
+        }
+    }
+
+    private func cancelPendingCompletion(in group: NotificationGroupKey) {
+        notificationCoalescer.cancelPendingCompletion(in: group)
+        completionSettleTimers[group]?.cancel()
+        completionSettleTimers[group] = nil
+    }
+
+    private func cancelAllCompletionSettleTimers() {
+        completionSettleTimers.values.forEach { $0.cancel() }
+        completionSettleTimers.removeAll()
+    }
+
+    /// True when `surface` is what the notch is showing right now as a
+    /// notification card, in which case re-presenting would only replay the
+    /// sound and restart the open animation.
+    private func isNotificationSurfaceCurrentlyPresented(_ surface: IslandSurface) -> Bool {
+        notchStatus == .opened
+            && notchOpenReason == .notification
+            && surface.isNotificationCard
+            && islandSurface == surface
+    }
+
+    /// Test-only view of the coalescer's pending completions.
+    func pendingCompletionSessionIDsForTests() -> [String] {
+        notificationCoalescer.pendingCompletions.values.map(\.payload.sessionID).sorted()
+    }
+
+    private func scheduleNotificationSurfacePresentationIfNeeded(
+        _ surface: IslandSurface,
+        ingress: TrackedEventIngress
+    ) {
+        guard notificationSurfaceIsEligibleForPresentation(surface, ingress: ingress),
               let sessionID = surface.sessionID,
               let session = state.session(id: sessionID) else {
             return
@@ -2233,6 +2374,7 @@ final class AppModel {
 
         return (ingress == .bridge || !isResolvingInitialLiveSessions)
             && (notchStatus == .closed || notchOpenReason == .notification)
+            && !isNotificationSurfaceCurrentlyPresented(surface)
             && !overlay.shouldPreserveCurrentNotificationSurface(against: surface)
             && surface.matchesCurrentState(of: session)
     }
@@ -2496,5 +2638,42 @@ extension Color {
         let g = Int(round(nsColor.greenComponent * 255))
         let b = Int(round(nsColor.blueComponent * 255))
         return String(format: "#%02X%02X%02X", r, g, b)
+    }
+}
+
+// MARK: - AgentEvent helpers for notification coalescing
+
+private extension AgentEvent {
+    var sessionID: String? {
+        switch self {
+        case let .sessionStarted(p): p.sessionID
+        case let .activityUpdated(p): p.sessionID
+        case let .permissionRequested(p): p.sessionID
+        case let .questionAsked(p): p.sessionID
+        case let .sessionCompleted(p): p.sessionID
+        case let .jumpTargetUpdated(p): p.sessionID
+        case let .sessionMetadataUpdated(p): p.sessionID
+        case let .claudeSessionMetadataUpdated(p): p.sessionID
+        case let .geminiSessionMetadataUpdated(p): p.sessionID
+        case let .antigravitySessionMetadataUpdated(p): p.sessionID
+        case let .openCodeSessionMetadataUpdated(p): p.sessionID
+        case let .cursorSessionMetadataUpdated(p): p.sessionID
+        case let .jumpTargetSynchronized(p): p.sessionID
+        case let .actionableStateResolved(p): p.sessionID
+        }
+    }
+
+    /// Events whose watch-relay push is gated by the coalescer's decision
+    /// rather than sent straight through: approvals, questions, and fresh
+    /// (non-interrupt, non-session-end) completions.
+    func isCoalescedNotificationEvent(wasAlreadyCompleted: Bool) -> Bool {
+        switch self {
+        case .permissionRequested, .questionAsked:
+            true
+        case let .sessionCompleted(p):
+            !wasAlreadyCompleted && p.isInterrupt != true && p.isSessionEnd != true
+        default:
+            false
+        }
     }
 }

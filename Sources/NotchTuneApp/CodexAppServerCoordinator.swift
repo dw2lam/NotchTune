@@ -33,6 +33,12 @@ final class CodexAppServerCoordinator {
 
     private(set) var isConnected = false
 
+    /// Last attention phase emitted per thread. The app-server re-sends
+    /// `thread/status/changed` with the same `waitingOnApproval` /
+    /// `waitingOnUserInput` flag on every status tick, and each re-emit would
+    /// otherwise bump the notch again for a request the user already saw.
+    private var lastEmittedWaitingPhaseByThread: [String: SessionPhase] = [:]
+
     // MARK: - Public API
 
     /// Ensure a connection exists.  Called from the monitoring loop when
@@ -88,6 +94,7 @@ final class CodexAppServerCoordinator {
         client?.stop()
         client = nil
         isConnected = false
+        lastEmittedWaitingPhaseByThread.removeAll()
     }
 
     // MARK: - Thread sync
@@ -115,7 +122,9 @@ final class CodexAppServerCoordinator {
 
     // MARK: - Notification handling
 
-    private func handleNotification(_ notification: CodexAppServerNotification) {
+    /// Internal (not private) so the status-change dedupe can be unit-tested
+    /// without a live app-server.
+    func handleNotification(_ notification: CodexAppServerNotification) {
         switch notification {
         case .threadStarted(let thread):
             guard !thread.ephemeral else { return }
@@ -126,6 +135,9 @@ final class CodexAppServerCoordinator {
             switch status.type {
             case .active:
                 if status.isWaitingOnApproval {
+                    // Dedupe: still waiting on the same approval → no re-emit.
+                    guard lastEmittedWaitingPhaseByThread[threadId] != .waitingForApproval else { return }
+                    lastEmittedWaitingPhaseByThread[threadId] = .waitingForApproval
                     onEvent?(.permissionRequested(
                         PermissionRequested(
                             sessionID: threadId,
@@ -138,6 +150,8 @@ final class CodexAppServerCoordinator {
                         )
                     ))
                 } else if status.isWaitingOnUserInput {
+                    guard lastEmittedWaitingPhaseByThread[threadId] != .waitingForAnswer else { return }
+                    lastEmittedWaitingPhaseByThread[threadId] = .waitingForAnswer
                     onEvent?(.questionAsked(
                         QuestionAsked(
                             sessionID: threadId,
@@ -149,6 +163,7 @@ final class CodexAppServerCoordinator {
                         )
                     ))
                 } else {
+                    lastEmittedWaitingPhaseByThread[threadId] = nil
                     onEvent?(.activityUpdated(
                         SessionActivityUpdated(
                             sessionID: threadId,
@@ -161,6 +176,7 @@ final class CodexAppServerCoordinator {
             case .idle:
                 // Idle means "between turns" in the same thread — the thread
                 // is still open.  Only `thread/closed` truly ends a session.
+                lastEmittedWaitingPhaseByThread[threadId] = nil
                 onEvent?(.activityUpdated(
                     SessionActivityUpdated(
                         sessionID: threadId,
@@ -174,6 +190,7 @@ final class CodexAppServerCoordinator {
             }
 
         case .threadClosed(let threadId):
+            lastEmittedWaitingPhaseByThread[threadId] = nil
             onEvent?(.sessionCompleted(
                 SessionCompleted(
                     sessionID: threadId,
@@ -191,6 +208,7 @@ final class CodexAppServerCoordinator {
             break
 
         case .turnStarted(let threadId, _):
+            lastEmittedWaitingPhaseByThread[threadId] = nil
             onEvent?(.activityUpdated(
                 SessionActivityUpdated(
                     sessionID: threadId,
@@ -201,6 +219,7 @@ final class CodexAppServerCoordinator {
             ))
 
         case .turnCompleted(let threadId, let turn):
+            lastEmittedWaitingPhaseByThread[threadId] = nil
             // A turn completing doesn't end the thread — the user can send
             // another message.  Use activityUpdated(phase: .completed) so the
             // session stays visible as "Completed" rather than being torn
