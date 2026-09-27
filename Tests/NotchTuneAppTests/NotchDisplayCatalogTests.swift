@@ -59,5 +59,58 @@ struct NotchDisplayCatalogTests {
         // 16" default.
         let mbp16 = NotchDisplayCatalog.estimatedNotchSize(forPointWidth: 1728)
         #expect(mbp16.width == 200)
+        #expect(mbp16.height == 32)
+    }
+
+    @Test
+    func cutoutHeightScalesWithTheDesktopLikeTheWidth() {
+        // The physical cutout is fixed; more points across → more points tall.
+        // 14" Pro at "More Space" (1800×1169) reports a 38pt safe area.
+        let moreSpace = NotchDisplayCatalog.estimatedNotchHeight(
+            forPointSize: CGSize(width: 1800, height: 1169),
+            modelIdentifier: "Mac16,1"
+        )
+        #expect(moreSpace == 38)
+
+        let largerText = NotchDisplayCatalog.estimatedNotchHeight(
+            forPointSize: CGSize(width: 1352, height: 878),
+            modelIdentifier: "Mac16,1"
+        )
+        #expect(largerText == (32 * 1352 / 1512).rounded())
+    }
+
+    @Test
+    func chassisIsResolvedFromTheModelIdentifierFirst() {
+        #expect(NotchDisplayCatalog.chassis(forModelIdentifier: "Mac16,1")?.name == "MacBook Pro 14\"")
+        #expect(NotchDisplayCatalog.chassis(forModelIdentifier: "Mac16,7")?.name == "MacBook Pro 16\"")
+        #expect(NotchDisplayCatalog.chassis(forModelIdentifier: "Mac16,12")?.name == "MacBook Air 13.6\"")
+        #expect(NotchDisplayCatalog.chassis(forModelIdentifier: "Mac16,13")?.name == "MacBook Air 15.3\"")
+        #expect(NotchDisplayCatalog.chassis(forModelIdentifier: "Mac17,9") == nil)
+        #expect(NotchDisplayCatalog.chassis(forModelIdentifier: nil) == nil)
+    }
+
+    @Test
+    func unknownModelsFallBackToThePanelAspectRatio() {
+        // A future 14" (Mac17,*) at 1800pt is wider than a 16" default; the
+        // width-only match would pick the 16" and under-estimate the cutout.
+        // The aspect ratio (3024:1964) identifies the 14" regardless of scaling.
+        let chassis = NotchDisplayCatalog.chassis(
+            forPointSize: CGSize(width: 1800, height: 1169),
+            modelIdentifier: "Mac17,9"
+        )
+        #expect(chassis.name == "MacBook Pro 14\"")
+
+        let height = NotchDisplayCatalog.estimatedNotchHeight(
+            forPointSize: CGSize(width: 1800, height: 1169),
+            modelIdentifier: "Mac17,9"
+        )
+        #expect(height == 38)
+
+        // 16" at "More Space" (2056×1329) keeps its own ratio.
+        let sixteen = NotchDisplayCatalog.chassis(
+            forPointSize: CGSize(width: 2056, height: 1329),
+            modelIdentifier: nil
+        )
+        #expect(sixteen.name == "MacBook Pro 16\"")
     }
 }

@@ -35,7 +35,8 @@ import AppKit
 ///
 /// The camera housing is ~200pt wide at default scaling on every chassis;
 /// in points it scales linearly with the chosen desktop width. Heights:
-/// the menu-bar/notch strip is 32pt on Pros, 30pt on Airs (default scaling).
+/// the menu-bar/notch strip is 32pt on Pros, 30pt on Airs (default scaling),
+/// and scales the same way (a 14" Pro at "More Space" 1800pt → 38pt).
 enum NotchDisplayCatalog {
     struct Chassis: Equatable, Sendable {
         let name: String
@@ -94,18 +95,94 @@ enum NotchDisplayCatalog {
         return String(cString: buffer)
     }
 
+    /// Cached once per process — `sysctl` is cheap, but the closed-height helper
+    /// runs on every layout pass.
+    static let currentModelIdentifierCached: String? = currentModelIdentifier()
+
+    /// Chassis families keyed by the exact model identifiers Apple ships them
+    /// under. Future identifiers (Mac17,* and later) fall back to the
+    /// aspect-ratio match in `chassis(forPointSize:modelIdentifier:)`.
+    private static let chassisIndexByModelIdentifier: [String: Int] = [
+        // MacBook Pro 14"
+        "MacBookPro18,3": 0, "MacBookPro18,4": 0,
+        "Mac14,5": 0, "Mac14,9": 0,
+        "Mac15,3": 0, "Mac15,6": 0, "Mac15,8": 0, "Mac15,10": 0,
+        "Mac16,1": 0, "Mac16,6": 0, "Mac16,8": 0,
+        // MacBook Pro 16"
+        "MacBookPro18,1": 1, "MacBookPro18,2": 1,
+        "Mac14,6": 1, "Mac14,10": 1,
+        "Mac15,7": 1, "Mac15,9": 1, "Mac15,11": 1,
+        "Mac16,5": 1, "Mac16,7": 1,
+        // MacBook Air 13.6"
+        "Mac14,2": 2, "Mac15,12": 2, "Mac16,12": 2,
+        // MacBook Air 15.3"
+        "Mac14,15": 3, "Mac15,13": 3, "Mac16,13": 3,
+    ]
+
+    /// The chassis a model identifier ships with, or `nil` when the identifier
+    /// is unknown (future generations, desktops).
+    static func chassis(forModelIdentifier modelIdentifier: String?) -> Chassis? {
+        guard let modelIdentifier,
+              let index = chassisIndexByModelIdentifier[modelIdentifier] else {
+            return nil
+        }
+        return chassis[index]
+    }
+
+    /// Nearest chassis by panel aspect ratio. Every scaled desktop keeps the
+    /// panel's native aspect (3024×1964 → 1.5397 on a 14", 3456×2234 → 1.5470
+    /// on a 16", …), so the ratio identifies the chassis independent of the
+    /// chosen scaling — unlike the raw point width, which overlaps across
+    /// chassis (a 14" at "More Space" is 1800pt, wider than a 16" default).
+    static func chassis(forPointSize pointSize: CGSize) -> Chassis {
+        guard pointSize.width > 0, pointSize.height > 0 else {
+            return chassis(forPointWidth: pointSize.width)
+        }
+        let ratio = pointSize.width / pointSize.height
+        return chassis.min { lhs, rhs in
+            abs(lhs.defaultPointWidth / lhs.defaultPointHeight - ratio)
+                < abs(rhs.defaultPointWidth / rhs.defaultPointHeight - ratio)
+        } ?? chassis[0]
+    }
+
+    /// Nearest chassis by default point width (legacy width-only match).
+    static func chassis(forPointWidth pointWidth: CGFloat) -> Chassis {
+        chassis.min { lhs, rhs in
+            abs(lhs.defaultPointWidth - pointWidth) < abs(rhs.defaultPointWidth - pointWidth)
+        } ?? chassis[0]
+    }
+
+    /// Best chassis guess: the model identifier when it is catalogued,
+    /// otherwise the panel aspect ratio.
+    static func chassis(forPointSize pointSize: CGSize, modelIdentifier: String?) -> Chassis {
+        chassis(forModelIdentifier: modelIdentifier) ?? chassis(forPointSize: pointSize)
+    }
+
     /// Best-effort notch size for a screen when the runtime auxiliary areas are
     /// unavailable. Matches the chassis by aspect-compatible point width and
     /// scales the default-resolution notch linearly with the chosen desktop
-    /// width (the physical cutout is fixed; its point size tracks scaling).
+    /// width (the physical cutout is fixed; its point size tracks scaling —
+    /// both axes, so a 14" at "More Space" (1800pt) reports a ~38pt cutout).
     static func estimatedNotchSize(forPointWidth pointWidth: CGFloat) -> CGSize {
-        let match = chassis.min { lhs, rhs in
-            abs(lhs.defaultPointWidth - pointWidth) < abs(rhs.defaultPointWidth - pointWidth)
-        } ?? chassis[0]
-        let scale = pointWidth / match.defaultPointWidth
+        estimatedNotchSize(for: chassis(forPointWidth: pointWidth), pointWidth: pointWidth)
+    }
+
+    /// Cutout height in points for a screen of `pointSize`, chassis chosen by
+    /// model identifier (exact) or aspect ratio (fallback). This is the
+    /// "never taller than the physical notch" ceiling for the closed island.
+    static func estimatedNotchHeight(
+        forPointSize pointSize: CGSize,
+        modelIdentifier: String? = currentModelIdentifierCached
+    ) -> CGFloat {
+        let match = chassis(forPointSize: pointSize, modelIdentifier: modelIdentifier)
+        return estimatedNotchSize(for: match, pointWidth: pointSize.width).height
+    }
+
+    private static func estimatedNotchSize(for match: Chassis, pointWidth: CGFloat) -> CGSize {
+        let scale = pointWidth > 0 ? pointWidth / match.defaultPointWidth : 1
         return CGSize(
             width: (match.notchWidthAtDefault * scale).rounded(),
-            height: match.notchHeightAtDefault
+            height: (match.notchHeightAtDefault * scale).rounded()
         )
     }
 }
