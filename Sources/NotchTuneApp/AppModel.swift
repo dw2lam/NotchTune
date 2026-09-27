@@ -2316,14 +2316,24 @@ final class AppModel {
         case .subtle:
             // The pill flash already ran when the completion arrived. Re-arm
             // it so the settled completion still gets its silent cue.
-            completionFlashSessionID = settled.payload.sessionID
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(2))
-                guard let self, self.completionFlashSessionID == settled.payload.sessionID else { return }
-                self.completionFlashSessionID = nil
-            }
+            showSubtleCompletion(sessionID: settled.payload.sessionID, bounce: false)
         case .suppress:
             break
+        }
+    }
+
+    /// The `.subtle` completion cue: a silent pill flash, plus a `notchPop()`
+    /// bounce when the completion was downgraded because its terminal is
+    /// frontmost (see `NotificationCoalescer.decisionForFrontmostSession`).
+    private func showSubtleCompletion(sessionID: String, bounce: Bool) {
+        completionFlashSessionID = sessionID
+        if bounce {
+            notchPop()
+        }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, self.completionFlashSessionID == sessionID else { return }
+            self.completionFlashSessionID = nil
         }
     }
 
@@ -2374,14 +2384,27 @@ final class AppModel {
                 return
             }
 
-            let shouldSuppress = await self.isNotificationSessionAlreadyFrontmost(session)
+            let isFrontmost = await self.isNotificationSessionAlreadyFrontmost(session)
             guard !Task.isCancelled,
-                  !shouldSuppress,
                   self.notificationSurfaceIsEligibleForPresentation(surface, ingress: ingress) else {
                 return
             }
 
-            self.presentNotificationSurface(surface)
+            guard isFrontmost else {
+                self.presentNotificationSurface(surface)
+                return
+            }
+
+            // Focus-aware: the user is already in this session's terminal.
+            let isCompletion = self.state.session(id: sessionID)?.phase == .completed
+            switch NotificationCoalescer.decisionForFrontmostSession(isCompletion: isCompletion) {
+            case .subtle:
+                self.showSubtleCompletion(sessionID: sessionID, bounce: true)
+            case .present:
+                self.presentNotificationSurface(surface)
+            case .suppress:
+                break
+            }
         }
     }
 

@@ -209,4 +209,12 @@ struct NotificationCoalescerTests {
         let b = NotificationGroupKey(session: session(id: "s2"))
         #expect(a != b)
     }
+
+    // MARK: Focus-aware downgrade
+
+    @Test
+    func frontmostCompletionIsSubtleAndFrontmostRequestIsSuppressed() {
+        #expect(NotificationCoalescer.decisionForFrontmostSession(isCompletion: true) == .subtle)
+        #expect(NotificationCoalescer.decisionForFrontmostSession(isCompletion: false) == .suppress)
+    }
 }

@@ -168,17 +168,54 @@ struct AppModelNotificationCoalescingTests {
     }
 
     @Test
-    func completionHonoursSuppressFrontmostNotifications() async throws {
+    func frontmostCompletionBouncesThePillInsteadOfOpeningTheToast() async throws {
         let model = makeModel(frontmost: { $0.id == "s1" })
         model.suppressFrontmostNotifications = true
         start(model, id: "s1")
         complete(model, id: "s1")
+        model.completionFlashSessionID = nil   // isolate the settled cue
 
-        try await waitForSettle(model, opened: false)
+        // Settle + async frontmost check → `.subtle` with a bounce.
+        var sawPop = false
+        for _ in 0..<Int((Self.settleSeconds * 6) / 0.01) {
+            if model.notchStatus == .popping { sawPop = true; break }
+            #expect(model.notchStatus != .opened)
+            await Task.yield()
+            try await Task.sleep(for: .milliseconds(10))
+        }
 
-        #expect(model.completionFlashSessionID == "s1" || model.completionFlashSessionID == nil)
-        #expect(model.notchStatus == .closed)
+        #expect(sawPop)
+        #expect(model.completionFlashSessionID == "s1")
         #expect(model.notchOpenReason == nil)
+        #expect(model.islandSurface == .sessionList())
+    }
+
+    @Test
+    func frontmostApprovalStaysSuppressed() async throws {
+        let model = makeModel(frontmost: { $0.id == "s1" })
+        model.suppressFrontmostNotifications = true
+        start(model, id: "s1")
+        approve(model, id: "s1")
+
+        for _ in 0..<20 {
+            #expect(model.notchStatus == .closed)
+            await Task.yield()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(model.notchOpenReason == nil)
+    }
+
+    @Test
+    func frontmostCompletionOpensNormallyWhenSuppressionIsOff() async throws {
+        let model = makeModel(frontmost: { $0.id == "s1" })
+        model.suppressFrontmostNotifications = false
+        start(model, id: "s1")
+        complete(model, id: "s1")
+
+        try await waitForSettle(model, opened: true)
+
+        #expect(model.notchStatus == .opened)
+        #expect(model.notchOpenReason == .notification)
     }
 
     @Test
