@@ -65,6 +65,11 @@
 "settings.appearance.centerLabel.agentAction" = "代理 · 動作";
 "settings.appearance.centerLabel.sessionName" = "會話名";
 "settings.appearance.centerLabel.off" = "關閉";
+"settings.appearance.liveActivity.title" = "即時動態";
+"settings.appearance.liveActivity.note" = "讓瀏海變寬，顯示 Agent 正在做什麼、何時需要你，以及何時完成。";
+"settings.appearance.liveActivity.off" = "關閉";
+"settings.appearance.liveActivity.events" = "僅事件";
+"settings.appearance.liveActivity.active" = "執行時";
 "settings.appearance.density.title" = "密度";
 "settings.appearance.density.note" = "一般保留標準膠囊。緊湊會縮小圖示、內距與兩翼，讓收合的島嶼貼合瀏海或選單列。";
 "settings.appearance.density.regular" = "一般";

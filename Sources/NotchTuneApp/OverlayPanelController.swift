@@ -915,7 +915,9 @@ final class OverlayPanelController {
             return nil
         }
 
-        let closedWidth = closedPanelWidth(for: model, on: screen)
+        // The drawn pill can be wider than the estimate (live activity, music
+        // notification); follow it so the widened wings stay hoverable.
+        let closedWidth = max(closedPanelWidth(for: model, on: screen), model.measuredClosedSurfaceWidth)
         return Self.closedSurfaceRect(
             notchRect: notchRect,
             closedWidth: closedWidth

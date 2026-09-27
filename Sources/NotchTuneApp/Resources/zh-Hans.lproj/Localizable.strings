@@ -65,6 +65,11 @@
 "settings.appearance.centerLabel.agentAction" = "代理 · 动作";
 "settings.appearance.centerLabel.sessionName" = "会话名";
 "settings.appearance.centerLabel.off" = "关闭";
+"settings.appearance.liveActivity.title" = "实时活动";
+"settings.appearance.liveActivity.note" = "让刘海变宽，显示 Agent 正在做什么、何时需要你，以及何时完成。";
+"settings.appearance.liveActivity.off" = "关闭";
+"settings.appearance.liveActivity.events" = "仅事件";
+"settings.appearance.liveActivity.active" = "运行时";
 "settings.appearance.density.title" = "密度";
 "settings.appearance.density.note" = "常规保留标准胶囊。紧凑会缩小图标、内边距和两翼，让收起的岛屿贴合刘海或菜单栏。";
 "settings.appearance.density.regular" = "常规";

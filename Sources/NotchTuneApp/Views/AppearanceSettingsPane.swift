@@ -153,6 +153,7 @@ struct AppearanceSettingsPane: View {
             partHeader(title: lang.t("settings.appearance.notchPart.title"))
             previewSection
             densitySection
+            liveActivitySection
             rightSlotSection
             centerLabelSection
 
@@ -279,6 +280,29 @@ struct AppearanceSettingsPane: View {
     }
 
     // MARK: - Density
+
+    private var liveActivitySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(
+                title: lang.t("settings.appearance.liveActivity.title"),
+                note: lang.t("settings.appearance.liveActivity.note")
+            )
+
+            Picker(lang.t("settings.appearance.liveActivity.title"), selection: Binding(
+                get: { editingPreferences.liveActivity },
+                set: { value in
+                    model.updateAppearancePreferences(for: editingProfile) { $0.liveActivity = value }
+                }
+            )) {
+                ForEach(IslandLiveActivityMode.allCases) { mode in
+                    Text(lang.t("settings.appearance.liveActivity.\(mode.rawValue)")).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 420)
+        }
+    }
 
     @ViewBuilder
     private var densitySection: some View {

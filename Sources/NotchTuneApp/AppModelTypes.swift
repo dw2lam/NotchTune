@@ -69,6 +69,7 @@ struct IslandAppearancePreferences: Equatable, Sendable {
     var centerLabel: IslandCenterLabel = .agentAction
     var character: IslandCharacter = .dino
     var density: IslandDensity = .regular
+    var liveActivity: IslandLiveActivityMode = .active
     var autoHideWhenInactive: Bool = false
     var usageDisplay: IslandUsageDisplay = .compact
     var sessionStateIndicator: IslandSessionStateIndicator = .animatedDot

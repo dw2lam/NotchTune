@@ -200,6 +200,10 @@ def main() -> None:
         if text_values and not any("9" in value for value in text_values):
             fail("closed scenario is missing the live session count value")
 
+    elif scenario == "closedNeedsApproval":
+        if notch_status != "closed":
+            fail(f"expected closed notch, got {notch_status!r}")
+
     elif scenario == "sessionList":
         if notch_status != "opened":
             fail(f"expected opened notch for sessionList, got {notch_status!r}")

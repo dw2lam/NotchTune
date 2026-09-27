@@ -475,6 +475,61 @@ final class AppModel {
     @ObservationIgnored
     var islandDensityHarnessOverride: IslandDensity?
 
+    // MARK: - Live activity (widened closed pill)
+
+    /// When the closed pill widens to carry text, for the active display profile.
+    var islandLiveActivityMode: IslandLiveActivityMode {
+        get { appearancePreferences(for: activeAppearanceProfile).liveActivity }
+        set { updateAppearancePreferences(for: activeAppearanceProfile) { $0.liveActivity = newValue } }
+    }
+
+    /// When each session most recently went from not-running to running, so
+    /// the working pill's timer counts the current turn, not the session.
+    private(set) var runningSince: [String: Date] = [:]
+
+    /// Session whose "finished" peek is on the pill right now, if any.
+    private(set) var finishedPeekSessionID: String?
+
+    /// What the closed pill should say, or nil to stay narrow.
+    var islandLiveActivity: IslandLiveActivity? {
+        IslandLiveActivity.resolve(
+            mode: islandLiveActivityMode,
+            sessions: surfacedSessions,
+            finishedPeekSessionID: finishedPeekSessionID,
+            runningSince: runningSince,
+            attentionSince: attentionStartedAt
+        )
+    }
+
+    /// Width the view actually drew for the closed pill; the controller uses it
+    /// so the hover / click area follows the widened live-activity pill.
+    @ObservationIgnored
+    var measuredClosedSurfaceWidth: CGFloat = 0
+
+    func noteRunningTransition(sessionID: String, from priorPhase: SessionPhase?, at date: Date = .now) {
+        let phase = state.session(id: sessionID)?.phase
+        if phase == .running {
+            if priorPhase != .running || runningSince[sessionID] == nil {
+                runningSince[sessionID] = date
+            }
+        } else if phase != nil {
+            runningSince[sessionID] = nil
+        }
+    }
+
+    /// Shows "<Agent> finished" on the pill for a few seconds and makes the
+    /// character hop. Replaces any earlier peek.
+    func beginFinishedPeek(for sessionID: String) {
+        guard islandLiveActivityMode != .off else { return }
+        finishedPeekSessionID = sessionID
+        nudgeTrigger = UUID()
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(IslandLiveActivity.finishedPeekDuration))
+            guard let self, self.finishedPeekSessionID == sessionID else { return }
+            self.finishedPeekSessionID = nil
+        }
+    }
+
     var islandUsageDisplay: IslandUsageDisplay {
         get { appearancePreferences(for: activeAppearanceProfile).usageDisplay }
         set { updateAppearancePreferences(for: activeAppearanceProfile) { $0.usageDisplay = newValue } }
@@ -549,6 +604,7 @@ final class AppModel {
         defaults.set(preferences.centerLabel.rawValue, forKey: Self.appearanceDefaultsKey(profile, "centerLabel"))
         defaults.set(preferences.character.rawValue, forKey: Self.appearanceDefaultsKey(profile, "character"))
         defaults.set(preferences.density.rawValue, forKey: Self.appearanceDefaultsKey(profile, "density"))
+        defaults.set(preferences.liveActivity.rawValue, forKey: Self.appearanceDefaultsKey(profile, "liveActivity"))
         defaults.set(preferences.autoHideWhenInactive, forKey: Self.appearanceDefaultsKey(profile, "autoHideWhenInactive"))
         defaults.set(preferences.usageDisplay.rawValue, forKey: Self.appearanceDefaultsKey(profile, "usageDisplay"))
         defaults.set(preferences.sessionStateIndicator.rawValue, forKey: Self.appearanceDefaultsKey(profile, "stateIndicator"))
@@ -693,6 +749,10 @@ final class AppModel {
                 rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "density"))
                     ?? ""
             ) ?? .regular,
+            liveActivity: IslandLiveActivityMode(
+                rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "liveActivity"))
+                    ?? ""
+            ) ?? .active,
             autoHideWhenInactive: defaults.bool(forKey: appearanceDefaultsKey(profile, "autoHideWhenInactive")),
             usageDisplay: IslandUsageDisplay(
                 rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "usageDisplay"))
@@ -2138,6 +2198,9 @@ final class AppModel {
         }
 
         state.apply(event)
+        if let sessionID = event.sessionID {
+            noteRunningTransition(sessionID: sessionID, from: priorPhase)
+        }
         reconcileIslandSurfaceAfterStateChange()
 
         // Arm an idle nudge when a session enters an attention phase.
@@ -2301,6 +2364,10 @@ final class AppModel {
         guard let session = state.session(id: settled.payload.sessionID),
               session.phase == .completed else {
             return
+        }
+
+        if settled.decision != .suppress {
+            beginFinishedPeek(for: settled.payload.sessionID)
         }
 
         switch settled.decision {

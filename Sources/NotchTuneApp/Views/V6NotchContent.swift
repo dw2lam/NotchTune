@@ -233,13 +233,105 @@ struct V6ClosedPill: View {
     /// Changes to trigger a one-shot jump on the glyph (idle-session nudge).
     var nudgeTrigger: UUID? = nil
 
+    /// MacBook mode only — when set, the wings widen to `liveWingWidth` and
+    /// carry the activity's text + timer instead of the glyph/right slot.
+    var liveActivity: IslandLiveActivity? = nil
+    var liveLeftWingWidth: CGFloat = 0
+    var liveRightWingWidth: CGFloat = 0
+
     @Environment(\.islandChromeMetrics) private var metrics
 
     var body: some View {
         switch layout {
-        case .external: externalBody
-        case .macbook:  macbookBody
+        case .external:
+            if let liveActivity {
+                externalLiveActivityBody(liveActivity)
+            } else {
+                externalBody
+            }
+        case .macbook:
+            if let liveActivity, liveLeftWingWidth > 0 {
+                liveActivityBody(liveActivity)
+            } else {
+                macbookBody
+            }
         }
+    }
+
+    // MARK: External live activity (single line — menu bars are ~24pt)
+
+    private func externalLiveActivityBody(_ activity: IslandLiveActivity) -> some View {
+        let glyphW = metrics.closedGlyphSize
+        let width = activity.externalPillWidth(metrics: metrics, height: height, minWidth: minWidth)
+
+        return ZStack {
+            IslandSurfaceBackground(
+                shape: V6ClosedPillShape(topFilletRadius: 0),
+                glass: glass
+            )
+
+            HStack(spacing: 0) {
+                UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
+                    .frame(width: glyphW, height: glyphW)
+
+                LiveActivityInlineText(activity: activity, metrics: metrics)
+                    .padding(.leading, 8)
+                    .id(activity.sessionID + String(describing: activity.kind))
+                    .transition(.opacity)
+
+                Spacer(minLength: Self.innerGap)
+
+                LiveActivityTrailingView(activity: activity, metrics: metrics)
+            }
+            .padding(.horizontal, pad)
+        }
+        .frame(width: width, height: height)
+        .animation(.smooth(duration: 0.45, extraBounce: 0.08), value: width)
+    }
+
+    // MARK: MacBook live activity (widened wings)
+
+    private func liveActivityBody(_ activity: IslandLiveActivity) -> some View {
+        let leftWing = liveLeftWingWidth
+        let rightWing = max(liveRightWingWidth, metrics.notchedClosedMinimumWingReserve)
+        let glyphW = metrics.closedGlyphSize
+
+        return ZStack {
+            IslandSurfaceBackground(
+                shape: V6ClosedPillShape(topFilletRadius: 0),
+                glass: glass
+            )
+
+            HStack(spacing: 0) {
+                HStack(spacing: metrics.notchedClosedContentGap) {
+                    UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger)
+                        .frame(width: glyphW, height: glyphW)
+
+                    LiveActivityTextBlock(activity: activity, metrics: metrics)
+                        .id(activity.sessionID + String(describing: activity.kind))
+                        .transition(.opacity.combined(with: .move(edge: .leading)))
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.leading, metrics.notchedClosedHorizontalPadding)
+                .frame(width: leftWing, alignment: .leading)
+                .clipped()
+
+                Color.clear
+                    .frame(width: physicalNotchWidth)
+
+                HStack(spacing: 6) {
+                    Spacer(minLength: 0)
+                    LiveActivityTrailingView(activity: activity, metrics: metrics)
+                        .transition(.opacity)
+                }
+                .padding(.trailing, metrics.notchedClosedHorizontalPadding)
+                .frame(width: rightWing, alignment: .trailing)
+            }
+        }
+        .frame(width: leftWing + physicalNotchWidth + rightWing, height: height)
+        .animation(.smooth(duration: 0.45, extraBounce: 0.08), value: leftWing + rightWing)
+        .animation(.easeInOut(duration: 0.25), value: activity)
     }
 
     // Horizontal edge padding is identical left/right — canonical v6 pill
@@ -847,5 +939,113 @@ struct IslandPreviewPill: View {
             physicalNotchWidth: physicalNotchWidth
         )
         .frame(maxWidth: .infinity, alignment: .center)
+    }
+}
+
+// MARK: - Live activity pieces
+
+/// Two-line text for the widened pill: title over what the agent is doing.
+private struct LiveActivityTextBlock: View {
+    let activity: IslandLiveActivity
+    let metrics: IslandChromeMetrics
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: metrics.notificationTextSpacing) {
+            Text(activity.title)
+                .font(metrics.notificationTitleFont.weight(.semibold))
+                .foregroundStyle(LiveActivityPalette.titleColor(for: activity.kind))
+                .frame(height: metrics.notificationTitleLineHeight, alignment: .leading)
+
+            if let subtitle = activity.subtitle {
+                Text(subtitle)
+                    .font(metrics.notificationArtistFont)
+                    .foregroundStyle(V6Palette.paper.opacity(0.58))
+                    .frame(height: metrics.notificationArtistLineHeight, alignment: .leading)
+            }
+        }
+        .lineLimit(1)
+        .truncationMode(.tail)
+        .frame(maxWidth: IslandLiveActivity.maxTextWidth, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// One-line variant for the short external menu-bar pill.
+private struct LiveActivityInlineText: View {
+    let activity: IslandLiveActivity
+    let metrics: IslandChromeMetrics
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Text(activity.title)
+                .font(metrics.notificationTitleFont.weight(.semibold))
+                .foregroundStyle(LiveActivityPalette.titleColor(for: activity.kind))
+                .layoutPriority(1)
+            if let subtitle = activity.subtitle {
+                Text("  " + subtitle)
+                    .font(metrics.notificationArtistFont)
+                    .foregroundStyle(V6Palette.paper.opacity(0.55))
+            }
+        }
+        .lineLimit(1)
+        .truncationMode(.tail)
+    }
+}
+
+enum LiveActivityPalette {
+    static func titleColor(for kind: IslandLiveActivity.Kind) -> Color {
+        switch kind {
+        case .working:       return V6Palette.paper.opacity(0.92)
+        case .needsApproval: return IslandDesignPalette.Status.waitingForApproval
+        case .needsAnswer:   return IslandDesignPalette.Status.waitingForAnswer
+        case .finished:      return IslandDesignPalette.Status.completed
+        }
+    }
+}
+
+/// Right wing: a live timer (working / waiting) or a check mark (finished),
+/// plus "+N" when other sessions are live.
+private struct LiveActivityTrailingView: View {
+    let activity: IslandLiveActivity
+    let metrics: IslandChromeMetrics
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if activity.otherCount > 0 {
+                Text("+\(activity.otherCount)")
+                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(V6Palette.paper.opacity(0.55))
+                    .padding(.horizontal, 5)
+                    .frame(height: 15)
+                    .background(.white.opacity(0.1), in: Capsule())
+            }
+
+            switch activity.kind {
+            case .finished:
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(IslandDesignPalette.Status.completed)
+                    .symbolEffect(.bounce, value: activity.sessionID)
+            case .working, .needsApproval, .needsAnswer:
+                if let since = activity.since {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text(IslandLiveActivity.elapsedText(since: since, now: context.date))
+                            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundStyle(timerColor)
+                            .contentTransition(.numericText())
+                    }
+                }
+            }
+        }
+        .fixedSize()
+    }
+
+    private var timerColor: Color {
+        switch activity.kind {
+        case .needsApproval: return IslandDesignPalette.Status.waitingForApproval
+        case .needsAnswer:   return IslandDesignPalette.Status.waitingForAnswer
+        default:             return V6Palette.paper.opacity(0.5)
+        }
     }
 }

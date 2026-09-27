@@ -65,6 +65,11 @@
 "settings.appearance.centerLabel.agentAction" = "Agent · action";
 "settings.appearance.centerLabel.sessionName" = "Session name";
 "settings.appearance.centerLabel.off" = "Off";
+"settings.appearance.liveActivity.title" = "Live activity";
+"settings.appearance.liveActivity.note" = "Let the notch widen to show what an agent is doing, when it needs you, and when it finishes.";
+"settings.appearance.liveActivity.off" = "Off";
+"settings.appearance.liveActivity.events" = "Events only";
+"settings.appearance.liveActivity.active" = "While active";
 "settings.appearance.density.title" = "Density";
 "settings.appearance.density.note" = "Regular keeps the standard pill. Compact trims the glyph, paddings and wings so the closed island hugs the notch or menu bar.";
 "settings.appearance.density.regular" = "Regular";

@@ -242,8 +242,36 @@ struct IslandPanelView: View {
         activeMusicClipMetrics.leftWingWidth
     }
 
+    /// Wing widths for the widened live-activity pill, or 0 when the pill is
+    /// not showing a live activity (MacBook layout only). Asymmetric: the
+    /// text wing grows, the timer wing stays tight; the notch-alignment offset
+    /// keeps the gap centred on the physical cutout.
+    private var liveActivityMaxWing: CGFloat {
+        max(0, (panelContentWidth - macbookPhysicalNotchWidth) / 2)
+    }
+
+    private var macbookLiveActivity: IslandLiveActivity? {
+        guard !isExternalDisplayPlacement, !isShowingClosedMusicSurface else { return nil }
+        return model.islandLiveActivity
+    }
+
+    private var liveActivityLeftWingWidth: CGFloat {
+        macbookLiveActivity?.leftWingWidth(metrics: chromeMetrics, maxWingWidth: liveActivityMaxWing) ?? 0
+    }
+
+    private var liveActivityRightWingWidth: CGFloat {
+        guard let activity = macbookLiveActivity else { return 0 }
+        return max(
+            activity.rightWingWidth(metrics: chromeMetrics, maxWingWidth: liveActivityMaxWing),
+            chromeMetrics.notchedClosedMinimumWingReserve
+        )
+    }
+
+    private var liveActivityWingWidth: CGFloat { liveActivityLeftWingWidth }
+
     private var compactClipLeftWingWidth: CGFloat {
         guard !isExternalDisplayPlacement else { return 0 }
+        if liveActivityLeftWingWidth > 0 { return liveActivityLeftWingWidth }
         if isShowingCompactMusicView {
             return chromeMetrics.notchedCompactMusicLeftWingReserve()
         }
@@ -254,6 +282,7 @@ struct IslandPanelView: View {
 
     private var compactClipRightWingWidth: CGFloat {
         guard !isExternalDisplayPlacement else { return 0 }
+        if liveActivityRightWingWidth > 0 { return liveActivityRightWingWidth }
         if isShowingCompactMusicView {
             return chromeMetrics.notchedCompactMusicRightWingReserve()
         }
@@ -275,9 +304,25 @@ struct IslandPanelView: View {
         return -(compactClipLeftWingWidth - compactClipRightWingWidth) / 2
     }
 
+    private var externalLiveActivityWidth: CGFloat {
+        guard isExternalDisplayPlacement,
+              !isShowingClosedMusicSurface,
+              let activity = model.islandLiveActivity else { return 0 }
+        return min(
+            activity.externalPillWidth(metrics: chromeMetrics, height: closedNotchHeight, minWidth: 70),
+            panelContentWidth
+        )
+    }
+
     private var standardClosedPillClipWidth: CGFloat {
+        if externalLiveActivityWidth > 0 {
+            return externalLiveActivityWidth
+        }
         if isExternalDisplayPlacement {
             return 360
+        }
+        if liveActivityLeftWingWidth > 0 {
+            return liveActivityLeftWingWidth + macbookPhysicalNotchWidth + liveActivityRightWingWidth
         }
         let rightSlotWidth = model.islandClosedRightSlotContent()
             .map { V6RightSlotView.intrinsicWidth(of: $0) } ?? 0
@@ -302,6 +347,9 @@ struct IslandPanelView: View {
             return chromeMetrics.notchedCompactMusicOuterWidth(
                 physicalNotchWidth: macbookPhysicalNotchWidth
             )
+        }
+        if liveActivityWingWidth > 0 || externalLiveActivityWidth > 0 {
+            return standardClosedPillClipWidth
         }
         if closedPillWidth > 0 { return closedPillWidth }
         return standardClosedPillClipWidth
@@ -628,6 +676,7 @@ struct IslandPanelView: View {
                 .background(closedSurfaceWidthReader)
             } else {
                 let layout: V6ClosedLayout = isExternalDisplayPlacement ? .external : .macbook
+                let liveActivity = model.islandLiveActivity
                 V6ClosedPill(
                     mode: model.islandClosedMode,
                     character: model.islandCharacter,
@@ -639,7 +688,10 @@ struct IslandPanelView: View {
                     minWidth: 70,
                     glass: model.glassSettings.closedGlass(layout: layout),
                     glyphPaused: closedGlyphPaused,
-                    nudgeTrigger: model.nudgeTrigger
+                    nudgeTrigger: model.nudgeTrigger,
+                    liveActivity: liveActivity,
+                    liveLeftWingWidth: layout == .macbook ? liveActivityLeftWingWidth : 0,
+                    liveRightWingWidth: layout == .macbook ? liveActivityRightWingWidth : 0
                 )
                 .scaleEffect(
                     x: isPopping ? chromeMetrics.closedPopScale.width : 1,
@@ -702,6 +754,14 @@ struct IslandPanelView: View {
 
     private func updateClosedPillWidth(_ width: CGFloat, fromMusicNotification: Bool = false) {
         guard width > 0 else { return }
+        // The controller centres the hit area on the notch, so an asymmetric
+        // live-activity pill needs the wider wing mirrored on both sides.
+        if liveActivityLeftWingWidth > 0 {
+            model.measuredClosedSurfaceWidth = 2 * max(liveActivityLeftWingWidth, liveActivityRightWingWidth)
+                + macbookPhysicalNotchWidth
+        } else {
+            model.measuredClosedSurfaceWidth = width
+        }
         if isShowingMusicNotification && !fromMusicNotification {
             return
         }
