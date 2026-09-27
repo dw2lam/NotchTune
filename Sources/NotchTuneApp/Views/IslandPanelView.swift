@@ -445,6 +445,10 @@ struct IslandPanelView: View {
                 withAnimation(openAnimation) { morphProgress = 1 }
             case .closed, .popping:
                 withAnimation(closeAnimation) { morphProgress = 0 }
+                // The panel stops accepting mouse events once it closes, so
+                // SwiftUI never delivers the matching hover exit — without
+                // this the closed pill stays stuck at the hover scale.
+                isHovering = false
             }
         }
         .onChange(of: model.musicNotificationTrack) { _, track in
@@ -527,7 +531,11 @@ struct IslandPanelView: View {
                 ))
             }
         }
-        .scaleEffect(usesOpenedVisualState ? 1 : (isHovering ? IslandChromeMetrics.closedHoverScale : 1), anchor: .top)
+        .scaleEffect(
+            x: usesOpenedVisualState || !isHovering ? 1 : chromeMetrics.closedHoverScale.width,
+            y: usesOpenedVisualState || !isHovering ? 1 : chromeMetrics.closedHoverScale.height,
+            anchor: .top
+        )
         // A soft spring instead of a linear ease so the pill "swells" toward the
         // cursor with a little surface-tension settle — the liquid peek before
         // it flows open.
@@ -633,7 +641,11 @@ struct IslandPanelView: View {
                     glyphPaused: closedGlyphPaused,
                     nudgeTrigger: model.nudgeTrigger
                 )
-                .scaleEffect(isPopping ? 1.04 : 1, anchor: .top)
+                .scaleEffect(
+                    x: isPopping ? chromeMetrics.closedPopScale.width : 1,
+                    y: isPopping ? chromeMetrics.closedPopScale.height : 1,
+                    anchor: .top
+                )
                 .animation(popAnimation, value: isPopping)
                 .background(closedSurfaceWidthReader)
             }
@@ -645,7 +657,11 @@ struct IslandPanelView: View {
         }
         // File drag in the approach zone: grow slightly to signal the shelf is
         // ready to catch the file (the character hop rides nudgeTrigger).
-        .scaleEffect(model.isFileDragHintReady ? 1.07 : 1, anchor: .top)
+        .scaleEffect(
+            x: model.isFileDragHintReady ? chromeMetrics.closedFileDragHintScale.width : 1,
+            y: model.isFileDragHintReady ? chromeMetrics.closedFileDragHintScale.height : 1,
+            anchor: .top
+        )
         .animation(.spring(response: 0.32, dampingFraction: 0.62), value: model.isFileDragHintReady)
     }
 
