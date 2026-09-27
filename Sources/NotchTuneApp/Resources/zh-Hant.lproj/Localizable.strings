@@ -238,6 +238,13 @@
 /* Island Panel - Completion */
 "completion.done" = "完成";
 "completion.replyPlaceholder" = "回覆 %@…";
+"completion.toast.finished" = "%@ 已完成";
+"completion.toast.jump" = "跳轉";
+"completion.toast.jumpTo" = "跳轉到 %@";
+"completion.toast.reply" = "回覆";
+"completion.toast.showAll" = "全部 %lld 個工作階段";
+"completion.toast.next" = "下一個完成";
+"completion.toast.previous" = "上一個完成";
 
 /* Window Titles */
 "window.settings" = "NotchTune 設定";

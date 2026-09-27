@@ -20,7 +20,7 @@ final class OverlayPanelController {
     // get one continuous row.
     nonisolated static let preferredNotchOpenedPanelWidth: CGFloat = 620
     private static let preferredTopBarOpenedPanelWidth: CGFloat = 640
-    private static let preferredNotificationPanelWidth: CGFloat = 620
+    private static let preferredNotificationPanelWidth: CGFloat = NotificationSurfaceMetrics.panelWidth
     private static let openedContentWidthPadding: CGFloat = 0
     private static let openedContentBottomPadding: CGFloat = 0
     private static let openedRowSpacing: CGFloat = 0
@@ -278,9 +278,12 @@ final class OverlayPanelController {
             return false
         }
         let current = panel.frame
-        return abs(current.width - newFrame.width) < 0.5
-            && abs(current.minX - newFrame.minX) < 0.5
-            && abs(current.height - newFrame.height) >= 0.5
+        // Same screen top edge = same display. A toast growing into the full
+        // session list changes width too, and that should morph, not snap.
+        let staysOnSameScreenTop = abs(current.maxY - newFrame.maxY) < 0.5
+        let heightChanges = abs(current.height - newFrame.height) >= 0.5
+        let widthChanges = abs(current.width - newFrame.width) >= 0.5
+        return staysOnSameScreenTop && (heightChanges || widthChanges)
     }
 
     private func presentPanel(_ panel: NSPanel, activates: Bool) {
@@ -937,11 +940,16 @@ final class OverlayPanelController {
             )
         }
 
-        let panelWidth = openedPanelWidth(for: screen)
-        let contentHeight = openedContentHeight(for: model)
+        let isNotification = isNotificationMode(model)
+        let panelWidth = isNotification
+            ? notificationPanelWidth(for: screen)
+            : openedPanelWidth(for: screen)
+        let contentHeight = openedContentHeight(for: model, on: screen)
         // Use at least the empty-state height so the window doesn't shrink
-        // when sessions come and go while opened.
-        let height = screen.notchSize.height + max(contentHeight, Self.openedEmptyStateHeight) + Self.openedContentBottomPadding + insets.bottom
+        // when sessions come and go while opened. Notifications are the
+        // exception: a toast is exactly as tall as its content.
+        let minimumHeight = isNotification ? 0 : Self.openedEmptyStateHeight
+        let height = screen.notchSize.height + max(contentHeight, minimumHeight) + Self.openedContentBottomPadding + insets.bottom
 
         return CGSize(
             width: panelWidth + Self.openedContentWidthPadding + (insets.horizontal * 2),
@@ -967,31 +975,48 @@ final class OverlayPanelController {
         )
     }
 
-    private func openedContentHeight(for model: AppModel) -> CGFloat {
+    private func isNotificationMode(_ model: AppModel) -> Bool {
+        model.notchOpenReason == .notification && model.islandSurface.sessionID != nil
+    }
+
+    private func openedContentHeight(for model: AppModel, on screen: NSScreen) -> CGFloat {
         let actionableID = model.islandSurface.sessionID
-        let isNotificationMode = model.notchOpenReason == .notification && actionableID != nil
+        let isNotificationMode = isNotificationMode(model)
 
         if model.notchOpenReason == .drag {
             return Self.fileDragTargetHeight
         }
 
         if isNotificationMode {
-            let tabBarHeight: CGFloat = 36
-            // Use SwiftUI-measured height when available (accurate after first render).
+            let session = actionableID.flatMap { model.state.session(id: $0) }
+            let cap = NotificationSurfaceMetrics.maxContentHeight(
+                screenHeight: screen.frame.height,
+                notchHeight: screen.notchSize.height,
+                phase: session?.phase
+            )
+            // No tab bar in notification mode; the card starts under the notch.
+            // Use the SwiftUI-measured height when available (accurate after the
+            // first render).
             if model.measuredNotificationContentHeight > 0 {
-                return model.measuredNotificationContentHeight + Self.notificationMeasuredContentPadding + tabBarHeight
+                return min(cap, model.measuredNotificationContentHeight + Self.notificationMeasuredContentPadding)
             }
-            // First render: estimate from the actionable session's content so the
-            // initial window is close to the final size. This avoids a large blank
-            // panel flash (the previous 500pt fallback) and reduces the chance of
-            // a measurement→reposition cycle.
-            if let actionableID,
-               let session = model.state.session(id: actionableID) {
+            // First render: estimate from the session's content so the initial
+            // window is close to the final size. This avoids a blank panel flash
+            // and reduces the chance of a measurement→reposition cycle.
+            if let session {
+                if session.phase == .completed {
+                    let estimate = CompletionToastView.estimatedHeight(
+                        for: session,
+                        contentWidth: notificationPanelWidth(for: screen),
+                        hasPrompt: session.latestUserPromptText != nil || session.initialUserPromptText != nil
+                    )
+                    return min(cap, estimate + Self.notificationMeasuredContentPadding)
+                }
                 let rowHeight = session.estimatedIslandRowHeight(at: Date.now)
                 let bodyHeight = actionableBodyHeight(for: session, model: model)
-                return rowHeight + bodyHeight + Self.notificationEstimatedVerticalInsets + tabBarHeight
+                return min(cap, rowHeight + bodyHeight + Self.notificationEstimatedVerticalInsets)
             }
-            return 300 + tabBarHeight
+            return min(cap, 160)
         }
 
         if model.islandActiveTab == .music {

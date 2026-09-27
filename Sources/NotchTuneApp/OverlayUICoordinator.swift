@@ -8,7 +8,7 @@ import SwiftUI
 @Observable
 final class OverlayUICoordinator {
 
-    private static let notificationSurfaceAutoCollapseDelay: TimeInterval = 10
+    private static let notificationSurfaceAutoCollapseDelay: TimeInterval = NotificationSurfaceMetrics.completionToastDuration
     private static let musicTrackNotificationDuration: TimeInterval = 2.5
     private static let pointerExitCollapseDelay: Duration = .milliseconds(160)
 
@@ -41,6 +41,16 @@ final class OverlayUICoordinator {
 
     @ObservationIgnored
     var isSoundMutedAccessor: (() -> Bool)?
+
+    /// Next completed session the toast should rotate to when its timer runs
+    /// out, or nil to collapse. Supplied by `AppModel`.
+    @ObservationIgnored
+    var nextUnseenCompletionAccessor: (() -> String?)?
+
+    /// Called whenever a notification surface for a session is put on screen
+    /// (first present or rotation), so the model can mark it as seen.
+    @ObservationIgnored
+    var onNotificationSurfaceShown: ((String) -> Void)?
 
     @ObservationIgnored
     var ignoresPointerExitAccessor: (() -> Bool)?
@@ -269,6 +279,9 @@ final class OverlayUICoordinator {
         // content while the Music tab is still displayed).
         if status == .opened, reason == .notification, surface.isNotificationCard {
             appModel?.islandActiveTab = .agents
+            if let sessionID = surface.sessionID {
+                onNotificationSurfaceShown?(sessionID)
+            }
         }
 
         if status == .opened, let appModel {
@@ -677,8 +690,33 @@ final class OverlayUICoordinator {
                 return
             }
 
+            // Rotate through the completions that piled up while this toast
+            // was showing before letting the notch close.
+            if let nextSessionID = self.nextUnseenCompletionAccessor?(),
+               nextSessionID != self.islandSurface.sessionID {
+                self.rotateNotificationSurface(to: nextSessionID)
+                return
+            }
+
             self.notchClose()
         }
+    }
+
+    /// Swaps the session shown by the current notification surface without
+    /// re-opening, re-sounding, or resetting the pointer bookkeeping.
+    func rotateNotificationSurface(to sessionID: String) {
+        guard notchStatus == .opened,
+              notchOpenReason == .notification,
+              islandSurface.isNotificationCard,
+              islandSurface.sessionID != sessionID else {
+            return
+        }
+
+        appModel?.measuredNotificationContentHeight = 0
+        islandSurface = .sessionList(actionableSessionID: sessionID)
+        onNotificationSurfaceShown?(sessionID)
+        refreshOverlayPlacementIfVisible()
+        updateNotificationAutoCollapse()
     }
 
     var shouldDeferTimedNotificationAutoCollapse: Bool {

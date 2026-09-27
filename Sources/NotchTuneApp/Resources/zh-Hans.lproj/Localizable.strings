@@ -239,6 +239,13 @@
 /* Island Panel - Completion */
 "completion.done" = "完成";
 "completion.replyPlaceholder" = "回复 %@…";
+"completion.toast.finished" = "%@ 已完成";
+"completion.toast.jump" = "跳转";
+"completion.toast.jumpTo" = "跳转到 %@";
+"completion.toast.reply" = "回复";
+"completion.toast.showAll" = "全部 %lld 个会话";
+"completion.toast.next" = "下一个完成";
+"completion.toast.previous" = "上一个完成";
 
 /* Window Titles */
 "window.settings" = "NotchTune 设置";

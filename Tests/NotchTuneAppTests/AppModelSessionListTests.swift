@@ -1290,6 +1290,59 @@ struct AppModelSessionListTests {
         #expect(claudeSessions.count == 2)
     }
 
+    @Test
+    func completionToastRingOrdersFreshCompletionsNewestFirstAndSkipsStale() {
+        let now = Date()
+        let model = AppModel()
+        model.completedStaleThreshold = .fiveMinutes
+
+        model.state = SessionState(sessions: [
+            listSession(id: "older", phase: .completed, updatedAt: now.addingTimeInterval(-90)),
+            listSession(id: "running", phase: .running, updatedAt: now),
+            listSession(id: "newest", phase: .completed, updatedAt: now.addingTimeInterval(-5)),
+            listSession(id: "stale", phase: .completed, updatedAt: now.addingTimeInterval(-600)),
+        ])
+
+        #expect(model.completionToastRing.map(\.id) == ["newest", "older"])
+    }
+
+    @Test
+    func nextUnseenCompletionSkipsShownSessionsUntilTheyCompleteAgain() {
+        let now = Date()
+        let model = AppModel()
+        model.completedStaleThreshold = .fiveMinutes
+
+        model.state = SessionState(sessions: [
+            listSession(id: "a", phase: .completed, updatedAt: now.addingTimeInterval(-10)),
+            listSession(id: "b", phase: .completed, updatedAt: now.addingTimeInterval(-20)),
+        ])
+
+        #expect(model.nextUnseenCompletedSessionID == "a")
+        model.markCompletionToastShown(for: "a")
+        #expect(model.nextUnseenCompletedSessionID == "b")
+        model.markCompletionToastShown(for: "b")
+        #expect(model.nextUnseenCompletedSessionID == nil)
+
+        // "a" finishes another turn: it becomes unseen again.
+        model.state = SessionState(sessions: [
+            listSession(id: "a", phase: .completed, updatedAt: now),
+            listSession(id: "b", phase: .completed, updatedAt: now.addingTimeInterval(-20)),
+        ])
+        #expect(model.nextUnseenCompletedSessionID == "a")
+    }
+
+    @Test
+    func markingARunningSessionShownIsIgnored() {
+        let model = AppModel()
+        model.state = SessionState(sessions: [
+            listSession(id: "busy", phase: .running, updatedAt: Date()),
+        ])
+
+        model.markCompletionToastShown(for: "busy")
+
+        #expect(model.completionToastShownAt["busy"] == nil)
+    }
+
     private func listSession(id: String, phase: SessionPhase, updatedAt: Date) -> AgentSession {
         AgentSession(
             id: id,

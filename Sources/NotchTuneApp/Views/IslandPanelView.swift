@@ -830,10 +830,14 @@ struct IslandPanelView: View {
                     .transition(.opacity)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
-                    islandTabBar
-                        .padding(.horizontal, sessionListSideInset)
-                        .padding(.top, Self.openedTabBarTopPadding)
-                        .padding(.bottom, Self.openedTabBarBottomPadding)
+                    // Notifications are toasts, not a browsing surface: no
+                    // tab bar, the card starts right under the notch.
+                    if !isNotificationMode {
+                        islandTabBar
+                            .padding(.horizontal, sessionListSideInset)
+                            .padding(.top, Self.openedTabBarTopPadding)
+                            .padding(.bottom, Self.openedTabBarBottomPadding)
+                    }
 
                     switch model.islandActiveTab {
                     case .agents:
@@ -951,7 +955,7 @@ struct IslandPanelView: View {
 
     private var agentsContent: some View {
         VStack(spacing: 8) {
-            if !model.hasAnyInstalledAgent {
+            if !model.hasAnyInstalledAgent, !isNotificationMode {
                 installHooksHint
                     .padding(.horizontal, sessionListSideInset)
                     .padding(.top, 8)
@@ -1059,7 +1063,17 @@ struct IslandPanelView: View {
         model.notchOpenReason == .notification && actionableSessionID != nil
     }
 
-    private static let maxSessionListHeight: CGFloat = 560
+    /// Screen-fraction budget for the current notification surface (see
+    /// `NotificationSurfaceMetrics`); the window controller clamps to the same
+    /// number so the view and the panel agree.
+    private var notificationContentHeightCap: CGFloat {
+        let screenHeight = targetOverlayScreen?.frame.height ?? 900
+        return NotificationSurfaceMetrics.maxContentHeight(
+            screenHeight: screenHeight,
+            notchHeight: closedNotchHeight,
+            phase: model.activeIslandCardSession?.phase
+        )
+    }
 
     private var sessionListSideInset: CGFloat {
         usesNotchAwareOpenedHeader ? Self.notchHeaderHorizontalPadding : 16
@@ -1070,16 +1084,12 @@ struct IslandPanelView: View {
             let referenceDate = context.date
 
             if isNotificationMode {
-                // Notification mode: NO ScrollView — content sizes naturally
-                sessionListContent(referenceDate: referenceDate)
+                // Notification mode: the card sizes itself (measured below and
+                // fed back into the window height). Past the screen-fraction
+                // budget it scrolls internally instead of growing the window.
+                let cap = notificationContentHeightCap
+                let content = sessionListContent(referenceDate: referenceDate)
                     .padding(.vertical, 2)
-                    .onHover { hovering in
-                        if hovering {
-                            model.notePointerInsideIslandSurface()
-                        } else {
-                            model.handlePointerExitedIslandSurface()
-                        }
-                    }
                     .background(
                         GeometryReader { geo in
                             Color.clear.preference(
@@ -1093,6 +1103,25 @@ struct IslandPanelView: View {
                             model.measuredNotificationContentHeight = height
                         }
                     }
+
+                Group {
+                    if model.measuredNotificationContentHeight > cap {
+                        ScrollView(.vertical) {
+                            content
+                        }
+                        .scrollIndicators(.automatic)
+                        .frame(height: cap)
+                    } else {
+                        content
+                    }
+                }
+                .onHover { hovering in
+                    if hovering {
+                        model.notePointerInsideIslandSurface()
+                    } else {
+                        model.handlePointerExitedIslandSurface()
+                    }
+                }
             } else {
                VStack(spacing: 0) {
                    sessionPanelHeader(referenceDate: referenceDate)
@@ -1135,7 +1164,23 @@ struct IslandPanelView: View {
                 sessionPanelHeader(referenceDate: referenceDate)
             }
 
-            if isNotificationMode, let session = model.activeIslandCardSession {
+            if isNotificationMode, let session = model.activeIslandCardSession, session.phase == .completed {
+                CompletionToastView(
+                    session: session,
+                    referenceDate: referenceDate,
+                    queuePosition: model.completionToastQueuePosition,
+                    totalSessionCount: model.allSessions.count,
+                    isFlashing: model.completionFlashSessionID == session.id,
+                    isInteractive: model.notchStatus == .opened,
+                    lang: model.lang,
+                    onJump: { model.jumpToSession(session) },
+                    onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
+                        ? { model.replyToSession(session, text: $0) } : nil,
+                    onRotate: { model.rotateCompletionToast(forward: $0) },
+                    onShowAll: { model.expandNotificationToSessionList(clearExpansion: true) }
+                )
+                .id(notificationCardIdentity(for: session))
+            } else if isNotificationMode, let session = model.activeIslandCardSession {
                 IslandSessionRow(
                     session: session,
                     referenceDate: referenceDate,
@@ -3078,7 +3123,7 @@ private struct StructuredQuestionPromptView: View {
 /// NSTextField wrapper that fires `onSubmit` only when the IME composition
 /// is finished — pressing Enter during Chinese/Japanese IME composition
 /// confirms the candidate instead of submitting.
-private struct ReplyTextField: NSViewRepresentable {
+struct ReplyTextField: NSViewRepresentable {
     var placeholder: String
     @Binding var text: String
     var onSubmit: () -> Void

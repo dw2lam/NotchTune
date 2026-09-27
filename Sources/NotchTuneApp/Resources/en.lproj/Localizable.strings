@@ -239,6 +239,13 @@
 /* Island Panel - Completion */
 "completion.done" = "Done";
 "completion.replyPlaceholder" = "Reply to %@…";
+"completion.toast.finished" = "%@ finished";
+"completion.toast.jump" = "Jump";
+"completion.toast.jumpTo" = "Jump to %@";
+"completion.toast.reply" = "Reply";
+"completion.toast.showAll" = "All %lld sessions";
+"completion.toast.next" = "Next completion";
+"completion.toast.previous" = "Previous completion";
 
 /* Window Titles */
 "window.settings" = "NotchTune Settings";

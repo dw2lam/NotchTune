@@ -205,13 +205,13 @@ def main() -> None:
             fail(f"expected sessionList surface, got {island_surface!r}")
         require_frame_between(
             overlay_frame,
-            width=(680, 780),
-            height=(360, 500),
+            width=(640, 700),
+            height=(360, 720),
             context="sessionList overlay frame",
         )
         if len(button_labels) < 3:
             fail("expected sessionList to expose multiple actionable row buttons")
-        assert_contains_any(text_values, ["sessions hidden"], "sessionList text values")
+        assert_contains_any(text_values, ["total"], "sessionList text values")
 
     elif scenario == "approvalCard":
         if notch_status != "opened":
@@ -220,8 +220,8 @@ def main() -> None:
             fail(f"expected approvalCard surface, got {island_surface!r}")
         require_frame_between(
             overlay_frame,
-            width=(660, 760),
-            height=(300, 390),
+            width=(540, 600),
+            height=(240, 340),
             context="approvalCard overlay frame",
         )
         if "Deny" not in button_labels:
@@ -236,11 +236,11 @@ def main() -> None:
             fail(f"expected questionCard surface, got {island_surface!r}")
         require_frame_between(
             overlay_frame,
-            width=(660, 760),
-            height=(200, 340),
+            width=(540, 600),
+            height=(300, 460),
             context="questionCard overlay frame",
         )
-        assert_contains_any(button_labels, ["Go to Terminal"], "questionCard button labels")
+        assert_contains_any(button_labels, ["Submit Answers"], "questionCard button labels")
 
     elif scenario == "completionCard":
         if notch_status != "opened":
@@ -249,12 +249,12 @@ def main() -> None:
             fail(f"expected completionCard surface, got {island_surface!r}")
         require_frame_between(
             overlay_frame,
-            width=(660, 760),
-            height=(240, 460),
+            width=(540, 600),
+            height=(140, 240),
             context="completionCard overlay frame",
         )
-        if "Done" not in text_values:
-            fail("completionCard is missing 'Done' text")
+        assert_contains_any(text_values | labels, ["finished"], "completionCard text values")
+        assert_contains_any(button_labels, ["Jump"], "completionCard button labels")
 
     elif scenario == "longCompletionCard":
         if notch_status != "opened":
@@ -263,12 +263,13 @@ def main() -> None:
             fail(f"expected longCompletionCard to remain on completionCard surface, got {island_surface!r}")
         require_frame_between(
             overlay_frame,
-            width=(660, 760),
-            height=(240, 460),
+            width=(540, 600),
+            # The toast is budgeted to ~20% of the screen; a long reply must
+            # never grow the window past that.
+            height=(140, 260),
             context="longCompletionCard overlay frame",
         )
-        if "Done" not in text_values:
-            fail("longCompletionCard is missing 'Done' text")
+        assert_contains_any(text_values | labels, ["finished"], "longCompletionCard text values")
         assert_contains_any(text_values, ["README.md", "worktree"], "longCompletionCard text values")
 
     else:

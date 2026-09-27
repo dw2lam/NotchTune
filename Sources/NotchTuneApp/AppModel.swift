@@ -950,6 +950,12 @@ final class AppModel {
         overlay.activeIslandCardSessionAccessor = { [weak self] in
             self?.activeIslandCardSession
         }
+        overlay.nextUnseenCompletionAccessor = { [weak self] in
+            self?.nextUnseenCompletedSessionID
+        }
+        overlay.onNotificationSurfaceShown = { [weak self] sessionID in
+            self?.markCompletionToastShown(for: sessionID)
+        }
         overlay.isSoundMutedAccessor = { [weak self] in
             self?.isSoundMuted ?? false
         }
@@ -1749,6 +1755,61 @@ final class AppModel {
     func hideOverlay() { overlay.hideOverlay() }
     func expandNotificationToSessionList(clearExpansion: Bool = false) {
         overlay.expandNotificationToSessionList(clearExpansion: clearExpansion)
+    }
+
+    // MARK: - Completion toast rotation
+
+    /// Completion timestamps the toast has already shown, keyed by session.
+    /// A later completion (newer activity date) counts as unseen again.
+    private(set) var completionToastShownAt: [String: Date] = [:]
+
+    func markCompletionToastShown(for sessionID: String) {
+        guard let session = state.session(id: sessionID), session.phase == .completed else {
+            return
+        }
+        completionToastShownAt[sessionID] = session.islandActivityDate
+    }
+
+    /// Recently finished sessions, newest first, that the toast can rotate
+    /// through. Stale completions (past the appearance threshold) drop out.
+    var completionToastRing: [AgentSession] {
+        let now = Date.now
+        return allSessions
+            .filter { session in
+                session.phase == .completed
+                    && !session.isStaleCompletedForIsland(at: now, threshold: completedStaleThreshold.seconds)
+            }
+            .sorted { $0.islandActivityDate > $1.islandActivityDate }
+    }
+
+    var completionToastQueuePosition: CompletionToastQueuePosition? {
+        guard let currentID = islandSurface.sessionID else { return nil }
+        let ring = completionToastRing
+        guard ring.count > 1, let index = ring.firstIndex(where: { $0.id == currentID }) else {
+            return nil
+        }
+        return CompletionToastQueuePosition(index: index, count: ring.count)
+    }
+
+    /// The next completed session the toast has not shown yet (or has shown
+    /// only for an older completion), excluding the one on screen.
+    var nextUnseenCompletedSessionID: String? {
+        let currentID = islandSurface.sessionID
+        return completionToastRing.first { session in
+            guard session.id != currentID else { return false }
+            guard let shownAt = completionToastShownAt[session.id] else { return true }
+            return session.islandActivityDate > shownAt
+        }?.id
+    }
+
+    func rotateCompletionToast(forward: Bool) {
+        guard let currentID = islandSurface.sessionID else { return }
+        let ring = completionToastRing
+        guard ring.count > 1, let index = ring.firstIndex(where: { $0.id == currentID }) else {
+            return
+        }
+        let nextIndex = (index + (forward ? 1 : ring.count - 1)) % ring.count
+        overlay.rotateNotificationSurface(to: ring[nextIndex].id)
     }
     func refreshOverlayDisplayConfiguration() { overlay.refreshOverlayDisplayConfiguration() }
     func refreshOverlayPlacement() { overlay.refreshOverlayPlacement() }
