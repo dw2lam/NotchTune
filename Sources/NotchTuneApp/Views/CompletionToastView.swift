@@ -131,8 +131,22 @@ struct CompletionToastView: View {
         } else {
             HStack(spacing: 8) {
                 Button(action: onJump) {
-                    Label(jumpTitle, systemImage: "arrow.up.forward")
-                        .labelStyle(.titleAndIcon)
+                    NotificationKeyHintedTitle(keys: "⏎") {
+                        Label(jumpTitle, systemImage: "arrow.up.forward")
+                            .labelStyle(.titleAndIcon)
+                    }
+                    // ⌘R from NotificationCardKeyCommand: open the reply row.
+                    // Lives on the Jump label because the action row (and so
+                    // this label) is exactly what the reply row replaces.
+                    .onReceive(NotificationCenter.default.publisher(for: .notificationCardKeyCommand)) { notification in
+                        guard onReply != nil,
+                              NotificationCardKeyCommandBus.command(from: notification, sessionID: session.id) == .openReply else {
+                            return
+                        }
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isReplying = true
+                        }
+                    }
                 }
                 .buttonStyle(ToastButtonStyle(kind: .primary))
 
