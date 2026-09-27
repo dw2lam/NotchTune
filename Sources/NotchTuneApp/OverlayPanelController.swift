@@ -941,7 +941,7 @@ final class OverlayPanelController {
         guard let model else {
             return CGSize(
                 width: openedPanelWidth(for: screen) + Self.openedContentWidthPadding + (insets.horizontal * 2),
-                height: screen.notchSize.height + Self.openedEmptyStateHeight + Self.openedContentBottomPadding + insets.bottom
+                height: screen.closedIslandHeight(density: .regular) + Self.openedEmptyStateHeight + Self.openedContentBottomPadding + insets.bottom
             )
         }
 
@@ -954,7 +954,7 @@ final class OverlayPanelController {
         // when sessions come and go while opened. Notifications are the
         // exception: a toast is exactly as tall as its content.
         let minimumHeight = isNotification ? 0 : Self.openedEmptyStateHeight
-        let height = screen.notchSize.height + max(contentHeight, minimumHeight) + Self.openedContentBottomPadding + insets.bottom
+        let height = screen.closedIslandHeight(density: model.islandDensity) + max(contentHeight, minimumHeight) + Self.openedContentBottomPadding + insets.bottom
 
         return CGSize(
             width: panelWidth + Self.openedContentWidthPadding + (insets.horizontal * 2),
@@ -997,7 +997,7 @@ final class OverlayPanelController {
             let session = actionableID.flatMap { model.state.session(id: $0) }
             let cap = NotificationSurfaceMetrics.maxContentHeight(
                 screenHeight: screen.frame.height,
-                notchHeight: screen.notchSize.height,
+                notchHeight: screen.closedIslandHeight(density: model.islandDensity),
                 phase: session?.phase
             )
             // No tab bar in notification mode; the card starts under the notch.

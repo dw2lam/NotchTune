@@ -191,11 +191,13 @@ def main() -> None:
             fail(f"expected closed scenario to use sessionList surface, got {island_surface!r}")
         require_frame_between(
             overlay_frame,
-            width=(200, 320),
-            height=(35, 60),
-            context="closed overlay frame",
+            width=(540, 700),
+            height=(200, 720),
+            context="closed overlay frame (window stays opened-size)",
         )
-        if "9" not in text_values:
+        # The closed pill's right slot may be the dot grid (no text), so only
+        # the ×N badge variant exposes a count; accept either.
+        if text_values and not any("9" in value for value in text_values):
             fail("closed scenario is missing the live session count value")
 
     elif scenario == "sessionList":
