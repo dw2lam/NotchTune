@@ -1159,10 +1159,12 @@ final class AppModel {
     }
 
     var isMusicPlaybackActive: Bool {
+        // Cheap stored flags first: `isRunning` asks the player app, and this
+        // is read from view bodies (live activity, music chip).
         playerManager.isMusicEnabled
-            && playerManager.isRunning
             && playerManager.isPlaying
             && !playerManager.track.isEmpty()
+            && playerManager.isRunning
     }
 
     /// How long a paused track keeps its place on the closed pill (one click
@@ -2005,6 +2007,41 @@ final class AppModel {
     var showsNotificationCard: Bool { overlay.showsNotificationCard }
     var shouldDeferTimedNotificationAutoCollapse: Bool { overlay.shouldDeferTimedNotificationAutoCollapse }
     var hasPendingNotificationAutoCollapse: Bool { overlay.hasPendingNotificationAutoCollapse }
+
+    /// Brief "which way did that skip go" arrows on the closed pill's right
+    /// wing after a swipe.
+    private(set) var musicSkipFeedback: MusicSkipFeedback?
+
+    func showMusicSkipFeedback(_ direction: MusicSkipFeedback.Direction) {
+        let feedback = MusicSkipFeedback(direction: direction)
+        withAnimation(.easeOut(duration: 0.15)) { musicSkipFeedback = feedback }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(MusicSkipFeedback.duration))
+            guard let self, self.musicSkipFeedback?.id == feedback.id else { return }
+            withAnimation(.easeIn(duration: 0.25)) { self.musicSkipFeedback = nil }
+        }
+    }
+
+    /// Harness-only: stands in for the playing track's cover in the Music
+    /// tab's album-art tint.
+    var harnessMusicTintArt: NSImage?
+
+    /// Album art tinting the opened glass on the Music tab, if any.
+    var musicTabTintArt: NSImage? {
+        if let harnessMusicTintArt { return harnessMusicTintArt }
+        guard playerManager.isRunning, !playerManager.track.isEmpty() else { return nil }
+        return playerManager.track.nsAlbumArt
+    }
+
+    /// Harness-only: a square, strongly colored cover (so a misplaced tint
+    /// is obvious in captures).
+    static func harnessSampleAlbumArt() -> NSImage {
+        NSImage(size: NSSize(width: 600, height: 600), flipped: false) { rect in
+            let gradient = NSGradient(colors: [.systemPink, .systemOrange, .systemTeal])
+            gradient?.draw(in: rect, angle: 90)
+            return true
+        }
+    }
 
     /// Harness-only: fixed usage numbers so captures show the header cycler.
     func seedHarnessSampleUsage() {

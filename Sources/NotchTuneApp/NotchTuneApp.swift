@@ -43,12 +43,25 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
             if harnessLaunchConfiguration.seedsSampleUsage {
                 model.seedHarnessSampleUsage()
             }
+            // `NOTCHTUNE_HARNESS_SKIP_FEEDBACK=next|previous`: fire the swipe
+            // arrows just before the capture.
+            if let skip = ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_SKIP_FEEDBACK"] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [model] in
+                    model.showMusicSkipFeedback(skip == "previous" ? .previous : .next)
+                }
+            }
+            if harnessLaunchConfiguration.seedsSampleTrack {
+                model.harnessMusicTintArt = AppModel.harnessSampleAlbumArt()
+            }
 
             if let scenario = harnessLaunchConfiguration.scenario {
                 model.loadDebugSnapshot(
                     scenario.snapshot(),
                     presentOverlay: harnessLaunchConfiguration.presentOverlay
                 )
+                if let tab = harnessLaunchConfiguration.tab {
+                    model.islandActiveTab = tab
+                }
             }
 
             // Hide all windows on launch — settings opens on demand only.

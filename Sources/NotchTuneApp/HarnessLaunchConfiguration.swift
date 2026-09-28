@@ -14,10 +14,20 @@ struct HarnessLaunchConfiguration {
     /// Seeds sample Claude + Codex usage so the header usage cycler renders
     /// (`NOTCHTUNE_HARNESS_SAMPLE_USAGE=1`).
     let seedsSampleUsage: Bool
+    /// Opens on this tab (`NOTCHTUNE_HARNESS_TAB=agents|music|myspace|reminders`).
+    let tab: IslandTab?
+    /// Paints a sample album cover behind the Music tab so captures show the
+    /// album-art tint without a real player (`NOTCHTUNE_HARNESS_SAMPLE_TRACK=1`).
+    let seedsSampleTrack: Bool
 
     init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         scenario = Self.scenarioValue(from: environment["NOTCHTUNE_HARNESS_SCENARIO"])
         islandDensity = Self.densityValue(from: environment["NOTCHTUNE_HARNESS_ISLAND_DENSITY"])
+        tab = environment["NOTCHTUNE_HARNESS_TAB"].flatMap { IslandTab(rawValue: $0.lowercased()) }
+        seedsSampleTrack = Self.boolValue(
+            environment["NOTCHTUNE_HARNESS_SAMPLE_TRACK"],
+            default: false
+        )
         seedsSampleUsage = Self.boolValue(
             environment["NOTCHTUNE_HARNESS_SAMPLE_USAGE"],
             default: false

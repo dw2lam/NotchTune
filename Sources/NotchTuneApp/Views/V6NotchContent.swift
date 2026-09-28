@@ -1092,3 +1092,43 @@ extension EnvironmentValues {
         set { self[IslandMusicChipArtKey.self] = newValue }
     }
 }
+
+/// The player's skip glyph (⏩ / ⏪) after a swipe-to-skip, its two triangles
+/// lighting up in turn on a smooth eased wave in the direction the track
+/// went. Drawn over the closed pill's right wing (ink backing covers
+/// whatever sits there).
+struct MusicSkipArrows: View {
+    let direction: MusicSkipFeedback.Direction
+    let height: CGFloat
+    @Environment(\.islandChromeMetrics) private var metrics
+
+    var body: some View {
+        let size = height * 0.34
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            HStack(spacing: -size * 0.18) {
+                ForEach(0..<2, id: \.self) { slot in
+                    // sin² is a naturally eased bump: soft in, soft out.
+                    let phase = (t * 1.25 - Double(slot) * 0.32).truncatingRemainder(dividingBy: 1)
+                    let bump = pow(sin(phase * .pi), 2)
+                    Image(systemName: "play.fill")
+                        .font(.system(size: size, weight: .bold))
+                        .foregroundStyle(V6Palette.paper.opacity(0.3 + 0.7 * bump))
+                        .offset(x: 1.5 * bump)
+                }
+            }
+            // ⏪ is ⏩ mirrored, which also runs the wave right → left.
+            .scaleEffect(x: direction == .next ? 1 : -1, y: 1)
+        }
+        .padding(.trailing, metrics.notchedClosedHorizontalPadding)
+        .frame(width: metrics.notchedClosedMinimumWingReserve + 8, height: height, alignment: .trailing)
+        .background(
+            UnevenRoundedRectangle(
+                bottomTrailingRadius: height / 2,
+                style: .continuous
+            )
+            .fill(V6Palette.ink)
+        )
+        .accessibilityLabel(direction == .next ? "Next track" : "Previous track")
+    }
+}

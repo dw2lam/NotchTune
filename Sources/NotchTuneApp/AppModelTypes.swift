@@ -57,6 +57,16 @@ enum IslandAppearanceDisplayProfile: String, CaseIterable, Identifiable, Sendabl
 /// How much room the closed island takes. `regular` is the shipped v6 pill;
 /// `compact` trims the chrome (glyph, album art, paddings, wing reserve) so the
 /// pill hugs the physical notch / menu bar instead of standing proud of it.
+struct MusicSkipFeedback: Equatable, Sendable {
+    enum Direction: Sendable { case next, previous }
+
+    let direction: Direction
+    let id = UUID()
+
+    /// How long the arrows ripple on the pill.
+    nonisolated static let duration: TimeInterval = 1.1
+}
+
 /// How long the cursor has to rest on the closed notch before it opens.
 enum HoverOpenMode: String, CaseIterable, Identifiable, Sendable {
     case off

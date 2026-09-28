@@ -723,6 +723,15 @@ struct IslandPanelView: View {
                 .background(closedSurfaceWidthReader)
             }
         }
+        // Swipe-to-skip feedback: arrows ripple over the right wing.
+        .overlay(alignment: .trailing) {
+            if let feedback = model.musicSkipFeedback, !usesOpenedVisualState {
+                MusicSkipArrows(direction: feedback.direction, height: closedNotchHeight)
+                    .id(feedback.id)
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
+        }
         .onPreferenceChange(MusicNotificationClipMetricsKey.self) { metrics in
             guard isShowingMusicNotification, metrics.width > 0 else { return }
             measuredMusicClipMetrics = metrics
@@ -812,13 +821,22 @@ struct IslandPanelView: View {
             }
             .frame(width: openedWidth, height: openedHeight)
             .overlay {
-                if model.islandActiveTab == .music && model.playerManager.isRunning && !model.playerManager.track.isEmpty() {
-                    Image(nsImage: model.playerManager.track.nsAlbumArt)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .opacity(0.12)
-                        .blur(radius: 20)
+                if model.islandActiveTab == .music, let tintArt = model.musicTabTintArt {
+                    // Pin the (aspect-fill, oversized) cover to the panel's
+                    // frame BEFORE clipping: `clipShape` lays its path out in
+                    // the clipped view's own bounds, and the morph shape has
+                    // fixed panel dimensions, so clipping the overflowing
+                    // image directly shifted the tint up into a hard band.
+                    Color.clear
+                        .overlay {
+                            Image(nsImage: tintArt)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .blur(radius: 20)
+                                .opacity(0.12)
+                        }
                         .clipShape(surfaceShape)
+                        .allowsHitTesting(false)
                 }
             }
             // No fade either way: the surface starts as the pill's own

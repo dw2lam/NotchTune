@@ -51,6 +51,11 @@ final class OverlayPanelController {
     /// and whether it already skipped a track (one skip per gesture).
     private var musicSwipeTravel: CGFloat = 0
     private var musicSwipeFired = false
+    /// Hover-open stays off while a swipe is in progress over the pill and a
+    /// beat after it (fingers resting on the trackpad would otherwise let
+    /// the dwell timer open the notch mid-swipe).
+    private var hoverOpenSuppressedUntil: TimeInterval = 0
+    private static let swipeHoverSuppression: TimeInterval = 0.9
     /// Last key the panel saw that was not a notification-card command, so
     /// a bare Return can tell "typing into the panel" from "deliberate".
     private var lastUnmappedKeyAt: Date?
@@ -681,22 +686,27 @@ final class OverlayPanelController {
               model.playerManager.isMusicEnabled,
               model.playerManager.isRunning,
               !model.playerManager.track.isEmpty(),
-              isPointInClosedSurfaceArea(location),
-              abs(dx) > abs(dy) else {
+              isPointInClosedSurfaceArea(location) else {
             return
         }
+
+        // Any scrolling over a music-capable pill is a swipe, not a hover.
+        cancelHoverOpenImmediately()
+        hoverOpenSuppressedUntil = ProcessInfo.processInfo.systemUptime + Self.swipeHoverSuppression
+
+        guard abs(dx) > abs(dy) else { return }
 
         // Finger direction regardless of the natural-scrolling setting.
         musicSwipeTravel += inverted ? dx : -dx
         guard !musicSwipeFired, abs(musicSwipeTravel) >= Self.musicSwipeThreshold else { return }
         musicSwipeFired = true
-        cancelHoverOpenImmediately()
         if musicSwipeTravel < 0 {
             model.playerManager.nextTrack()
+            model.showMusicSkipFeedback(.next)
         } else {
             model.playerManager.previousTrack()
+            model.showMusicSkipFeedback(.previous)
         }
-        model.notchPop()
         performMusicHaptic(model)
     }
 
@@ -930,6 +940,10 @@ final class OverlayPanelController {
         // Suppressed right after an auto-collapse until the cursor leaves the
         // notch, so a lingering cursor doesn't interrupt the close animation.
         guard !suppressHoverOpenAfterCollapse else { return }
+        guard ProcessInfo.processInfo.systemUptime >= hoverOpenSuppressedUntil else {
+            cancelHoverOpenImmediately()
+            return
+        }
 
         // Mouse re-entered during grace period — just revoke the cancel.
         hoverCancelGrace?.cancel()
