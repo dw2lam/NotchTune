@@ -40,11 +40,6 @@
 "settings.general.uninstallConfirmMessage.codex" = "This will remove NotchTune hooks from Codex. You can reinstall them at any time.";
 "settings.general.uninstallConfirmMessage.claudeUsage" = "This will remove the Claude usage bridge. You can reinstall it at any time.";
 "settings.general.cancel" = "Cancel";
-"settings.general.language" = "Language";
-"settings.general.languageSystem" = "System";
-"settings.general.languageEnglish" = "English";
-"settings.general.languageChinese" = "Chinese (Simplified)";
-"settings.general.languageTraditionalChinese" = "Chinese (Traditional)";
 
 /* Settings - Personalization (v6) */
 "settings.tab.appearance" = "Personalization";

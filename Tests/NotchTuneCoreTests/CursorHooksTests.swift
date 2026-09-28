@@ -235,12 +235,12 @@ struct CursorHooksTests {
         defer { try? FileManager.default.removeItem(at: tempFile) }
 
         let entry = """
-        {"role":"user","message":{"content":[{"type":"text","text":"<image_files>\\nSome image context\\n</image_files><user_query>\\n修复这个bug\\n</user_query>"}]}}
+        {"role":"user","message":{"content":[{"type":"text","text":"<image_files>\\nSome image context\\n</image_files><user_query>\\nfix this bug\\n</user_query>"}]}}
         """
         try entry.write(to: tempFile, atomically: true, encoding: .utf8)
 
         let prompt = CursorTranscriptReader.initialUserPrompt(at: tempFile.path)
-        #expect(prompt == "修复这个bug")
+        #expect(prompt == "fix this bug")
     }
 
     @Test

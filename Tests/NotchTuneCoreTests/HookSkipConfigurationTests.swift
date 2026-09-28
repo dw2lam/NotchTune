@@ -2,10 +2,10 @@ import Testing
 @testable import NotchTuneCore
 
 /// Verifies the per-process hook skip environment contract.
-/// 验证单次子进程 hook 跳过环境变量协议。
+/// Verifies the per-child-process hook-skip environment contract.
 struct HookSkipConfigurationTests {
     /// Accepts common truthy spellings for the preferred NotchTune key.
-    /// 推荐的新环境变量接受常见真值写法。
+    /// The recommended variable accepts the common truthy spellings.
     @Test
     func notchTuneSkipHooksAcceptsTruthyValues() {
         for value in ["1", "true", "TRUE", "yes", "on", " 1 "] {
@@ -16,7 +16,7 @@ struct HookSkipConfigurationTests {
     }
 
     /// Keeps compatibility with existing Vibe Island-based wrappers.
-    /// 保留对已有 Vibe Island wrapper 的兼容。
+    /// Existing Vibe Island wrappers keep working.
     @Test
     func legacyVibeIslandSkipAliasIsSupported() {
         #expect(HookSkipConfiguration.shouldSkipHooks(environment: [
@@ -25,7 +25,7 @@ struct HookSkipConfigurationTests {
     }
 
     /// Rejects unset or non-truthy values so hooks remain enabled by default.
-    /// 未设置或非真值时保持默认启用 hook。
+    /// Unset or non-truthy values leave hooks enabled.
     @Test
     func skipHooksRejectsFalsyOrMissingValues() {
         for value in ["", "0", "false", "no", "off", "random"] {

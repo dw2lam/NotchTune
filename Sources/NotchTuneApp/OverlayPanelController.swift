@@ -45,6 +45,12 @@ final class OverlayPanelController {
     private var fileDragPresentationSnapshot: FileDragPresentationSnapshot?
     private var fileDragWatchTask: Task<Void, Never>?
     private var keyDownMonitor: Any?
+    private var globalScrollMonitor: Any?
+    private var localScrollMonitor: Any?
+    /// Finger travel of the current two-finger swipe over the closed notch,
+    /// and whether it already skipped a track (one skip per gesture).
+    private var musicSwipeTravel: CGFloat = 0
+    private var musicSwipeFired = false
     /// Last key the panel saw that was not a notification-card command, so
     /// a bare Return can tell "typing into the panel" from "deliberate".
     private var lastUnmappedKeyAt: Date?
@@ -484,10 +490,38 @@ final class OverlayPanelController {
         } fileDragEndedHandler: { [weak self] in
             self?.fileDragEnded()
         }
+
+        // Two-finger swipe over the closed notch skips tracks. Observed only:
+        // the scroll still reaches whatever sits under the cursor (usually
+        // the menu bar, which ignores it).
+        let scrollHandler: @Sendable (NSEvent) -> Void = { [weak self] event in
+            guard event.hasPreciseScrollingDeltas else { return }
+            let dx = event.scrollingDeltaX
+            let dy = event.scrollingDeltaY
+            let inverted = event.isDirectionInvertedFromDevice
+            let phase = event.phase
+            let isMomentum = event.momentumPhase != []
+            let location = NSEvent.mouseLocation
+            Task { @MainActor in
+                self?.handleScroll(
+                    at: location, dx: dx, dy: dy, inverted: inverted,
+                    phase: phase, isMomentum: isMomentum
+                )
+            }
+        }
+        globalScrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel, handler: scrollHandler)
+        localScrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+            scrollHandler(event)
+            return event
+        }
     }
 
     private func stopEventMonitoring() {
         eventMonitors.stop()
+        if let m = globalScrollMonitor { NSEvent.removeMonitor(m) }
+        if let m = localScrollMonitor { NSEvent.removeMonitor(m) }
+        globalScrollMonitor = nil
+        localScrollMonitor = nil
         fileDragWatchTask?.cancel()
         fileDragWatchTask = nil
     }
@@ -584,6 +618,12 @@ final class OverlayPanelController {
 
         if model.notchStatus == .closed && inClosedSurfaceArea {
             cancelHoverOpenImmediately()
+            if isPointOnClosedMusicArt(screenLocation) {
+                model.playerManager.togglePlayPause()
+                model.notchPop()
+                performMusicHaptic(model)
+                return
+            }
             model.notchOpen(reason: .click)
         } else if model.notchStatus == .opened {
             if !isPointInExpandedArea(screenLocation) {
@@ -599,6 +639,70 @@ final class OverlayPanelController {
                 model.notchOpen(reason: .click, surface: model.islandSurface)
             }
         }
+    }
+
+    // MARK: - Closed-notch music controls
+
+    /// Finger travel (points) a horizontal swipe needs before it skips.
+    private static let musicSwipeThreshold: CGFloat = 50
+
+    /// The album art sits at the leading end of the closed music pill: the
+    /// left wing on a MacBook, the first ~pill-height on an external display.
+    /// A click there plays / pauses instead of opening the notch.
+    private func isPointOnClosedMusicArt(_ point: NSPoint) -> Bool {
+        guard let model,
+              model.shouldShowCompactMusicView,
+              model.musicNotificationTrack == nil,
+              let closedRect = closedSurfaceRect(for: model),
+              Self.rectContainsIncludingEdges(closedRect, point: point) else {
+            return false
+        }
+        let isNotched = panel?.screen?.isNotchedScreen ?? false
+        let artZoneMaxX = isNotched ? notchRect.minX : closedRect.minX + closedRect.height + 8
+        return point.x < artZoneMaxX
+    }
+
+    private func handleScroll(
+        at location: NSPoint,
+        dx: CGFloat,
+        dy: CGFloat,
+        inverted: Bool,
+        phase: NSEvent.Phase,
+        isMomentum: Bool
+    ) {
+        if phase.contains(.began) || phase.contains(.mayBegin) {
+            musicSwipeTravel = 0
+            musicSwipeFired = false
+        }
+        guard !isMomentum,
+              let model,
+              model.notchStatus == .closed,
+              !model.isOverlayDisplayFullscreen,
+              model.playerManager.isMusicEnabled,
+              model.playerManager.isRunning,
+              !model.playerManager.track.isEmpty(),
+              isPointInClosedSurfaceArea(location),
+              abs(dx) > abs(dy) else {
+            return
+        }
+
+        // Finger direction regardless of the natural-scrolling setting.
+        musicSwipeTravel += inverted ? dx : -dx
+        guard !musicSwipeFired, abs(musicSwipeTravel) >= Self.musicSwipeThreshold else { return }
+        musicSwipeFired = true
+        cancelHoverOpenImmediately()
+        if musicSwipeTravel < 0 {
+            model.playerManager.nextTrack()
+        } else {
+            model.playerManager.previousTrack()
+        }
+        model.notchPop()
+        performMusicHaptic(model)
+    }
+
+    private func performMusicHaptic(_ model: AppModel) {
+        guard model.hapticFeedbackEnabled else { return }
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
     }
 
     // MARK: - File drag shelf

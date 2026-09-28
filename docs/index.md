@@ -7,13 +7,12 @@ This index is the repository map for humans and coding agents. Read these files 
 - [README.md](../README.md) for the public project summary and local quick start
 - [AGENTS.md](../AGENTS.md) for the repository workflow, commit policy, and worktree rules
 - [docs/roadmap.md](./roadmap.md) for the project roadmap and contribution focus areas
-- [docs/roadmap.zh-CN.md](./roadmap.zh-CN.md) for the Chinese roadmap and contribution focus areas
 - [docs/product.md](./product.md) for the product scope, supported agents, and terminals
 - [docs/architecture.md](./architecture.md) for the runtime shape and transport boundaries
 - [docs/quality.md](./quality.md) for the current harness contract and verification expectations
 - [docs/worktree-workflow.md](./worktree-workflow.md) for the parallel worktree lifecycle
 - [docs/packaging.md](./packaging.md) for the current local app packaging, signing, and notarization path
-- [docs/releasing.md](./releasing.md) for the GitHub release workflow, bilingual notes template, and checklist
+- [docs/releasing.md](./releasing.md) for the GitHub release workflow, notes template, and checklist
 
 ## Hooks
 

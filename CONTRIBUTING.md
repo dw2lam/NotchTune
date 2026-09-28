@@ -1,7 +1,5 @@
 # Contributing to NotchTune
 
-<a href="CONTRIBUTING.zh-CN.md">中文</a> | <strong>English</strong>
-
 Thank you for your interest in contributing to NotchTune!
 
 ---

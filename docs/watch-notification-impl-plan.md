@@ -1,46 +1,46 @@
-# Apple Watch 通知 — 实现计划
+# Apple Watch Notifications — Implementation Plan
 
-> 设计文档：[watch-notification-design.md](./watch-notification-design.md)
-> 分支：`worktree-feat-watch-notification`
+> Design doc: [watch-notification-design.md](./watch-notification-design.md)
+> Branch: `worktree-feat-watch-notification`
 
 ---
 
-## 架构总览
+## Architecture Overview
 
 ```
-┌─ Mac (NotchTuneApp 进程内) ──────────────────────────────────────┐
+┌─ Mac (inside the NotchTuneApp process) ──────────────────────────┐
 │                                                                   │
 │  Agent → Hook → BridgeServer → AppModel                           │
 │                                    │                              │
-│                                    │ 监听 phase 变化               │
+│                                    │ listens for phase changes    │
 │                                    ↓                              │
 │                           WatchNotificationRelay                  │
 │                                    │                              │
 │                                    ↓                              │
 │                           WatchHTTPEndpoint                       │
 │                           ┌────────────────────┐                  │
-│                           │ Bonjour 广播        │                  │
-│                           │ GET  /events (SSE)  │── 推送事件 ──┐   │
-│                           │ POST /resolution    │← 回传决策 ─┐│   │
+│                           │ Bonjour broadcast   │                  │
+│                           │ GET  /events (SSE)  │── push events ──┐│
+│                           │ POST /resolution    │← decision back ─┐│
 │                           │ POST /pair          │            ││   │
 │                           │ GET  /status        │            ││   │
 │                           └────────────────────┘            ││   │
 └──────────────────────────────────────────────────────────────┼┼───┘
                                                                ││
-                         ～～～ 同一 WiFi ～～～                   ││
+                         ～～～ same WiFi ～～～                   ││
                                                                ││
 ┌─ iPhone (NotchTuneMobile) ──────────────────────────────────┼┼───┐
 │                                                              ││   │
-│  NWBrowser (Bonjour 发现) → SSEClient (长连接) ←─────────────┘│   │
+│  NWBrowser (Bonjour discovery) → SSEClient (long-lived) ←────┘│   │
 │       │                                                       │   │
-│       ↓ 收到事件                                               │   │
-│  UNNotificationRequest (本地通知, 带 Action)                    │   │
+│       ↓ receives an event                                     │   │
+│  UNNotificationRequest (local notification, with Action)       │   │
 │       │                                                       │   │
-│       │ 系统自动镜像                                            │   │
+│       │ automatic system mirroring                             │   │
 │       ↓                                                       │   │
-│  Apple Watch (通知卡片 + Allow/Deny 按钮)                       │   │
+│  Apple Watch (notification card + Allow/Deny buttons)          │   │
 │       │                                                       │   │
-│       │ 用户点击                                                │   │
+│       │ user taps                                              │   │
 │       ↓                                                       │   │
 │  UNNotificationCenter.delegate → HTTP POST /resolution ───────┘   │
 │                                                                   │
@@ -49,71 +49,71 @@
 
 ---
 
-## Step 1: macOS 端 — WatchHTTPEndpoint
+## Step 1: macOS side — WatchHTTPEndpoint
 
-**目标**：macOS app 内新增轻量 HTTP server + Bonjour 广播。可用 curl 独立测试。
+**Goal**: add a lightweight HTTP server + Bonjour broadcast inside the macOS app. Testable standalone with curl.
 
-### 新增文件
+### New Files
 
-| 文件 | 职责 |
+| File | Responsibility |
 |---|---|
-| `Sources/NotchTuneCore/WatchHTTPEndpoint.swift` | NWListener TCP server，Bonjour 广播，HTTP 路由，配对/token 管理 |
-| `Sources/NotchTuneCore/WatchNotificationRelay.swift` | 监听 AppModel 状态变化，构造 SSE 事件，处理 resolution 回传 |
+| `Sources/NotchTuneCore/WatchHTTPEndpoint.swift` | NWListener TCP server, Bonjour broadcast, HTTP routing, pairing/token management |
+| `Sources/NotchTuneCore/WatchNotificationRelay.swift` | Listens for AppModel state changes, builds SSE events, handles resolution callbacks |
 
-### WatchHTTPEndpoint 详细设计
+### WatchHTTPEndpoint Detailed Design
 
-- 用 `NWListener`（Network.framework）创建 TCP server，自带 Bonjour 支持
-- 服务类型：`_notchtune._tcp`，TXT record 含设备名
-- 手动解析 HTTP/1.1 请求（NWListener 给的是 raw TCP，需要自己解析 HTTP）
-- SSE 响应：`Content-Type: text/event-stream`，保持连接不关闭
+- Create a TCP server with `NWListener` (Network.framework), which has built-in Bonjour support
+- Service type: `_notchtune._tcp`, TXT record contains the device name
+- Manually parse HTTP/1.1 requests (NWListener hands you raw TCP, so you need to parse HTTP yourself)
+- SSE response: `Content-Type: text/event-stream`, keep the connection open
 
-**端点：**
+**Endpoints:**
 
-| 路径 | 方法 | 认证 | 功能 |
+| Path | Method | Auth | Function |
 |---|---|---|---|
-| `POST /pair` | JSON | 无 | 提交 4 位配对码，验证通过返回 session token |
-| `GET /events` | SSE | Bearer token | 实时事件流 |
-| `POST /resolution` | JSON | Bearer token | Watch 操作决策回传 |
-| `GET /status` | JSON | Bearer token | 连接状态、活跃 session 数 |
+| `POST /pair` | JSON | None | Submit the 4-digit pairing code; on success, returns a session token |
+| `GET /events` | SSE | Bearer token | Real-time event stream |
+| `POST /resolution` | JSON | Bearer token | Watch action decision callback |
+| `GET /status` | JSON | Bearer token | Connection status, number of active sessions |
 
-**配对流程：**
-- macOS app 启动时生成随机 4 位数字码，2 分钟有效
-- 用户在 macOS 设置页或通知中看到配对码
-- iPhone app 提交配对码 → 验证通过 → 返回 UUID session token
-- token 持久化在 Keychain，后续请求免配对
+**Pairing flow:**
+- The macOS app generates a random 4-digit code on launch, valid for 2 minutes
+- The user sees the pairing code on the macOS settings page or in a notification
+- The iPhone app submits the pairing code → on verification success → a UUID session token is returned
+- The token is persisted in the Keychain; subsequent requests skip pairing
 
-### WatchNotificationRelay 详细设计
+### WatchNotificationRelay Detailed Design
 
-- 持有 `WatchHTTPEndpoint` 引用
-- 监听 `AppModel.state` 变化（通过 `applyTrackedEvent()` 回调）
-- 过滤需要推送的事件：
-  - `sessionCompleted` → 推送完成通知
-  - `permissionRequested` → 推送权限请求（含 requestID）
-  - `questionAsked` → 推送问题（含选项）
-- 收到 `/resolution` POST → 根据 requestID 找到对应 session → 调用 BridgeServer 的 resolution 逻辑
+- Holds a reference to `WatchHTTPEndpoint`
+- Listens for `AppModel.state` changes (via the `applyTrackedEvent()` callback)
+- Filters events that need to be pushed:
+  - `sessionCompleted` → push a completion notification
+  - `permissionRequested` → push a permission request (including the requestID)
+  - `questionAsked` → push a question (including its options)
+- On receiving a `/resolution` POST → find the corresponding session by requestID → call BridgeServer's resolution logic
 
-### 修改文件
+### Files to Modify
 
-| 文件 | 改动 |
+| File | Change |
 |---|---|
-| `Sources/NotchTuneApp/AppModel.swift` | 新增 `watchRelay` 属性；`applyTrackedEvent()` (~L745) 中事件应用后通知 relay |
-| `Sources/NotchTuneCore/BridgeServer.swift` | 暴露 `resolvePendingClaudeInteraction()` (~L1638) 和 `resolvePendingClaudeQuestion()` (~L1704) 或通过 BridgeCommand 转发 |
+| `Sources/NotchTuneApp/AppModel.swift` | Add a `watchRelay` property; notify the relay after events are applied in `applyTrackedEvent()` (~L745) |
+| `Sources/NotchTuneCore/BridgeServer.swift` | Expose `resolvePendingClaudeInteraction()` (~L1638) and `resolvePendingClaudeQuestion()` (~L1704), or forward via BridgeCommand |
 
-### 验证
+### Verification
 
 ```bash
 swift build
 
-# 启动 app 后：
-# 1. 配对
+# After launching the app:
+# 1. Pair
 curl -X POST -d '{"code":"1234"}' http://<mac-ip>:<port>/pair
-# 返回 {"token":"uuid-xxx"}
+# Returns {"token":"uuid-xxx"}
 
-# 2. 监听 SSE
+# 2. Listen to SSE
 curl -N -H "Authorization: Bearer uuid-xxx" http://<mac-ip>:<port>/events
 
-# 3. 触发 agent 事件 → 观察 curl 输出
-# 4. 回传决策
+# 3. Trigger an agent event → observe the curl output
+# 4. Post back a decision
 curl -X POST -H "Authorization: Bearer uuid-xxx" \
   -d '{"requestID":"req-456","action":"allow"}' \
   http://<mac-ip>:<port>/resolution
@@ -121,31 +121,31 @@ curl -X POST -H "Authorization: Bearer uuid-xxx" \
 
 ---
 
-## Step 2: iOS App — 骨架 + Bonjour 发现 + 配对
+## Step 2: iOS App — skeleton + Bonjour discovery + pairing
 
-**目标**：新建 iOS app，实现 Bonjour 发现和配对。
+**Goal**: create the new iOS app, implement Bonjour discovery and pairing.
 
-### 项目结构
+### Project Structure
 
 ```
 ios/
 ├── NotchTuneMobile.xcodeproj
 └── NotchTuneMobile/
-    ├── App.swift                    # SwiftUI 入口
-    ├── ContentView.swift            # 主页：连接状态 + 通知历史
+    ├── App.swift                    # SwiftUI entry point
+    ├── ContentView.swift            # Home screen: connection status + notification history
     ├── Network/
-    │   ├── BonjourDiscovery.swift   # NWBrowser 搜索 _notchtune._tcp
-    │   ├── SSEClient.swift          # HTTP SSE 长连接
-    │   └── ConnectionManager.swift  # 发现→配对→SSE 生命周期
+    │   ├── BonjourDiscovery.swift   # NWBrowser search for _notchtune._tcp
+    │   ├── SSEClient.swift          # HTTP SSE long-lived connection
+    │   └── ConnectionManager.swift  # discover → pair → SSE lifecycle
     ├── Views/
-    │   ├── PairingView.swift        # Mac 列表 + 输入配对码
-    │   └── SettingsView.swift       # 通知类型开关
+    │   ├── PairingView.swift        # List of Macs + pairing code entry
+    │   └── SettingsView.swift       # Notification type toggles
     ├── Models/
-    │   └── WatchEvent.swift         # 事件数据模型（与 macOS 端共享定义）
+    │   └── WatchEvent.swift         # Event data model (shared definition with the macOS side)
     └── Info.plist                   # NSLocalNetworkUsageDescription + NSBonjourServices
 ```
 
-### Info.plist 关键配置
+### Key Info.plist Configuration
 
 ```xml
 <key>NSLocalNetworkUsageDescription</key>
@@ -156,103 +156,103 @@ ios/
 </array>
 ```
 
-### 验证
+### Verification
 
-- iPhone 上运行 → 发现 Mac → 输入配对码 → 连接成功
-- SSE 事件在控制台打印
+- Run on the iPhone → discovers the Mac → enter the pairing code → connects successfully
+- SSE events are printed to the console
 
 ---
 
-## Step 3: iOS App — 本地通知 + Watch 镜像
+## Step 3: iOS App — local notifications + Watch mirroring
 
-**目标**：SSE 事件转为本地通知，Watch 自动镜像显示。
+**Goal**: turn SSE events into local notifications, automatically mirrored to the Watch.
 
-### 新增文件
+### New Files
 
-| 文件 | 职责 |
+| File | Responsibility |
 |---|---|
-| `NotificationManager.swift` | 注册 category/action，事件→通知转换 |
+| `NotificationManager.swift` | Registers category/action, converts events to notifications |
 
-### 通知 Category 定义
+### Notification Category Definitions
 
 ```swift
-// PERMISSION_REQUEST: Allow + Deny 按钮
-// QUESTION: 动态选项（最多 4 个 action）
-// SESSION_COMPLETED: 无按钮，纯信息
+// PERMISSION_REQUEST: Allow + Deny buttons
+// QUESTION: dynamic options (up to 4 actions)
+// SESSION_COMPLETED: no buttons, purely informational
 ```
 
-### 验证
+### Verification
 
-- 触发 agent 权限请求 → iPhone 通知 → Watch 镜像 → 看到 Allow/Deny 按钮
+- Trigger an agent permission request → iPhone notification → mirrored to Watch → see the Allow/Deny buttons
 
 ---
 
-## Step 4: 双向交互
+## Step 4: Two-way interaction
 
-**目标**：Watch 按钮点击 → 回传 Mac 执行。
+**Goal**: Watch button tap → posted back to the Mac to execute.
 
-### 关键实现
+### Key Implementation
 
-- `UNUserNotificationCenter.delegate` 的 `didReceive response` 回调
-- 根据 `response.actionIdentifier` 判断操作（ALLOW/DENY/选项文本）
+- The `didReceive response` callback of `UNUserNotificationCenter.delegate`
+- Determine the action from `response.actionIdentifier` (ALLOW/DENY/option text)
 - `ConnectionManager.postResolution(requestID:action:)` → HTTP POST
 
-### 验证
+### Verification
 
-- 端到端：agent 请求权限 → Watch 震动 → 点 Allow → agent 继续执行
-
----
-
-## Step 5: 打磨
-
-- iOS app UI：连接状态页、通知历史列表、已配对设备管理
-- macOS 设置页：Watch 通知开关、配对码显示、已配对设备
-- SSE 后台重连（app 进入后台时连接可能被系统断开）
-- 边界情况：token 过期、Mac 重启后重新配对、多 session 并发
+- End-to-end: agent requests permission → Watch vibrates → tap Allow → agent continues executing
 
 ---
 
-## 关键代码路径参考
+## Step 5: Polish
 
-| 功能 | 文件 | 位置 |
+- iOS app UI: connection status page, notification history list, paired device management
+- macOS settings page: Watch notifications toggle, pairing code display, paired devices
+- SSE background reconnection (the connection may be dropped by the system while the app is backgrounded)
+- Edge cases: token expiry, re-pairing after a Mac restart, concurrent multi-session handling
+
+---
+
+## Key Code Path Reference
+
+| Feature | File | Location |
 |---|---|---|
-| 事件分发入口 | `AppModel.swift` | `applyTrackedEvent()` ~L745 |
-| 权限审批 | `AppModel.swift` | `approveFocusedPermission()` ~L564 |
-| 问题回答 | `AppModel.swift` | `answerFocusedQuestion()` ~L577 |
-| 权限 resolution 执行 | `BridgeServer.swift` | `resolvePendingClaudeInteraction()` ~L1638 |
-| 问题 resolution 执行 | `BridgeServer.swift` | `resolvePendingClaudeQuestion()` ~L1704 |
-| Session phase 定义 | `AgentSession.swift` | `SessionPhase` ~L51 |
-| 权限请求模型 | `AgentSession.swift` | `PermissionRequest` ~L105 |
-| 问题模型 | `AgentSession.swift` | `QuestionPrompt` ~L168 |
-| 现有 bridge 协议 | `BridgeTransport.swift` | `BridgeEnvelope` / `BridgeCodec` |
+| Event dispatch entry point | `AppModel.swift` | `applyTrackedEvent()` ~L745 |
+| Permission approval | `AppModel.swift` | `approveFocusedPermission()` ~L564 |
+| Question answering | `AppModel.swift` | `answerFocusedQuestion()` ~L577 |
+| Permission resolution execution | `BridgeServer.swift` | `resolvePendingClaudeInteraction()` ~L1638 |
+| Question resolution execution | `BridgeServer.swift` | `resolvePendingClaudeQuestion()` ~L1704 |
+| Session phase definition | `AgentSession.swift` | `SessionPhase` ~L51 |
+| Permission request model | `AgentSession.swift` | `PermissionRequest` ~L105 |
+| Question model | `AgentSession.swift` | `QuestionPrompt` ~L168 |
+| Existing bridge protocol | `BridgeTransport.swift` | `BridgeEnvelope` / `BridgeCodec` |
 
 ---
 
-## 分支策略
+## Branching Strategy
 
-Watch 通知是实验性功能，不能污染 `main`。使用 **integration branch** 模式：
+Watch notifications are an experimental feature and must not pollute `main`. Use an **integration branch** pattern:
 
 ```
-main (发版用，保持干净)
-  └── feat/watch-notification (集成分支)
+main (used for releases, kept clean)
+  └── feat/watch-notification (integration branch)
         ├── Step 1 PR → target feat/watch-notification
         ├── Step 2 PR → target feat/watch-notification
         ├── Step 3 PR → target feat/watch-notification
         ├── Step 4 PR → target feat/watch-notification
         ├── Step 5 PR → target feat/watch-notification
-        └── 功能完整后 → 一个 PR 合入 main
+        └── once the feature is complete → one PR merges into main
 ```
 
-**规则：**
-- 每个 Step 从 `feat/watch-notification` 开分支，PR 也 target `feat/watch-notification`
-- **不要** target `main`，不要直接往 `main` 合并
-- 功能完整且稳定后，`feat/watch-notification` 整体合入 `main`
+**Rules:**
+- Each Step branches off `feat/watch-notification`, and its PR also targets `feat/watch-notification`
+- **Do not** target `main`, and do not merge directly into `main`
+- Once the feature is complete and stable, merge `feat/watch-notification` into `main` as a whole
 
-**分支命名：**
+**Branch naming:**
 - Step 1: `feat/watch-http-endpoint`
 - Step 2: `feat/watch-ios-app`
 - Step 3: `feat/watch-notifications`
 - Step 4: `feat/watch-bidirectional`
 - Step 5: `feat/watch-polish`
 
-建议从 Step 1 开始，纯 macOS 端，用 curl 验证。
+Recommended to start with Step 1, purely on the macOS side, verified with curl.

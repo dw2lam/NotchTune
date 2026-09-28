@@ -46,7 +46,7 @@ struct NotchTuneHooksCLI {
 
         do {
             // Allow wrappers to delegate one child process away from NotchTune without changing global hook installation.
-            // 允许外部控制器只让当前子进程跳过 NotchTune hook，不影响全局安装状态。
+            // Lets an external controller skip NotchTune hooks for this child process only, without touching the global install.
             if HookSkipConfiguration.shouldSkipHooks(environment: ProcessInfo.processInfo.environment) {
                 return
             }

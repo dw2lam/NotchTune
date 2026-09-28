@@ -484,6 +484,7 @@ struct IslandPanelView: View {
         .environment(\.islandChromeMetrics, chromeMetrics)
         .environment(\.islandControlGlass, model.glassSettings.usesGlassControls)
         .environment(\.islandNotchEarRadius, closedEarRadius)
+        .environment(\.islandMusicChipArt, model.islandMusicChipArt)
         .alert(model.lang.t("island.quit.confirmTitle"), isPresented: $showingQuitConfirmation) {
             Button(model.lang.t("island.quit.confirmAction"), role: .destructive) {
                 model.quitApplication()

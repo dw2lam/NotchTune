@@ -269,6 +269,7 @@ final class OverlayUICoordinator {
             appModel?.measuredNotificationContentHeight = 0
         }
 
+        let wasOpened = notchStatus == .opened
         islandSurface = surface
         notchOpenReason = reason
         notchStatus = status
@@ -277,6 +278,18 @@ final class OverlayUICoordinator {
         // An agent notification belongs to the Agents tab — switch to it so the
         // card is actually shown (and the panel isn't sized for the agents
         // content while the Music tab is still displayed).
+        // Opened by hand while no agent needs anything and a track is on:
+        // land on the player.
+        // (Only on a real closed → open; a click inside an already-open
+        // panel re-enters here to make it key and must keep the tab.)
+        if status == .opened, !wasOpened, reason == .hover || reason == .click,
+           surface.sessionID == nil,
+           let appModel,
+           appModel.agentsAreIdle,
+           appModel.hasClosedMusicPresence {
+            appModel.islandActiveTab = .music
+        }
+
         if status == .opened, reason == .notification, surface.isNotificationCard {
             appModel?.islandActiveTab = .agents
             if let sessionID = surface.sessionID {

@@ -1,20 +1,20 @@
 import Foundation
 
 /// Centralizes the per-process hook skip environment contract.
-/// 集中管理“单次子进程跳过 hook”的环境变量协议。
+/// The environment-variable contract for "skip hooks for this one child process".
 public enum HookSkipConfiguration {
     /// Preferred NotchTune environment key for disabling hooks in this process.
-    /// NotchTune 推荐使用的当前进程 hook 跳过开关。
+    /// The switch NotchTune recommends for skipping hooks in the current process.
     public static let notchTuneSkipKey = "NOTCHTUNE_SKIP_HOOKS"
     /// Compatibility alias honored from pre-rename Open Island installs.
-    /// 兼容改名前 Open Island 安装使用的旧开关。
+    /// Legacy switch used by pre-rename Open Island installs.
     public static let legacyOpenIslandSkipKey = "OPEN_ISLAND_SKIP_HOOKS"
     /// Compatibility alias used by existing Vibe Island integrations.
-    /// 兼容已有 Vibe Island 集成使用的旧开关。
+    /// Legacy switch used by existing Vibe Island integrations.
     public static let legacyVibeIslandSkipKey = "VIBE_ISLAND_SKIP"
 
     /// Returns true when the provided environment explicitly requests hook no-op mode.
-    /// 当传入环境显式要求跳过 hook 时返回 true。
+    /// True when the given environment explicitly asks to skip hooks.
     public static func shouldSkipHooks(environment: [String: String]) -> Bool {
         isTruthy(environment[notchTuneSkipKey])
             || isTruthy(environment[legacyOpenIslandSkipKey])
@@ -22,7 +22,7 @@ public enum HookSkipConfiguration {
     }
 
     /// Interprets common shell-friendly truthy values and treats everything else as false.
-    /// 只接受常见 shell 友好的真值，其它值都按 false 处理。
+    /// Accepts the usual shell-friendly truthy values; anything else is false.
     private static func isTruthy(_ value: String?) -> Bool {
         guard let value else { return false }
         switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {

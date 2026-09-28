@@ -1019,7 +1019,7 @@ struct AppModelSessionListTests {
             ),
             claudeMetadata: ClaudeSessionMetadata(
                 transcriptPath: "/tmp/claude-session.jsonl",
-                lastUserPrompt: "整理 readme。"
+                lastUserPrompt: "Tidy up the readme."
             )
         )
 

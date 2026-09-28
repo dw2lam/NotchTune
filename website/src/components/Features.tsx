@@ -102,7 +102,7 @@ export default function Features() {
         <article className="card glass">
           <div className="card-ico">🔔</div>
           <h4>Quiet by default</h4>
-          <p>Configurable system sounds for permission and completion events — or mute it entirely. English and 简体中文 built in.</p>
+          <p>Configurable system sounds for permission and completion events — or mute it entirely.</p>
         </article>
         <article className="card glass">
           <div className="card-ico">↩︎</div>

@@ -499,13 +499,19 @@ final class AppModel {
 
     /// What the closed pill should say, or nil to stay narrow.
     var islandLiveActivity: IslandLiveActivity? {
-        IslandLiveActivity.resolve(
+        var activity = IslandLiveActivity.resolve(
             mode: islandLiveActivityMode,
             sessions: surfacedSessions,
             finishedPeekSessionID: finishedPeekSessionID,
             runningSince: runningSince,
             attentionSince: attentionStartedAt
         )
+        // Music keeps a foothold while agents work; attention states stay
+        // single-minded.
+        if activity?.kind == .working, isMusicPlaybackActive {
+            activity?.showsMusicChip = true
+        }
+        return activity
     }
 
     /// Width the view actually drew for the closed pill; the controller uses it
@@ -1044,8 +1050,9 @@ final class AppModel {
             self.refreshMusicNotificationAlbumArtIfNeeded(from: track)
         }
 
-        playerManager.onPlaybackStateChange = { [weak self] _ in
+        playerManager.onPlaybackStateChange = { [weak self] isPlaying in
             guard let self else { return }
+            self.noteMusicPlaybackChanged(isPlaying: isPlaying)
             self.reconcileCompactMusicView()
         }
 
@@ -1158,9 +1165,50 @@ final class AppModel {
             && !playerManager.track.isEmpty()
     }
 
-    /// Closed-notch music pill while agents are idle and music is playing.
+    /// How long a paused track keeps its place on the closed pill (one click
+    /// on the art resumes it) before the notch tucks away.
+    nonisolated static let pausedMusicLingerDuration: TimeInterval = 5 * 60
+
+    /// Set while a track is paused and still within the linger window.
+    private(set) var musicPausedAt: Date?
+    @ObservationIgnored private var musicPauseLingerTask: Task<Void, Never>?
+
+    /// Music the closed pill should keep reachable: playing, or paused
+    /// within the last few minutes.
+    var hasClosedMusicPresence: Bool {
+        if isMusicPlaybackActive { return true }
+        guard musicPausedAt != nil,
+              playerManager.isMusicEnabled,
+              playerManager.isRunning,
+              !playerManager.track.isEmpty() else { return false }
+        return true
+    }
+
+    func noteMusicPlaybackChanged(isPlaying: Bool) {
+        musicPauseLingerTask?.cancel()
+        guard !isPlaying else {
+            musicPausedAt = nil
+            return
+        }
+        musicPausedAt = .now
+        musicPauseLingerTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.pausedMusicLingerDuration))
+            guard let self, !Task.isCancelled else { return }
+            self.musicPausedAt = nil
+            self.reconcileCompactMusicView()
+        }
+    }
+
+    /// Closed-notch music pill while agents are idle and music is playing
+    /// (or was paused moments ago).
     var shouldShowCompactMusicView: Bool {
-        notchStatus != .opened && agentsAreIdle && isMusicPlaybackActive
+        notchStatus != .opened && agentsAreIdle && hasClosedMusicPresence
+    }
+
+    /// Album art for the live activity's music chip (agents working while
+    /// music plays).
+    var islandMusicChipArt: NSImage? {
+        isMusicPlaybackActive ? playerManager.track.nsAlbumArt : nil
     }
 
     var isIslandInactive: Bool {
@@ -1173,7 +1221,7 @@ final class AppModel {
     var shouldHideClosedNotch: Bool {
         notchStatus != .opened
             && musicNotificationTrack == nil
-            && !isMusicPlaybackActive
+            && !hasClosedMusicPresence
             && agentsAreIdle
     }
 

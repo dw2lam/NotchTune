@@ -817,6 +817,21 @@ struct V6ClosedMusicSurface: View {
             size: metrics.albumArtSize,
             cornerRadius: metrics.albumArtCornerRadius
         )
+        // Paused (the pill lingers a few minutes): a play glyph on the art,
+        // which is also where a click resumes playback.
+        .overlay {
+            if !isPlaying && !isNotification {
+                ZStack {
+                    Color.black.opacity(0.45)
+                    Image(systemName: "play.fill")
+                        .font(.system(size: metrics.albumArtSize * 0.42, weight: .bold))
+                        .foregroundStyle(V6Palette.paper)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: metrics.albumArtCornerRadius, style: .continuous))
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: isPlaying)
     }
 
     private func notificationTextBlock(maxWidth: CGFloat) -> some View {
@@ -1013,9 +1028,20 @@ enum LiveActivityPalette {
 private struct LiveActivityTrailingView: View {
     let activity: IslandLiveActivity
     let metrics: IslandChromeMetrics
+    @Environment(\.islandMusicChipArt) private var musicChipArt
 
     var body: some View {
         HStack(spacing: 5) {
+            if activity.showsMusicChip, let musicChipArt {
+                Image(nsImage: musicChipArt)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 16, height: 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .transition(.scale.combined(with: .opacity))
+                    .accessibilityLabel("Now playing")
+            }
+
             if activity.otherCount > 0 {
                 Text("+\(activity.otherCount)")
                     .font(.system(size: 9.5, weight: .semibold, design: .rounded))
@@ -1052,5 +1078,17 @@ private struct LiveActivityTrailingView: View {
         case .needsAnswer:   return IslandDesignPalette.Status.waitingForAnswer
         default:             return V6Palette.paper.opacity(0.5)
         }
+    }
+}
+
+private struct IslandMusicChipArtKey: EnvironmentKey {
+    static let defaultValue: NSImage? = nil
+}
+
+extension EnvironmentValues {
+    /// Album art for the live activity's music chip; nil hides the chip.
+    var islandMusicChipArt: NSImage? {
+        get { self[IslandMusicChipArtKey.self] }
+        set { self[IslandMusicChipArtKey.self] = newValue }
     }
 }

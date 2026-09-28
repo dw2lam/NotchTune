@@ -195,18 +195,6 @@ struct GeneralSettingsPane: View {
                 }
             }
 
-            Section(lang.t("settings.general.language")) {
-                Picker(lang.t("settings.general.language"), selection: Binding(
-                    get: { lang.language },
-                    set: { lang.language = $0 }
-                )) {
-                    Text(lang.t("settings.general.languageSystem")).tag(LanguageManager.AppLanguage.system)
-                    Text(lang.t("settings.general.languageEnglish")).tag(LanguageManager.AppLanguage.en)
-                    Text(lang.t("settings.general.languageChinese")).tag(LanguageManager.AppLanguage.zhHans)
-                    Text(lang.t("settings.general.languageTraditionalChinese")).tag(LanguageManager.AppLanguage.zhHant)
-                }
-            }
-
             Section(lang.t("settings.general.behavior")) {
                 Toggle(lang.t("settings.general.autoCollapse"), isOn: .constant(true))
                 Toggle(lang.t("settings.general.hideDockIcon"), isOn: Binding(

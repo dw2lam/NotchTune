@@ -47,19 +47,18 @@ This produces `output/package/NotchTune.dmg` and
 
 ## Release Notes Format
 
-All release notes **must be bilingual** (English + Simplified Chinese). Use the following template:
+Release notes are English-only. Use the following template:
 
 ```markdown
 ## NotchTune v<version> — <Title>
 
-### Changes since v<prev> | 自 v<prev> 以来的变更
+### Changes since v<prev>
 
 - <emoji> **Category**: English description (#PR)
-  中文描述 (#PR)
 
 ---
 
-## Installation | 安装说明
+## Installation
 
 << See "Installation Section" below >>
 
@@ -81,23 +80,19 @@ All release notes **must be bilingual** (English + Simplified Chinese). Use the 
 **Include in every release** until code signing is in place. Remove once we ship a signed & notarized build.
 
 ```markdown
-## Installation | 安装说明
+## Installation
 
 1. Download **NotchTune.dmg**, open it, and drag **NotchTune** to **Applications**.
-   下载 **NotchTune.dmg**，打开后将 **NotchTune** 拖入 **Applications**。
 
 2. Since this is an unsigned app, macOS may show **"NotchTune is damaged"** when you try to open it. Run this command in Terminal to fix it:
-   由于应用未签名，macOS 可能会提示**「"NotchTune"已损坏」**。请在终端中执行以下命令：
 
    ```bash
    xattr -dr com.apple.quarantine "/Applications/NotchTune.app"
    ```
 
 3. Requirements: **macOS 14+**, **Apple Silicon** (M1/M2/M3/M4/M5).
-   系统要求：**macOS 14+**，**Apple Silicon**（M1/M2/M3/M4/M5）。
 
 > ⚠️ **Note**: This is an unsigned early-access build. Code signing and notarization will be added once our Apple Developer account is approved.
-> **注意**：这是未签名的早期测试版。代码签名和 Apple 公证将在 Developer 账号审核通过后添加。
 ```
 
 ## Assets

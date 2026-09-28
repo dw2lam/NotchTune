@@ -35,6 +35,11 @@ struct IslandLiveActivity: Equatable, Sendable {
     var since: Date?
     /// Other live sessions beyond this one ("+2").
     var otherCount: Int
+    /// Album-art chip on the right wing (music playing while an agent works).
+    var showsMusicChip: Bool = false
+
+    /// Width the music chip adds to the right wing (art + gap).
+    nonisolated static let musicChipWidth: CGFloat = 21
 
     /// Seconds a finished peek stays on the pill before it tucks back.
     nonisolated static let finishedPeekDuration: TimeInterval = 4
@@ -243,11 +248,12 @@ struct IslandLiveActivity: Equatable, Sendable {
 
     /// Room reserved on the right wing for the timer / status mark.
     var trailingWidth: CGFloat {
+        let chip = showsMusicChip ? Self.musicChipWidth : 0
         switch kind {
         case .working, .needsApproval, .needsAnswer:
-            return otherCount > 0 ? 64 : 40
+            return (otherCount > 0 ? 64 : 40) + chip
         case .finished:
-            return otherCount > 0 ? 44 : 20
+            return (otherCount > 0 ? 44 : 20) + chip
         }
     }
 

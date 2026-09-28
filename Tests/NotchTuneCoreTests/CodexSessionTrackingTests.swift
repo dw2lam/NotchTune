@@ -624,7 +624,7 @@ struct CodexSessionTrackingTests {
                     "content": [
                         [
                             "type": "input_text",
-                            "text": "读一下这篇论文 https://arxiv.org/html/2603.28052v1，然后对比一下 autoresearch 的实现。",
+                            "text": "Read this paper https://arxiv.org/html/2603.28052v1, then compare it with the autoresearch implementation.",
                         ],
                     ],
                 ]
@@ -638,17 +638,17 @@ struct CodexSessionTrackingTests {
                     "content": [
                         [
                             "type": "output_text",
-                            "text": "我先读论文内容并在仓库里定位 autoresearch 相关实现，再把两边的机制做一版对照。",
+                            "text": "I'll read the paper, find the autoresearch implementation in the repo, then compare the two mechanisms.",
                         ],
                     ],
                 ]
             ),
         ])
 
-        #expect(snapshot.initialUserPrompt == "读一下这篇论文 https://arxiv.org/html/2603.28052v1，然后对比一下 autoresearch 的实现。")
-        #expect(snapshot.lastUserPrompt == "读一下这篇论文 https://arxiv.org/html/2603.28052v1，然后对比一下 autoresearch 的实现。")
-        #expect(snapshot.lastAssistantMessage == "我先读论文内容并在仓库里定位 autoresearch 相关实现，再把两边的机制做一版对照。")
-        #expect(snapshot.summary == "我先读论文内容并在仓库里定位 autoresearch 相关实现，再把两边的机制做一版对照。")
+        #expect(snapshot.initialUserPrompt == "Read this paper https://arxiv.org/html/2603.28052v1, then compare it with the autoresearch implementation.")
+        #expect(snapshot.lastUserPrompt == "Read this paper https://arxiv.org/html/2603.28052v1, then compare it with the autoresearch implementation.")
+        #expect(snapshot.lastAssistantMessage == "I'll read the paper, find the autoresearch implementation in the repo, then compare the two mechanisms.")
+        #expect(snapshot.summary == "I'll read the paper, find the autoresearch implementation in the repo, then compare the two mechanisms.")
     }
 
     @Test
@@ -795,7 +795,7 @@ struct CodexSessionTrackingTests {
                     "content": [
                         [
                             "type": "input_text",
-                            "text": "读一下这篇论文 https://arxiv.org/html/2603.28052v1，然后对比一下 autoresearch 的实现。",
+                            "text": "Read this paper https://arxiv.org/html/2603.28052v1, then compare it with the autoresearch implementation.",
                         ],
                     ],
                 ]
@@ -810,7 +810,7 @@ struct CodexSessionTrackingTests {
                     "content": [
                         [
                             "type": "input_text",
-                            "text": "时间你看图对比吧 我说的不对",
+                            "text": "Compare against the screenshot for the timing, I got it wrong",
                         ],
                     ],
                 ]
@@ -825,7 +825,7 @@ struct CodexSessionTrackingTests {
                     "content": [
                         [
                             "type": "output_text",
-                            "text": "我先读论文内容并在仓库里定位 autoresearch 相关实现，再把两边的机制做一版对照。",
+                            "text": "I'll read the paper, find the autoresearch implementation in the repo, then compare the two mechanisms.",
                         ],
                     ],
                 ]
@@ -857,13 +857,13 @@ struct CodexSessionTrackingTests {
 
         let events = await recorder.snapshot()
         #expect(events.contains(where: {
-            $0.trackedMetadataUpdate?.codexMetadata.initialUserPrompt == "读一下这篇论文 https://arxiv.org/html/2603.28052v1，然后对比一下 autoresearch 的实现。"
+            $0.trackedMetadataUpdate?.codexMetadata.initialUserPrompt == "Read this paper https://arxiv.org/html/2603.28052v1, then compare it with the autoresearch implementation."
         }))
         #expect(events.contains(where: {
-            $0.trackedMetadataUpdate?.codexMetadata.lastUserPrompt == "时间你看图对比吧 我说的不对"
+            $0.trackedMetadataUpdate?.codexMetadata.lastUserPrompt == "Compare against the screenshot for the timing, I got it wrong"
         }))
         #expect(events.contains(where: {
-            $0.trackedActivityUpdate?.summary == "我先读论文内容并在仓库里定位 autoresearch 相关实现，再把两边的机制做一版对照。"
+            $0.trackedActivityUpdate?.summary == "I'll read the paper, find the autoresearch implementation in the repo, then compare the two mechanisms."
         }))
     }
 
