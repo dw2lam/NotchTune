@@ -43,7 +43,7 @@ final class AppModel {
     private static let liveSessionStalenessWindow: TimeInterval = 15 * 60
     private static let jumpOverlayDismissLeadTime: Duration = .milliseconds(20)
     private static let agentsGridObservedSequenceLimit = 512
-    static let hoverOpenDelay: TimeInterval = 0.15
+    private static let hoverOpenModeDefaultsKey = "app.hoverOpenMode"
 
     struct AcceptanceStep: Identifiable {
         let id: String
@@ -283,6 +283,13 @@ final class AppModel {
         didSet {
             guard hasFinishedInit, hapticFeedbackEnabled != oldValue else { return }
             UserDefaults.standard.set(hapticFeedbackEnabled, forKey: Self.hapticFeedbackEnabledDefaultsKey)
+        }
+    }
+    /// Dwell before hover opens the notch (Settings → General).
+    var hoverOpenMode: HoverOpenMode = .normal {
+        didSet {
+            guard hasFinishedInit, hoverOpenMode != oldValue else { return }
+            UserDefaults.standard.set(hoverOpenMode.rawValue, forKey: Self.hoverOpenModeDefaultsKey)
         }
     }
     var showCodexUsage: Bool = false {
@@ -1001,6 +1008,9 @@ final class AppModel {
         selectedSoundName = NotificationSoundService.selectedSoundName
         showDockIcon = UserDefaults.standard.bool(forKey: Self.showDockIconDefaultsKey)
         hapticFeedbackEnabled = UserDefaults.standard.bool(forKey: Self.hapticFeedbackEnabledDefaultsKey)
+        hoverOpenMode = HoverOpenMode(
+            rawValue: UserDefaults.standard.string(forKey: Self.hoverOpenModeDefaultsKey) ?? ""
+        ) ?? .normal
         suppressFrontmostNotifications = UserDefaults.standard.bool(forKey: Self.suppressFrontmostNotificationsDefaultsKey)
         if UserDefaults.standard.object(forKey: Self.showCodexUsageDefaultsKey) != nil {
             showCodexUsage = UserDefaults.standard.bool(forKey: Self.showCodexUsageDefaultsKey)

@@ -24,6 +24,11 @@ struct GrowingNotchShape: Shape {
     /// width. Interpolates closed → opened with `progress`; 0 disables.
     var compactEarRadius: CGFloat = 0
     var expandedEarRadius: CGFloat = 0
+    /// Extends the top edge this far ABOVE the rect (off the top of the
+    /// screen), so an outline stroke or the Liquid Glass rim never draws a
+    /// light line along the screen edge — the surface reads as continuous
+    /// with the hardware notch / menu bar.
+    var topOverscan: CGFloat = 0
 
     var animatableData: AnimatablePair<CGFloat, CGFloat> {
         get { AnimatablePair(progress, compactW) }
@@ -49,7 +54,7 @@ struct GrowingNotchShape: Shape {
         // Closed: anchor the notch gap to the physical cutout. Open: center the panel.
         let x = compactX + (expandedX - compactX) * progress
 
-        return Self.surfacePath(x: x, width: w, height: h, bottomRadius: r, earRadius: e)
+        return Self.surfacePath(x: x, width: w, height: h, bottomRadius: r, earRadius: e, topOverscan: topOverscan)
     }
 
     /// Flat top edge (flared outward by `earRadius`), straight sides, rounded
@@ -60,10 +65,12 @@ struct GrowingNotchShape: Shape {
         width w: CGFloat,
         height h: CGFloat,
         bottomRadius r: CGFloat,
-        earRadius e: CGFloat
+        earRadius e: CGFloat,
+        topOverscan o: CGFloat = 0
     ) -> Path {
         Path { p in
-            p.move(to: CGPoint(x: x - e, y: 0))
+            p.move(to: CGPoint(x: x - e, y: -o))
+            p.addLine(to: CGPoint(x: x + w + e, y: -o))
             p.addLine(to: CGPoint(x: x + w + e, y: 0))
             if e > 0 {
                 p.addQuadCurve(to: CGPoint(x: x + w, y: e), control: CGPoint(x: x + w, y: 0))
@@ -78,6 +85,7 @@ struct GrowingNotchShape: Shape {
             if e > 0 {
                 p.addQuadCurve(to: CGPoint(x: x - e, y: 0), control: CGPoint(x: x, y: 0))
             }
+            p.addLine(to: CGPoint(x: x - e, y: -o))
             p.closeSubpath()
         }
     }

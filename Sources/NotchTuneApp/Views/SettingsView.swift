@@ -221,6 +221,17 @@ struct GeneralSettingsPane: View {
                     get: { model.completionReplyEnabled },
                     set: { model.completionReplyEnabled = $0 }
                 ))
+                Picker(selection: Binding(
+                    get: { model.hoverOpenMode },
+                    set: { model.hoverOpenMode = $0 }
+                )) {
+                    ForEach(HoverOpenMode.allCases) { mode in
+                        Text(lang.t("settings.general.hoverOpen.\(mode.rawValue)")).tag(mode)
+                    }
+                } label: {
+                    Text(lang.t("settings.general.hoverOpen"))
+                    Text(lang.t("settings.general.hoverOpen.note"))
+                }
                 Toggle(isOn: Binding(
                     get: { model.suppressFrontmostNotifications },
                     set: { model.suppressFrontmostNotifications = $0 }

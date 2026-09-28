@@ -263,3 +263,9 @@
 "settings.appearance.colorByAgent.note" = "角色顏色跟隨目前代理：Codex 藍色、Claude 橘色、Gemini 綠色。";
 "settings.appearance.topCurve.title" = "瀏海頂部弧線";
 "settings.appearance.topCurve.note" = "瀏海與螢幕頂部相接處向外彎出，收合與展開時皆生效。";
+"settings.general.hoverOpen" = "懸停展開";
+"settings.general.hoverOpen.note" = "指標在瀏海上停留這麼久才會展開。點擊一律可以展開。";
+"settings.general.hoverOpen.off" = "關閉";
+"settings.general.hoverOpen.quick" = "快";
+"settings.general.hoverOpen.normal" = "標準";
+"settings.general.hoverOpen.relaxed" = "從容";

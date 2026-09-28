@@ -264,3 +264,9 @@
 "settings.appearance.colorByAgent.note" = "角色颜色跟随当前代理：Codex 蓝色、Claude 橙色、Gemini 绿色。";
 "settings.appearance.topCurve.title" = "刘海顶部弧线";
 "settings.appearance.topCurve.note" = "刘海与屏幕顶部相接处向外弯出，收起和展开时都生效。";
+"settings.general.hoverOpen" = "悬停展开";
+"settings.general.hoverOpen.note" = "指针在刘海上停留这么久才会展开。点击始终可以展开。";
+"settings.general.hoverOpen.off" = "关闭";
+"settings.general.hoverOpen.quick" = "快";
+"settings.general.hoverOpen.normal" = "标准";
+"settings.general.hoverOpen.relaxed" = "从容";

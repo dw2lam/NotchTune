@@ -37,6 +37,7 @@ final class OverlayPanelController {
     private var panel: NotchPanel?
     private var eventMonitors = NotchEventMonitors()
     private var hoverTimer: DispatchWorkItem?
+    private var hoverAnchor: NSPoint?
     private var hoverCancelGrace: DispatchWorkItem?
     private var isFileDragNearNotch = false
     private var acceptedCurrentFileDrop = false
@@ -507,7 +508,7 @@ final class OverlayPanelController {
             // Only auto-expand on hover if the island is NOT in its auto-hidden "inactive" state.
             // When auto-hidden (peeking), the user must click to expand.
             if !model.shouldCollapseClosedNotch {
-                scheduleHoverOpen()
+                scheduleHoverOpen(at: screenLocation)
             } else {
                 cancelHoverOpen()
             }
@@ -815,7 +816,13 @@ final class OverlayPanelController {
     /// mouse jitter at the notch edge from resetting the delay.
     private static let hoverCancelGracePeriod: TimeInterval = 0.1
 
-    private func scheduleHoverOpen() {
+    /// The cursor must REST on the pill to open it: moving farther than this
+    /// from where the dwell started restarts the timer, so a cursor sweeping
+    /// across the (sometimes wide) pill on its way to the menu bar or a tab
+    /// strip never opens it.
+    private static let hoverStillnessRadius: CGFloat = 24
+
+    private func scheduleHoverOpen(at point: NSPoint) {
         // Suppressed right after an auto-collapse until the cursor leaves the
         // notch, so a lingering cursor doesn't interrupt the close animation.
         guard !suppressHoverOpenAfterCollapse else { return }
@@ -824,9 +831,26 @@ final class OverlayPanelController {
         hoverCancelGrace?.cancel()
         hoverCancelGrace = nil
 
-        guard model != nil else { return }
+        guard let model, let delay = model.hoverOpenMode.delay else {
+            cancelHoverOpenImmediately()
+            return
+        }
 
-        guard hoverTimer == nil else { return }
+        // Dragging a window or selecting text along the top edge.
+        guard NSEvent.pressedMouseButtons == 0 else {
+            cancelHoverOpenImmediately()
+            return
+        }
+
+        if hoverTimer != nil {
+            guard let anchor = hoverAnchor,
+                  hypot(point.x - anchor.x, point.y - anchor.y) > Self.hoverStillnessRadius else {
+                return
+            }
+            hoverTimer?.cancel()
+            hoverTimer = nil
+        }
+        hoverAnchor = point
 
         let item = DispatchWorkItem { [weak self] in
             guard let self, let model = self.model else { return }
@@ -835,7 +859,7 @@ final class OverlayPanelController {
         }
 
         hoverTimer = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + AppModel.hoverOpenDelay, execute: item)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
     }
 
     private func performHoverOpen(_ model: AppModel) {

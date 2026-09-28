@@ -840,9 +840,14 @@ struct IslandPanelView: View {
             compactLeftWingWidth: compactClipLeftWingWidth,
             compactNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
             compactEarRadius: closedEarRadius,
-            expandedEarRadius: openedEarRadius
+            expandedEarRadius: openedEarRadius,
+            topOverscan: Self.surfaceTopOverscan
         )
     }
+
+    /// How far the surface background reaches above the screen's top edge
+    /// (see `GrowingNotchShape.topOverscan`).
+    private static let surfaceTopOverscan: CGFloat = 6
 
     private var closedEarRadius: CGFloat {
         model.islandNotchTopCurve ? IslandChromeMetrics.closedEarRadius : 0

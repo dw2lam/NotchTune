@@ -57,6 +57,26 @@ enum IslandAppearanceDisplayProfile: String, CaseIterable, Identifiable, Sendabl
 /// How much room the closed island takes. `regular` is the shipped v6 pill;
 /// `compact` trims the chrome (glyph, album art, paddings, wing reserve) so the
 /// pill hugs the physical notch / menu bar instead of standing proud of it.
+/// How long the cursor has to rest on the closed notch before it opens.
+enum HoverOpenMode: String, CaseIterable, Identifiable, Sendable {
+    case off
+    case quick
+    case normal
+    case relaxed
+
+    var id: String { rawValue }
+
+    /// `nil` = hover never opens the notch (click still does).
+    var delay: TimeInterval? {
+        switch self {
+        case .off: nil
+        case .quick: 0.2
+        case .normal: 0.4
+        case .relaxed: 0.7
+        }
+    }
+}
+
 enum IslandDensity: String, CaseIterable, Identifiable, Sendable {
     case regular
     case compact

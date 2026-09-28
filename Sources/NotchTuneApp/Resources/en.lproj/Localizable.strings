@@ -264,3 +264,9 @@
 "settings.appearance.colorByAgent.note" = "Tint the character with the agent it's showing: Codex blue, Claude orange, Gemini green.";
 "settings.appearance.topCurve.title" = "Notch top curve";
 "settings.appearance.topCurve.note" = "Flare the notch outward where it meets the top of the screen, closed and opened.";
+"settings.general.hoverOpen" = "Open on hover";
+"settings.general.hoverOpen.note" = "Rest the pointer on the notch this long to open it. Clicking always opens it.";
+"settings.general.hoverOpen.off" = "Off";
+"settings.general.hoverOpen.quick" = "Quick";
+"settings.general.hoverOpen.normal" = "Normal";
+"settings.general.hoverOpen.relaxed" = "Relaxed";
