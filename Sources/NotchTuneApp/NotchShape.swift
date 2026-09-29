@@ -30,11 +30,20 @@ struct GrowingNotchShape: Shape {
     /// with the hardware notch / menu bar.
     var topOverscan: CGFloat = 0
 
-    var animatableData: AnimatablePair<CGFloat, CGFloat> {
-        get { AnimatablePair(progress, compactW) }
+    /// Progress + the compact geometry, so switching the compact target
+    /// (pill ↔ hardware notch) animates instead of jumping.
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, AnimatablePair<CGFloat, CGFloat>> {
+        get {
+            AnimatablePair(
+                AnimatablePair(progress, compactW),
+                AnimatablePair(compactLeftWingWidth, compactR)
+            )
+        }
         set {
-            progress = newValue.first
-            compactW = newValue.second
+            progress = newValue.first.first
+            compactW = newValue.first.second
+            compactLeftWingWidth = newValue.second.first
+            compactR = newValue.second.second
         }
     }
 

@@ -403,9 +403,12 @@ final class OverlayUICoordinator {
 
     func refreshFullscreenState() {
         guard let appModel else { return }
-        let fullscreen = FullscreenDisplayDetection.isOverlayScreenInFullscreen(
-            preferredScreenID: preferredOverlayScreenID
-        )
+        // Harness scenarios render deterministically whatever the user has
+        // full-screen on that display (it used to blank the captures).
+        let fullscreen = !appModel.disablesOverlayEventMonitoringDuringHarness
+            && FullscreenDisplayDetection.isOverlayScreenInFullscreen(
+                preferredScreenID: preferredOverlayScreenID
+            )
         // Only write when it actually changed — assigning an @Observable
         // property re-notifies SwiftUI every time, even with the same value.
         guard appModel.isOverlayDisplayFullscreen != fullscreen else { return }

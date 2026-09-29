@@ -18,7 +18,13 @@ struct AppModelNotificationCardKeysTests {
     }
 
     private func makeModel() -> AppModel {
-        let model = AppModel(isNotificationSessionAlreadyFrontmost: { _ in false })
+        let model = AppModel(
+            isNotificationSessionAlreadyFrontmost: { _ in false },
+            frontmostBundleIdentifierProvider: { nil }
+        )
+        // Hermetic: a full-screen app on the real display would otherwise
+        // hide the overlay panel that hosts the card these keys drive.
+        model.disablesOverlayEventMonitoringDuringHarness = true
         model.isSoundMuted = true
         model.notchStatus = .closed
         model.notchOpenReason = nil

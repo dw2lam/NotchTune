@@ -124,6 +124,8 @@ struct IslandPanelView: View {
     @State private var keepsOpenedSurfaceMounted = false
     @State private var openedSurfaceMountGeneration: UInt64 = 0
     @State private var morphProgress: CGFloat = 0
+    @State private var morphCompactTarget: MorphCompactTarget = .pill
+    @State private var morphEmergeGeneration: UInt64 = 0
 
     /// Bumped after an opened-state window resize settles to force one fresh
     /// render of the glass backdrop (see `scheduleGlassResolve`).
@@ -504,12 +506,20 @@ struct IslandPanelView: View {
                 openWindow(id: "onboarding")
             }
         }
-        .onChange(of: model.notchStatus) { _, status in
+        .onChange(of: model.notchStatus) { oldStatus, status in
             syncOpenedSurfaceMount(with: status)
             switch status {
             case .opened:
+                // Open grows out of the pill the user is looking at.
+                setMorphCompactTarget(.pill)
                 withAnimation(openAnimation) { morphProgress = 1 }
             case .closed, .popping:
+                // Close tucks the panel into the hardware notch, then the
+                // pill's wings grow back out of it (pops don't come from open).
+                if oldStatus == .opened {
+                    setMorphCompactTarget(.hardwareNotch)
+                    scheduleWingsEmerge()
+                }
                 withAnimation(closeAnimation) { morphProgress = 0 }
                 // The panel stops accepting mouse events once it closes, so
                 // SwiftUI never delivers the matching hover exit — without
@@ -572,7 +582,9 @@ struct IslandPanelView: View {
                         .animation(
                             usesOpenedVisualState
                                 ? .easeOut(duration: 0.05)
-                                : .easeIn(duration: 0.14).delay(0.16),
+                                // Comes back as the tuck into the notch
+                                // settles, just before the wings emerge.
+                                : .easeOut(duration: 0.18).delay(0.3),
                             value: usesOpenedVisualState
                         )
                         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.isPeeking)
@@ -587,13 +599,13 @@ struct IslandPanelView: View {
                     musicClipMetrics: activeMusicClipMetrics,
                     musicNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
                     morphProgress: morphProgress,
-                    compactW: closedSurfaceClipWidth,
+                    compactW: morphCompact.width,
                     compactH: closedNotchHeight,
                     expandedW: openedWidth,
                     expandedH: openedHeight,
-                    compactR: closedNotchHeight / 2,
-                    compactLeftWingWidth: compactClipLeftWingWidth,
-                    compactNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
+                    compactR: morphCompact.radius,
+                    compactLeftWingWidth: morphCompact.leftWing,
+                    compactNotchGapWidth: morphCompact.notchGap,
                     compactEarRadius: closedEarRadius,
                     expandedEarRadius: openedEarRadius
                 ))
@@ -850,18 +862,68 @@ struct IslandPanelView: View {
     private func morphShape(openedWidth: CGFloat, openedHeight: CGFloat) -> GrowingNotchShape {
         GrowingNotchShape(
             progress: morphProgress,
-            compactW: closedSurfaceClipWidth,
+            compactW: morphCompact.width,
             compactH: closedNotchHeight,
             expandedW: openedWidth,
             expandedH: openedHeight,
-            compactR: closedNotchHeight / 2,
+            compactR: morphCompact.radius,
             expandedR: OpenedIslandSurfaceShape.openedBottomRadius,
-            compactLeftWingWidth: compactClipLeftWingWidth,
-            compactNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
+            compactLeftWingWidth: morphCompact.leftWing,
+            compactNotchGapWidth: morphCompact.notchGap,
             compactEarRadius: closedEarRadius,
             expandedEarRadius: openedEarRadius,
             topOverscan: Self.surfaceTopOverscan
         )
+    }
+
+    // MARK: - Morph compact target
+
+    enum MorphCompactTarget {
+        /// The closed pill with its wings (open starts here; resting state).
+        case pill
+        /// The physical cutout (close ends here on a MacBook).
+        case hardwareNotch
+    }
+
+    /// Bottom corner radius of the hardware notch the close tucks into.
+    private static let hardwareNotchBottomRadius: CGFloat = 10
+
+    /// When the wings start growing back out after a close tucks in: just
+    /// as the close spring settles onto the notch.
+    private static let wingsEmergeDelay: TimeInterval = 0.4
+    private static let wingsEmergeAnimation = Animation.spring(response: 0.38, dampingFraction: 0.82)
+
+    /// Compact geometry for the current target. External displays have no
+    /// hardware notch, so they always use the pill.
+    private var morphCompact: (width: CGFloat, leftWing: CGFloat, notchGap: CGFloat, radius: CGFloat) {
+        if morphCompactTarget == .hardwareNotch, !isExternalDisplayPlacement {
+            return (macbookPhysicalNotchWidth, 0, macbookPhysicalNotchWidth, Self.hardwareNotchBottomRadius)
+        }
+        return (
+            closedSurfaceClipWidth,
+            compactClipLeftWingWidth,
+            isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
+            closedNotchHeight / 2
+        )
+    }
+
+    /// Swap the compact target without animating the swap itself (the
+    /// open / close spring that follows carries the motion).
+    private func setMorphCompactTarget(_ target: MorphCompactTarget) {
+        morphEmergeGeneration &+= 1
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { morphCompactTarget = target }
+    }
+
+    private func scheduleWingsEmerge() {
+        let generation = morphEmergeGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.wingsEmergeDelay) {
+            guard generation == morphEmergeGeneration,
+                  model.notchStatus != .opened,
+                  morphCompactTarget == .hardwareNotch else { return }
+            withAnimation(Self.wingsEmergeAnimation) { morphCompactTarget = .pill }
+        }
     }
 
     /// How far the surface background reaches above the screen's top edge
