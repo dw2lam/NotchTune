@@ -43,6 +43,28 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
             if harnessLaunchConfiguration.seedsSampleUsage {
                 model.seedHarnessSampleUsage()
             }
+            // `NOTCHTUNE_HARNESS_SETTINGS_TAB=<SettingsTab>` opens Settings on
+            // that pane; `NOTCHTUNE_HARNESS_ONBOARDING_STEP=<0-6>` opens the
+            // onboarding wizard on that step (Settings first: it registers
+            // the window openers). The recorder then captures those windows.
+            let env = ProcessInfo.processInfo.environment
+            if env["NOTCHTUNE_HARNESS_SETTINGS_TAB"] != nil || env["NOTCHTUNE_HARNESS_ONBOARDING_STEP"] != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [model] in
+                    model.showSettings()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        if let tab = env["NOTCHTUNE_HARNESS_SETTINGS_TAB"] {
+                            NotificationCenter.default.post(name: .notchTuneSelectSettingsTab, object: tab)
+                        }
+                        if let raw = env["NOTCHTUNE_HARNESS_ONBOARDING_STEP"], let index = Int(raw) {
+                            model.showOnboarding()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                NotificationCenter.default.post(name: .notchTuneSelectOnboardingStep, object: index)
+                            }
+                        }
+                    }
+                }
+            }
+
             // `NOTCHTUNE_HARNESS_SKIP_FEEDBACK=next|previous`: fire the swipe
             // arrows just before the capture.
             if let skip = ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_SKIP_FEEDBACK"] {
@@ -87,6 +109,9 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                         launchedAt: launchedAt,
                         runtimeMonitor: harnessRuntimeMonitor
                     )
+                    if let directoryURL = harnessLaunchConfiguration.artifactDirectoryURL {
+                        HarnessArtifactRecorder.recordAppWindows(to: directoryURL)
+                    }
                     if ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_FILMSTRIP"] == "1",
                        let directoryURL = harnessLaunchConfiguration.artifactDirectoryURL {
                         HarnessArtifactRecorder.recordFilmstrip(model: model, directoryURL: directoryURL)

@@ -219,6 +219,27 @@ enum HarnessArtifactRecorder {
         return bitmap.representation(using: .png, properties: [:])
     }
 
+    /// Settings / onboarding windows opened by the harness, captured as the
+    /// window server composites them (materials, shadows) into
+    /// `settings.png` / `onboarding.png`.
+    static func recordAppWindows(to directoryURL: URL) {
+        for window in NSApp.windows where window.isVisible && !(window is NSPanel) {
+            // SwiftUI `Window(id:)` scenes carry their id in the identifier;
+            // the title follows the selected pane, so it can't be matched.
+            let identifier = window.identifier?.rawValue ?? ""
+            let name: String
+            if identifier.contains("settings") {
+                name = "settings"
+            } else if identifier.contains("onboarding") {
+                name = "onboarding"
+            } else {
+                continue
+            }
+            guard let data = compositedPNGData(for: window) else { continue }
+            try? data.write(to: directoryURL.appendingPathComponent("\(name).png"))
+        }
+    }
+
     /// `NOTCHTUNE_HARNESS_FILMSTRIP=1`: close the notch, then sample the
     /// window at ~30 fps while it opens and again while it closes, into
     /// `<artifacts>/filmstrip/{open,close}-NN.png`. Captures run off the main

@@ -89,6 +89,11 @@ struct OnboardingView: View {
                 model.beginAppearanceLivePreview()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .notchTuneSelectOnboardingStep)) { note in
+            if let index = note.object as? Int, let target = Step(rawValue: index) {
+                step = target
+            }
+        }
         .onChange(of: step) { old, new in
             // Personalize previews on the REAL notch: pin the island open for
             // the duration of the step.
@@ -229,6 +234,12 @@ struct OnboardingView: View {
     }
 
     private func refreshNotificationAuthorization() async {
+        // `swift run` (harness) has no bundle proxy; UNUserNotificationCenter
+        // raises instead of returning.
+        guard Bundle.main.bundleIdentifier != nil else {
+            notificationAuthorization = "Unavailable"
+            return
+        }
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         notificationAuthorization = switch settings.authorizationStatus {
         case .authorized, .provisional, .ephemeral: "Allowed"

@@ -10,6 +10,10 @@ extension Notification.Name {
     /// user to the right place without `SettingsView`'s `@State` having
     /// to leak into `AppModel`.
     static let notchTuneSelectSetupTab = Notification.Name("notchTuneSelectSetupTab")
+    /// Harness: `object` = a `SettingsTab.rawValue` to show.
+    static let notchTuneSelectSettingsTab = Notification.Name("notchTuneSelectSettingsTab")
+    /// Harness: `object` = an onboarding step index to jump to.
+    static let notchTuneSelectOnboardingStep = Notification.Name("notchTuneSelectOnboardingStep")
 }
 
 @MainActor

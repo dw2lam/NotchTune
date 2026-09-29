@@ -100,6 +100,11 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .notchTuneSelectSetupTab)) { _ in
             selectedTab = .setup
         }
+        .onReceive(NotificationCenter.default.publisher(for: .notchTuneSelectSettingsTab)) { note in
+            if let raw = note.object as? String, let tab = SettingsTab(rawValue: raw) {
+                selectedTab = tab
+            }
+        }
     }
 
     // MARK: Sidebar
