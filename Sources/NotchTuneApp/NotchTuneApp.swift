@@ -191,7 +191,9 @@ struct NotchTuneApp: App {
         Window("NotchTune Settings", id: "settings") {
             SettingsWindowContent(model: appDelegate.model)
         }
-        .windowResizability(.contentMinSize)
+        .windowResizability(.contentSize)
+        .windowToolbarStyle(.unified)
+        .defaultSize(width: 740, height: 620)
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {
