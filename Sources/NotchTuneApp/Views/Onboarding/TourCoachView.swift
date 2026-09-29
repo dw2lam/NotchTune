@@ -21,7 +21,7 @@ struct TourCoachView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if model.notchStatus == .opened, tour.phase != .celebrate {
-                Button("Skip tour") {
+                Button("Skip Tour") {
                     tour.skip()
                 }
                 .buttonStyle(.plain)

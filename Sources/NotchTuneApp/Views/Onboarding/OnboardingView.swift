@@ -28,18 +28,6 @@ struct OnboardingView: View {
             case .tryLive: "Tour"
             }
         }
-
-        var systemImage: String {
-            switch self {
-            case .welcome: "sparkles"
-            case .agents: "terminal"
-            case .permissions: "lock.shield"
-            case .music: "music.note"
-            case .personalize: "paintbrush"
-            case .keepRunning: "power"
-            case .tryLive: "play.circle"
-            }
-        }
     }
 
     var model: AppModel
@@ -50,23 +38,20 @@ struct OnboardingView: View {
     @State private var notificationAuthorization = "Checking…"
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider().opacity(0.35)
-
-            ScrollView {
-                stepContent
-                    .frame(maxWidth: 620)
-                    .padding(.horizontal, 42)
-                    .padding(.vertical, 30)
-            }
-
-            Divider().opacity(0.35)
+        OnboardingScrollWithFooter {
+            stepContent
+                .id(step)
+                .transition(.opacity)
+                .frame(maxWidth: OnboardingTheme.contentWidth)
+                .padding(.horizontal, 40)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+                .frame(maxWidth: .infinity)
+        } footer: {
             footer
         }
-        .frame(minWidth: 700, idealWidth: 760, minHeight: 560, idealHeight: 610)
-        .background(V6Palette.ink)
-        .preferredColorScheme(.dark)
+        .frame(minWidth: 700, idealWidth: 760, minHeight: 600, idealHeight: 660)
+        .modifier(OnboardingWindowChrome())
         .task {
             await refreshNotificationAuthorization()
         }
@@ -108,46 +93,6 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        HStack(spacing: 6) {
-            ForEach(Step.allCases) { item in
-                let isActive = item == step
-                HStack(spacing: 6) {
-                    Image(systemName: item.systemImage)
-                        .font(.system(size: 10, weight: .semibold))
-                    if isActive {
-                        Text(item.title)
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                }
-                .foregroundStyle(
-                    isActive
-                        ? OnboardingTheme.primaryText
-                        : item.rawValue < step.rawValue
-                            ? OnboardingTheme.ready.opacity(0.75)
-                            : OnboardingTheme.primaryText.opacity(0.3)
-                )
-                .padding(.horizontal, isActive ? 11 : 8)
-                .frame(height: 28)
-                .background(
-                    isActive ? Color.white.opacity(0.1) : .clear,
-                    in: Capsule()
-                )
-
-                if item != Step.allCases.last {
-                    Rectangle()
-                        .fill(.white.opacity(item.rawValue < step.rawValue ? 0.24 : 0.08))
-                        .frame(width: 12, height: 1)
-                }
-            }
-        }
-        .padding(.horizontal, 24)
-        .frame(maxWidth: .infinity, minHeight: 54)
-        .animation(.easeInOut(duration: 0.2), value: step)
-    }
-
     // MARK: - Content
 
     @ViewBuilder
@@ -176,38 +121,52 @@ struct OnboardingView: View {
 
     // MARK: - Footer
 
+    /// Setup Assistant footer: a quiet skip on the leading edge, page dots in
+    /// the middle, Back + the primary action on the trailing edge.
     private var footer: some View {
-        HStack {
-            Button(step == .tryLive ? "Finish without tour" : "Skip setup") {
-                if step == .tryLive, model.onboardingTourOutcome == nil {
-                    model.onboardingTourOutcome = .skipped
-                }
-                finish()
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(OnboardingTheme.tertiaryText)
+        ZStack {
+            OnboardingPageDots(count: Step.allCases.count, current: step.rawValue)
+                .accessibilityValue(step.title)
 
-            Spacer()
-
-            if step != .welcome {
-                Button("Back") {
-                    move(by: -1)
-                }
-            }
-
-            Button(step == .tryLive ? "Start the guided tour" : "Continue") {
-                if step == .tryLive {
+            HStack(spacing: 10) {
+                Button(step == .tryLive ? "Skip Tour" : "Skip Setup") {
+                    if step == .tryLive, model.onboardingTourOutcome == nil {
+                        model.onboardingTourOutcome = .skipped
+                    }
                     finish()
-                    model.startOnboardingTour()
-                } else {
-                    move(by: 1)
                 }
+                .buttonStyle(.link)
+                .help(step == .tryLive ? "Finish setup without the guided tour" : "Finish setup now — everything stays editable in Settings")
+
+                Spacer()
+
+                if step != .welcome {
+                    Button {
+                        move(by: -1)
+                    } label: {
+                        Text("Back").frame(minWidth: 64)
+                    }
+                    .controlSize(.large)
+                }
+
+                Button {
+                    if step == .tryLive {
+                        finish()
+                        model.startOnboardingTour()
+                    } else {
+                        move(by: 1)
+                    }
+                } label: {
+                    Text(step == .tryLive ? "Start Tour" : "Continue").frame(minWidth: 84)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .keyboardShortcut(.defaultAction)
             }
-            .keyboardShortcut(.defaultAction)
-            .tint(OnboardingTheme.accent)
         }
         .padding(.horizontal, 24)
-        .frame(minHeight: 62)
+        .padding(.top, 12)
+        .padding(.bottom, 20)
     }
 
     // MARK: - Actions
@@ -246,6 +205,48 @@ struct OnboardingView: View {
         case .denied: "Denied"
         case .notDetermined: "Allow"
         @unknown default: "Unknown"
+        }
+    }
+}
+
+/// Hide the redundant window title (the step header carries it) and let the
+/// title bar blend into the content, like Apple's welcome windows.
+private struct OnboardingWindowChrome: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content
+                .toolbar(removing: .title)
+                .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        } else {
+            content
+        }
+    }
+}
+
+/// The step content scrolls; the footer stays pinned. On macOS 26 the footer
+/// is a safe-area bar, so content scrolling beneath it gets the system's soft
+/// scroll-edge effect instead of a hard divider.
+private struct OnboardingScrollWithFooter<Content: View, Footer: View>: View {
+    @ViewBuilder var content: Content
+    @ViewBuilder var footer: Footer
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            ScrollView {
+                content
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .safeAreaBar(edge: .bottom) {
+                footer
+            }
+        } else {
+            VStack(spacing: 0) {
+                ScrollView {
+                    content
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                footer
+            }
         }
     }
 }
