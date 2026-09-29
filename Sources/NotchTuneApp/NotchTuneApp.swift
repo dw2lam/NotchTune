@@ -10,6 +10,20 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
     private let launchedAt = Date()
     private lazy var harnessRuntimeMonitor = HarnessRuntimeMonitor(launchedAt: launchedAt)
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Headless harness: hide SwiftUI's scene windows (the Settings scene
+        // auto-opens at launch) before they ever draw on the user's screen.
+        guard HarnessHeadless.isActive else { return }
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didUpdateNotification, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { HarnessHeadless.parkAppWindows() }
+        }
+        Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { _ in
+            MainActor.assumeIsolated { HarnessHeadless.parkAppWindows() }
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // UNUserNotificationCenter throws (bundleProxyForCurrentProcess is nil)
         // when the binary runs unbundled, e.g. `swift run` in the harness.
@@ -48,7 +62,33 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
             // onboarding wizard on that step (Settings first: it registers
             // the window openers). The recorder then captures those windows.
             let env = ProcessInfo.processInfo.environment
-            if env["NOTCHTUNE_HARNESS_SETTINGS_TAB"] != nil || env["NOTCHTUNE_HARNESS_ONBOARDING_STEP"] != nil {
+            if HarnessHeadless.isActive,
+               env["NOTCHTUNE_HARNESS_SETTINGS_TAB"] != nil || env["NOTCHTUNE_HARNESS_ONBOARDING_STEP"] != nil {
+                // Headless: host the same views in windows born below the
+                // desktop, so nothing ever appears on the user's screen.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [model] in
+                    if let tab = env["NOTCHTUNE_HARNESS_SETTINGS_TAB"] {
+                        HarnessHeadless.openHiddenWindow(
+                            id: "settings", title: "NotchTune Settings",
+                            size: NSSize(width: 780, height: 560),
+                            rootView: SettingsView(model: model)
+                        )
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            NotificationCenter.default.post(name: .notchTuneSelectSettingsTab, object: tab)
+                        }
+                    }
+                    if let raw = env["NOTCHTUNE_HARNESS_ONBOARDING_STEP"], let index = Int(raw) {
+                        HarnessHeadless.openHiddenWindow(
+                            id: "onboarding", title: "Welcome to NotchTune",
+                            size: NSSize(width: 760, height: 610),
+                            rootView: OnboardingView(model: model)
+                        )
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            NotificationCenter.default.post(name: .notchTuneSelectOnboardingStep, object: index)
+                        }
+                    }
+                }
+            } else if env["NOTCHTUNE_HARNESS_SETTINGS_TAB"] != nil || env["NOTCHTUNE_HARNESS_ONBOARDING_STEP"] != nil {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [model] in
                     model.showSettings()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -110,6 +150,7 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                         runtimeMonitor: harnessRuntimeMonitor
                     )
                     if let directoryURL = harnessLaunchConfiguration.artifactDirectoryURL {
+                        HarnessHeadless.parkAppWindows()
                         HarnessArtifactRecorder.recordAppWindows(to: directoryURL)
                     }
                     if ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_FILMSTRIP"] == "1",

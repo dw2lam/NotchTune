@@ -2092,6 +2092,10 @@ final class AppModel {
             // the `CommandGroup(.appSettings)` button that opens the window.
             NSApp.sendAction(NSSelectorFromString("showSettingsWindow:"), to: nil, from: nil)
         }
+        if HarnessHeadless.isActive {
+            HarnessHeadless.parkAppWindows()
+            return
+        }
         if let window = NSApp.windows.first(where: { $0.title == "NotchTune Settings" }) {
             window.orderFrontRegardless()
             window.makeKey()
@@ -2102,7 +2106,11 @@ final class AppModel {
     func showOnboarding() {
         if let opener = openOnboardingWindow {
             opener()
-            NSApp.activate(ignoringOtherApps: true)
+            if HarnessHeadless.isActive {
+                HarnessHeadless.parkAppWindows()
+            } else {
+                NSApp.activate(ignoringOtherApps: true)
+            }
         } else {
             showSettings()
             NotificationCenter.default.post(name: .notchTuneSelectSetupTab, object: nil)

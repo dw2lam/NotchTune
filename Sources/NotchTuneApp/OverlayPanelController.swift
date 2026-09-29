@@ -358,7 +358,11 @@ final class OverlayPanelController {
             return nil
         }
 
-        let windowFrame = panelFrame(for: model, on: screen)
+        var windowFrame = panelFrame(for: model, on: screen)
+        if HarnessHeadless.isActive {
+            // Same size and notch geometry, just parked beyond every display.
+            windowFrame.origin.x += HarnessHeadless.offscreenOffsetX
+        }
 
         // The window is ALWAYS opened-size, so the closed↔open morph never
         // resizes it — that transition is pure SwiftUI inside a fixed window.
@@ -421,6 +425,10 @@ final class OverlayPanelController {
     }
 
     private func presentPanel(_ panel: NSPanel, activates: Bool) {
+        if HarnessHeadless.isActive {
+            panel.orderFrontRegardless()
+            return
+        }
         if activates {
             panel.makeKeyAndOrderFront(nil)
         } else {

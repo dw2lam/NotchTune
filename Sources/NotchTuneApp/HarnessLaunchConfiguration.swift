@@ -1,3 +1,5 @@
+import AppKit
+import SwiftUI
 import Foundation
 
 struct HarnessLaunchConfiguration {
@@ -132,5 +134,68 @@ struct HarnessLaunchConfiguration {
         }
 
         return URL(fileURLWithPath: normalized, isDirectory: true)
+    }
+}
+
+/// Harness runs must not disturb the person using the Mac: every window is
+/// placed far off-screen and the app never activates or takes focus. The
+/// recorder still captures the windows (the window server renders them
+/// wherever they sit).
+enum HarnessHeadless {
+    static let isActive: Bool = ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_SCENARIO"] != nil
+        && ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_ONSCREEN"] != "1"
+
+    /// Horizontal shift that parks harness windows beyond every display.
+    static let offscreenOffsetX: CGFloat = 60_000
+
+    /// Hides every non-overlay window (Settings, onboarding) from the user:
+    /// titled windows can't live off-screen (AppKit pulls them back onto a
+    /// display), so they drop BELOW the desktop instead and ignore the mouse.
+    /// A single-window capture still renders them in full.
+    @MainActor
+    static func parkAppWindows() {
+        guard isActive else { return }
+        let belowDesktop = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 1)
+        for window in NSApp.windows where !(window is NSPanel) && window.level != belowDesktop {
+            window.animationBehavior = .none
+            window.level = belowDesktop
+            window.ignoresMouseEvents = true
+            // SwiftUI scene windows (the Settings scene auto-opens at launch)
+            // are closed outright; the harness's own hidden windows stay.
+            if hostedWindowIDs.contains(window.identifier?.rawValue ?? "") {
+                window.orderBack(nil)
+            } else {
+                window.orderOut(nil)
+            }
+        }
+    }
+
+    /// Identifiers of the windows `openHiddenWindow` creates.
+    static let hostedWindowIDs: Set<String> = ["settings", "onboarding"]
+
+    /// Opens `rootView` in a titled window created BELOW the desktop (never
+    /// visible, never key), for the recorder to capture.
+    @MainActor
+    @discardableResult
+    static func openHiddenWindow<Content: View>(id: String, title: String, size: NSSize, rootView: Content) -> NSWindow {
+        let controller = NSHostingController(rootView: rootView)
+        controller.sceneBridgingOptions = [.toolbars, .title]
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.animationBehavior = .none
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 1)
+        window.ignoresMouseEvents = true
+        window.isReleasedWhenClosed = false
+        window.title = title
+        window.identifier = NSUserInterfaceItemIdentifier(id)
+        window.contentViewController = controller
+        window.setContentSize(size)
+        window.center()
+        window.orderBack(nil)
+        return window
     }
 }
