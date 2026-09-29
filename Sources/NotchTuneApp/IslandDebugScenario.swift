@@ -159,8 +159,13 @@ enum IslandDebugScenario: String, CaseIterable, Identifiable {
 }
 
 private enum DebugSessionFactory {
+    /// `NOTCHTUNE_HARNESS_SHOWCASE=1`: clean, realistic sessions for
+    /// marketing captures instead of the dev sample data.
+    static let isShowcase = ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_SHOWCASE"] == "1"
+
     static func listSessions(now: Date) -> [AgentSession] {
-        [
+        if isShowcase { return ShowcaseSessionFactory.listSessions(now: now) }
+        return [
             runningSession(now: now),
             recentCompletedSession(now: now),
             inactiveSession(
@@ -324,7 +329,8 @@ private enum DebugSessionFactory {
     }
 
     static func approvalSession(now: Date) -> AgentSession {
-        AgentSession(
+        if isShowcase { return ShowcaseSessionFactory.approvalSession(now: now) }
+        return AgentSession(
             id: "session-approval",
             title: "Codex · open-island",
             tool: .codex,
@@ -451,6 +457,114 @@ If you want another round, I'd move the work into its own worktree so it doesn't
 
 Next I'll check the repo state, create a worktree and branch from `origin/main`, and finish the styling fix and verification there.
 """
+            )
+        )
+    }
+}
+
+/// Marketing-capture sessions (`NOTCHTUNE_HARNESS_SHOWCASE=1`).
+private enum ShowcaseSessionFactory {
+    static func listSessions(now: Date) -> [AgentSession] {
+        [
+            claude(
+                id: "showcase-api", workspace: "api", phase: .running, age: 40, now: now,
+                initial: "Add rate limiting to the upload endpoint",
+                latest: "Looks good, run the test suite",
+                assistant: nil, tool: "Bash", preview: "swift test --parallel"
+            ),
+            codex(
+                id: "showcase-web", workspace: "web", age: 60, now: now,
+                initial: "Fix the checkout button on mobile",
+                latest: "Check it on iOS Safari too",
+                assistant: "Fixed: the button now stays above the keyboard on iOS Safari, and the tests pass."
+            ),
+            claude(
+                id: "showcase-docs", workspace: "docs", phase: .completed, age: 4 * 60, now: now,
+                initial: "Write the release notes for 2.1.2",
+                latest: "Keep it short",
+                assistant: "Drafted the notes: six features and two fixes, with install steps.",
+                tool: nil, preview: nil
+            ),
+            codex(
+                id: "showcase-tokens", workspace: "design-system", age: 18 * 60, now: now,
+                initial: "Rename the color tokens to the new scale",
+                latest: "Update every reference too",
+                assistant: "Renamed 42 tokens and updated every reference across the app."
+            ),
+        ]
+    }
+
+    static func approvalSession(now: Date) -> AgentSession {
+        var session = claude(
+            id: "showcase-api", workspace: "api", phase: .waitingForApproval, age: 12, now: now,
+            initial: "Add rate limiting to the upload endpoint",
+            latest: "Ship it",
+            assistant: "Tests pass. Pushing the branch.",
+            tool: "Bash", preview: "git push origin main"
+        )
+        session.summary = "Claude Code wants to run git push origin main"
+        session.permissionRequest = PermissionRequest(
+            title: "Run command",
+            summary: "Claude Code wants to run git push origin main",
+            affectedPath: "",
+            primaryActionTitle: "Allow",
+            secondaryActionTitle: "Deny"
+        )
+        return session
+    }
+
+    private static func jump(_ workspace: String, _ id: String) -> JumpTarget {
+        JumpTarget(
+            terminalApp: "Ghostty",
+            workspaceName: workspace,
+            paneTitle: "~/Developer/\(workspace)",
+            workingDirectory: "/Users/you/Developer/\(workspace)",
+            terminalSessionID: "ghostty-\(id)"
+        )
+    }
+
+    private static func claude(
+        id: String, workspace: String, phase: SessionPhase, age: TimeInterval, now: Date,
+        initial: String, latest: String, assistant: String?, tool: String?, preview: String?
+    ) -> AgentSession {
+        AgentSession(
+            id: id,
+            title: "Claude Code · \(workspace)",
+            tool: .claudeCode,
+            origin: .demo,
+            attachmentState: .attached,
+            phase: phase,
+            summary: assistant ?? latest,
+            updatedAt: now.addingTimeInterval(-age),
+            jumpTarget: jump(workspace, id),
+            claudeMetadata: ClaudeSessionMetadata(
+                initialUserPrompt: initial,
+                lastUserPrompt: latest,
+                lastAssistantMessage: assistant,
+                currentTool: tool,
+                currentToolInputPreview: preview
+            )
+        )
+    }
+
+    private static func codex(
+        id: String, workspace: String, age: TimeInterval, now: Date,
+        initial: String, latest: String, assistant: String
+    ) -> AgentSession {
+        AgentSession(
+            id: id,
+            title: "Codex · \(workspace)",
+            tool: .codex,
+            origin: .demo,
+            attachmentState: .attached,
+            phase: .completed,
+            summary: assistant,
+            updatedAt: now.addingTimeInterval(-age),
+            jumpTarget: jump(workspace, id),
+            codexMetadata: CodexSessionMetadata(
+                initialUserPrompt: initial,
+                lastUserPrompt: latest,
+                lastAssistantMessage: assistant
             )
         )
     }

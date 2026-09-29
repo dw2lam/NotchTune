@@ -145,6 +145,10 @@ enum HarnessHeadless {
     static let isActive: Bool = ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_SCENARIO"] != nil
         && ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_ONSCREEN"] != "1"
 
+    /// Marketing captures (`NOTCHTUNE_HARNESS_SHOWCASE=1`): clean sessions,
+    /// no "install hooks" banner.
+    static let isShowcase: Bool = ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_SHOWCASE"] == "1"
+
     /// Horizontal shift that parks harness windows beyond every display.
     static let offscreenOffsetX: CGFloat = 60_000
 

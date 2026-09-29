@@ -1250,7 +1250,7 @@ struct IslandPanelView: View {
 
     private var agentsContent: some View {
         VStack(spacing: 8) {
-            if !model.hasAnyInstalledAgent, !isNotificationMode {
+            if !model.hasAnyInstalledAgent, !isNotificationMode, !HarnessHeadless.isShowcase {
                 installHooksHint
                     .padding(.horizontal, sessionListSideInset)
                     .padding(.top, 8)
@@ -2523,18 +2523,16 @@ private struct IslandSessionRow: View {
 
             Spacer(minLength: 10)
 
+            // Same flat tags as the session list, so a card and its row match.
             HStack(spacing: 6) {
-                agentBadge
+                listAgentTag
                 if session.isRemote {
-                    sideBadge("SSH")
+                    listPill("SSH")
                 }
                 if let terminalBadge = session.spotlightTerminalBadge {
-                    sideBadge(terminalBadge)
+                    listPill(terminalBadge)
                 }
-                Text(session.spotlightAgeBadge)
-                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(summaryAgeColor(for: presence))
-                    .frame(minWidth: 30, alignment: .trailing)
+                listPill(session.spotlightAgeBadge, minWidth: 38)
                 detailToggleButton(isOpen: showsDetail)
                 if let onDismiss {
                     DismissButton(action: onDismiss)
