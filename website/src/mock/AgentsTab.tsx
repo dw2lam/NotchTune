@@ -1,133 +1,170 @@
-import type { ReactNode } from 'react';
-import { HourglassIcon, ChevronIcon, CheckIcon } from './icons';
+import type { CSSProperties, ReactNode } from 'react';
+import { HourglassIcon, CheckIcon } from './icons';
 
 /* ============================================================
-   1:1 open Agents tab (IslandPanelView.swift sessionList):
-   SESSIONS header (mono 10.5 tracking 1.4 @0.55, h36) with
-   labeled overview metrics ("4 total • 2 running • 2 done"),
-   then IslandSessionRow entries — glyph state indicators
-   (running ring / done check / waiting pulse), lowercase agent
-   badge, terminal badge, age, collapse chevron.
+   1:1 open Agents tab (IslandPanelView.swift):
+   - counts line (sessionPanelHeader): "9 total" paper@0.34, then
+     5.5pt tinted dot + "1 running" 11/medium paper@0.48, gap 9, h24
+   - rows (IslandSessionRow.listRowSummary): state indicator centred
+     on the block (20pt column, gap 12), 13.5 semibold title, flat
+     pills on the title line — agent tag in brand colour on a 16%
+     tint, terminal + age pills white@0.08 — RR5, pad 7/3, 11pt.
+     No dividers, no chevrons: the whole row jumps to the terminal.
+   - subtitle (listSubtitleLines, 12/medium): running rows show
+     "You: <prompt>" then the activity phrase with the verb in the
+     running blue; other rows show one plain line at paper@0.5.
    ============================================================ */
 
 export type SessionState = 'running' | 'approve' | 'answer' | 'done' | 'idle';
 
-/* brand tints for agent badges (badge text is the lowercase agent name) */
+/* AgentTool.brandColorHex (NotchTuneCore/AgentSession.swift:83) */
 export const AGENT_TINTS: Record<string, string> = {
-  claude: '#d97757',
-  codex: '#7aa2f7',
-  gemini: '#8ab4f8',
-  opencode: '#9ece6a',
-  kimi: '#bb9af7',
+  claude: '#d97742',
+  codex: '#4aa3df',
+  gemini: '#42e86b',
+  opencode: '#ffb547',
+  qwen: '#c084fc',
+  kimi: '#fde047',
+  cursor: '#7a5cff',
+  factory: '#6e9fff',
 };
 
-export function StateIndicator({ state }: { state: SessionState }) {
-  switch (state) {
-    case 'running':
-      return <span className="nt-ind nt-ind-run" />;
-    case 'done':
-      return <span className="nt-ind nt-ind-done"><CheckIcon /></span>;
-    case 'idle':
-      return <span className="nt-dot nt-dot-idle nt-ind-dot" />;
-    case 'approve':
-      return <span className="nt-dot nt-dot-approve nt-dot-pulse nt-ind-dot" />;
-    case 'answer':
-      return <span className="nt-dot nt-dot-answer nt-dot-pulse nt-ind-dot" />;
+/* completionReplyRecipientName — the tag reads "Claude", "Codex"… */
+export const AGENT_NAMES: Record<string, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  gemini: 'Gemini',
+  opencode: 'OpenCode',
+  qwen: 'Qwen',
+  kimi: 'Kimi',
+  cursor: 'Cursor',
+  factory: 'Droid',
+};
+
+export type IndicatorStyle = 'dot' | 'glyph';
+
+export function StateIndicator({ state, style = 'dot' }: { state: SessionState; style?: IndicatorStyle }) {
+  if (style === 'glyph') {
+    /* SF glyphs: circle.dashed · checkmark.circle.fill ·
+       exclamationmark.triangle.fill · questionmark.circle.fill */
+    switch (state) {
+      case 'running':
+        return <span className="nt-ind nt-ind-run" />;
+      case 'done':
+      case 'idle':
+        return <span className={`nt-ind nt-ind-done ${state === 'idle' ? 'is-idle' : ''}`}><CheckIcon /></span>;
+      case 'approve':
+        return <span className="nt-ind nt-ind-glyph nt-wait-approve">!</span>;
+      case 'answer':
+        return <span className="nt-ind nt-ind-glyph nt-wait-answer is-q">?</span>;
+    }
   }
+  /* animatedDot (app default): 9pt dot, 1.96s sine pulse while live,
+     top-padded 6 inside a 10×24 frame */
+  const live = state === 'running' || state === 'approve' || state === 'answer';
+  return (
+    <span className="nt-ind-frame">
+      <span className={`nt-dot nt-dot-${state === 'approve' ? 'approve' : state === 'answer' ? 'answer' : state === 'running' ? 'run' : state === 'done' ? 'done' : 'idle'} nt-ind-dot ${live ? 'nt-dot-pulse' : ''}`} />
+    </span>
+  );
 }
 
 export interface MockSession {
   state: SessionState;
+  /** headline, e.g. "api · Make BridgeServer dispatch…" */
   title: string;
-  branch?: string;
-  prompt?: string;
+  prompt?: string;        /* running rows: "You: …" */
+  activity?: string;      /* running rows: "Running swift test" (first word tinted) */
+  summary?: string;       /* done rows: first line of the last reply */
   waiting?: string;       /* "Waiting 2m 14s" line (approve/answer) */
-  agent: string;          /* lowercase agent name, e.g. "claude" */
+  agent: string;          /* key into AGENT_TINTS, e.g. "claude" */
   terminal?: string;
   age: string;
-  command?: string;       /* running `$ cmd` box */
-  subagents?: { name: string; desc: string; time: string }[];
 }
 
-export function SessionRow({ s }: { s: MockSession }) {
-  const waitClass = s.state === 'approve' ? 'nt-wait-approve' : 'nt-wait-answer';
+function ActivityLine({ text }: { text: string }) {
+  const i = text.indexOf(' ');
+  if (i < 0) return <span className="nt-verb">{text}</span>;
+  return <><span className="nt-verb">{text.slice(0, i)}</span>{text.slice(i)}</>;
+}
+
+export function AgentTag({ agent }: { agent: string }) {
   return (
-    <>
-      <div className="nt-row">
-        <StateIndicator state={s.state} />
-        <div className="nt-row-main">
-          <div className="nt-row-title">
-            {s.title}
-            {s.branch && <span className="nt-branch"> ({s.branch})</span>}
-          </div>
-          {s.prompt && <div className="nt-row-prompt">You: {s.prompt}</div>}
-          {s.waiting && (
-            <span className={`nt-row-wait ${waitClass}`}>
-              <HourglassIcon /> {s.waiting}
-            </span>
-          )}
-        </div>
-        <div className="nt-row-side">
-          <span className="nt-badge nt-badge-agent" style={{ '--agent': AGENT_TINTS[s.agent] ?? '#d97757' } as React.CSSProperties}>
-            {s.agent}
-          </span>
-          {s.terminal && <span className="nt-badge nt-badge-term">{s.terminal}</span>}
-          <span className="nt-age">{s.age}</span>
-          <button type="button" className="nt-chev" aria-label="Toggle details"><ChevronIcon /></button>
-        </div>
-      </div>
-      {s.subagents?.map((sub) => (
-        <div className="nt-subrow" key={sub.name}>
-          <span className="nt-dot nt-dot-run" />
-          <span className="nt-sub-name">{sub.name}</span>
-          <span className="nt-sub-desc">{sub.desc}</span>
-          <span className="nt-sub-time">{sub.time}</span>
-        </div>
-      ))}
-      {s.command && <div className="nt-cmdbox">$ {s.command}</div>}
-    </>
+    <span className="nt-lpill nt-lpill-agent" style={{ '--agent': AGENT_TINTS[agent] ?? '#f1ead9' } as CSSProperties}>
+      {AGENT_NAMES[agent] ?? agent}
+    </span>
   );
 }
 
-const METRIC_LABEL: Partial<Record<SessionState, string>> = {
-  running: 'running',
-  approve: 'waiting',
-  answer: 'waiting',
-  done: 'done',
-  idle: 'idle',
-};
-const METRIC_DOT: Partial<Record<SessionState, string>> = {
-  running: 'nt-dot-run',
-  approve: 'nt-dot-approve',
-  answer: 'nt-dot-answer',
-  done: 'nt-dot-done',
-  idle: 'nt-dot-idle',
-};
+export function SessionRow({ s, indicator = 'dot' }: { s: MockSession; indicator?: IndicatorStyle }) {
+  const inactive = s.state === 'idle';
+  return (
+    <div className={`nt-row ${inactive ? 'is-inactive' : ''}`}>
+      <StateIndicator state={s.state} style={indicator} />
+      <div className="nt-row-main">
+        <div className="nt-row-line">
+          <span className="nt-row-title">{s.title}</span>
+          <span className="nt-row-pills">
+            <AgentTag agent={s.agent} />
+            {s.terminal && <span className="nt-lpill">{s.terminal}</span>}
+            <span className="nt-lpill nt-lpill-age">{s.age}</span>
+          </span>
+        </div>
+        {s.state === 'running' && s.prompt && (
+          <div className="nt-row-sub nt-row-prompt"><span>You: </span>{s.prompt}</div>
+        )}
+        {s.state === 'running' && s.activity && (
+          <div className="nt-row-sub"><ActivityLine text={s.activity} /></div>
+        )}
+        {s.state !== 'running' && !inactive && s.summary && (
+          <div className="nt-row-sub">{s.summary}</div>
+        )}
+        {s.waiting && (
+          <span className={`nt-row-wait ${s.state === 'approve' ? 'nt-wait-approve' : 'nt-wait-answer'}`}>
+            <HourglassIcon /> {s.waiting}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
-export function AgentsTab({ sessions, children }: {
+const METRICS: { id: string; label: string; dot?: string; match: (s: SessionState) => boolean }[] = [
+  { id: 'waiting', label: 'waiting', dot: 'nt-dot-agg', match: (s) => s === 'approve' || s === 'answer' },
+  { id: 'running', label: 'running', dot: 'nt-dot-run', match: (s) => s === 'running' },
+  { id: 'done', label: 'done', dot: 'nt-dot-done', match: (s) => s === 'done' },
+  { id: 'idle', label: 'idle', dot: 'nt-dot-idle', match: (s) => s === 'idle' },
+];
+
+/** "9 total • 1 running • 1 done" — counts line above the rows */
+export function SessionCounts({ sessions, total }: { sessions: MockSession[]; total?: number }) {
+  return (
+    <div className="nt-counts">
+      <span className="nt-metric nt-metric-total">{total ?? sessions.length} total</span>
+      {METRICS.map((m) => {
+        const n = sessions.filter((s) => m.match(s.state)).length;
+        if (!n) return null;
+        return (
+          <span className="nt-metric" key={m.id}>
+            <span className={`nt-dot ${m.dot}`} /> {n} {m.label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+export function AgentsTab({ sessions, total, indicator = 'dot', children }: {
   sessions: MockSession[];
+  /** overrides the "N total" count (rows below may be a subset) */
+  total?: number;
+  indicator?: IndicatorStyle;
   children?: ReactNode;
 }) {
-  const counts = new Map<string, { dot: string; n: number }>();
-  sessions.forEach((s) => {
-    const label = METRIC_LABEL[s.state]!;
-    const prev = counts.get(label);
-    counts.set(label, { dot: METRIC_DOT[s.state]!, n: (prev?.n ?? 0) + 1 });
-  });
   return (
     <div className="nt-agents">
-      <div className="nt-sess-head">
-        <span className="nt-sess-title">Sessions</span>
-        <span className="nt-sess-metrics">
-          <span className="nt-metric">{sessions.length} total</span>
-          {[...counts.entries()].map(([label, { dot, n }]) => (
-            <span className="nt-metric" key={label}>
-              <span className={`nt-dot ${dot}`} /> {n} {label}
-            </span>
-          ))}
-        </span>
-      </div>
-      {sessions.map((s, i) => <SessionRow s={s} key={i} />)}
+      <SessionCounts sessions={sessions} total={total} />
+      {sessions.map((s, i) => <SessionRow s={s} key={i} indicator={indicator} />)}
       {children}
     </div>
   );

@@ -32,9 +32,31 @@
 .nt button { border: 0; background: none; padding: 0; color: inherit; cursor: pointer; font-family: inherit; }
 
 /* ---------- Opened island panel (520pt preferred width) ---------- */
+/* shell carries the outward top curve ("ears", openedEarRadius 14):
+   concave flares drawn OUTSIDE the body where it meets the screen edge
+   (GrowingNotchShape.surfacePath) */
+.nt-island-shell { position: relative; width: min(620px, 100%); }
+.nt-panel-ear {
+  position: absolute; top: 0; z-index: 1; width: 14px; height: 14px;
+  pointer-events: none;
+  background: rgba(6, 6, 8, var(--ear-tint, 0.22));
+  -webkit-backdrop-filter: blur(28px) saturate(1.05) brightness(0.52) contrast(1.08);
+  backdrop-filter: blur(28px) saturate(1.05) brightness(0.52) contrast(1.08);
+}
+.nt-panel-ear.is-off { background: var(--nt-ink, #000); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.nt-panel-ear-l {
+  left: -14px;
+  -webkit-mask: radial-gradient(circle at 0 100%, transparent 13.5px, #000 14px);
+  mask: radial-gradient(circle at 0 100%, transparent 13.5px, #000 14px);
+}
+.nt-panel-ear-r {
+  right: -14px;
+  -webkit-mask: radial-gradient(circle at 100% 100%, transparent 13.5px, #000 14px);
+  mask: radial-gradient(circle at 100% 100%, transparent 13.5px, #000 14px);
+}
 .nt-island {
   position: relative;
-  width: min(620px, 100%);
+  width: 100%;
   background: var(--nt-ink);
   /* top fillet 0 (flush w/ notch), bottom radius 22 (NotchShape.swift:207) */
   border-radius: 0 0 22px 22px;
@@ -72,10 +94,13 @@
   align-items: center;
   gap: 12px; /* notch lane safety inset (IslandPanelView.swift:106) */
   padding: 2px 16px 0; /* top 2, horizontal 16 (IslandPanelView.swift:103-104) */
-  min-height: 30px;
+  min-height: 36px; /* frame(height: closedNotchHeight) */
 }
+.nt-header.has-divider { border-bottom: 1px solid rgba(255, 255, 255, 0.045); padding-bottom: 2px; }
 .nt-header-gap { width: 190px; height: 24px; } /* physical notch lane */
 .nt-usage {
+  /* ViewThatFits: the reset countdowns drop out when the lane is short */
+  container-type: inline-size;
   display: flex; gap: 7px; align-items: center; min-width: 0;
   /* the lane ends at the physical notch: overflow fades out and scrolls
      (swipe between chips), matching the app's together-left design */
@@ -85,15 +110,66 @@
 }
 .nt-usage::-webkit-scrollbar { display: none; }
 .nt-usage > * { flex: none; }
-.nt-tools { display: flex; gap: 8px; justify-content: flex-end; }
-/* 22x22 circle, white@0.08 bg, 10px semibold icon white@0.62
-   (IslandPanelView.swift:705-731) */
-.nt .nt-toolbtn {
-  width: 22px; height: 22px; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  display: grid; place-items: center;
+.nt-tools { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.nt-weekly { margin-right: 4px; white-space: nowrap; }
+/* glass disc (IslandGlassIconDisc): .glassEffect circle — CSS: translucent
+   white fill + top-lit specular rim; glyph white@0.78 */
+.nt .nt-gdisc {
+  display: grid; place-items: center; flex: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 0.75px rgba(255, 255, 255, 0.1),
+    0 1px 4px rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.78);
+  transition: transform 0.12s ease, background 0.15s ease;
 }
-.nt-toolbtn svg { width: 10px; height: 10px; fill: rgba(255, 255, 255, 0.62); }
+.nt .nt-gdisc:hover { background: rgba(255, 255, 255, 0.15); }
+.nt .nt-gdisc:active { transform: scale(0.94); }
+/* header gear / power: 22pt, 10pt semibold glyph */
+.nt .nt-toolbtn { width: 22px; height: 22px; }
+.nt-toolbtn svg { width: 10px; height: 10px; fill: currentColor; }
+
+/* ---------- Usage cycler (IslandPanelView.usageCycler) ----------
+   one provider at a time: 15pt app icon + "5h 12% | 7d 83%" (mono 11.5
+   bold) + dim reset countdowns (mono 11 medium white@0.34), 4pt page dots */
+.nt .nt-ucycler {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 4px 8px; border-radius: 999px;
+  white-space: nowrap; overflow: hidden;
+  transition: background 0.15s ease;
+}
+.nt .nt-ucycler:hover { background: rgba(255, 255, 255, 0.07); }
+.nt-ucycler-line {
+  display: inline-flex; align-items: center; gap: 6px;
+  animation: nt-ucycle 0.28s cubic-bezier(0.3, 1, 0.4, 1);
+}
+@keyframes nt-ucycle { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.nt-ucycler-win { display: inline-flex; align-items: center; gap: 6px; }
+.nt-usep { display: block; width: 1px; height: 11px; background: rgba(255, 255, 255, 0.18); }
+.nt-uwin {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  font-family: var(--nt-mono); font-size: 11.5px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.nt-uwin-label { color: rgba(255, 255, 255, 0.62); }
+.nt-uwin-reset { font-size: 11px; font-weight: 500; color: rgba(255, 255, 255, 0.34); }
+@container (max-width: 300px) { .nt-ucycler .nt-uwin-reset { display: none; } }
+.nt-udots { display: inline-flex; gap: 3px; }
+.nt-udots i { width: 4px; height: 4px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); }
+.nt-udots i.is-on { background: rgba(255, 255, 255, 0.62); }
+/* 15pt app icons (AgentAppIconProvider): brand tile + white glyph */
+.nt-appicon { width: 15px; height: 15px; border-radius: 4px; flex: none; display: grid; place-items: center; }
+.nt-appicon i {
+  width: 11px; height: 11px; background: #fff;
+  -webkit-mask: var(--glyph) center / contain no-repeat;
+  mask: var(--glyph) center / contain no-repeat;
+}
+.nt-appicon-claude { background: linear-gradient(180deg, #e48a5f, #d4643c); --glyph: url(/assets/logos/claude.svg); }
+.nt-appicon-codex { background: linear-gradient(180deg, #3b3f4a, #16181d); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.18); --glyph: url(/assets/logos/openai.svg); }
+.nt-appicon-gemini { background: linear-gradient(135deg, #4c8df6, #a36cf0); --glyph: url(/assets/logos/googlegemini.svg); }
 
 /* Usage chip (IslandPanelView.swift:1472-1485): pad h8/v4, capsule
    white@0.055, border white@0.06 */
@@ -118,27 +194,35 @@
 .nt-u-hot { color: rgba(248, 113, 113, 0.95); }
 
 /* ---------- Tab bar (IslandPanelView.swift:759-792) ---------- */
+/* HStack(spacing 4) of tab buttons: 10pt semibold glyph + 11pt medium
+   label, pad h12 v4, min-height 30; unselected white@0.5 on glass */
 .nt-tabbar {
   position: relative;
-  display: flex; gap: 8px; align-items: center;
-  padding: 10px 16px 8px; /* top 10 / bottom 8 (IslandPanelView.swift:105) */
+  display: flex; gap: 4px; align-items: center;
+  padding: 10px 16px 8px; /* top 10 / bottom 8 (openedTabBar*Padding) */
 }
 .nt .nt-tab {
-  position: relative;
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 12px; border-radius: 999px;
+  position: relative; z-index: 1;
+  display: inline-flex; align-items: center; gap: 4px;
+  min-height: 30px; padding: 4px 12px; border-radius: 999px;
   font-size: 11px; font-weight: 500; line-height: 1;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.5);
   transition: color 0.2s ease;
 }
-.nt-tab svg { width: 12px; height: 12px; fill: currentColor; flex: none; }
-.nt .nt-tab.is-on { color: #fff; font-weight: 600; }
-/* sliding capsule indicator (matchedGeometryEffect equivalent) —
-   boosted from the app's white@0.12 so it stays visible over glass */
+.nt-tab svg { width: 10px; height: 10px; fill: currentColor; flex: none; }
+.nt .nt-tab.is-on { color: #fff; }
+/* the active tab's Liquid Glass capsule; glassEffectID morphs it from
+   tab to tab (≈ a sliding pill with a soft overshoot) */
 .nt-tab-ind {
   position: absolute; border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.08));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 0.75px rgba(255, 255, 255, 0.12),
+    0 2px 10px rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(6px) saturate(1.3) brightness(1.15);
+  backdrop-filter: blur(6px) saturate(1.3) brightness(1.15);
   transition: left 0.35s cubic-bezier(0.32, 1.25, 0.42, 1), width 0.35s cubic-bezier(0.32, 1.25, 0.42, 1);
 }
 
@@ -210,26 +294,22 @@
 }
 
 /* ---------- Agents tab (IslandPanelView sessionList) ---------- */
-.nt-agents { display: flex; flex-direction: column; padding-bottom: 10px; }
-/* SESSIONS header: mono 10.5 semibold, tracking 1.4, paper@0.55, uppercase,
-   height 36, divider white@0.055 (IslandPanelView:1105-1133) */
-.nt-sess-head {
-  display: flex; align-items: center; justify-content: flex-start; gap: 12px;
-  height: 36px; padding: 0 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+.nt-agents { display: flex; flex-direction: column; padding: 2px 0 8px; }
+/* counts line (sessionPanelHeader): h24 + 2 bottom; "9 total" 11/500
+   paper@0.34, tinted metrics paper@0.48 with a 5.5pt dot, gap 9 */
+.nt-counts {
+  display: flex; align-items: center; gap: 9px;
+  height: 24px; margin-bottom: 2px; padding: 0 16px;
+  white-space: nowrap; overflow: hidden;
 }
-.nt-sess-title {
-  font-family: var(--nt-mono); font-size: 10.5px; font-weight: 600;
-  letter-spacing: 1.4px; text-transform: uppercase;
-  color: rgba(241, 234, 217, 0.55);
-}
-.nt-sess-metrics { display: flex; gap: 10px; align-items: center; }
 .nt-metric {
   display: inline-flex; align-items: center; gap: 4px;
-  font-family: var(--nt-mono); font-size: 10.5px; font-weight: 600;
-  color: rgba(241, 234, 217, 0.55); font-variant-numeric: tabular-nums;
+  font-size: 11px; font-weight: 500;
+  color: rgba(241, 234, 217, 0.48); font-variant-numeric: tabular-nums;
 }
+.nt-metric-total { color: rgba(241, 234, 217, 0.34); }
 .nt-metric .nt-dot { width: 5.5px; height: 5.5px; }
+.nt-dot-agg { background: var(--nt-wait-agg); }
 
 .nt-dot { border-radius: 50%; flex: none; }
 .nt-dot-run { background: var(--nt-run); }
@@ -238,31 +318,36 @@
 .nt-dot-done { background: var(--nt-done); }
 .nt-dot-idle { background: rgba(241, 234, 217, 0.35); }
 
-/* session row */
+/* session row (listRowSummary): indicator column 20 + gap 12, centred on
+   the whole block; pad v9, leading/trailing 16; hover fill white@0.04
+   in an RR12 inset max(4, 16-8) */
 .nt-row {
-  display: grid; grid-template-columns: 16px 1fr auto; gap: 10px;
-  align-items: center; padding: 10px 12px 10px 16px;
-  border-radius: 10px; margin: 1px 6px;
+  display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 12px;
+  align-items: center; padding: 9px 8px;
+  border-radius: 12px; margin: 1px 8px;
   transition: background 0.15s ease;
 }
 .nt-row:hover { background: rgba(255, 255, 255, 0.04); }
+.nt-row.is-inactive { opacity: 0.7; }
 /* glyph state indicators (indicator style "glyph"):
-   running = spinning open ring · done = green check circle ·
-   waiting = pulsing dot */
+   running = circle.dashed · done = checkmark.circle.fill */
 .nt-ind { display: inline-grid; place-items: center; justify-self: center; }
 .nt-ind-run {
-  width: 12px; height: 12px; border-radius: 50%;
-  border: 1.6px solid var(--nt-run);
-  border-top-color: transparent;
-  animation: nt-spin 1.1s linear infinite;
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 1.6px dashed var(--nt-run);
+  animation: nt-spin 4s linear infinite;
 }
 @keyframes nt-spin { to { transform: rotate(360deg); } }
 .nt-ind-done {
   width: 14px; height: 14px; border-radius: 50%;
   background: var(--nt-done);
 }
-.nt-ind-done svg { width: 8px; height: 8px; fill: #08130b; }
-.nt-ind-dot { width: 9px; height: 9px; justify-self: center; }
+.nt-ind-done.is-idle { background: rgba(241, 234, 217, 0.35); }
+.nt-ind-done svg { width: 9px; height: 9px; fill: #0b0b0b; }
+.nt-ind-glyph { font-size: 13px; font-weight: 800; line-height: 1; }
+/* animatedDot: 9pt dot top-padded 6 inside a 10×24 frame */
+.nt-ind-frame { display: block; justify-self: center; width: 10px; height: 24px; padding-top: 6px; }
+.nt-ind-dot { display: block; width: 9px; height: 9px; }
 /* animated status dot 9pt w/ pulse glow (IslandPanelView:2333-2345) */
 .nt-dot-pulse { animation: nt-dotpulse 1.96s ease-in-out infinite; }
 @keyframes nt-dotpulse {
@@ -273,36 +358,73 @@
 .nt-dot-approve.nt-dot-pulse { color: var(--nt-wait-approve); }
 .nt-dot-answer.nt-dot-pulse { color: var(--nt-wait-answer); }
 
-.nt-row-main { min-width: 0; }
-/* headline 13.2 semibold (IslandPanelView:1976-1978) */
+.nt-row-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.nt-row-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* headline 13.5 semibold white (inactive white@0.78) */
 .nt-row-title {
-  font-size: 13.2px; font-weight: 600; color: rgba(255, 255, 255, 0.92);
+  flex: 1; min-width: 0;
+  font-size: 13.5px; font-weight: 600; color: #fff;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.nt-row-title .nt-branch { color: rgba(255, 255, 255, 0.45); font-weight: 500; }
-/* prompt line 11.2 medium (IslandPanelView:1727) */
-.nt-row-prompt {
-  font-size: 11.2px; font-weight: 500; color: rgba(255, 255, 255, 0.45);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-top: 2px;
+.nt-row.is-inactive .nt-row-title { color: rgba(255, 255, 255, 0.78); }
+.nt-row-pills { display: flex; align-items: center; gap: 6px; flex: none; }
+/* flat pills (listAgentTag / listPill): 11pt, pad 7/3, RR5 — agent tag in
+   brand colour on a 16% tint; terminal + age paper@0.55 on white@0.08 */
+.nt-lpill {
+  font-size: 11px; font-weight: 500; line-height: 14px;
+  padding: 3px 7px; border-radius: 5px; white-space: nowrap;
+  color: rgba(241, 234, 217, 0.55); background: rgba(255, 255, 255, 0.08);
+  font-variant-numeric: tabular-nums;
 }
-/* waiting line: size 10.5 medium (IslandPanelView:1764-1768) */
+.nt-lpill-agent {
+  font-weight: 600; color: var(--agent);
+  background: color-mix(in srgb, var(--agent) 16%, transparent);
+}
+.nt-lpill-age { min-width: 38px; text-align: center; }
+/* subtitle lines 12/500: "You:" @0.42 + prompt @0.74; activity @0.5
+   with the verb in the running blue */
+.nt-row-sub {
+  font-size: 12px; font-weight: 500; line-height: 15px;
+  color: rgba(241, 234, 217, 0.5);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nt-row-prompt { color: rgba(241, 234, 217, 0.74); }
+.nt-row-prompt > span { color: rgba(241, 234, 217, 0.42); }
+.nt-verb { color: var(--nt-run); }
+/* waiting line: hourglass 9 + size 10.5 medium */
 .nt-row-wait {
-  display: inline-flex; align-items: center; gap: 4px; margin-top: 3px;
+  display: inline-flex; align-items: center; gap: 5px;
   font-size: 10.5px; font-weight: 500;
 }
 .nt-row-wait svg { width: 9px; height: 9px; fill: currentColor; }
 .nt-wait-approve { color: var(--nt-wait-approve); }
 .nt-wait-answer { color: var(--nt-wait-answer); }
 
-.nt-row-side { display: flex; align-items: center; gap: 6px; }
-/* agent badge: mono 10.5 semibold tinted, cap h8/v3, fill tint@0.10,
-   stroke tint@0.3 (IslandPanelView:1861-1870) */
+/* notification row (notificationRowSummary) — the session header on an
+   approval / question card: title 13.2/600, "You:" 11.2/500 @0.46,
+   lowercase mono agent badge, terminal badge, age, chevron disc */
+.nt-nrow {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 11px 16px 8px;
+}
+.nt-nrow-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.nt-nrow-title {
+  font-size: 13.2px; font-weight: 600; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nt-nrow-prompt {
+  font-size: 11.2px; font-weight: 500; color: rgba(241, 234, 217, 0.46);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nt-nrow-side { display: flex; align-items: center; gap: 6px; flex: none; }
+.nt-nrow .nt-age { color: rgba(241, 234, 217, 0.36); }
+/* agent badge: mono 10.5 semibold tinted, cap h8/v3, fill tint@0.08,
+   stroke tint@0.24 in notification presentation */
 .nt-badge {
   font-family: var(--nt-mono); font-size: 10.5px; font-weight: 600;
   padding: 3px 8px; border-radius: 999px; white-space: nowrap;
 }
-.nt-badge-agent { color: var(--agent, #d97757); background: color-mix(in srgb, var(--agent, #d97757) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--agent, #d97757) 30%, transparent); }
+.nt-badge-agent { color: var(--agent, #d97757); background: color-mix(in srgb, var(--agent, #d97757) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--agent, #d97757) 30%, transparent); }
 .nt-badge-term {
   font-weight: 500; color: rgba(241, 234, 217, 0.7);
   background: rgba(255, 255, 255, 0.045);
@@ -314,15 +436,9 @@
   color: rgba(241, 234, 217, 0.45); min-width: 30px; text-align: right;
   font-variant-numeric: tabular-nums;
 }
-/* detail-toggle chevron: 10px bold in a 22px circle (IslandPanelView:2428) */
-.nt .nt-chev {
-  width: 22px; height: 22px; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  display: grid; place-items: center;
-  transition: background 0.15s ease;
-}
-.nt .nt-chev:hover { background: rgba(255, 255, 255, 0.12); }
-.nt-chev svg { width: 10px; height: 10px; fill: rgba(255, 255, 255, 0.55); transform: rotate(180deg); }
+/* detail-toggle chevron: 10px bold in a glass disc */
+.nt .nt-chev { width: 26px; height: 26px; }
+.nt-chev svg { width: 12px; height: 12px; fill: rgba(255, 255, 255, 0.7); transform: rotate(180deg); }
 /* subagent row (IslandPanelView:1790-1827) */
 .nt-subrow {
   display: flex; align-items: center; gap: 7px;
@@ -353,35 +469,129 @@
 }
 .nt .nt-showall:hover { color: rgba(255, 255, 255, 0.6); }
 
-/* ---------- Notification card (approval) ---------- */
-/* title 12.5 semibold paper@0.86; $ cmd mono 11.5 semibold paper@0.78 in
-   RR7 white@0.045; path 10.5 medium paper@0.42 (IslandPanelView:2098-2124) */
-.nt-notify { padding: 4px 16px 12px; }
-.nt-notify-head {
-  display: flex; align-items: center; gap: 8px; padding: 6px 0 8px;
-}
-.nt-notify-head .nt-dot { width: 9px; height: 9px; }
+/* ---------- Notification cards (approval / question) ---------- */
+/* approvalActionBody: VStack(8) — title 12.5/600 paper@0.86; well RR10
+   white@0.045 pad 12/8 with `$ cmd` mono 11.5/600 @0.78 and path
+   10.5/500 @0.42; expanding glass action capsules */
+.nt-notify { padding: 0 16px 13px; display: flex; flex-direction: column; gap: 8px; }
 .nt-notify-title { font-size: 12.5px; font-weight: 600; color: rgba(241, 234, 217, 0.86); }
-.nt-notify-cmd {
-  padding: 8px 10px; border-radius: 7px;
+.nt-notify-well {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 8px 12px; border-radius: 10px;
   background: rgba(255, 255, 255, 0.045);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-  font-family: var(--nt-mono); font-size: 11.5px; font-weight: 600;
+}
+.nt-notify-cmd {
+  font-family: var(--nt-mono); font-size: 11.5px; font-weight: 600; line-height: 1.35;
   color: rgba(241, 234, 217, 0.78);
-  overflow-x: auto; white-space: nowrap;
+  overflow-wrap: anywhere;
 }
-.nt-notify-path { margin-top: 6px; font-size: 10.5px; font-weight: 500; color: rgba(241, 234, 217, 0.42); }
-/* buttons 11.8 semibold RR10 pad h13/v8 (IslandActionButtonStyle) */
-.nt-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
-.nt .nt-abtn {
-  font-size: 11.8px; font-weight: 600; padding: 8px 13px; border-radius: 10px;
-  transition: filter 0.15s ease, transform 0.15s ease;
+.nt-notify-path {
+  font-size: 10.5px; font-weight: 500; color: rgba(241, 234, 217, 0.42);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.nt .nt-abtn:hover { filter: brightness(1.15); }
-.nt .nt-abtn:active { transform: scale(0.97); }
-.nt .nt-abtn-secondary { background: rgba(255, 255, 255, 0.065); color: rgba(241, 234, 217, 0.78); }
-.nt .nt-abtn-warning { background: rgb(217, 140, 38); color: #fff; }
-.nt .nt-abtn-primary { background: var(--nt-paper); color: rgba(0, 0, 0, 0.88); }
+.nt-actions { display: flex; gap: 8px; }
+.nt-actions .nt-gbtn { flex: 1; }
+
+/* Liquid Glass capsules (IslandActionButtonStyle glass body / toast
+   styles): 12/600, pad h16 v8; tint painted as a fill with a top-lit
+   specular rim (islandGlass(in:tint:)). secondary = plain glass,
+   warning = warm rgb(217,140,38)@0.9, primary = paper@0.86 */
+.nt .nt-gbtn {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 8px 16px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; line-height: 15px; white-space: nowrap;
+  color: rgba(241, 234, 217, 0.9);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 0.75px rgba(255, 255, 255, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.22);
+  transition: transform 0.12s ease, filter 0.15s ease;
+}
+.nt .nt-gbtn:hover { filter: brightness(1.12); }
+.nt .nt-gbtn:active { transform: scale(0.98); }
+.nt .nt-gbtn-warning { color: #fff; background: rgba(217, 140, 38, 0.9); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42), inset 0 -1px 0 rgba(255, 255, 255, 0.14), 0 2px 10px rgba(0, 0, 0, 0.25); }
+.nt .nt-gbtn-primary { color: rgba(0, 0, 0, 0.86); background: rgba(241, 234, 217, 0.86); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42), inset 0 -1px 0 rgba(255, 255, 255, 0.14), 0 2px 10px rgba(0, 0, 0, 0.25); }
+.nt .nt-gbtn-disabled { color: rgba(241, 234, 217, 0.4); cursor: default; filter: none; }
+.nt .nt-gbtn-wide { width: 100%; }
+/* toast actions: 11/600, pad h12, h24 */
+.nt .nt-gbtn-sm { font-size: 11px; padding: 0 12px; height: 24px; }
+.nt-gbtn svg { width: 11px; height: 11px; flex: none; }
+/* NotificationKeyHint: 9pt medium rounded, label colour @0.4 */
+.nt-khint { font-size: 9px; font-weight: 500; opacity: 0.4; letter-spacing: 0.02em; }
+
+/* question card (StructuredQuestionPromptView): RR14 white@0.03 stroke
+   0.05 pad 12; options RR10 with a 22×20 RR6 number key (⌘1–9) */
+.nt-qcard {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 12px; border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+.nt-q-text { font-size: 12px; font-weight: 500; color: rgba(255, 255, 255, 0.88); }
+.nt-q-opts { display: flex; flex-direction: column; gap: 4px; }
+.nt .nt-q-opt {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  padding: 6px 12px; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  transition: background 0.12s ease;
+}
+.nt .nt-q-opt:hover { background: rgba(255, 255, 255, 0.055); }
+.nt-q-key {
+  width: 22px; height: 20px; flex: none; display: grid; place-items: center;
+  border-radius: 6px; background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  font-family: var(--nt-mono); font-size: 10.5px; font-weight: 600;
+  color: rgba(241, 234, 217, 0.42);
+}
+.nt-q-opt.is-on .nt-q-key { background: rgba(241, 234, 217, 0.88); color: rgba(0, 0, 0, 0.82); box-shadow: none; }
+.nt-q-label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.nt-q-label b { font-size: 12.2px; font-weight: 500; color: rgba(255, 255, 255, 0.78); }
+.nt-q-opt.is-on .nt-q-label b { color: #fff; }
+.nt-q-label em { font-style: normal; font-size: 10.5px; color: rgba(255, 255, 255, 0.38); }
+.nt-q-check svg { width: 12px; height: 12px; fill: var(--nt-done); display: block; }
+
+/* ---------- Completion toast (CompletionToastView) ---------- */
+.nt-toast { display: flex; flex-direction: column; gap: 6px; padding: 8px 16px 12px; }
+.nt-toast-head { display: flex; align-items: baseline; gap: 8px; height: 18px; min-width: 0; }
+.nt-toast-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center;
+  background: var(--nt-done); box-shadow: 0 0 6px rgba(111, 185, 130, 0.7);
+  margin-right: -1px;
+}
+.nt-toast-head b { font-size: 12.5px; font-weight: 600; color: rgba(241, 234, 217, 0.94); white-space: nowrap; }
+.nt-toast-ws {
+  font-size: 11.5px; font-weight: 500; color: rgba(241, 234, 217, 0.55);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.nt-toast-meta {
+  margin-left: auto; padding-left: 8px; flex: none;
+  font-family: var(--nt-mono); font-size: 10.5px; font-weight: 500;
+  color: rgba(241, 234, 217, 0.42); white-space: nowrap;
+}
+.nt-toast-prompt {
+  font-size: 11px; font-weight: 500; color: rgba(241, 234, 217, 0.5);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nt-toast-excerpt {
+  margin: 0; font-size: 12.5px; font-weight: 400; line-height: 16.5px;
+  color: rgba(241, 234, 217, 0.88);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.nt-toast-actions { display: flex; align-items: center; gap: 8px; height: 28px; margin-top: 2px; }
+.nt-toast-spacer { flex: 1; min-width: 4px; }
+.nt-toast-queue {
+  display: inline-flex; align-items: center; gap: 2px; margin-right: 4px;
+  font-family: var(--nt-mono); font-size: 10.5px; font-weight: 600;
+  color: rgba(241, 234, 217, 0.5); font-variant-numeric: tabular-nums;
+}
+.nt .nt-gdisc-sm { width: 18px; height: 18px; color: rgba(241, 234, 217, 0.72); }
+.nt-gdisc-sm svg { width: 8px; height: 8px; }
+.nt .nt-toast-all { font-size: 10.5px; font-weight: 500; color: rgba(241, 234, 217, 0.42); white-space: nowrap; }
+.nt .nt-toast-all:hover { color: rgba(241, 234, 217, 0.7); }
 
 /* ---------- Closed pill (V6ClosedPillShape / V6NotchContent) ---------- */
 /* flat top, semicircle bottom r = h/2; auto-sizes to content like the
@@ -424,6 +634,98 @@
   backdrop-filter: blur(22px) saturate(1.1);
 }
 .nt-pill-inner { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.nt-wing { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.nt-pill-layout-notch .nt-wing-r { justify-content: flex-end; }
+/* MacBook: the notch gap stays on the cutout even when the wings are
+   asymmetric (macbookNotchAlignmentOffsetX) */
+.nt-pill-layout-notch { max-width: none; transform: translateX(var(--notch-shift, 0px)); transition: transform 0.45s cubic-bezier(0.3, 1.1, 0.4, 1), width 0.45s ease; }
+
+/* outward 6pt top curve (closedEarRadius) — concave flares outside the
+   body where the pill meets the screen edge */
+.nt-ear {
+  position: absolute; top: 0; width: 6px; height: 6px; pointer-events: none;
+  background: inherit;
+}
+.nt-ear-l {
+  left: -6px;
+  -webkit-mask: radial-gradient(circle at 0 100%, transparent 5.6px, #000 6px);
+  mask: radial-gradient(circle at 0 100%, transparent 5.6px, #000 6px);
+}
+.nt-ear-r {
+  right: -6px;
+  -webkit-mask: radial-gradient(circle at 100% 100%, transparent 5.6px, #000 6px);
+  mask: radial-gradient(circle at 100% 100%, transparent 5.6px, #000 6px);
+}
+
+/* ---------- Live activity (widened pill, V6ClosedPill.liveActivityBody) ----------
+   left wing: pad 14 · glyph 24 · gap 8 · two mono lines (11/600 lh14 over
+   10/500 lh12 @0.58, spacing 1, max 150) · notch gap · right wing: timer
+   mono 10.5 @0.5 (tinted while waiting) or a green check when finished */
+.nt-pill-live.nt-pill-layout-notch { padding: 0 14px; }
+.nt-live-text {
+  display: flex; flex-direction: column; gap: 1px; min-width: 0; max-width: 150px;
+  font-family: var(--nt-mono); white-space: nowrap;
+  animation: nt-live-in 0.3s ease-out;
+}
+.nt-live-text b, .nt-live-text em { display: block; overflow: hidden; text-overflow: ellipsis; }
+.nt-live-text b { font-size: 11px; font-weight: 600; line-height: 14px; }
+.nt-live-text em { font-style: normal; font-size: 10px; font-weight: 500; line-height: 12px; color: rgba(241, 234, 217, 0.58); }
+@keyframes nt-live-in { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+/* external one-line variant */
+.nt-live-inline {
+  min-width: 0; max-width: 270px; overflow: hidden; text-overflow: ellipsis; white-space: pre;
+  font-family: var(--nt-mono); font-size: 11px;
+}
+.nt-live-inline b { font-weight: 600; }
+.nt-live-inline em { font-style: normal; font-size: 10px; font-weight: 500; color: rgba(241, 234, 217, 0.55); }
+b.nt-live-working { color: rgba(241, 234, 217, 0.92); }
+.nt-live-approval { color: var(--nt-wait-approve) !important; }
+.nt-live-answer { color: var(--nt-wait-answer) !important; }
+b.nt-live-finished { color: var(--nt-done); }
+.nt-live-trail { display: inline-flex; align-items: center; gap: 5px; flex: none; }
+.nt-live-timer {
+  font-family: var(--nt-mono); font-size: 10.5px; font-weight: 500;
+  color: rgba(241, 234, 217, 0.5); font-variant-numeric: tabular-nums;
+}
+.nt-live-chip { width: 16px; height: 16px; border-radius: 4px; background-size: cover; background-position: center; flex: none; }
+.nt-live-others {
+  font-size: 9.5px; font-weight: 600; color: rgba(241, 234, 217, 0.55);
+  height: 15px; line-height: 15px; padding: 0 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.1);
+}
+.nt-live-check {
+  width: 14px; height: 14px; border-radius: 50%; background: var(--nt-done);
+  display: grid; place-items: center; animation: nt-bouncein 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.nt-pill-inner .nt-live-check svg { width: 9px; height: 9px; fill: #0b0b0b; }
+@keyframes nt-bouncein { 0% { transform: scale(0.4); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+.nt-sprite.is-hopping { animation: nt-hop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 2; }
+@keyframes nt-hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-3.5px); } }
+
+/* swipe-to-skip feedback (MusicSkipArrows): ink backing over the right
+   wing (min reserve 44 + 8), two play.fill glyphs at h·0.34 overlapping
+   by 18%, each brightening 0.3→1 on a sin² wave (1.25 Hz, 0.32 lag) */
+.nt-skip-wing {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 52px;
+  display: flex; align-items: center; justify-content: flex-end; padding-right: 14px;
+  background: var(--nt-ink); border-radius: 0 0 19px 0;
+  animation: nt-live-in 0.2s ease-out;
+}
+.nt-skip { display: inline-flex; color: var(--nt-paper); }
+.nt-skip.is-prev { transform: scaleX(-1); }
+.nt-skip i { display: block; width: 13px; height: 13px; animation: nt-skipwave 0.8s ease-in-out infinite; opacity: 0.3; }
+.nt-skip i + i { margin-left: -2.3px; animation-delay: -0.544s; }
+.nt-pill-inner .nt-skip svg, .nt-skip svg { width: 13px; height: 13px; fill: currentColor; display: block; }
+@keyframes nt-skipwave { 0%, 100% { opacity: 0.3; transform: translateX(0); } 50% { opacity: 1; transform: translateX(1.5px); } }
+
+/* closed music art: a click plays/pauses; paused art carries a play glyph */
+.nt-pill-art { position: relative; }
+.nt-pill-art.is-clickable { cursor: pointer; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.nt-pill-art.is-clickable:active { transform: scale(0.88); }
+.nt-pill-art-play {
+  position: absolute; inset: 0; border-radius: inherit; display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.45); color: #fff;
+}
+.nt-pill-inner .nt-pill-art-play svg { width: 9px; height: 9px; }
 .nt-pill-inner svg { fill: currentColor; width: 100%; height: 100%; display: block; }
 /* closed art 22x22 r5 (V6NotchContent:517-518) */
 .nt-pill-art {
@@ -560,7 +862,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nt-eq i, .nt-dot-pulse, .nt-sprite.is-running, .nt-grid .is-waiting { animation: none; }
+  .nt-eq i, .nt-dot-pulse, .nt-sprite.is-running, .nt-grid .is-waiting,
+  .nt-sprite.is-hopping, .nt-ind-run, .nt-live-text, .nt-live-check, .nt-ucycler-line { animation: none; }
+  .nt-skip i { animation: none; opacity: 0.8; }
 }
 
 /* narrow screens: shrink the music layout gracefully */
@@ -568,7 +872,12 @@
   .nt-music { gap: 14px; padding: 12px 16px 8px; }
   .nt-art { width: 116px; height: 116px; flex-basis: 116px; }
   .nt-controls { gap: 14px; }
-  .nt-row-side .nt-badge-term { display: none; }
+  .nt-row-pills .nt-lpill:not(.nt-lpill-agent):not(.nt-lpill-age),
+  .nt-nrow-side .nt-badge-term { display: none; }
+  .nt-toast-queue, .nt-weekly { display: none; }
+  .nt-tabbar { gap: 0; padding-left: 10px; padding-right: 10px; }
+  .nt .nt-tab { padding: 4px 8px; }
+  .nt .nt-gbtn { padding-left: 10px; padding-right: 10px; }
 }
 
 /* ============================================================

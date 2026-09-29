@@ -24,6 +24,10 @@ export default function Personalize() {
         <h2>Personalize every pixel.</h2>
         <p>Past the glass and your island buddy, the Appearance settings shape exactly what the notch shows and how it behaves — and it keeps a separate profile for your MacBook notch and any external display.</p>
       </div>
+      {/* TODO(website-refresh): the app's Settings window is being redesigned —
+          rebuild this panel from the new Settings panes once they land (new
+          options to cover: live activity off/events/active, hover-open dwell,
+          density, top curve, color by agent, notification suppression). */}
       <div className="settings-panel glass reveal">
         <div className="sp-bar">
           <span className="sp-dot" /><span className="sp-dot" /><span className="sp-dot" />

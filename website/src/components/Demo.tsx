@@ -1,16 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import './Demo.css';
 import {
-  IslandPanel, MusicTab, AgentsTab, ApprovalCard, ClosedPill,
-  MyspaceTab, RemindersTab, MyspaceDropTarget,
-  type IslandTab, type MockTrack, type MockSession,
-  type MockThought, type MockReminder, UsageChip,
+  IslandPanel, MusicTab, AgentsTab, ApprovalCard, QuestionCard, CompletionToast,
+  NotificationSessionHeader, ShowAll, ClosedPill, UsageCycler,
+  MyspaceTab, RemindersTab, MyspaceDropTarget, AGENT_TINTS,
+  type IslandTab, type MockTrack, type MockSession, type LiveActivity, type PillMode,
+  type MockThought, type MockReminder,
 } from '../mock';
+import { USAGE_PROVIDERS, MODEL_WEEKLY } from '../lib/demoData';
 
 /* ============================================================
    Live demo — a full interactive mock of the app, 1:1 with the
-   real notch UI. Hover the pill to open, switch tabs, play the
-   fake player, trigger an approval, pick a character.
+   real notch UI. The closed pill carries a live activity while an
+   agent works; hover (0.4s dwell) or click to open — the surface
+   grows out of the pill as one shape and tucks back into the
+   hardware notch before the wings re-emerge. Trigger an approval,
+   a question or a completion toast, swipe to skip, pick a buddy.
    ============================================================ */
 
 const TRACKS: MockTrack[] = [
@@ -21,16 +26,28 @@ const TRACKS: MockTrack[] = [
 
 const BASE_SESSIONS: MockSession[] = [
   {
-    state: 'running', title: 'api', branch: 'feat/bridge-queue',
-    prompt: 'make BridgeServer dispatch on a background queue…',
-    agent: 'claude', terminal: 'Ghostty', age: '‹1m',
-    command: 'swift test --filter BridgeServerTests',
-    subagents: [{ name: 'subagent', desc: 'searching the codebase', time: '3s' }],
+    state: 'running', title: 'api · Make BridgeServer dispatch on a background queue',
+    prompt: 'make BridgeServer dispatch on a background queue',
+    activity: 'Running swift test --filter BridgeServerTests',
+    agent: 'claude', terminal: 'Ghostty', age: '<1m',
   },
   {
-    state: 'done', title: 'infra', branch: 'main',
-    prompt: 'deploy the staging build',
-    agent: 'codex', terminal: 'tmux', age: '2m',
+    state: 'done', title: 'research · Summarize the autoresearch paper',
+    summary: 'Done. I pulled out the key differences that matter for our loop.',
+    agent: 'codex', terminal: 'Ghostty', age: '3m',
+  },
+  { state: 'idle', title: 'infra · Deploy the staging build', agent: 'codex', terminal: 'tmux', age: '27m' },
+  { state: 'idle', title: 'voice-input · Look at the voice-input repo', agent: 'claude', terminal: 'Ghostty', age: '1h' },
+];
+
+const COMPLETIONS = [
+  {
+    agent: 'codex', workspace: 'research', prompt: 'Read the autoresearch paper and compare it to our loop.',
+    excerpt: 'Done. I pulled out the key differences: their loop scores every candidate against a held-out eval before it commits, and it keeps a ranked memory of failed attempts so it never retries them.',
+  },
+  {
+    agent: 'claude', workspace: 'site', prompt: 'Swap the hero to the new session rows.',
+    excerpt: 'The hero now renders the new session rows and the usage cycler. Build passes and nothing else changed.',
   },
 ];
 
@@ -51,29 +68,52 @@ const BASE_REMINDERS: MockReminder[] = [
   { text: 'Send the beta build to Sam', reminderAt: 'Jul 20, 5:00 PM', created: '11:14:27 AM', done: true },
 ];
 
+type Surface = 'tabs' | 'approval' | 'question' | 'toast';
+/* closed → opening (pill-sized clip, 1 frame) → open → tucking (into the
+   hardware notch) → closed (wings re-emerge) */
+type Phase = 'closed' | 'opening' | 'open' | 'tucking';
+
+const HOVER_DWELL = 400; /* HoverOpenMode default 0.4s */
+const CLOSE_MS = 400;    /* closeAnimationDuration */
+
 export default function Demo() {
-  const [open, setOpen] = useState(false);
+  const [phase, setPhase] = useState<Phase>('closed');
+  const [emerge, setEmerge] = useState(0);
   const [pinned, setPinned] = useState(false);
-  const [tab, setTab] = useState<IslandTab>('music');
+  const [surface, setSurface] = useState<Surface>('tabs');
+  const [tab, setTab] = useState<IslandTab>('agents');
   const [trackIdx, setTrackIdx] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [position, setPosition] = useState(64);
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState(false);
   const [char, setChar] = useState<(typeof CHARS)[number]>('dino');
+  const [colorByAgent, setColorByAgent] = useState(false);
+  const [agentsWorking, setAgentsWorking] = useState(true);
   const [glass, setGlass] = useState<'clear' | 'frosted' | 'off'>('clear');
   const [tint, setTint] = useState(22); /* app default tintStrength (LiquidGlass.swift:44) */
-  const [approval, setApproval] = useState(false);
-  const [notifMode, setNotifMode] = useState(true);
   const [thoughts, setThoughts] = useState<MockThought[]>(BASE_THOUGHTS);
   const [reminders, setReminders] = useState<MockReminder[]>(BASE_REMINDERS);
+  const [skip, setSkip] = useState<'next' | 'prev' | null>(null);
+  const [toastIdx, setToastIdx] = useState(0);
+  /* approval flow: the pill says what the web session needs / does */
+  const [webState, setWebState] = useState<'none' | 'approval' | 'question' | 'running' | 'finished' | 'idle'>('none');
+  const [webSince, setWebSince] = useState(0);
   /* file-drag demo: idle → hint (near the notch) → catch (over it) */
   const [dragPhase, setDragPhase] = useState<'idle' | 'hint' | 'catch'>('idle');
   const sceneRef = useRef<HTMLDivElement>(null);
-  const [resolved, setResolved] = useState<'allowed' | 'denied' | null>(null);
+  const pillRef = useRef<HTMLDivElement>(null);
+  const dwellTimer = useRef<number>();
   const closeTimer = useRef<number>();
+  const toastTimer = useRef<number>();
+  const skipTimer = useRef<number>();
+  const lastSkip = useRef(0);
+  const hoveringPanel = useRef(false);
+  const workingSince = useRef(Date.now() - 42_000);
 
   const track = TRACKS[trackIdx];
+  const artUrl = track.art.startsWith('url') ? track.art.slice(4, -1) : undefined;
+  const isOpen = phase === 'opening' || phase === 'open';
 
   /* playback clock */
   useEffect(() => {
@@ -93,6 +133,130 @@ export default function Demo() {
   const next = () => { setTrackIdx((i) => (i + 1) % TRACKS.length); setPosition(0); };
   const prev = () => { setTrackIdx((i) => (i + TRACKS.length - 1) % TRACKS.length); setPosition(0); };
 
+  /* ---- open / close morph ---- */
+  const measurePill = () => {
+    const scene = sceneRef.current;
+    const pill = pillRef.current?.querySelector<HTMLElement>('.nt-pill');
+    if (!scene || !pill) return;
+    const shift = parseFloat(pill.style.getPropertyValue('--notch-shift')) || 0;
+    scene.style.setProperty('--pw', `${pill.offsetWidth}px`);
+    scene.style.setProperty('--ps', `${shift}px`);
+  };
+
+  const open = useCallback((nextSurface?: Surface) => {
+    window.clearTimeout(closeTimer.current);
+    window.clearTimeout(dwellTimer.current);
+    if (nextSurface) setSurface(nextSurface);
+    setPhase((p) => {
+      if (p === 'open' || p === 'opening') return p;
+      measurePill();
+      requestAnimationFrame(() => requestAnimationFrame(() => setPhase((q) => (q === 'opening' ? 'open' : q))));
+      return 'opening';
+    });
+  }, []);
+
+  const close = useCallback(() => {
+    window.clearTimeout(dwellTimer.current);
+    window.clearTimeout(toastTimer.current);
+    setPinned(false);
+    setPhase((p) => {
+      if (p === 'closed' || p === 'tucking') return p;
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = window.setTimeout(() => {
+        setPhase('closed');
+        setSurface('tabs');
+        setEmerge((n) => n + 1);
+      }, CLOSE_MS + 30); /* wingsEmergeDelay */
+      return 'tucking';
+    });
+  }, []);
+
+  const enter = () => {
+    window.clearTimeout(closeTimer.current);
+    if (isOpen) return;
+    window.clearTimeout(dwellTimer.current);
+    dwellTimer.current = window.setTimeout(() => open(), HOVER_DWELL);
+  };
+  const leave = () => {
+    window.clearTimeout(dwellTimer.current);
+    if (pinned || !isOpen) return;
+    closeTimer.current = window.setTimeout(close, 350);
+  };
+
+  /* ---- swipe to skip (two-finger horizontal swipe over the pill) ---- */
+  const doSkip = (dir: 'next' | 'prev') => {
+    lastSkip.current = Date.now();
+    if (dir === 'next') next(); else prev();
+    setSkip(dir);
+    window.clearTimeout(skipTimer.current);
+    skipTimer.current = window.setTimeout(() => setSkip(null), 1100);
+  };
+  const onWheel = (e: React.WheelEvent) => {
+    if (isOpen) return;
+    if (Math.abs(e.deltaX) < 18 || Math.abs(e.deltaX) < Math.abs(e.deltaY) * 1.5) return;
+    if (Date.now() - lastSkip.current < 700) return; /* one skip per gesture */
+    doSkip(e.deltaX > 0 ? 'next' : 'prev');
+  };
+
+  /* ---- notifications ---- */
+  const triggerApproval = () => {
+    setWebState('approval');
+    setWebSince(Date.now());
+    setPinned(true);
+    open('approval');
+  };
+  const triggerQuestion = () => {
+    setWebState('question');
+    setWebSince(Date.now());
+    setPinned(true);
+    open('question');
+  };
+  const scheduleToastCollapse = () => {
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => {
+      if (!hoveringPanel.current) close();
+    }, 6000); /* toasts auto-collapse after 6s unless hovered */
+  };
+  const triggerCompletion = () => {
+    setToastIdx(0);
+    setPinned(false);
+    open('toast');
+    scheduleToastCollapse();
+  };
+  const resolve = (kind: 'allowed' | 'denied' | 'answered') => {
+    close();
+    if (kind === 'denied') { setWebState('idle'); return; }
+    setWebState('running');
+    setWebSince(Date.now());
+    window.setTimeout(() => {
+      setWebState((s) => (s === 'running' ? 'finished' : s));
+      window.setTimeout(() => setWebState((s) => (s === 'finished' ? 'idle' : s)), 4000); /* finishedPeekDuration */
+    }, 4500);
+  };
+
+  /* keyboard: ⌘Y / ⌘N on the approval card, ⏎ / Esc on toasts */
+  useEffect(() => {
+    if (phase !== 'open' || surface === 'tabs') return;
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (e.key === 'Escape') { close(); return; }
+      if (surface === 'approval' && mod && (e.key === 'y' || e.key === 'n')) {
+        e.preventDefault();
+        resolve(e.key === 'y' ? 'allowed' : 'denied');
+      } else if (surface === 'toast' && e.key === 'Enter') {
+        close();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, surface]);
+
+  useEffect(() => () => {
+    [dwellTimer, closeTimer, toastTimer, skipTimer].forEach((t) => window.clearTimeout(t.current));
+  }, []);
+
+  /* ---- file drag ---- */
   const onSceneDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     const scene = sceneRef.current;
@@ -100,15 +264,10 @@ export default function Demo() {
     const r = scene.getBoundingClientRect();
     const dx = Math.abs(e.clientX - (r.left + r.width / 2));
     const dy = e.clientY - r.top;
-    if (dx < 110 && dy < 64) {
-      setDragPhase('catch');
-    } else if (dx < 240 && dy < 170) {
-      setDragPhase('hint');
-    } else {
-      setDragPhase('idle');
-    }
+    if (dx < 110 && dy < 64) setDragPhase('catch');
+    else if (dx < 240 && dy < 170) setDragPhase('hint');
+    else setDragPhase('idle');
   };
-
   const onSceneDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (dragPhase !== 'idle') {
@@ -118,63 +277,145 @@ export default function Demo() {
         attachments: [{ name: 'quarterly-report.pdf', ext: 'pdf', kind: 'pdf' as const }],
       }, ...t]);
       setTab('myspace');
-      setOpen(true);
       setPinned(true);
+      open('tabs');
     }
     setDragPhase('idle');
   };
 
-  const enter = () => { window.clearTimeout(closeTimer.current); setOpen(true); };
-  const leave = () => {
-    if (pinned) return;
-    closeTimer.current = window.setTimeout(() => setOpen(false), 350);
-  };
+  /* ---- closed pill: IslandLiveActivity.resolve priority ---- */
+  const liveMusicArt = playing ? artUrl : undefined;
+  let activity: LiveActivity | null = null;
+  let activityAgent = 'claude';
+  if (webState === 'approval') {
+    activity = { kind: 'approval', title: 'Claude needs approval', subtitle: 'git push origin main', since: webSince };
+  } else if (webState === 'question') {
+    activity = { kind: 'answer', title: 'Claude has a question', subtitle: 'Which auth method?', since: webSince };
+  } else if (webState === 'finished') {
+    activity = { kind: 'finished', title: 'Claude finished', subtitle: 'web' };
+  } else if (webState === 'running') {
+    activity = { kind: 'working', title: 'Claude · web', subtitle: 'Running git push origin main', since: webSince, musicArt: liveMusicArt, others: agentsWorking ? 1 : 0 };
+  } else if (agentsWorking) {
+    activity = { kind: 'working', title: 'Claude · api', subtitle: 'Running swift test', since: workingSince.current, musicArt: liveMusicArt };
+  }
+  if (activity?.kind === 'approval' || activity?.kind === 'answer') activityAgent = 'claude';
+  const agentTint = colorByAgent ? AGENT_TINTS[activityAgent] : undefined;
 
-  const triggerApproval = () => {
-    setResolved(null);
-    setApproval(true);
-    setNotifMode(true);
-    setTab('agents');
-    setOpen(true);
-    setPinned(true);
-  };
-  const resolve = (kind: 'allowed' | 'denied') => {
-    setApproval(false);
-    setResolved(kind);
-    window.setTimeout(() => setResolved(null), 4000);
-  };
+  const pillMode: PillMode = activity
+    ? { kind: 'live', char, activity, tint: agentTint }
+    : artUrl && (playing || position > 0)
+      ? { kind: 'music-compact', art: artUrl, playing }
+      : { kind: 'idle', char, tint: agentTint };
 
-  const approvalSession: MockSession = {
-    state: 'approve', title: 'web', branch: 'main', prompt: 'ship the landing page',
-    waiting: 'Waiting 0m 12s', agent: 'claude', terminal: 'WezTerm', age: '12s',
-  };
+  /* ---- opened content ---- */
+  const webSession: MockSession | null =
+    webState === 'running' ? { state: 'running', title: 'web · Ship the landing page', prompt: 'ship the landing page', activity: 'Running git push origin main', agent: 'claude', terminal: 'WezTerm', age: '<1m' }
+      : webState === 'approval' || webState === 'question'
+        ? { state: webState === 'approval' ? 'approve' : 'answer', title: 'web · Ship the landing page', waiting: 'Waiting 0m 12s', agent: 'claude', terminal: 'WezTerm', age: '12s' }
+        : webState === 'finished' || webState === 'idle'
+          ? { state: 'done', title: 'web · Ship the landing page', summary: 'Pushed main. The deploy is building.', agent: 'claude', terminal: 'WezTerm', age: '1m' }
+          : null;
   const sessions: MockSession[] = [
-    ...(resolved
-      ? [{ state: resolved === 'allowed' ? 'running' : 'idle', title: 'web', branch: 'main', prompt: 'ship the landing page', agent: 'claude', terminal: 'WezTerm', age: '‹1m', command: resolved === 'allowed' ? 'git push origin main' : undefined } as MockSession]
-      : []),
-    ...BASE_SESSIONS,
+    ...(webSession ? [webSession] : []),
+    ...BASE_SESSIONS.map((s, i) => (i === 0 && !agentsWorking ? { ...s, state: 'done' as const, summary: 'All BridgeServer tests pass on the background queue.', prompt: undefined, activity: undefined } : s)),
   ];
+  const total = sessions.length + 5;
+  const toast = COMPLETIONS[toastIdx % COMPLETIONS.length];
 
-  const pillMode = approval
-    ? { kind: 'agents' as const, char, running: true, tiles: [{ color: '#f4a4a4', state: 'waiting' as const }, { color: '#6ea7ff', state: 'running' as const }] }
-    : playing
-      ? { kind: 'music-compact' as const, art: track.art.startsWith('url') ? track.art.slice(4, -1) : '', playing }
-      : { kind: 'idle' as const, char };
+  const notificationMode = surface !== 'tabs';
+  const panelContent = (() => {
+    if (surface === 'approval') {
+      return (
+        <>
+          <NotificationSessionHeader title="web · Ship the landing page" prompt="ship the landing page" agent="claude" terminal="WezTerm" age="12s" />
+          <ApprovalCard
+            command="git push origin main"
+            path="~/dev/web"
+            onDeny={() => resolve('denied')}
+            onAllow={() => resolve('allowed')}
+          />
+          <ShowAll count={total} onClick={() => { setSurface('tabs'); setTab('agents'); }} />
+        </>
+      );
+    }
+    if (surface === 'question') {
+      return (
+        <>
+          <NotificationSessionHeader title="web · Add sign-in to the dashboard" prompt="How should we approach it?" agent="claude" terminal="WezTerm" age="<1m" />
+          <QuestionCard
+            question="Which authentication method should we use?"
+            options={[
+              { label: 'Passkeys', desc: 'WebAuthn, no passwords' },
+              { label: 'Session cookies', desc: 'Traditional approach' },
+              { label: 'OAuth 2.0', desc: 'Third-party sign-in' },
+            ]}
+            onSubmit={() => resolve('answered')}
+          />
+          <ShowAll count={total} onClick={() => { setSurface('tabs'); setTab('agents'); }} />
+        </>
+      );
+    }
+    if (surface === 'toast') {
+      return (
+        <CompletionToast
+          agent={toast.agent} workspace={toast.workspace} prompt={toast.prompt} excerpt={toast.excerpt}
+          total={total}
+          queue={{ index: toastIdx % COMPLETIONS.length, count: COMPLETIONS.length }}
+          onRotate={(fwd) => { setToastIdx((i) => (i + (fwd ? 1 : COMPLETIONS.length - 1)) % COMPLETIONS.length); scheduleToastCollapse(); }}
+          onJump={close}
+          onReply={close}
+          onShowAll={() => { window.clearTimeout(toastTimer.current); setPinned(true); setSurface('tabs'); setTab('agents'); }}
+        />
+      );
+    }
+    switch (tab) {
+      case 'myspace':
+        return (
+          <MyspaceTab
+            thoughts={thoughts}
+            onSubmit={(text) => setThoughts((t) => [{ text, time: new Date().toLocaleTimeString() }, ...t])}
+            onDelete={(i) => setThoughts((t) => t.filter((_, idx) => idx !== i))}
+          />
+        );
+      case 'reminders':
+        return (
+          <RemindersTab
+            reminders={reminders}
+            onToggle={(i) => setReminders((r) => r.map((item, idx) => (idx === i ? { ...item, done: !item.done } : item)))}
+          />
+        );
+      case 'music':
+        return (
+          <MusicTab
+            track={track} playing={playing} position={position}
+            shuffle={shuffle} repeat={repeat}
+            onPlayPause={() => setPlaying((p) => !p)}
+            onPrev={prev} onNext={next}
+            onShuffle={() => setShuffle((s) => !s)}
+            onRepeat={() => setRepeat((r) => !r)}
+            onSeek={setPosition}
+          />
+        );
+      default:
+        return <AgentsTab sessions={sessions} total={total} />;
+    }
+  })();
 
   return (
     <section id="demo" className="section">
       <div className="section-head reveal">
         <h2>Take it for a spin.</h2>
-        <p>This is a live, pixel-faithful mock of the real app — same fonts, same spacing, same glass. Hover (or tap) the notch to open it.</p>
+        <p>This is a live, pixel-faithful mock of the real app — same fonts, same spacing, same glass. The pill is already tracking an agent; hover (or tap) the notch to open it, or swipe sideways over it to skip a track.</p>
       </div>
 
       <div
         ref={sceneRef}
         className="demo-scene reveal"
-        data-open={open}
+        data-phase={phase}
+        data-surface={surface}
         data-catching={dragPhase === 'catch'}
         onClick={(e) => {
-          if (!(e.target as HTMLElement).closest('.demo-anchor')) { setPinned(false); setOpen(false); }
+          if (!(e.target as HTMLElement).closest('.demo-anchor')) close();
         }}
         onDragOver={onSceneDragOver}
         onDragLeave={() => setDragPhase('idle')}
@@ -185,7 +426,8 @@ export default function Demo() {
           className="demo-anchor"
           onMouseEnter={enter}
           onMouseLeave={leave}
-          onClick={() => { setOpen(true); setPinned(true); }}
+          onWheel={onWheel}
+          onClick={() => { setPinned(true); open(); }}
         >
           {dragPhase === 'hint' && (
             <div className="demo-drop-hint">
@@ -193,83 +435,40 @@ export default function Demo() {
               Drop to hold
             </div>
           )}
-          <div className={`demo-pill ${dragPhase === 'hint' ? 'is-hinting' : ''}`}>
-            {pillMode.kind === 'music-compact' && !pillMode.art ? (
-              <ClosedPill layout="notch" mode={{ kind: 'agents', char, running: false, label: 'Claude Code' }} />
-            ) : (
-              <ClosedPill layout="notch" mode={pillMode} />
-            )}
+          <div ref={pillRef} className={`demo-pill ${dragPhase === 'hint' ? 'is-hinting' : ''}`} key={`pill-${emerge}`} data-emerge={emerge > 0}>
+            <ClosedPill
+              layout="notch"
+              mode={pillMode}
+              skip={skip}
+              onArtClick={pillMode.kind === 'music-compact' ? () => { window.clearTimeout(dwellTimer.current); setPlaying((p) => !p); } : undefined}
+            />
           </div>
           {dragPhase === 'catch' && (
-            <div className="demo-panel demo-drop-panel">
+            <div className="demo-drop-panel">
               <div className="nt nt-island nt-plainglass">
                 <MyspaceDropTarget />
               </div>
             </div>
           )}
-          <div className="demo-panel" onClick={(e) => e.stopPropagation()} style={dragPhase === 'catch' ? { opacity: 0 } : undefined}>
+          <div
+            className="demo-panel"
+            onClick={(e) => { e.stopPropagation(); if (surface === 'toast') { window.clearTimeout(toastTimer.current); } }}
+            onMouseEnter={() => { hoveringPanel.current = true; }}
+            onMouseLeave={() => { hoveringPanel.current = false; if (surface === 'toast' && phase === 'open') scheduleToastCollapse(); }}
+            style={dragPhase === 'catch' ? { opacity: 0 } : undefined}
+          >
             <IslandPanel
-              usage={<><UsageChip name="Claude" window="5h" pct={41} /><UsageChip name="Codex" window="5h" pct={78} /></>}
-              tab={tab}
+              usage={<UsageCycler providers={USAGE_PROVIDERS} />}
+              modelWeekly={MODEL_WEEKLY}
+              tab={notificationMode ? undefined : tab}
               onTab={setTab}
               glass={glass}
               tintStrength={tint / 100}
-              ambientArt={tab === 'music' && playing && track.art.startsWith('url') ? track.art.slice(4, -1) : undefined}
+              ambientArt={!notificationMode && tab === 'music' && playing ? artUrl : undefined}
+              divider={notificationMode && surface !== 'toast'}
               showNotchGap
             >
-              {tab === 'myspace' ? (
-                <MyspaceTab
-                  thoughts={thoughts}
-                  onSubmit={(text) => setThoughts((t) => [
-                    { text, time: new Date().toLocaleTimeString() }, ...t,
-                  ])}
-                  onDelete={(i) => setThoughts((t) => t.filter((_, idx) => idx !== i))}
-                />
-              ) : tab === 'reminders' ? (
-                <RemindersTab
-                  reminders={reminders}
-                  onToggle={(i) => setReminders((r) => r.map(
-                    (item, idx) => (idx === i ? { ...item, done: !item.done } : item),
-                  ))}
-                />
-              ) : tab === 'music' ? (
-                <MusicTab
-                  track={track} playing={playing} position={position}
-                  shuffle={shuffle} repeat={repeat}
-                  onPlayPause={() => setPlaying((p) => !p)}
-                  onPrev={prev} onNext={next}
-                  onShuffle={() => setShuffle((s) => !s)}
-                  onRepeat={() => setRepeat((r) => !r)}
-                  onSeek={setPosition}
-                />
-              ) : approval && notifMode ? (
-                /* notification presentation: only the actionable session +
-                   card + "Show all N" (like the real app) */
-                <AgentsTab sessions={[approvalSession]}>
-                  <ApprovalCard
-                    command="git push origin main"
-                    path="~/dev/web"
-                    onDeny={() => resolve('denied')}
-                    onAllowOnce={() => resolve('allowed')}
-                    onAlwaysAllow={() => resolve('allowed')}
-                  />
-                  <button type="button" className="nt-showall" onClick={() => setNotifMode(false)}>
-                    Show all {BASE_SESSIONS.length + 1} sessions
-                  </button>
-                </AgentsTab>
-              ) : (
-                <AgentsTab sessions={approval ? [approvalSession, ...sessions] : sessions}>
-                  {approval && (
-                    <ApprovalCard
-                      command="git push origin main"
-                      path="~/dev/web"
-                      onDeny={() => resolve('denied')}
-                      onAllowOnce={() => resolve('allowed')}
-                      onAlwaysAllow={() => resolve('allowed')}
-                    />
-                  )}
-                </AgentsTab>
-              )}
+              <div key={surface}>{panelContent}</div>
             </IslandPanel>
           </div>
           <div className="demo-hw-notch" aria-hidden="true" />
@@ -279,36 +478,35 @@ export default function Demo() {
       <div className="demo-controls reveal">
         <div className="demo-ctl">
           <span className="demo-ctl-label">Try</span>
+          <button type="button" className="demo-chip demo-chip-cta" onClick={triggerApproval}>Trigger an approval</button>
+          <button type="button" className="demo-chip demo-chip-q" onClick={triggerQuestion}>Ask a question</button>
+          <button type="button" className="demo-chip demo-chip-done" onClick={triggerCompletion}>Finish a task</button>
+          <button type="button" className="demo-chip" onClick={() => doSkip('next')}>Swipe to skip ⏩</button>
+        </div>
+        <div className="demo-ctl">
           <span
             className="demo-file"
             draggable
             onDragStart={(e) => e.dataTransfer.setData('text/plain', 'quarterly-report.pdf')}
             onDragEnd={() => setDragPhase('idle')}
           >📄 quarterly-report.pdf — drag me at the notch</span>
-          <button type="button" className="demo-chip demo-chip-cta" onClick={triggerApproval}>
-            Trigger an approval
-          </button>
+        </div>
+        <div className="demo-ctl">
+          <span className="demo-ctl-label">Agents</span>
+          <button type="button" className={`demo-chip ${agentsWorking ? 'is-on' : ''}`} onClick={() => setAgentsWorking(true)}>Working</button>
+          <button type="button" className={`demo-chip ${!agentsWorking ? 'is-on' : ''}`} onClick={() => setAgentsWorking(false)}>Idle · music</button>
         </div>
         <div className="demo-ctl">
           <span className="demo-ctl-label">Character</span>
           {CHARS.map((c) => (
-            <button
-              type="button" key={c}
-              className={`demo-chip ${char === c ? 'is-on' : ''}`}
-              onClick={() => setChar(c)}
-            >
-              {c}
-            </button>
+            <button type="button" key={c} className={`demo-chip ${char === c ? 'is-on' : ''}`} onClick={() => setChar(c)}>{c}</button>
           ))}
+          <button type="button" className={`demo-chip ${colorByAgent ? 'is-on' : ''}`} onClick={() => setColorByAgent((v) => !v)}>Color by agent</button>
         </div>
         <div className="demo-ctl">
           <span className="demo-ctl-label">Glass</span>
           {(['clear', 'frosted', 'off'] as const).map((g) => (
-            <button
-              type="button" key={g}
-              className={`demo-chip ${glass === g ? 'is-on' : ''}`}
-              onClick={() => setGlass(g)}
-            >
+            <button type="button" key={g} className={`demo-chip ${glass === g ? 'is-on' : ''}`} onClick={() => setGlass(g)}>
               {g === 'off' ? 'solid ink' : g}
             </button>
           ))}
@@ -326,6 +524,7 @@ export default function Demo() {
           <span className="demo-pct">{tint}%</span>
         </div>
       </div>
+      <p className="demo-hint reveal">On the approval card, <kbd>⌘Y</kbd> allows and <kbd>⌘N</kbd> denies. <kbd>Esc</kbd> dismisses.</p>
     </section>
   );
 }

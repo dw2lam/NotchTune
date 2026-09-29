@@ -1,24 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { useLatestRelease } from '../hooks/useLatestRelease';
-import { IslandPanel, AgentsTab, UsageChip, type MockSession } from '../mock';
+import { IslandPanel, AgentsTab, UsageCycler, type MockSession } from '../mock';
+import { USAGE_PROVIDERS, MODEL_WEEKLY } from '../lib/demoData';
 
 const HERO_SESSIONS: MockSession[] = [
   {
-    state: 'running', title: 'notchtune', branch: 'feat/agy-hooks',
-    prompt: 'the notch should react when agy is actually working…',
-    agent: 'claude', terminal: 'Ghostty', age: '‹1m',
+    state: 'running', title: 'notchtune · Make the pill show what the agent is doing',
+    prompt: 'widen the wings while an agent works, timer on the right',
+    activity: 'Editing IslandLiveActivity.swift',
+    agent: 'claude', terminal: 'Ghostty', age: '<1m',
   },
   {
-    state: 'approve', title: 'island-demo', branch: 'main',
-    prompt: 'run the release script?',
+    state: 'approve', title: 'api · Cut the 2.2 release',
     waiting: 'Waiting 0m 12s',
     agent: 'codex', terminal: 'iTerm2', age: '12s',
   },
   {
-    state: 'done', title: 'site', branch: 'main',
-    prompt: 'build the liquid-glass hero',
+    state: 'done', title: 'site · Build the liquid-glass hero',
+    summary: 'Done. The hero now uses the new session rows and usage cycler.',
     agent: 'claude', terminal: 'tmux', age: '3m',
+  },
+  {
+    state: 'idle', title: 'infra · Deploy the staging build',
+    agent: 'codex', terminal: 'Ghostty', age: '1h',
   },
 ];
 
@@ -68,9 +73,10 @@ export default function Hero() {
           <span className="nt-hero-accent">finally useful.</span>
         </h1>
         <p className="lede">
-          NotchTune turns your Mac's notch into a live control surface — music and your
-          terminal AI agents in one place. Playback, approvals, and one-tap jump-back
-          to the right session. <em>Native, local-first, no account.</em>
+          NotchTune turns your Mac's notch into a live control surface for your terminal
+          AI agents and your music. Watch an agent work right in the closed notch, approve
+          it from the keyboard, and jump back to the right session in one click.{' '}
+          <em>Native, local-first, no account.</em>
         </p>
       </div>
 
@@ -90,10 +96,8 @@ export default function Hero() {
       <div className="hero-stage reveal" ref={demoRef}>
         <div className="scene scene-hero">
           <IslandPanel
-            usage={<>
-              <UsageChip name="Claude" window="5h" pct={41} />
-              <UsageChip name="Codex" window="7d" pct={76} tone="warn" />
-            </>}
+            usage={<UsageCycler providers={USAGE_PROVIDERS} />}
+            modelWeekly={MODEL_WEEKLY}
             tab="agents"
             glass="clear"
             showNotchGap={false}

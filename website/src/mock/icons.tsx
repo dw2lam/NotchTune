@@ -58,6 +58,24 @@ export const ChevronIcon = () => (
   <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" /></svg>
 );
 
+/* arrow.up.forward — toast "Jump to <terminal>" */
+export const JumpIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg>
+);
+
+/* arrowshape.turn.up.left — toast "Reply" */
+export const ReplyIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none"><path d="M10 5L3.5 11 10 17v-3.6c4.7 0 8 1.3 10.5 5.1-.7-5.2-3.6-9.4-10.5-10.1V5z" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" fill="none" /></svg>
+);
+
+export const ChevronLeftIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg>
+);
+
+export const ChevronRightIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg>
+);
+
 /* square.grid.2x2 — Myspace tab */
 export const GridIcon = () => (
   <svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z" /></svg>
