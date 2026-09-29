@@ -1,0 +1,257 @@
+/* Mock of NotchTune's Settings window after its System Settings redesign
+   (dark appearance). Values follow macOS Tahoe's System Settings: 13px
+   labels, 11px secondary text, 10px-radius grouped sections, inset
+   dividers, 20px colored rounded-square sidebar icons. */
+
+.mset {
+  --ms-bg: #1e1e20;
+  --ms-side: #262628;
+  --ms-group: rgba(255, 255, 255, 0.05);
+  --ms-line: rgba(255, 255, 255, 0.07);
+  --ms-text: #f5f5f7;
+  --ms-sub: #98989d;
+  --ms-accent: #0a84ff;
+  max-width: 880px;
+  margin: 0 auto;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--ms-bg);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(0, 0, 0, 0.6);
+  color: var(--ms-text);
+  font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  text-align: left;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mset-titlebar {
+  position: relative;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(90deg, var(--ms-side) 0 210px, var(--ms-bg) 210px);
+}
+.mset-lights { display: flex; gap: 8px; padding-left: 20px; width: 210px; box-sizing: border-box; }
+.mset-lights i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
+.mset-lights i:nth-child(2) { background: #febc2e; }
+.mset-lights i:nth-child(3) { background: #28c840; }
+.mset-title { padding-left: 20px; font-size: 15px; font-weight: 700; }
+
+.mset-body { display: flex; height: 560px; }
+
+.mset-sidebar {
+  width: 210px;
+  flex: none;
+  padding: 10px 10px;
+  box-sizing: border-box;
+  background: var(--ms-side);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.mset-side-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--ms-text);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.mset-side-row[tabindex="0"] { cursor: pointer; }
+.mset-side-row.gap { margin-top: 14px; }
+.mset-side-row.is-on { background: rgba(10, 132, 255, 0.9); color: #fff; font-weight: 600; }
+.mset-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.25);
+}
+.mset-icon svg { width: 13px; height: 13px; fill: #fff; }
+
+.mset-detail { flex: 1; overflow-y: auto; padding: 18px 24px 24px; scrollbar-width: thin; }
+
+.mset-section { margin-bottom: 20px; }
+.mset-section-title { font-weight: 700; margin: 0 0 7px 10px; }
+.mset-group {
+  background: var(--ms-group);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.mset-footer { color: var(--ms-sub); font-size: 11px; margin: 7px 10px 0; }
+
+.mset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 36px;
+  padding: 7px 12px;
+  box-sizing: border-box;
+  position: relative;
+}
+.mset-row + .mset-row::before,
+.mset-tiles + .mset-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  background: var(--ms-line);
+}
+.mset-row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mset-row-text small { color: var(--ms-sub); font-size: 11px; }
+.mset-row-control { flex: none; display: flex; align-items: center; }
+
+.mset-switch {
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  border: 0;
+  padding: 0;
+  background: #3a3a3c;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.mset-switch span {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+.mset-switch.is-on { background: var(--ms-accent); }
+.mset-switch.is-on span { transform: translateX(14px); }
+
+.mset-seg {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.mset-seg button {
+  border: 0;
+  background: none;
+  color: var(--ms-text);
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.mset-seg button.is-on { background: rgba(255, 255, 255, 0.24); box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3); }
+
+.mset-popup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ms-text);
+}
+.mset-popup svg {
+  width: 8px;
+  height: 12px;
+  padding: 2px 3px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.14);
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mset-push {
+  border: 0;
+  border-radius: 6px;
+  padding: 3px 12px;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--ms-text);
+  font: inherit;
+  cursor: pointer;
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* picture tiles (display profile, character) */
+.mset-tiles { display: grid; gap: 14px; padding: 14px; }
+.mset-tiles.two { grid-template-columns: 1fr 1fr; }
+.mset-tiles.chars { grid-template-columns: repeat(5, 1fr); }
+.mset-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: none;
+  color: var(--ms-text);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.mset-tile-art {
+  width: 100%;
+  border-radius: 9px;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color 0.15s ease;
+}
+.mset-tile.is-on .mset-tile-art { outline-color: var(--ms-accent); }
+.mset-tile-cap { font-size: 12px; }
+.mset-tile.is-on .mset-tile-cap { font-weight: 600; }
+.mset-tile-sub { font-size: 11px; color: var(--ms-sub); text-align: center; }
+
+.mset-wall {
+  display: block;
+  position: relative;
+  height: 74px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #3b2a7a 0%, #7a3f9a 45%, #c65b86 100%);
+  overflow: hidden;
+}
+.mset-pill {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 56%;
+  height: 16px;
+  transform: translateX(-50%);
+  background: #000;
+  border-radius: 0 0 9px 9px;
+}
+.mset-pill.floating { top: 10px; width: 46%; border-radius: 9px; }
+
+.mset-char {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: 9px;
+  background: #000;
+}
+.mset-sprite { width: 30px; height: 30px; animation: none; filter: none; }
+
+@media (max-width: 720px) {
+  .mset-sidebar { display: none; }
+  .mset-titlebar { background: var(--ms-bg); }
+  .mset-lights { width: auto; }
+  .mset-body { height: 600px; }
+  .mset-detail { padding: 14px 12px 20px; }
+  .mset-tiles.chars { grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 10px; }
+  .mset-row { flex-wrap: wrap; }
+  .mset-seg button { padding: 2px 7px; }
+}

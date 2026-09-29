@@ -199,11 +199,13 @@ code{font-family:"JetBrains Mono",ui-monospace,monospace}
 .sessions li{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:13px;transition:background .2s}
 .sessions li:hover{background:rgba(255,255,255,.06)}
 .s-dot{width:9px;height:9px;border-radius:50%;flex:none;position:relative}
-.s-dot.running{background:var(--green);box-shadow:0 0 8px var(--green)}
-.s-dot.running::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--green);opacity:.4;animation:ring 1.8s infinite}
+/* legend dots use the app's IslandDesignPalette.Status tints */
+.s-dot.running{background:#6ea7ff;box-shadow:0 0 8px #6ea7ff}
+.s-dot.running::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid #6ea7ff;opacity:.4;animation:ring 1.8s infinite}
 @keyframes ring{0%{transform:scale(.6);opacity:.6}100%{transform:scale(1.5);opacity:0}}
-.s-dot.waiting{background:var(--amber);box-shadow:0 0 8px var(--amber)}
-.s-dot.done{background:var(--blue)}
+.s-dot.waiting{background:#f4a4a4;box-shadow:0 0 8px #f4a4a4}
+.s-dot.question{background:#ffd58a;box-shadow:0 0 8px #ffd58a}
+.s-dot.done{background:#6fb982}
 .s-body{flex:1;min-width:0}
 .s-title{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .s-sub{font-weight:400;color:var(--ink-dim)}

@@ -1,6 +1,9 @@
 /* Live demo scene — wallpaper plate with a working notch. */
 
 .demo-scene {
+  /* width of the physical cutout; the pill's notch gap, the header gap and
+     the close tuck all follow it (narrower on phones so the wings fit) */
+  --notch-w: 190px;
   position: relative;
   min-height: 520px;
   border-radius: 26px;
@@ -35,7 +38,7 @@
 .demo-hw-notch {
   position: absolute; top: 0; left: 50%;
   transform: translateX(-50%);
-  width: 190px; height: 38px;
+  width: var(--notch-w); height: 38px;
   background: #000;
   border-radius: 0 0 12px 12px;
   z-index: 4;
@@ -45,34 +48,69 @@
 /* closed pill sits flush under the menu bar */
 .demo-pill {
   display: flex; justify-content: center;
+  transform-origin: top center;
   transition: opacity 0.05s ease-out, transform 0.32s cubic-bezier(0.33, 1.35, 0.5, 1);
 }
 .demo-anchor:hover .demo-pill { transform: scale(1.035); } /* closedHoverScale */
-.demo-scene[data-open='true'] .demo-pill {
+.demo-scene:not([data-phase='closed']) .demo-pill {
   opacity: 0;
   pointer-events: none;
-  transition-delay: 0s;
+  transition: none;
+}
+/* after a close has tucked into the hardware notch, the wings grow back
+   out of the cutout: spring(response .38, damping .82) */
+.demo-pill[data-emerge='true'] .nt-pill { animation: demo-wings-emerge 0.42s cubic-bezier(0.3, 1.12, 0.4, 1) both; }
+@keyframes demo-wings-emerge {
+  from { clip-path: inset(0 calc(50% - var(--notch-w) / 2 + 2px - var(--notch-shift, 0px)) 2px calc(50% - var(--notch-w) / 2 + 2px + var(--notch-shift, 0px)) round 0 0 12px 12px); }
+  to { clip-path: inset(-10px -10px -10px -10px round 0); }
 }
 
-/* opened panel morphs out of the notch: spring(response .5, damping .8) */
+/* opened panel: ONE surface that grows out of the pill (GrowingNotchShape,
+   openAnimation spring(response .42, damping .8)); content emerges with it
+   (easeOut .22 delay .07). Close tucks it into a rect a hair inside the
+   hardware notch (inset 2, bottom radius 12) before the wings re-emerge. */
 .demo-panel {
+  --clip-pill: inset(0 calc(50% - var(--pw, 300px) / 2 - var(--ps, 0px)) calc(100% - 38px) calc(50% - var(--pw, 300px) / 2 + var(--ps, 0px)) round 0 0 19px 19px);
+  --clip-notch: inset(0 calc(50% - var(--notch-w) / 2 + 2px) calc(100% - 36px) calc(50% - var(--notch-w) / 2 + 2px) round 0 0 12px 12px);
+  --clip-open: inset(0 -24px -70px -24px round 0 0 0 0);
   position: absolute; top: 0; left: 50%;
   width: 620px; max-width: calc(100vw - 48px);
-  transform: translateX(-50%) scale(0.42);
-  transform-origin: top center;
+  transform: translateX(-50%);
   opacity: 0;
   pointer-events: none;
-  transition:
-    transform 0.5s cubic-bezier(0.3, 1.18, 0.35, 1),
-    opacity 0.2s ease-out;
+  clip-path: var(--clip-notch);
 }
-.demo-scene[data-open='true'] .demo-panel {
-  transform: translateX(-50%) scale(1);
+.demo-scene[data-phase='opening'] .demo-panel {
+  opacity: 1;
+  clip-path: var(--clip-pill);
+  transition: none;
+}
+.demo-scene[data-phase='open'] .demo-panel {
   opacity: 1;
   pointer-events: auto;
-  transition:
-    transform 0.5s cubic-bezier(0.3, 1.18, 0.35, 1),
-    opacity 0.22s ease-out 0.07s;
+  clip-path: var(--clip-open);
+  transition: clip-path 0.52s cubic-bezier(0.32, 1.12, 0.36, 1);
+}
+/* stays visible while it tucks, then drops out as it settles on the notch */
+.demo-scene[data-phase='tucking'] .demo-panel {
+  opacity: 0;
+  clip-path: var(--clip-notch);
+  transition: clip-path 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.08s linear 0.36s;
+}
+/* content fades + scales 0.97 from the top edge with the expansion */
+.demo-panel .nt-header, .demo-panel .nt-tabbar, .demo-panel .nt-height {
+  opacity: 0; transform: scale(0.97); transform-origin: top center;
+  transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+.demo-scene[data-phase='open'] .demo-panel .nt-header,
+.demo-scene[data-phase='open'] .demo-panel .nt-tabbar,
+.demo-scene[data-phase='open'] .demo-panel .nt-height {
+  opacity: 1; transform: none;
+  transition: opacity 0.22s ease-out 0.07s, transform 0.22s ease-out 0.07s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .demo-scene .demo-panel { transition: opacity 0.15s linear !important; }
+  .demo-pill[data-emerge='true'] .nt-pill { animation: none; }
 }
 
 /* controls under the scene */
@@ -142,8 +180,14 @@
   min-width: 34px; font-variant-numeric: tabular-nums;
 }
 
+.demo-scene .nt-pill-notchgap, .demo-scene .nt-header-gap { width: var(--notch-w); }
 @media (max-width: 640px) {
-  .demo-scene { min-height: 520px; }
+  .demo-scene { min-height: 520px; --notch-w: 112px; }
+  /* compact-density-like wings so the widened pill fits a phone */
+  .demo-scene { --notch-w: 104px; }
+  .demo-scene .nt-live-text { max-width: 70px; }
+  .demo-scene .nt-pill-live.nt-pill-layout-notch { padding: 0 10px; }
+  .demo-scene .nt-pill-live .nt-wing-l { gap: 6px; }
   .demo-panel { max-width: calc(100vw - 32px); }
 }
 
@@ -187,7 +231,28 @@
 
 /* compact drag-catch panel: ONLY the drop surface (app: reason .drag
    presents fileDragTargetContent at ~104pt — no header, no tabs) */
-.demo-drop-panel { z-index: 6; }
+.demo-drop-panel {
+  position: absolute; top: 0; left: 50%; z-index: 6;
+  width: 620px; max-width: calc(100vw - 48px);
+  transform: translateX(-50%) scale(0.6); transform-origin: top center;
+  opacity: 0; pointer-events: none;
+}
+
+/* extra demo chips + keyboard hint */
+.demo-chip-q { background: rgba(255, 213, 138, 0.12); border-color: rgba(255, 213, 138, 0.38); color: #ffd58a; }
+.demo-chip-q:hover { background: rgba(255, 213, 138, 0.22); color: #ffe7bd; }
+.demo-chip-done { background: rgba(111, 185, 130, 0.13); border-color: rgba(111, 185, 130, 0.4); color: #8fd6a2; }
+.demo-chip-done:hover { background: rgba(111, 185, 130, 0.23); color: #bdebc9; }
+.demo-hint {
+  margin-top: 16px; text-align: center;
+  font-size: 12.5px; color: rgba(255, 255, 255, 0.42);
+}
+.demo-hint kbd {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  font-size: 11px; padding: 1px 6px; border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+}
 .demo-drop-panel .nt-island { width: 620px; max-width: 100%; }
 .demo-drop-panel .nt-ms-drop { min-height: 104px; }
 
