@@ -30,16 +30,17 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         }
     }
 
+    /// White glyph drawn on the colored tile, System Settings style.
     var icon: String {
         switch self {
         case .general:    "gearshape.fill"
-        case .setup:      "arrow.down.circle.fill"
-        case .appearance: "paintbrush.fill"
-        case .display:    "textformat.size"
-        case .sound:      "speaker.wave.2.fill"
+        case .setup:      "puzzlepiece.extension.fill"
+        case .appearance: "paintpalette.fill"
+        case .display:    "display"
+        case .sound:      "speaker.wave.3.fill"
         case .music:      "music.note"
-        case .updates:    "arrow.triangle.2.circlepath.circle.fill"
-        case .about:      "info.circle.fill"
+        case .updates:    "arrow.triangle.2.circlepath"
+        case .about:      "info"
         }
     }
 
@@ -47,11 +48,11 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general:    .gray
         case .setup:      .orange
-        case .appearance: .purple
+        case .appearance: .indigo
         case .display:    .blue
-        case .sound:      .green
+        case .sound:      .red
         case .music:      .pink
-        case .updates:    .green
+        case .updates:    .gray
         case .about:      .blue
         }
     }
@@ -68,15 +69,26 @@ enum SettingsSection: String, CaseIterable {
     case system
     case app
 
-    func header(_ lang: LanguageManager) -> String {
-        switch self {
-        case .system:   lang.t("settings.section.system")
-        case .app:      "NotchTune"
-        }
-    }
-
     var tabs: [SettingsTab] {
         SettingsTab.allCases.filter { $0.section == self }
+    }
+}
+
+/// The small colored rounded-square icon System Settings puts in front of
+/// every sidebar row.
+struct SettingsSidebarIcon: View {
+    let systemName: String
+    let color: Color
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 20, height: 20)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(color.gradient)
+            )
     }
 }
 
@@ -91,12 +103,11 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             sidebar
-                .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
+                .navigationSplitViewColumnWidth(215)
         } detail: {
             detailView
         }
-        .frame(minWidth: 680, idealWidth: 780, minHeight: 480, idealHeight: 560)
-        .preferredColorScheme(.dark)
+        .frame(minWidth: 715, idealWidth: 740, maxWidth: 780, minHeight: 480, idealHeight: 620)
         .onReceive(NotificationCenter.default.publisher(for: .notchTuneSelectSetupTab)) { _ in
             selectedTab = .setup
         }
@@ -112,14 +123,15 @@ struct SettingsView: View {
     @ViewBuilder
     private var sidebar: some View {
         List(selection: $selectedTab) {
+            // Groups are separated by spacing only, like System Settings —
+            // no header text that would repeat the panes' own titles.
             ForEach(SettingsSection.allCases, id: \.self) { section in
-                Section(section.header(lang)) {
+                Section {
                     ForEach(section.tabs) { tab in
                         Label {
                             Text(tab.label(lang))
                         } icon: {
-                            Image(systemName: tab.icon)
-                                .foregroundStyle(tab.iconColor)
+                            SettingsSidebarIcon(systemName: tab.icon, color: tab.iconColor)
                         }
                         .tag(tab)
                     }
@@ -133,26 +145,23 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var detailView: some View {
-        ZStack(alignment: .topTrailing) {
-            switch selectedTab {
-            case .general:
-                GeneralSettingsPane(model: model)
-            case .setup:
-                SetupSettingsPane(model: model)
-            case .appearance:
-                AppearanceSettingsPane(model: model)
-            case .display:
-                DisplaySettingsPane(model: model)
-            case .sound:
-                SoundSettingsPane(model: model)
-            case .music:
-                MusicSettingsPane(model: model)
-            case .updates:
-                UpdateSettingsPane(model: model)
-            case .about:
-                AboutSettingsPane(model: model)
-            }
-
+        switch selectedTab {
+        case .general:
+            GeneralSettingsPane(model: model)
+        case .setup:
+            SetupSettingsPane(model: model)
+        case .appearance:
+            AppearanceSettingsPane(model: model)
+        case .display:
+            DisplaySettingsPane(model: model)
+        case .sound:
+            SoundSettingsPane(model: model)
+        case .music:
+            MusicSettingsPane(model: model)
+        case .updates:
+            UpdateSettingsPane(model: model)
+        case .about:
+            AboutSettingsPane(model: model)
         }
     }
 }
@@ -166,7 +175,7 @@ struct GeneralSettingsPane: View {
 
     var body: some View {
         Form {
-            Section(lang.t("settings.section.system")) {
+            Section {
                 Toggle(lang.t("settings.general.launchAtLogin"), isOn: Binding(
                     get: { model.launchAtLoginEnabled },
                     set: { model.launchAtLoginEnabled = $0 }
@@ -183,25 +192,7 @@ struct GeneralSettingsPane: View {
                 }
             }
 
-            Section("Onboarding") {
-                Button("Re-run setup assistant") {
-                    model.showOnboarding()
-                }
-
-                if model.tour.isActive {
-                    Button("End guided tour") {
-                        model.tour.skip()
-                    }
-                } else {
-                    Button(model.onboardingTourOutcome == nil ? "Take the guided tour" : "Replay guided tour") {
-                        model.startOnboardingTour()
-                    }
-                    .disabled(model.isOverlayDisplayFullscreen)
-                }
-            }
-
             Section(lang.t("settings.general.behavior")) {
-                Toggle(lang.t("settings.general.autoCollapse"), isOn: .constant(true))
                 Toggle(lang.t("settings.general.hideDockIcon"), isOn: Binding(
                     get: { !model.showDockIcon },
                     set: { model.showDockIcon = !$0 }
@@ -234,17 +225,35 @@ struct GeneralSettingsPane: View {
                 }
             }
 
-            Section("Getting Started") {
-                Button {
-                    model.showOnboarding()
+            Section(lang.t("settings.general.gettingStarted")) {
+                LabeledContent {
+                    Button(lang.t("settings.general.open")) {
+                        model.showOnboarding()
+                    }
                 } label: {
-                    Label("Open onboarding", systemImage: "sparkles")
+                    Text(lang.t("settings.general.setupAssistant"))
+                    Text(lang.t("settings.general.setupAssistant.note"))
                 }
-                Text("Review AI setup, permissions, and your Liquid Glass style.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
 
+                LabeledContent {
+                    if model.tour.isActive {
+                        Button(lang.t("settings.general.tour.end")) {
+                            model.tour.skip()
+                        }
+                    } else {
+                        Button(model.onboardingTourOutcome == nil
+                            ? lang.t("settings.general.tour.start")
+                            : lang.t("settings.general.tour.replay")
+                        ) {
+                            model.startOnboardingTour()
+                        }
+                        .disabled(model.isOverlayDisplayFullscreen)
+                    }
+                } label: {
+                    Text(lang.t("settings.general.tour"))
+                    Text(lang.t("settings.general.tour.note"))
+                }
+            }
         }
         .formStyle(.grouped)
         .navigationTitle(lang.t("settings.tab.general"))
@@ -260,7 +269,7 @@ struct DisplaySettingsPane: View {
 
     var body: some View {
         Form {
-            Section(lang.t("settings.display.monitor")) {
+            Section {
                 Picker(lang.t("settings.display.position"), selection: Binding(
                     get: { model.overlayDisplaySelectionID },
                     set: { model.overlayDisplaySelectionID = $0 }
@@ -270,6 +279,11 @@ struct DisplaySettingsPane: View {
                         Text(option.title).tag(option.id)
                     }
                 }
+            } header: {
+                Text(lang.t("settings.display.monitor"))
+            } footer: {
+                Text(lang.t("settings.display.position.footer"))
+                    .settingsFooterStyle()
             }
 
             if let diag = model.overlay.overlayPlacementDiagnostics {
@@ -303,79 +317,56 @@ struct SoundSettingsPane: View {
                     get: { model.isSoundMuted },
                     set: { _ in model.toggleSoundMuted() }
                 ))
-            }
 
-            Section(lang.t("settings.sound.selectSound")) {
-                List {
-                    Section(header: Text(lang.t("settings.sound.systemSounds"))) {
-                        ForEach(availableSounds, id: \.self) { name in
-                            Button {
-                                model.selectedSoundName = name
-                                NotificationSoundService.play(name)
-                            } label: {
-                                HStack {
-                                    Text(name)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    if name == model.selectedSoundName {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(.blue)
-                                            .fontWeight(.semibold)
-                                    }
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    Section(header: Text(lang.t("settings.sound.customSounds"))) {
-                        if customSounds.isEmpty {
-                            Text(lang.t("settings.sound.noCustomSounds"))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .italic()
-                                .padding(.vertical, 4)
-                        } else {
-                            ForEach(customSounds, id: \.self) { filename in
-                                HStack {
-                                    Button {
-                                        model.selectedSoundName = filename
-                                        NotificationSoundService.play(filename)
-                                    } label: {
-                                        HStack {
-                                            Text(cleanFilename(filename))
-                                                .foregroundStyle(.primary)
-                                            Spacer()
-                                            if filename == model.selectedSoundName {
-                                                Image(systemName: "checkmark")
-                                                    .foregroundStyle(.blue)
-                                                    .fontWeight(.semibold)
-                                            }
-                                        }
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-
-                                    Button {
-                                        deleteSound(filename)
-                                    } label: {
-                                        Image(systemName: "trash")
-                                            .foregroundStyle(.red)
-                                    }
-                                    .buttonStyle(.borderless)
-                                }
-                            }
-                        }
-                    }
+                soundPickerRow(
+                    title: lang.t("settings.sound.selectSound"),
+                    selection: Binding(
+                        get: { model.selectedSoundName },
+                        set: { model.selectedSoundName = $0; NotificationSoundService.play($0) }
+                    ),
+                    previewHelp: lang.t("settings.sound.preview")
+                ) {
+                    NotificationSoundService.play(model.selectedSoundName)
                 }
-                .frame(minHeight: 300)
             }
 
             Section {
-                Button(action: selectCustomSoundFile) {
-                    Label(lang.t("settings.sound.addCustomSound"), systemImage: "plus")
+                if customSounds.isEmpty {
+                    Text(lang.t("settings.sound.noCustomSounds"))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(customSounds, id: \.self) { filename in
+                        LabeledContent(cleanFilename(filename)) {
+                            HStack(spacing: 12) {
+                                Button {
+                                    NotificationSoundService.play(filename)
+                                } label: {
+                                    Image(systemName: "play.fill")
+                                }
+                                .buttonStyle(.borderless)
+                                .help(lang.t("settings.sound.preview"))
+
+                                Button(role: .destructive) {
+                                    deleteSound(filename)
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
+                                .help(lang.t("settings.sound.delete"))
+                            }
+                        }
+                    }
                 }
+
+                HStack {
+                    Spacer()
+                    Button(lang.t("settings.sound.addCustomSound"), action: selectCustomSoundFile)
+                }
+            } header: {
+                Text(lang.t("settings.sound.customSounds"))
+            } footer: {
+                Text(lang.t("settings.sound.customSounds.footer"))
+                    .settingsFooterStyle()
             }
 
             nudgeSection
@@ -387,9 +378,46 @@ struct SoundSettingsPane: View {
         }
     }
 
+    /// A menu of every system + custom sound with a trailing preview button.
+    /// Choosing a sound plays it, like System Settings' alert-sound menu.
+    @ViewBuilder
+    private func soundPickerRow(
+        title: String,
+        selection: Binding<String>,
+        previewHelp: String,
+        preview: @escaping () -> Void
+    ) -> some View {
+        LabeledContent(title) {
+            HStack(spacing: 8) {
+                Picker(title, selection: selection) {
+                    Section(lang.t("settings.sound.systemSounds")) {
+                        ForEach(availableSounds, id: \.self) { name in
+                            Text(name).tag(name)
+                        }
+                    }
+                    if !customSounds.isEmpty {
+                        Section(lang.t("settings.sound.customSounds")) {
+                            ForEach(customSounds, id: \.self) { filename in
+                                Text(cleanFilename(filename)).tag(filename)
+                            }
+                        }
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+
+                Button(action: preview) {
+                    Image(systemName: "play.fill")
+                }
+                .buttonStyle(.borderless)
+                .help(previewHelp)
+            }
+        }
+    }
+
     @ViewBuilder
     private var nudgeSection: some View {
-        Section("Idle Session Nudge") {
+        Section {
             Toggle("Nudge me about sessions I haven't answered", isOn: Binding(
                 get: { model.nudgeSettings.isEnabled },
                 set: { model.nudgeSettings.isEnabled = $0 }
@@ -405,32 +433,22 @@ struct SoundSettingsPane: View {
             }
             .disabled(!model.nudgeSettings.isEnabled)
 
-            HStack {
-                Picker("Nudge sound", selection: Binding(
+            soundPickerRow(
+                title: "Nudge sound",
+                selection: Binding(
                     get: { model.selectedNudgeSoundName },
                     set: { model.selectedNudgeSoundName = $0; NotificationSoundService.play($0) }
-                )) {
-                    ForEach(availableSounds, id: \.self) { name in
-                        Text(name).tag(name)
-                    }
-                    ForEach(customSounds, id: \.self) { filename in
-                        Text(cleanFilename(filename)).tag(filename)
-                    }
-                }
-
-                Button {
-                    NotificationSoundService.play(model.selectedNudgeSoundName)
-                } label: {
-                    Image(systemName: "play.circle")
-                }
-                .buttonStyle(.borderless)
-                .help("Preview nudge sound")
+                ),
+                previewHelp: "Preview nudge sound"
+            ) {
+                NotificationSoundService.play(model.selectedNudgeSoundName)
             }
             .disabled(!model.nudgeSettings.isEnabled)
-
+        } header: {
+            Text("Idle Session Nudge")
+        } footer: {
             Text("When a session waits for you longer than the chosen time, the island's character jumps once and the nudge sound plays. The nudge sound shares the custom sounds added above.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .settingsFooterStyle()
         }
     }
 
@@ -515,24 +533,23 @@ struct UpdateSettingsPane: View {
             }
 
             Section {
-                Button {
-                    model.updateChecker.checkForUpdates()
+                LabeledContent {
+                    Button(lang.t("settings.updates.checkNow")) {
+                        model.updateChecker.checkForUpdates()
+                    }
+                    .disabled(!model.updateChecker.canCheckForUpdates)
                 } label: {
-                    Label(
-                        lang.t("settings.updates.checkForUpdates"),
-                        systemImage: "arrow.triangle.2.circlepath"
-                    )
+                    Text(lang.t("settings.updates.checkRow"))
+                    Text(lang.t("settings.updates.automaticDetail"))
                 }
-                .disabled(!model.updateChecker.canCheckForUpdates)
 
-                Link(destination: UpdateChecker.releasesURL) {
-                    Label(
-                        lang.t("settings.updates.releaseNotes"),
-                        systemImage: "safari"
-                    )
+                LabeledContent {
+                    Button(lang.t("settings.updates.releaseNotes")) {
+                        NSWorkspace.shared.open(UpdateChecker.releasesURL)
+                    }
+                } label: {
+                    Text(lang.t("settings.updates.releaseNotesRow"))
                 }
-            } footer: {
-                Text(lang.t("settings.updates.automaticDetail"))
             }
         }
         .formStyle(.grouped)
@@ -546,134 +563,102 @@ struct AboutSettingsPane: View {
     var model: AppModel
 
     private var lang: LanguageManager { model.lang }
-    private let primaryInk = Color.white.opacity(0.94)
+
+    private var versionLine: String? {
+        guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String else {
+            return nil
+        }
+        return lang.t("settings.about.version", version)
+    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 8) {
-                Image(nsImage: NSApplication.shared.applicationIconImage)
-                    .resizable()
-                    .frame(width: 56, height: 56)
+        Form {
+            Section {
+                VStack(spacing: 6) {
+                    Image(nsImage: NSApplication.shared.applicationIconImage)
+                        .resizable()
+                        .frame(width: 72, height: 72)
 
-                Text(lang.t("app.name"))
-                    .font(.title.bold())
+                    Text(lang.t("app.name"))
+                        .font(.title2.weight(.semibold))
 
-                Text("(originally Open Island)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text(lang.t("app.description"))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
 
-                Text(lang.t("app.description"))
-                    .foregroundStyle(.secondary)
+                    if let versionLine {
+                        Text(versionLine)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
 
-                if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
-                    Text(lang.t("settings.about.version", version))
+                    Text("Originally Open Island")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
             }
-            .padding(.top, 24)
-            .padding(.bottom, 20)
 
-            Divider()
+            Section("Credits") {
+                creditLinkRow(
+                    title: "View NotchTune source",
+                    subtitle: "Open source on GitHub",
+                    url: "https://github.com/dw2lam/NotchTune"
+                )
 
-            Form {
-                Section("Credits") {
-                    creditLinkRow(
-                        title: "View NotchTune source",
-                        subtitle: "Open source on GitHub",
-                        url: "https://github.com/dw2lam/NotchTune"
-                    )
+                creditLinkRow(
+                    title: "Forked from Open Vibe Island",
+                    subtitle: "Octane0411/open-vibe-island",
+                    url: "https://github.com/Octane0411/open-vibe-island"
+                )
 
-                    creditLinkRow(
-                        title: "Forked from Open Vibe Island",
-                        subtitle: "Octane0411/open-vibe-island",
-                        url: "https://github.com/Octane0411/open-vibe-island"
-                    )
+                creditLinkRow(
+                    title: "Music foundation from Tuneful",
+                    subtitle: "martinfekete10/Tuneful",
+                    url: "https://github.com/martinfekete10/Tuneful"
+                )
 
-                    creditLinkRow(
-                        title: "Music foundation from Tuneful",
-                        subtitle: "martinfekete10/Tuneful",
-                        url: "https://github.com/martinfekete10/Tuneful"
-                    )
+                creditLinkRow(
+                    title: "Created by David",
+                    subtitle: "dw2lam",
+                    url: "https://github.com/dw2lam"
+                )
+            }
 
-                    creditLinkRow(
-                        title: "Created by David",
-                        subtitle: "dw2lam",
-                        url: "https://github.com/dw2lam"
-                    )
-                }
-
-                Section {
-                    aboutActionRow(
-                        title: lang.t("settings.about.quitApp"),
-                        systemImage: "rectangle.portrait.and.arrow.right",
-                        tint: Color(red: 1.0, green: 0.29, blue: 0.29),
-                        action: {
-                            model.quitApplication()
-                        }
-                    )
+            Section {
+                LabeledContent {
+                    Button(lang.t("settings.about.quit"), role: .destructive) {
+                        model.quitApplication()
+                    }
                     .accessibilityIdentifier("settings.about.quitApp")
+                } label: {
+                    Text(lang.t("settings.about.quitApp"))
+                    Text(lang.t("settings.about.quitApp.note"))
                 }
             }
-            .formStyle(.grouped)
-
-            Spacer()
         }
-        .frame(maxWidth: .infinity)
+        .formStyle(.grouped)
         .navigationTitle(lang.t("settings.tab.about"))
     }
 
+    /// A credit row that opens its page in the browser: title + secondary
+    /// line on the left, a trailing "open externally" arrow.
     private func creditLinkRow(
         title: String,
         subtitle: String,
         url: String
     ) -> some View {
         Link(destination: URL(string: url)!) {
-            HStack(spacing: 10) {
-                Image(systemName: "link")
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(width: 18, alignment: .leading)
-                    .foregroundStyle(.blue)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(primaryInk)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Image(systemName: "arrow.up.forward")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.vertical, 2)
-            .contentShape(Rectangle())
-        }
-    }
-
-    private func aboutActionRow(
-        title: String,
-        systemImage: String,
-        tint: Color,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(width: 18, alignment: .leading)
-
+            LabeledContent {
+                Image(systemName: "arrow.up.forward.app")
+                    .foregroundStyle(.secondary)
+            } label: {
                 Text(title)
-                    .font(.system(size: 11.5, weight: .semibold))
-
-                Spacer()
+                    .foregroundStyle(.primary)
+                Text(subtitle)
             }
-            .foregroundStyle(tint)
-            .padding(.vertical, 2)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -706,9 +691,7 @@ struct SetupSettingsPane: View {
                 emptyStateBanner
             }
 
-            claudeConfigDirectorySection
-
-            Section(lang.t("setup.section.hooks")) {
+            Section {
                 hookRow(
                     name: "Claude Code",
                     installed: model.claudeHooksInstalled,
@@ -898,21 +881,39 @@ struct SetupSettingsPane: View {
                     Text("This will remove NotchTune hooks from ~/.kimi/config.toml.")
                 }
 
+                HStack {
+                    Spacer()
+                    Button(lang.t("setup.installAll")) {
+                        if !model.claudeHooksInstalled { model.installClaudeHooks() }
+                        if !model.codexHooksInstalled { model.installCodexHooks() }
+                        if !model.openCodePluginInstalled { model.installOpenCodePlugin() }
+                        if !model.qoderHooksInstalled { model.installQoderHooks() }
+                        if !model.qwenCodeHooksInstalled { model.installQwenCodeHooks() }
+                        if !model.factoryHooksInstalled { model.installFactoryHooks() }
+                        if !model.codebuddyHooksInstalled { model.installCodebuddyHooks() }
+                        if !model.cursorHooksInstalled { model.installCursorHooks() }
+                        if !model.geminiHooksInstalled { model.installGeminiHooks() }
+                        if !model.antigravityHooksInstalled { model.installAntigravityHooks() }
+                        if !model.kimiHooksInstalled { model.installKimiHooks() }
+                        if !model.claudeUsageInstalled { model.installClaudeUsageBridge() }
+                    }
+                    .disabled(model.hooksBinaryURL == nil || allReady)
+                }
+            } header: {
+                Text(lang.t("setup.section.hooks"))
+            } footer: {
+                Text(lang.t("setup.section.hooks.footer"))
+                    .settingsFooterStyle()
             }
 
             Section {
-                HStack {
-                    Label(lang.t("setup.usageBridge"), systemImage: "chart.bar")
-                    Spacer()
+                LabeledContent {
                     if model.claudeUsageInstalled {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                            Text(lang.t("setup.usageBridgeReady"))
-                                .foregroundStyle(.secondary)
-                        }
-                        Button(lang.t("settings.general.uninstall")) {
-                            confirmingUninstallClaudeUsage = true
+                        HStack(spacing: 10) {
+                            statusBadge(lang.t("setup.usageBridgeReady"))
+                            Button(lang.t("settings.general.uninstall")) {
+                                confirmingUninstallClaudeUsage = true
+                            }
                         }
                     } else if model.isClaudeUsageSetupBusy {
                         ProgressView().controlSize(.small)
@@ -921,6 +922,9 @@ struct SetupSettingsPane: View {
                             model.installClaudeUsageBridge()
                         }
                     }
+                } label: {
+                    Text(lang.t("setup.usageBridge"))
+                    Text(lang.t("setup.usageBridgeDesc"))
                 }
                 .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallClaudeUsage) {
                     Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
@@ -936,51 +940,30 @@ struct SetupSettingsPane: View {
                     set: { model.showCodexUsage = $0 }
                 ))
             } header: {
-                HStack(spacing: 4) {
-                    Text(lang.t("setup.section.usage"))
-                    Text(lang.t("setup.optional"))
-                        .foregroundStyle(.tertiary)
-                }
+                Text(lang.t("setup.section.usage"))
+            } footer: {
+                Text(lang.t("setup.section.usage.footer"))
+                    .settingsFooterStyle()
             }
 
+            claudeConfigDirectorySection
+
             Section(lang.t("setup.section.permissions")) {
-                HStack(alignment: .top) {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(lang.t("setup.permissionsTitle"))
-                            Text(lang.t("setup.permissionsDesc"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                LabeledContent {
+                    Button(lang.t("setup.permissions.open")) {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                            NSWorkspace.shared.open(url)
                         }
-                    } icon: {
-                        Image(systemName: "lock.shield")
                     }
-                    Spacer()
+                } label: {
+                    Text(lang.t("setup.permissionsTitle"))
+                    Text(lang.t("setup.permissionsDesc"))
                 }
             }
 
             hookDiagnosticsSection
 
             RemoteConnectionSection(model: model)
-
-            Section {
-                Button(lang.t("setup.installAll")) {
-                    if !model.claudeHooksInstalled { model.installClaudeHooks() }
-                    if !model.codexHooksInstalled { model.installCodexHooks() }
-                    if !model.openCodePluginInstalled { model.installOpenCodePlugin() }
-                    if !model.qoderHooksInstalled { model.installQoderHooks() }
-                    if !model.qwenCodeHooksInstalled { model.installQwenCodeHooks() }
-                    if !model.factoryHooksInstalled { model.installFactoryHooks() }
-                    if !model.codebuddyHooksInstalled { model.installCodebuddyHooks() }
-                    if !model.cursorHooksInstalled { model.installCursorHooks() }
-                    if !model.geminiHooksInstalled { model.installGeminiHooks() }
-                    if !model.antigravityHooksInstalled { model.installAntigravityHooks() }
-                    if !model.kimiHooksInstalled { model.installKimiHooks() }
-                    if !model.claudeUsageInstalled { model.installClaudeUsageBridge() }
-                }
-                .disabled(model.hooksBinaryURL == nil || allReady)
-                .frame(maxWidth: .infinity, alignment: .center)
-            }
         }
         .formStyle(.grouped)
         .navigationTitle(lang.t("settings.tab.setup"))
@@ -989,48 +972,36 @@ struct SetupSettingsPane: View {
     @ViewBuilder
     private var claudeConfigDirectorySection: some View {
         Section {
-            HStack {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(lang.t("setup.claudeConfigDir.title"))
-                        Text(ClaudeConfigDirectory.resolved().path)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+            LabeledContent {
+                HStack(spacing: 8) {
+                    if ClaudeConfigDirectory.customDirectory != nil {
+                        Button(lang.t("setup.claudeConfigDir.reset")) {
+                            model.updateClaudeConfigDirectory(to: nil)
+                        }
                     }
-                } icon: {
-                    Image(systemName: "folder")
-                }
-                Spacer()
-                if ClaudeConfigDirectory.customDirectory != nil {
-                    Button(lang.t("setup.claudeConfigDir.reset")) {
-                        model.updateClaudeConfigDirectory(to: nil)
-                    }
-                    .font(.caption)
-                }
-                Button(lang.t("setup.claudeConfigDir.choose")) {
-                    let panel = NSOpenPanel()
-                    panel.canChooseDirectories = true
-                    panel.canChooseFiles = false
-                    panel.canCreateDirectories = true
-                    panel.showsHiddenFiles = true
-                    panel.prompt = lang.t("setup.claudeConfigDir.choose")
-                    if panel.runModal() == .OK, let url = panel.url {
-                        model.updateClaudeConfigDirectory(to: url)
+                    Button(lang.t("setup.claudeConfigDir.choose")) {
+                        let panel = NSOpenPanel()
+                        panel.canChooseDirectories = true
+                        panel.canChooseFiles = false
+                        panel.canCreateDirectories = true
+                        panel.showsHiddenFiles = true
+                        panel.prompt = lang.t("setup.claudeConfigDir.choose")
+                        if panel.runModal() == .OK, let url = panel.url {
+                            model.updateClaudeConfigDirectory(to: url)
+                        }
                     }
                 }
+            } label: {
+                Text(lang.t("setup.claudeConfigDir.title"))
+                Text(ClaudeConfigDirectory.resolved().path)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
         } header: {
-            HStack(spacing: 4) {
-                Text(lang.t("setup.claudeConfigDir.section"))
-                Text(lang.t("setup.optional"))
-                    .foregroundStyle(.tertiary)
-            }
+            Text(lang.t("setup.claudeConfigDir.section"))
         } footer: {
             Text(lang.t("setup.claudeConfigDir.footer"))
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .settingsFooterStyle()
         }
     }
 
@@ -1043,25 +1014,25 @@ struct SetupSettingsPane: View {
     @ViewBuilder
     private var emptyStateBanner: some View {
         Section {
-            HStack(alignment: .top, spacing: 12) {
+            Label {
+                Text(lang.t("setup.banner.noHooks.title"))
+                Text(lang.t("setup.banner.noHooks.message"))
+            } icon: {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.tint)
-                    .frame(width: 28)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(lang.t("setup.banner.noHooks.title"))
-                        .font(.system(size: 13, weight: .semibold))
-                    Text(lang.t("setup.banner.noHooks.message"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer()
             }
-            .padding(.vertical, 4)
         }
+    }
+
+    private func statusBadge(_ text: String) -> some View {
+        Label {
+            Text(text)
+                .foregroundStyle(.secondary)
+        } icon: {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        }
+        .labelStyle(.titleAndIcon)
     }
 
     private var codexHookConfigURL: URL? {
@@ -1101,7 +1072,7 @@ struct SetupSettingsPane: View {
 
     @ViewBuilder
     private var hookDiagnosticsSection: some View {
-        Section {
+        Section(lang.t("setup.section.diagnostics")) {
             if let claudeReport = model.claudeHealthReport, !claudeReport.issues.isEmpty {
                 issueList(report: claudeReport)
             }
@@ -1110,46 +1081,44 @@ struct SetupSettingsPane: View {
             }
 
             if model.claudeHealthReport == nil && model.codexHealthReport == nil {
-                HStack {
-                    Text(lang.t("setup.diagnostics.notRun"))
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                LabeledContent(lang.t("setup.diagnostics.notRun")) {
                     Button(lang.t("setup.diagnostics.runCheck")) {
                         model.runHealthChecks()
                     }
                 }
             } else if !hasErrors {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text(lang.t("setup.diagnostics.allHealthy"))
-                    Spacer()
+                LabeledContent {
                     Button(lang.t("setup.diagnostics.recheck")) {
                         model.runHealthChecks()
                     }
-                    .font(.caption)
+                } label: {
+                    Label {
+                        Text(lang.t("setup.diagnostics.allHealthy"))
+                    } icon: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
                 }
             } else {
-                HStack(spacing: 10) {
-                    Button(lang.t("setup.diagnostics.recheck")) {
-                        model.runHealthChecks()
-                    }
-
-                    if hasRepairableIssues {
-                        Button(lang.t("setup.diagnostics.repair")) {
-                            model.repairHooks()
+                LabeledContent {
+                    HStack(spacing: 8) {
+                        Button(lang.t("setup.diagnostics.recheck")) {
+                            model.runHealthChecks()
                         }
-                        .buttonStyle(.borderedProminent)
+                        if hasRepairableIssues {
+                            Button(lang.t("setup.diagnostics.repair")) {
+                                model.repairHooks()
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
                     }
-                }
-            }
-        } header: {
-            HStack(spacing: 4) {
-                Text(lang.t("setup.section.diagnostics"))
-                if hasErrors {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                        .font(.caption2)
+                } label: {
+                    Label {
+                        Text(lang.t("setup.diagnostics.issuesFound"))
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
         }
@@ -1159,28 +1128,24 @@ struct SetupSettingsPane: View {
     private func issueList(report: HookHealthReport) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(report.agent == "claude" ? "Claude Code" : "Codex")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+                .font(.headline)
 
             ForEach(Array(report.issues.enumerated()), id: \.offset) { _, issue in
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: issueIcon(for: issue))
-                        .font(.caption2)
-                        .foregroundStyle(issueColor(for: issue))
-                        .frame(width: 14)
-
+                Label {
                     Text(issue.description)
-                        .font(.caption)
                         .foregroundStyle(issue.severity == .info ? .secondary : .primary)
                         .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: issueIcon(for: issue))
+                        .foregroundStyle(issueColor(for: issue))
                 }
             }
 
             if let binaryPath = report.binaryPath {
                 Text("Binary: \(binaryPath)")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
         }
     }
@@ -1209,32 +1174,22 @@ struct SetupSettingsPane: View {
         installAction: @escaping () -> Void,
         uninstallAction: @escaping () -> Void
     ) -> some View {
-        HStack {
-            Label(name, systemImage: "terminal")
-            Spacer()
+        LabeledContent(name) {
             if installed {
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
+                    statusBadge(lang.t("settings.general.activated"))
                     if let configLocationURL {
                         Button {
                             revealInFinder(configLocationURL)
                         } label: {
-                            Image(systemName: "arrow.up.forward.square")
-                                .foregroundStyle(.secondary)
+                            Image(systemName: "folder")
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.borderless)
                         .help(lang.t("setup.revealConfigLocation"))
-                    }
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        Text(lang.t("settings.general.activated"))
-                            .foregroundStyle(.secondary)
                     }
                     Button(lang.t("settings.general.uninstall")) {
                         uninstallAction()
                     }
-                    .foregroundStyle(.red)
-                    .font(.caption)
                 }
             } else if busy {
                 ProgressView().controlSize(.small)
@@ -1285,8 +1240,7 @@ struct MusicSettingsPane: View {
                 Text("Music Player")
             } footer: {
                 Text("NotchTune will only connect to the selected app. Choose None to disable music controls entirely.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .settingsFooterStyle()
             }
         }
         .formStyle(.grouped)
@@ -1347,96 +1301,63 @@ struct RemoteConnectionSection: View {
 
     var body: some View {
         Section {
-            VStack(alignment: .leading, spacing: 12) {
-                // Status
-                HStack {
-                    Label("SSH Remote", systemImage: "network")
-                    Spacer()
-                    if remoteSessionCount > 0 {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(.green)
-                                .frame(width: 7, height: 7)
-                            Text("\(remoteSessionCount) active")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        Text("No remote sessions")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+            LabeledContent {
+                if remoteSessionCount > 0 {
+                    Label {
+                        Text("\(remoteSessionCount) active")
+                            .foregroundStyle(.secondary)
+                    } icon: {
+                        Image(systemName: "circle.fill")
+                            .font(.system(size: 7))
+                            .foregroundStyle(.green)
                     }
+                } else {
+                    Text("No remote sessions")
+                        .foregroundStyle(.secondary)
                 }
-
+            } label: {
+                Text("SSH remote")
                 Text("Monitor Claude Code running on remote servers via SSH.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            }
 
-                // Step 1
-                remoteSetupStep(
-                    number: "1",
-                    title: "Deploy hooks to remote server",
-                    description: "Run from the NotchTune repo directory:",
-                    command: setupCommand
-                )
+            remoteSetupStep(
+                title: "1. Deploy hooks to the remote server",
+                description: "Run from the NotchTune repo directory:",
+                command: setupCommand
+            )
 
-                // Step 2
+            VStack(alignment: .leading, spacing: 10) {
                 remoteSetupStep(
-                    number: "2",
-                    title: "Connect with socket forwarding",
+                    title: "2. Connect with socket forwarding",
                     description: "Add to ~/.ssh/config (recommended):",
                     command: sshConfigSnippet,
                     multiline: true
                 )
 
-                // Step 2 alternative
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Or connect directly:")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.tertiary)
-                    copyableCommand(sshCommand)
-                }
-
-                // Tip
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.blue.opacity(0.8))
-                        .padding(.top, 1)
-                    Text("The remote sshd needs `StreamLocalBindUnlink yes` in /etc/ssh/sshd_config for reliable reconnects.")
-                        .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
+                    copyableCommand(sshCommand)
                 }
             }
         } header: {
-            HStack(spacing: 4) {
-                Text("Remote")
-                Text("Beta")
-                    .foregroundStyle(.tertiary)
-            }
+            Text("Remote (Beta)")
+        } footer: {
+            Text("The remote sshd needs `StreamLocalBindUnlink yes` in /etc/ssh/sshd_config for reliable reconnects.")
+                .settingsFooterStyle()
         }
     }
 
     @ViewBuilder
     private func remoteSetupStep(
-        number: String,
         title: String,
         description: String,
         command: String,
         multiline: Bool = false
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(number)
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(width: 16, height: 16)
-                    .background(Circle().fill(.blue.opacity(0.7)))
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-            }
+            Text(title)
             Text(description)
-                .font(.system(size: 10.5))
                 .foregroundStyle(.secondary)
             copyableCommand(command, multiline: multiline)
         }
@@ -1448,7 +1369,7 @@ struct RemoteConnectionSection: View {
         GroupBox {
             HStack(alignment: multiline ? .top : .center) {
                 Text(command)
-                    .font(.system(size: 10.5, design: .monospaced))
+                    .font(.system(.callout, design: .monospaced))
                     .foregroundStyle(.primary)
                     .lineLimit(multiline ? nil : 1)
                     .truncationMode(.middle)
@@ -1465,12 +1386,30 @@ struct RemoteConnectionSection: View {
                     }
                 } label: {
                     Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 10))
-                        .foregroundStyle(isCopied ? .green : .secondary)
+                        .foregroundStyle(isCopied ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
+                .help("Copy")
             }
             .padding(.vertical, multiline ? 2 : 0)
         }
+    }
+}
+
+// MARK: - Footer style
+
+extension View {
+    /// Section footers the way System Settings sets them: small secondary
+    /// text, leading-aligned under the section (a macOS grouped `Form`
+    /// otherwise right-aligns footer content).
+    func settingsFooterStyle() -> some View {
+        self
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // Line up with the rows' content inset, not the card edge.
+            .padding(.horizontal, 10)
     }
 }
