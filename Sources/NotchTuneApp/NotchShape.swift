@@ -32,18 +32,26 @@ struct GrowingNotchShape: Shape {
 
     /// Progress + the compact geometry, so switching the compact target
     /// (pill ↔ hardware notch) animates instead of jumping.
-    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, AnimatablePair<CGFloat, CGFloat>> {
+    var animatableData: AnimatablePair<
+        AnimatablePair<CGFloat, CGFloat>,
+        AnimatablePair<AnimatablePair<CGFloat, CGFloat>, AnimatablePair<CGFloat, CGFloat>>
+    > {
         get {
             AnimatablePair(
                 AnimatablePair(progress, compactW),
-                AnimatablePair(compactLeftWingWidth, compactR)
+                AnimatablePair(
+                    AnimatablePair(compactLeftWingWidth, compactR),
+                    AnimatablePair(compactH, compactEarRadius)
+                )
             )
         }
         set {
             progress = newValue.first.first
             compactW = newValue.first.second
-            compactLeftWingWidth = newValue.second.first
-            compactR = newValue.second.second
+            compactLeftWingWidth = newValue.second.first.first
+            compactR = newValue.second.first.second
+            compactH = newValue.second.second.first
+            compactEarRadius = newValue.second.second.second
         }
     }
 

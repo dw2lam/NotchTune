@@ -76,9 +76,11 @@ extension AgentSession {
 // Open: the whole surface (background, outline, ears) grows out of the pill as
 // one shape on a soft spring with a whisper of overshoot.
 private let openAnimation  = Animation.spring(response: 0.42, dampingFraction: 0.8)
-// Close: critically damped, so the panel melts back into the pill without a
-// bounce at the end.
-private let closeAnimation = Animation.spring(response: 0.4, dampingFraction: 1.0)
+// Close: a fixed-length ease-in-out that lands EXACTLY on the notch at 0.4s
+// (a spring's long settling tail left the corners peeking out beside the
+// cutout just as the wings started to re-emerge).
+private let closeAnimationDuration: TimeInterval = 0.4
+private let closeAnimation = Animation.timingCurve(0.4, 0, 0.2, 1, duration: closeAnimationDuration)
 private let popAnimation   = Animation.spring(response: 0.35, dampingFraction: 0.65)
 private let openedSurfaceUnmountDelay: TimeInterval = 0.42
 
@@ -584,7 +586,7 @@ struct IslandPanelView: View {
                                 ? .easeOut(duration: 0.05)
                                 // Comes back as the tuck into the notch
                                 // settles, just before the wings emerge.
-                                : .easeOut(duration: 0.18).delay(0.3),
+                                : .easeOut(duration: 0.16).delay(0.34),
                             value: usesOpenedVisualState
                         )
                         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.isPeeking)
@@ -600,13 +602,13 @@ struct IslandPanelView: View {
                     musicNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
                     morphProgress: morphProgress,
                     compactW: morphCompact.width,
-                    compactH: closedNotchHeight,
+                    compactH: morphCompact.height,
                     expandedW: openedWidth,
                     expandedH: openedHeight,
                     compactR: morphCompact.radius,
                     compactLeftWingWidth: morphCompact.leftWing,
                     compactNotchGapWidth: morphCompact.notchGap,
-                    compactEarRadius: closedEarRadius,
+                    compactEarRadius: morphCompact.ear,
                     expandedEarRadius: openedEarRadius
                 ))
             }
@@ -863,14 +865,14 @@ struct IslandPanelView: View {
         GrowingNotchShape(
             progress: morphProgress,
             compactW: morphCompact.width,
-            compactH: closedNotchHeight,
+            compactH: morphCompact.height,
             expandedW: openedWidth,
             expandedH: openedHeight,
             compactR: morphCompact.radius,
             expandedR: OpenedIslandSurfaceShape.openedBottomRadius,
             compactLeftWingWidth: morphCompact.leftWing,
             compactNotchGapWidth: morphCompact.notchGap,
-            compactEarRadius: closedEarRadius,
+            compactEarRadius: morphCompact.ear,
             expandedEarRadius: openedEarRadius,
             topOverscan: Self.surfaceTopOverscan
         )
@@ -885,25 +887,43 @@ struct IslandPanelView: View {
         case hardwareNotch
     }
 
-    /// Bottom corner radius of the hardware notch the close tucks into.
-    private static let hardwareNotchBottomRadius: CGFloat = 10
+    /// The close tucks into a rect a hair INSIDE the hardware notch (and
+    /// with rounder corners than it) so no edge, corner or ear is left
+    /// peeking out beside the cutout at the end of the animation.
+    private static let hardwareNotchTuckInset: CGFloat = 2
+    private static let hardwareNotchTuckBottomRadius: CGFloat = 12
 
     /// When the wings start growing back out after a close tucks in: just
     /// as the close spring settles onto the notch.
-    private static let wingsEmergeDelay: TimeInterval = 0.4
+    private static let wingsEmergeDelay: TimeInterval = closeAnimationDuration + 0.03
     private static let wingsEmergeAnimation = Animation.spring(response: 0.38, dampingFraction: 0.82)
 
     /// Compact geometry for the current target. External displays have no
     /// hardware notch, so they always use the pill.
-    private var morphCompact: (width: CGFloat, leftWing: CGFloat, notchGap: CGFloat, radius: CGFloat) {
+    private var morphCompact: (
+        width: CGFloat, height: CGFloat, leftWing: CGFloat, notchGap: CGFloat, radius: CGFloat, ear: CGFloat
+    ) {
         if morphCompactTarget == .hardwareNotch, !isExternalDisplayPlacement {
-            return (macbookPhysicalNotchWidth, 0, macbookPhysicalNotchWidth, Self.hardwareNotchBottomRadius)
+            let inset = Self.hardwareNotchTuckInset
+            // leftWing = -inset keeps the notch gap centred on the cutout
+            // (gap stays the full notch width) while the body is 2·inset
+            // narrower; ears go to zero so nothing flares past the notch.
+            return (
+                macbookPhysicalNotchWidth - inset * 2,
+                closedNotchHeight - inset,
+                -inset,
+                macbookPhysicalNotchWidth,
+                Self.hardwareNotchTuckBottomRadius,
+                0
+            )
         }
         return (
             closedSurfaceClipWidth,
+            closedNotchHeight,
             compactClipLeftWingWidth,
             isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
-            closedNotchHeight / 2
+            closedNotchHeight / 2,
+            closedEarRadius
         )
     }
 
