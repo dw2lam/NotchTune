@@ -1,5 +1,5 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
-import { AGENT_TINTS, AGENT_NAMES } from './AgentsTab';
+import { useState, type ReactNode } from 'react';
+import { AGENT_NAMES, AgentTag } from './AgentsTab';
 import { ChevronIcon, CheckIcon, JumpIcon, ReplyIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 
 /* ============================================================
@@ -18,7 +18,7 @@ export function KeyHint({ keys }: { keys: string }) {
   return <span className="nt-khint" aria-hidden="true">{keys}</span>;
 }
 
-/** Title + "You:" line + lowercase agent badge, terminal, age, chevron. */
+/** Title + "You:" line + flat agent tag, terminal and age pills, chevron. */
 export function NotificationSessionHeader({ title, prompt, agent, terminal, age }: {
   title: string; prompt?: string; agent: string; terminal?: string; age: string;
 }) {
@@ -29,11 +29,10 @@ export function NotificationSessionHeader({ title, prompt, agent, terminal, age 
         {prompt && <div className="nt-nrow-prompt">You: {prompt}</div>}
       </div>
       <div className="nt-nrow-side">
-        <span className="nt-badge nt-badge-agent" style={{ '--agent': AGENT_TINTS[agent] ?? '#d97742' } as CSSProperties}>
-          {agent}
-        </span>
-        {terminal && <span className="nt-badge nt-badge-term">{terminal}</span>}
-        <span className="nt-age">{age}</span>
+        {/* Same flat tags as the session list (the app unified them). */}
+        <AgentTag agent={agent} />
+        {terminal && <span className="nt-lpill">{terminal}</span>}
+        <span className="nt-lpill nt-lpill-age">{age}</span>
         <span className="nt-gdisc nt-chev" aria-hidden="true"><ChevronIcon /></span>
       </div>
     </div>
