@@ -86,3 +86,29 @@ struct NotificationSurfaceMetricsTests {
         #expect(NotificationSurfaceMetrics.maxContentHeight(screenHeight: 300, notchHeight: 40, phase: .completed) == 72)
     }
 }
+
+struct CompletionPreviewTextBoundTests {
+    /// A multi-kilobyte reply, as agents routinely send.
+    private static let longReply: String = (1...400)
+        .map { "- **Step \($0)**: updated `File\($0).swift` and [the docs](https://example.com/\($0))" }
+        .joined(separator: "\n")
+
+    @Test
+    func flattensOnlyTheHeadOfALongReply() {
+        // Previews show a line or three, yet this runs from view bodies (the
+        // finished live-activity subtitle resolves it many times per render),
+        // so the work must not grow with the reply.
+        let preview = CompletionPreviewText.plain(Self.longReply)
+        #expect(preview.count <= 2_000)
+        #expect(preview.hasPrefix("Step 1: updated File1.swift and the docs Step 2:"))
+    }
+
+    @Test
+    func cutsALongReplyOnALineBoundary() {
+        let preview = CompletionPreviewText.plain(Self.longReply)
+        // The last step kept is whole: no half-stripped link or code span.
+        #expect(preview.hasSuffix("and the docs"))
+        #expect(!preview.contains("]("))
+        #expect(!preview.contains("`"))
+    }
+}

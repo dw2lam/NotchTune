@@ -4,8 +4,15 @@ import Foundation
 /// preview for the completion toast. Not a Markdown parser — it strips the
 /// syntax that would otherwise show up as noise in a three-line excerpt.
 enum CompletionPreviewText {
+    /// Longest stretch of the source that gets flattened. Every preview shows
+    /// a line or three, yet this runs from view bodies (the finished
+    /// live-activity subtitle is resolved many times per render) and each
+    /// regex pass below is linear in the input, so a long reply must not
+    /// cost more than its visible head.
+    nonisolated static let maxSourceLength = 2_000
+
     nonisolated static func plain(_ markdown: String) -> String {
-        var text = markdown.replacingOccurrences(of: "\r\n", with: "\n")
+        var text = head(of: markdown).replacingOccurrences(of: "\r\n", with: "\n")
 
         // Fenced code: drop the fence lines, keep the code itself.
         text = text.replacingOccurrences(
@@ -71,5 +78,24 @@ enum CompletionPreviewText {
             options: .regularExpression
         )
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The first `maxSourceLength` characters, cut back to the last line break
+    /// in the second half of that window so no Markdown line (link, code span,
+    /// table row) is split.
+    nonisolated private static func head(of markdown: String) -> String {
+        guard let limit = markdown.index(
+            markdown.startIndex,
+            offsetBy: maxSourceLength,
+            limitedBy: markdown.endIndex
+        ), limit < markdown.endIndex else {
+            return markdown
+        }
+        let window = markdown[..<limit]
+        if let lineBreak = window.lastIndex(where: \.isNewline),
+           window.distance(from: window.startIndex, to: lineBreak) >= maxSourceLength / 2 {
+            return String(window[..<lineBreak])
+        }
+        return String(window)
     }
 }
