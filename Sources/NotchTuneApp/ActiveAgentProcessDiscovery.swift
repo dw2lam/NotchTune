@@ -751,6 +751,7 @@ struct ActiveAgentProcessDiscovery {
 
         do {
             try process.run()
+            MonitorInstrumentation.recordSpawn(executablePath: executablePath)
         } catch {
             return nil
         }

@@ -64,40 +64,53 @@ final class ProcessMonitoringCoordinator {
             }
 
             while !Task.isCancelled {
-                let discovery = self.activeAgentProcessDiscovery
-                let probe = self.terminalSessionAttachmentProbe
-                let resolver = self.terminalJumpTargetResolver
-                let liveSessions = self.state.sessions.filter(\.isTrackedLiveSession)
-                let (snapshots, ghosttyAvail, terminalAvail, jumpTargets) = await Task.detached(
-                    priority: .utility
-                ) { () -> (
-                    [ActiveProcessSnapshot],
-                    TerminalSessionAttachmentProbe.SnapshotAvailability<TerminalSessionAttachmentProbe.GhosttyTerminalSnapshot>?,
-                    TerminalSessionAttachmentProbe.SnapshotAvailability<TerminalSessionAttachmentProbe.TerminalTabSnapshot>?,
-                    [String: JumpTarget]
-                ) in
-                    let s = discovery.discover()
-                    // Idle guard: with no tracked live sessions and no agent
-                    // processes on the system there is nothing to attach —
-                    // skip the AppleScript terminal snapshots entirely (they
-                    // wake Ghostty/Terminal.app on every 2s cycle otherwise).
-                    guard !liveSessions.isEmpty || !s.isEmpty else {
-                        return (s, nil, nil, [:])
-                    }
-                    let g = probe.ghosttySnapshotAvailability()
-                    let t = probe.terminalSnapshotAvailability()
-                    let j = resolver.resolveJumpTargets(for: liveSessions, activeProcesses: s)
-                    return (s, g, t, j)
-                }.value
-                self.reconcileSessionAttachments(
-                    activeProcesses: snapshots,
-                    ghosttyAvailability: ghosttyAvail,
-                    terminalAvailability: terminalAvail,
-                    preResolvedJumpTargets: jumpTargets
-                )
+                await self.runMonitorTick()
                 try? await Task.sleep(for: .seconds(2))
             }
         }
+    }
+
+    /// Stops the background monitor loop (used by benchmarks and teardown).
+    func stopMonitoring() {
+        sessionAttachmentMonitorTask?.cancel()
+        sessionAttachmentMonitorTask = nil
+    }
+
+    /// One pass of the background monitor: discover agent processes and
+    /// terminal snapshots off the main actor, then reconcile on it.
+    func runMonitorTick() async {
+        let discovery = self.activeAgentProcessDiscovery
+        let probe = self.terminalSessionAttachmentProbe
+        let resolver = self.terminalJumpTargetResolver
+        let liveSessions = self.state.sessions.filter(\.isTrackedLiveSession)
+        let (snapshots, ghosttyAvail, terminalAvail, jumpTargets) = await Task.detached(
+            priority: .utility
+        ) { () -> (
+            [ActiveProcessSnapshot],
+            TerminalSessionAttachmentProbe.SnapshotAvailability<TerminalSessionAttachmentProbe.GhosttyTerminalSnapshot>?,
+            TerminalSessionAttachmentProbe.SnapshotAvailability<TerminalSessionAttachmentProbe.TerminalTabSnapshot>?,
+            [String: JumpTarget]
+        ) in
+            let s = discovery.discover()
+            // Idle guard: with no tracked live sessions and no agent
+            // processes on the system there is nothing to attach —
+            // skip the AppleScript terminal snapshots entirely (they
+            // wake Ghostty/Terminal.app on every 2s cycle otherwise).
+            guard !liveSessions.isEmpty || !s.isEmpty else {
+                return (s, nil, nil, [:])
+            }
+            let g = probe.ghosttySnapshotAvailability()
+            let t = probe.terminalSnapshotAvailability()
+            let j = resolver.resolveJumpTargets(for: liveSessions, activeProcesses: s)
+            return (s, g, t, j)
+        }.value
+        MonitorInstrumentation.recordTick(full: ghosttyAvail != nil)
+        self.reconcileSessionAttachments(
+            activeProcesses: snapshots,
+            ghosttyAvailability: ghosttyAvail,
+            terminalAvailability: terminalAvail,
+            preResolvedJumpTargets: jumpTargets
+        )
     }
 
     // MARK: - Reconciliation

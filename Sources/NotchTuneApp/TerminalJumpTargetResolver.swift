@@ -356,6 +356,7 @@ struct TerminalJumpTargetResolver {
         whichTask.standardOutput = pipe
         whichTask.standardError = FileHandle.nullDevice
         if let _ = try? whichTask.run() {
+            MonitorInstrumentation.recordSpawn(executablePath: "/usr/bin/which")
             whichTask.waitUntilExit()
             if whichTask.terminationStatus == 0 {
                 let path = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
@@ -384,6 +385,7 @@ struct TerminalJumpTargetResolver {
 
         do {
             try task.run()
+            MonitorInstrumentation.recordSpawn(executablePath: tmuxPath)
         } catch {
             return nil
         }
@@ -604,6 +606,7 @@ struct TerminalJumpTargetResolver {
         whichTask.standardOutput = pipe
         whichTask.standardError = FileHandle.nullDevice
         if let _ = try? whichTask.run() {
+            MonitorInstrumentation.recordSpawn(executablePath: "/usr/bin/which")
             whichTask.waitUntilExit()
             if whichTask.terminationStatus == 0 {
                 let path = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
@@ -636,6 +639,7 @@ struct TerminalJumpTargetResolver {
 
         do {
             try task.run()
+            MonitorInstrumentation.recordSpawn(executablePath: cliPath)
         } catch {
             return nil
         }
@@ -823,6 +827,8 @@ struct TerminalJumpTargetResolver {
         }
 
         try task.run()
+        MonitorInstrumentation.recordSpawn(executablePath: "/usr/bin/osascript")
+        MonitorInstrumentation.recordAppleScript(target: TerminalSessionAttachmentProbe.appleScriptTarget(of: script))
         let waitResult = completionGroup.wait(timeout: .now() + Self.appleScriptTimeout)
         if waitResult == .timedOut {
             task.terminate()

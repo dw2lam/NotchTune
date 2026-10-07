@@ -1299,6 +1299,14 @@ struct TerminalSessionAttachmentProbe {
         NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).isEmpty == false
     }
 
+    static func appleScriptTarget(of script: String) -> String {
+        guard let range = script.range(of: "tell application \"") else {
+            return "unknown"
+        }
+        let rest = script[range.upperBound...]
+        return String(rest.prefix { $0 != "\"" })
+    }
+
     private func runAppleScript(_ script: String) throws -> String {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -1315,6 +1323,8 @@ struct TerminalSessionAttachmentProbe {
         }
 
         try task.run()
+        MonitorInstrumentation.recordSpawn(executablePath: "/usr/bin/osascript")
+        MonitorInstrumentation.recordAppleScript(target: Self.appleScriptTarget(of: script))
         let waitResult = completionGroup.wait(timeout: .now() + Self.appleScriptTimeout)
         if waitResult == .timedOut {
             task.terminate()
