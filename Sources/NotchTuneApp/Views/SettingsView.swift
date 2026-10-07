@@ -30,7 +30,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// White glyph drawn on the colored tile, System Settings style.
+    /// White glyph drawn on the colored tile.
     var icon: String {
         switch self {
         case .general:    "gearshape.fill"
@@ -74,24 +74,6 @@ enum SettingsSection: String, CaseIterable {
     }
 }
 
-/// The small colored rounded-square icon System Settings puts in front of
-/// every sidebar row.
-struct SettingsSidebarIcon: View {
-    let systemName: String
-    let color: Color
-
-    var body: some View {
-        Image(systemName: systemName)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 20, height: 20)
-            .background(
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(color.gradient)
-            )
-    }
-}
-
 // MARK: - Root settings view
 
 struct SettingsView: View {
@@ -103,11 +85,11 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             sidebar
-                .navigationSplitViewColumnWidth(215)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
         } detail: {
             detailView
         }
-        .frame(minWidth: 715, idealWidth: 740, maxWidth: 780, minHeight: 480, idealHeight: 620)
+        .frame(minWidth: 780, idealWidth: 860, maxWidth: 1240, minHeight: 540, idealHeight: 640)
         .onReceive(NotificationCenter.default.publisher(for: .notchTuneSelectSetupTab)) { _ in
             selectedTab = .setup
         }
@@ -123,16 +105,18 @@ struct SettingsView: View {
     @ViewBuilder
     private var sidebar: some View {
         List(selection: $selectedTab) {
-            // Groups are separated by spacing only, like System Settings —
-            // no header text that would repeat the panes' own titles.
+            // Groups are separated by spacing only — no header text that
+            // would repeat the panes' own titles.
             ForEach(SettingsSection.allCases, id: \.self) { section in
                 Section {
                     ForEach(section.tabs) { tab in
                         Label {
                             Text(tab.label(lang))
+                                .font(.system(size: 13.5))
                         } icon: {
-                            SettingsSidebarIcon(systemName: tab.icon, color: tab.iconColor)
+                            SettingsIconTile(systemName: tab.icon, color: tab.iconColor)
                         }
+                        .padding(.vertical, 3)
                         .tag(tab)
                     }
                 }
@@ -174,14 +158,21 @@ struct GeneralSettingsPane: View {
     private var lang: LanguageManager { model.lang }
 
     var body: some View {
-        Form {
-            Section {
-                Toggle(lang.t("settings.general.launchAtLogin"), isOn: Binding(
+        SettingsPane(
+            title: lang.t("settings.tab.general"),
+            subtitle: lang.t("settings.hero.general"),
+            systemImage: SettingsTab.general.icon,
+            color: SettingsTab.general.iconColor
+        ) {
+            SettingsCard(title: lang.t("settings.general.startup")) {
+                SettingsToggleRow(lang.t("settings.general.launchAtLogin"), isOn: Binding(
                     get: { model.launchAtLoginEnabled },
                     set: { model.launchAtLoginEnabled = $0 }
                 ))
 
-                Picker(lang.t("settings.general.monitor"), selection: Binding(
+                SettingsRowDivider()
+
+                SettingsPickerRow(lang.t("settings.general.monitor"), selection: Binding(
                     get: { model.overlayDisplaySelectionID },
                     set: { model.overlayDisplaySelectionID = $0 }
                 )) {
@@ -192,50 +183,70 @@ struct GeneralSettingsPane: View {
                 }
             }
 
-            Section(lang.t("settings.general.behavior")) {
-                Toggle(lang.t("settings.general.hideDockIcon"), isOn: Binding(
+            SettingsCard(title: lang.t("settings.general.behavior")) {
+                SettingsToggleRow(lang.t("settings.general.hideDockIcon"), isOn: Binding(
                     get: { !model.showDockIcon },
                     set: { model.showDockIcon = !$0 }
                 ))
-                Toggle(lang.t("settings.general.hapticFeedback"), isOn: Binding(
+
+                SettingsRowDivider()
+
+                SettingsToggleRow(lang.t("settings.general.hapticFeedback"), isOn: Binding(
                     get: { model.hapticFeedbackEnabled },
                     set: { model.hapticFeedbackEnabled = $0 }
                 ))
-                Toggle(lang.t("settings.general.completionReply"), isOn: Binding(
+
+                SettingsRowDivider()
+
+                SettingsToggleRow(lang.t("settings.general.completionReply"), isOn: Binding(
                     get: { model.completionReplyEnabled },
                     set: { model.completionReplyEnabled = $0 }
                 ))
-                Picker(selection: Binding(
-                    get: { model.hoverOpenMode },
-                    set: { model.hoverOpenMode = $0 }
-                )) {
+
+                SettingsRowDivider()
+
+                SettingsPickerRow(
+                    lang.t("settings.general.hoverOpen"),
+                    subtitle: lang.t("settings.general.hoverOpen.note"),
+                    selection: Binding(
+                        get: { model.hoverOpenMode },
+                        set: { model.hoverOpenMode = $0 }
+                    ),
+                    style: .segmentedBelow
+                ) {
                     ForEach(HoverOpenMode.allCases) { mode in
                         Text(lang.t("settings.general.hoverOpen.\(mode.rawValue)")).tag(mode)
                     }
-                } label: {
-                    Text(lang.t("settings.general.hoverOpen"))
-                    Text(lang.t("settings.general.hoverOpen.note"))
                 }
-                Toggle(isOn: Binding(
-                    get: { model.suppressFrontmostNotifications },
-                    set: { model.suppressFrontmostNotifications = $0 }
-                )) {
-                    Text(lang.t("settings.general.suppressFrontmostNotifications"))
-                    Text(lang.t("settings.general.suppressFrontmostNotifications.note"))
-                }
+
+                SettingsRowDivider()
+
+                SettingsToggleRow(
+                    lang.t("settings.general.suppressFrontmostNotifications"),
+                    subtitle: lang.t("settings.general.suppressFrontmostNotifications.note"),
+                    isOn: Binding(
+                        get: { model.suppressFrontmostNotifications },
+                        set: { model.suppressFrontmostNotifications = $0 }
+                    )
+                )
             }
 
-            Section(lang.t("settings.general.gettingStarted")) {
-                LabeledContent {
+            SettingsCard(title: lang.t("settings.general.gettingStarted")) {
+                SettingsRow(
+                    lang.t("settings.general.setupAssistant"),
+                    subtitle: lang.t("settings.general.setupAssistant.note")
+                ) {
                     Button(lang.t("settings.general.open")) {
                         model.showOnboarding()
                     }
-                } label: {
-                    Text(lang.t("settings.general.setupAssistant"))
-                    Text(lang.t("settings.general.setupAssistant.note"))
                 }
 
-                LabeledContent {
+                SettingsRowDivider()
+
+                SettingsRow(
+                    lang.t("settings.general.tour"),
+                    subtitle: lang.t("settings.general.tour.note")
+                ) {
                     if model.tour.isActive {
                         Button(lang.t("settings.general.tour.end")) {
                             model.tour.skip()
@@ -249,14 +260,9 @@ struct GeneralSettingsPane: View {
                         }
                         .disabled(model.isOverlayDisplayFullscreen)
                     }
-                } label: {
-                    Text(lang.t("settings.general.tour"))
-                    Text(lang.t("settings.general.tour.note"))
                 }
             }
         }
-        .formStyle(.grouped)
-        .navigationTitle(lang.t("settings.tab.general"))
     }
 }
 
@@ -268,33 +274,85 @@ struct DisplaySettingsPane: View {
     private var lang: LanguageManager { model.lang }
 
     var body: some View {
-        Form {
-            Section {
-                Picker(lang.t("settings.display.position"), selection: Binding(
-                    get: { model.overlayDisplaySelectionID },
-                    set: { model.overlayDisplaySelectionID = $0 }
-                )) {
-                    Text(lang.t("settings.general.automatic")).tag(OverlayDisplayOption.automaticID)
-                    ForEach(model.overlayDisplayOptions) { option in
-                        Text(option.title).tag(option.id)
+        SettingsPane(
+            title: lang.t("settings.tab.display"),
+            subtitle: lang.t("settings.hero.display"),
+            systemImage: SettingsTab.display.icon,
+            color: SettingsTab.display.iconColor
+        ) {
+            SettingsCard(
+                title: lang.t("settings.display.monitor"),
+                footer: lang.t("settings.display.position.footer")
+            ) {
+                SettingsStackedRow(lang.t("settings.display.position")) {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 12, alignment: .top)],
+                        alignment: .leading,
+                        spacing: 14
+                    ) {
+                        displayTile(
+                            id: OverlayDisplayOption.automaticID,
+                            title: lang.t("settings.general.automatic"),
+                            subtitle: nil,
+                            systemImage: "sparkles"
+                        )
+                        ForEach(model.overlayDisplayOptions) { option in
+                            displayTile(
+                                id: option.id,
+                                title: option.title,
+                                subtitle: option.subtitle,
+                                systemImage: Self.symbol(forDisplayNamed: option.title, subtitle: option.subtitle)
+                            )
+                        }
                     }
                 }
-            } header: {
-                Text(lang.t("settings.display.monitor"))
-            } footer: {
-                Text(lang.t("settings.display.position.footer"))
-                    .settingsFooterStyle()
             }
 
             if let diag = model.overlay.overlayPlacementDiagnostics {
-                Section(lang.t("settings.display.diagnostics")) {
-                    LabeledContent(lang.t("settings.display.currentScreen"), value: diag.targetScreenName)
-                    LabeledContent(lang.t("settings.display.layoutMode"), value: diag.modeDescription)
+                SettingsCard(title: lang.t("settings.display.diagnostics")) {
+                    SettingsRow(lang.t("settings.display.currentScreen")) {
+                        Text(diag.targetScreenName)
+                            .font(SettingsMetrics.rowTitleFont)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+
+                    SettingsRowDivider()
+
+                    SettingsRow(lang.t("settings.display.layoutMode")) {
+                        Text(diag.modeDescription)
+                            .font(SettingsMetrics.rowTitleFont)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
-        .formStyle(.grouped)
-        .navigationTitle(lang.t("settings.tab.display"))
+    }
+
+    /// One display choice: a big symbol on a neutral tile, the display's
+    /// name and kind underneath.
+    private func displayTile(id: String, title: String, subtitle: String?, systemImage: String) -> some View {
+        let isSelected = model.overlayDisplaySelectionID == id
+        return SettingsTile(
+            title: title,
+            subtitle: subtitle,
+            isSelected: isSelected,
+            thumbnailHeight: 76,
+            background: .neutral
+        ) {
+            model.overlayDisplaySelectionID = id
+        } thumbnail: {
+            Image(systemName: systemImage)
+                .font(.system(size: 30, weight: .regular))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+        }
+    }
+
+    /// The built-in panel draws as a laptop, anything else as a display.
+    private static func symbol(forDisplayNamed name: String, subtitle: String) -> String {
+        let text = (name + " " + subtitle).lowercased()
+        return text.contains("built-in") || text.contains("notch") ? "laptopcomputer" : "display"
     }
 }
 
@@ -311,12 +369,19 @@ struct SoundSettingsPane: View {
     }
 
     var body: some View {
-        Form {
-            Section(lang.t("settings.sound.notifications")) {
-                Toggle(lang.t("settings.sound.mute"), isOn: Binding(
+        SettingsPane(
+            title: lang.t("settings.tab.sound"),
+            subtitle: lang.t("settings.hero.sound"),
+            systemImage: SettingsTab.sound.icon,
+            color: SettingsTab.sound.iconColor
+        ) {
+            SettingsCard(title: lang.t("settings.sound.notifications")) {
+                SettingsToggleRow(lang.t("settings.sound.mute"), isOn: Binding(
                     get: { model.isSoundMuted },
                     set: { _ in model.toggleSoundMuted() }
                 ))
+
+                SettingsRowDivider()
 
                 soundPickerRow(
                     title: lang.t("settings.sound.selectSound"),
@@ -330,49 +395,52 @@ struct SoundSettingsPane: View {
                 }
             }
 
-            Section {
+            SettingsCard(
+                title: lang.t("settings.sound.customSounds"),
+                footer: lang.t("settings.sound.customSounds.footer")
+            ) {
+                Button(lang.t("settings.sound.addCustomSound"), action: selectCustomSoundFile)
+            } content: {
                 if customSounds.isEmpty {
-                    Text(lang.t("settings.sound.noCustomSounds"))
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 12) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                        Text(lang.t("settings.sound.noCustomSounds"))
+                            .font(SettingsMetrics.rowTitleFont)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: SettingsMetrics.rowMinHeight, alignment: .leading)
+                    .padding(.vertical, 6)
                 } else {
-                    ForEach(customSounds, id: \.self) { filename in
-                        LabeledContent(cleanFilename(filename)) {
-                            HStack(spacing: 12) {
-                                Button {
+                    ForEach(Array(customSounds.enumerated()), id: \.element) { index, filename in
+                        if index > 0 {
+                            SettingsRowDivider()
+                        }
+                        SettingsRow(cleanFilename(filename)) {
+                            HStack(spacing: 8) {
+                                SettingsIconButton(
+                                    systemName: "play.fill",
+                                    help: lang.t("settings.sound.preview")
+                                ) {
                                     NotificationSoundService.play(filename)
-                                } label: {
-                                    Image(systemName: "play.fill")
                                 }
-                                .buttonStyle(.borderless)
-                                .help(lang.t("settings.sound.preview"))
-
-                                Button(role: .destructive) {
+                                SettingsIconButton(
+                                    systemName: "trash",
+                                    help: lang.t("settings.sound.delete"),
+                                    tint: .red,
+                                    role: .destructive
+                                ) {
                                     deleteSound(filename)
-                                } label: {
-                                    Image(systemName: "trash")
                                 }
-                                .buttonStyle(.borderless)
-                                .help(lang.t("settings.sound.delete"))
                             }
                         }
                     }
                 }
-
-                HStack {
-                    Spacer()
-                    Button(lang.t("settings.sound.addCustomSound"), action: selectCustomSoundFile)
-                }
-            } header: {
-                Text(lang.t("settings.sound.customSounds"))
-            } footer: {
-                Text(lang.t("settings.sound.customSounds.footer"))
-                    .settingsFooterStyle()
             }
 
-            nudgeSection
+            nudgeCard
         }
-        .formStyle(.grouped)
-        .navigationTitle(lang.t("settings.tab.sound"))
         .onAppear {
             loadCustomSounds()
         }
@@ -387,8 +455,8 @@ struct SoundSettingsPane: View {
         previewHelp: String,
         preview: @escaping () -> Void
     ) -> some View {
-        LabeledContent(title) {
-            HStack(spacing: 8) {
+        SettingsRow(title) {
+            HStack(spacing: 10) {
                 Picker(title, selection: selection) {
                     Section(lang.t("settings.sound.systemSounds")) {
                         ForEach(availableSounds, id: \.self) { name in
@@ -406,24 +474,24 @@ struct SoundSettingsPane: View {
                 .labelsHidden()
                 .fixedSize()
 
-                Button(action: preview) {
-                    Image(systemName: "play.fill")
-                }
-                .buttonStyle(.borderless)
-                .help(previewHelp)
+                SettingsIconButton(systemName: "play.fill", help: previewHelp, action: preview)
             }
         }
     }
 
-    @ViewBuilder
-    private var nudgeSection: some View {
-        Section {
-            Toggle("Nudge me about sessions I haven't answered", isOn: Binding(
+    private var nudgeCard: some View {
+        SettingsCard(
+            title: "Idle Session Nudge",
+            footer: "When a session waits for you longer than the chosen time, the island's character jumps once and the nudge sound plays. The nudge sound shares the custom sounds added above."
+        ) {
+            SettingsToggleRow("Nudge me about sessions I haven't answered", isOn: Binding(
                 get: { model.nudgeSettings.isEnabled },
                 set: { model.nudgeSettings.isEnabled = $0 }
             ))
 
-            Picker("Nudge after", selection: Binding(
+            SettingsRowDivider()
+
+            SettingsPickerRow("Nudge after", selection: Binding(
                 get: { model.nudgeSettings.threshold },
                 set: { model.nudgeSettings.threshold = $0 }
             )) {
@@ -432,6 +500,8 @@ struct SoundSettingsPane: View {
                 }
             }
             .disabled(!model.nudgeSettings.isEnabled)
+
+            SettingsRowDivider()
 
             soundPickerRow(
                 title: "Nudge sound",
@@ -444,11 +514,6 @@ struct SoundSettingsPane: View {
                 NotificationSoundService.play(model.selectedNudgeSoundName)
             }
             .disabled(!model.nudgeSettings.isEnabled)
-        } header: {
-            Text("Idle Session Nudge")
-        } footer: {
-            Text("When a session waits for you longer than the chosen time, the island's character jumps once and the nudge sound plays. The nudge sound shares the custom sounds added above.")
-                .settingsFooterStyle()
         }
     }
 
@@ -512,48 +577,63 @@ struct UpdateSettingsPane: View {
     }
 
     var body: some View {
-        Form {
-            Section(lang.t("settings.updates.softwareUpdate")) {
-                LabeledContent(
-                    lang.t("settings.updates.currentVersion"),
-                    value: currentVersion
-                )
-                LabeledContent(
-                    lang.t("settings.updates.build"),
-                    value: currentBuild
-                )
+        SettingsPane(
+            title: lang.t("settings.tab.updates"),
+            subtitle: lang.t("settings.hero.updates"),
+            systemImage: SettingsTab.updates.icon,
+            color: SettingsTab.updates.iconColor
+        ) {
+            SettingsCard(title: lang.t("settings.updates.softwareUpdate")) {
+                versionRow(lang.t("settings.updates.currentVersion"), value: currentVersion)
+
+                SettingsRowDivider()
+
+                versionRow(lang.t("settings.updates.build"), value: currentBuild)
 
                 if model.updateChecker.hasUpdate,
                    let latestVersion = model.updateChecker.latestVersion {
-                    LabeledContent(
-                        lang.t("settings.updates.availableVersion"),
-                        value: latestVersion
-                    )
+                    SettingsRowDivider()
+
+                    SettingsRow(lang.t("settings.updates.availableVersion")) {
+                        SettingsStatusBadge(
+                            text: latestVersion,
+                            systemImage: "arrow.down.circle.fill",
+                            color: .blue
+                        )
+                    }
                 }
             }
 
-            Section {
-                LabeledContent {
+            SettingsCard {
+                SettingsRow(
+                    lang.t("settings.updates.checkRow"),
+                    subtitle: lang.t("settings.updates.automaticDetail")
+                ) {
                     Button(lang.t("settings.updates.checkNow")) {
                         model.updateChecker.checkForUpdates()
                     }
                     .disabled(!model.updateChecker.canCheckForUpdates)
-                } label: {
-                    Text(lang.t("settings.updates.checkRow"))
-                    Text(lang.t("settings.updates.automaticDetail"))
                 }
 
-                LabeledContent {
+                SettingsRowDivider()
+
+                SettingsRow(lang.t("settings.updates.releaseNotesRow")) {
                     Button(lang.t("settings.updates.releaseNotes")) {
                         NSWorkspace.shared.open(UpdateChecker.releasesURL)
                     }
-                } label: {
-                    Text(lang.t("settings.updates.releaseNotesRow"))
                 }
             }
         }
-        .formStyle(.grouped)
-        .navigationTitle(lang.t("settings.tab.updates"))
+    }
+
+    private func versionRow(_ title: String, value: String) -> some View {
+        SettingsRow(title) {
+            Text(value)
+                .font(SettingsMetrics.rowTitleFont)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+        }
     }
 }
 
@@ -572,92 +652,138 @@ struct AboutSettingsPane: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                VStack(spacing: 6) {
-                    Image(nsImage: NSApplication.shared.applicationIconImage)
-                        .resizable()
-                        .frame(width: 72, height: 72)
-
-                    Text(lang.t("app.name"))
-                        .font(.title2.weight(.semibold))
-
-                    Text(lang.t("app.description"))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-
-                    if let versionLine {
-                        Text(versionLine)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-
-                    Text("Originally Open Island")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-            }
-
-            Section("Credits") {
+        SettingsPane(title: lang.t("settings.tab.about")) {
+            aboutHero
+        } content: {
+            SettingsCard(title: "Credits") {
                 creditLinkRow(
                     title: "View NotchTune source",
                     subtitle: "Open source on GitHub",
+                    systemImage: "chevron.left.forwardslash.chevron.right",
+                    color: .indigo,
                     url: "https://github.com/dw2lam/NotchTune"
                 )
+
+                SettingsRowDivider()
 
                 creditLinkRow(
                     title: "Forked from Open Vibe Island",
                     subtitle: "Octane0411/open-vibe-island",
+                    systemImage: "arrow.triangle.branch",
+                    color: .teal,
                     url: "https://github.com/Octane0411/open-vibe-island"
                 )
+
+                SettingsRowDivider()
 
                 creditLinkRow(
                     title: "Music foundation from Tuneful",
                     subtitle: "martinfekete10/Tuneful",
+                    systemImage: "music.note",
+                    color: .pink,
                     url: "https://github.com/martinfekete10/Tuneful"
                 )
+
+                SettingsRowDivider()
 
                 creditLinkRow(
                     title: "Created by David",
                     subtitle: "dw2lam",
+                    systemImage: "person.fill",
+                    color: .orange,
                     url: "https://github.com/dw2lam"
                 )
             }
 
-            Section {
-                LabeledContent {
+            SettingsCard {
+                SettingsRow(
+                    lang.t("settings.about.quitApp"),
+                    subtitle: lang.t("settings.about.quitApp.note")
+                ) {
                     Button(lang.t("settings.about.quit"), role: .destructive) {
                         model.quitApplication()
                     }
                     .accessibilityIdentifier("settings.about.quitApp")
-                } label: {
-                    Text(lang.t("settings.about.quitApp"))
-                    Text(lang.t("settings.about.quitApp.note"))
                 }
             }
         }
-        .formStyle(.grouped)
-        .navigationTitle(lang.t("settings.tab.about"))
     }
 
-    /// A credit row that opens its page in the browser: title + secondary
-    /// line on the left, a trailing "open externally" arrow.
+    /// The app's identity in place of a pane icon: the real app icon,
+    /// name, one-line description and version, on a softly lit card.
+    private var aboutHero: some View {
+        VStack(spacing: 8) {
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 104, height: 104)
+                .shadow(color: .black.opacity(0.22), radius: 14, y: 8)
+                .padding(.bottom, 4)
+
+            Text(lang.t("app.name"))
+                .font(.title.weight(.bold))
+
+            Text(lang.t("app.description"))
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let versionLine {
+                Text(versionLine)
+                    .font(.system(size: 12, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.primary.opacity(0.06), in: Capsule())
+                    .padding(.top, 2)
+            }
+
+            Text("Originally Open Island")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 30)
+        .padding(.horizontal, 24)
+        .background {
+            ZStack {
+                SettingsCardBackground()
+                RadialGradient(
+                    colors: [Color.accentColor.opacity(0.16), Color.accentColor.opacity(0)],
+                    center: .top,
+                    startRadius: 0,
+                    endRadius: 260
+                )
+                .clipShape(RoundedRectangle(cornerRadius: SettingsMetrics.cardCornerRadius, style: .continuous))
+            }
+        }
+        .padding(.top, 6)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// A credit row that opens its page in the browser: a small colored
+    /// glyph tile, title + secondary line, a trailing "open externally"
+    /// arrow.
     private func creditLinkRow(
         title: String,
         subtitle: String,
+        systemImage: String,
+        color: Color,
         url: String
     ) -> some View {
         Link(destination: URL(string: url)!) {
-            LabeledContent {
-                Image(systemName: "arrow.up.forward.app")
-                    .foregroundStyle(.secondary)
-            } label: {
-                Text(title)
-                    .foregroundStyle(.primary)
-                Text(subtitle)
+            SettingsRow {
+                HStack(spacing: 12) {
+                    SettingsIconTile(systemName: systemImage, color: color, size: 30)
+                    SettingsRowLabel(title: title, subtitle: subtitle)
+                }
+            } accessory: {
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.tertiary)
             }
             .contentShape(Rectangle())
         }
@@ -686,293 +812,361 @@ struct SetupSettingsPane: View {
     private var lang: LanguageManager { model.lang }
 
     var body: some View {
-        Form {
+        SettingsPane(
+            title: lang.t("settings.tab.setup"),
+            subtitle: lang.t("settings.hero.setup"),
+            systemImage: SettingsTab.setup.icon,
+            color: SettingsTab.setup.iconColor
+        ) {
             if !model.hasAnyInstalledAgent {
                 emptyStateBanner
             }
 
-            Section {
-                hookRow(
-                    name: "Claude Code",
-                    installed: model.claudeHooksInstalled,
-                    busy: model.isClaudeHookSetupBusy,
-                    configLocationURL: model.claudeHookStatus?.settingsURL,
-                    installAction: { model.installClaudeHooks() },
-                    uninstallAction: { confirmingUninstallClaude = true }
-                )
-                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallClaude) {
-                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
-                        model.uninstallClaudeHooks()
-                    }
-                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
-                } message: {
-                    Text(lang.t("settings.general.uninstallConfirmMessage.claude"))
-                }
+            hooksCard
 
-                hookRow(
-                    name: "Codex",
-                    installed: model.codexHooksInstalled,
-                    busy: model.isCodexSetupBusy,
-                    configLocationURL: codexHookConfigURL,
-                    installAction: { model.installCodexHooks() },
-                    uninstallAction: { confirmingUninstallCodex = true }
-                )
-                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallCodex) {
-                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
-                        model.uninstallCodexHooks()
-                    }
-                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
-                } message: {
-                    Text(lang.t("settings.general.uninstallConfirmMessage.codex"))
-                }
+            usageCard
 
-                hookRow(
-                    name: "OpenCode",
-                    installed: model.openCodePluginInstalled,
-                    busy: model.isOpenCodeSetupBusy,
-                    requiresBinary: false,
-                    configLocationURL: model.openCodePluginStatus?.configURL,
-                    installAction: { model.installOpenCodePlugin() },
-                    uninstallAction: { confirmingUninstallOpenCode = true }
-                )
-                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallOpenCode) {
-                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
-                        model.uninstallOpenCodePlugin()
-                    }
-                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
-                } message: {
-                    Text("This will remove the NotchTune plugin from ~/.config/opencode/plugins/.")
-                }
+            claudeConfigDirectoryCard
 
-                hookRow(
-                    name: "Qoder",
-                    installed: model.qoderHooksInstalled,
-                    busy: model.isQoderHookSetupBusy,
-                    configLocationURL: model.qoderHookStatus?.settingsURL,
-                    installAction: { model.installQoderHooks() },
-                    uninstallAction: { confirmingUninstallQoder = true }
-                )
-                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallQoder) {
-                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
-                        model.uninstallQoderHooks()
-                    }
-                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
-                } message: {
-                    Text("This will remove NotchTune hooks from ~/.qoder/settings.json.")
-                }
-
-                hookRow(
-                    name: "Qwen Code",
-                    installed: model.qwenCodeHooksInstalled,
-                    busy: model.isQwenCodeHookSetupBusy,
-                    configLocationURL: model.qwenCodeHookStatus?.settingsURL,
-                    installAction: { model.installQwenCodeHooks() },
-                    uninstallAction: { confirmingUninstallQwenCode = true }
-                )
-                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallQwenCode) {
-                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
-                        model.uninstallQwenCodeHooks()
-                    }
-                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
-                } message: {
-                    Text("This will remove NotchTune hooks from ~/.qwen/settings.json.")
-                }
-
-                hookRow(
-                    name: "Factory",
-                    installed: model.factoryHooksInstalled,
-                    busy: model.isFactoryHookSetupBusy,
-                    configLocationURL: model.factoryHookStatus?.settingsURL,
-                    installAction: { model.installFactoryHooks() },
-                    uninstallAction: { confirmingUninstallFactory = true }
-                )
-                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallFactory) {
-                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
-                        model.uninstallFactoryHooks()
-                    }
-                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
-                } message: {
-                    Text("This will remove NotchTune hooks from ~/.factory/settings.json.")
-                }
-
-                hookRow(
-                    name: "CodeBuddy",
-                    installed: model.codebuddyHooksInstalled,
-                    busy: model.isCodebuddyHookSetupBusy,
-                    configLocationURL: model.codebuddyHookStatus?.settingsURL,
-                    installAction: { model.installCodebuddyHooks() },
-                    uninstallAction: { confirmingUninstallCodebuddy = true }
-                )
-                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallCodebuddy) {
-                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
-                        model.uninstallCodebuddyHooks()
-                    }
-                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
-                } message: {
-                    Text("This will remove NotchTune hooks from ~/.codebuddy/settings.json.")
-                }
-
-                hookRow(
-                    name: "Cursor",
-                    installed: model.cursorHooksInstalled,
-                    busy: model.isCursorHookSetupBusy,
-                    requiresBinary: true,
-                    configLocationURL: model.cursorHookStatus?.hooksURL,
-                    installAction: { model.installCursorHooks() },
-                    uninstallAction: { confirmingUninstallCursor = true }
-                )
-                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallCursor) {
-                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
-                        model.uninstallCursorHooks()
-                    }
-                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
-                } message: {
-                    Text("This will remove the NotchTune hooks from ~/.cursor/hooks.json.")
-                }
-
-                hookRow(
-                    name: "Gemini CLI",
-                    installed: model.geminiHooksInstalled,
-                    busy: model.isGeminiHookSetupBusy,
-                    configLocationURL: geminiHookConfigURL,
-                    installAction: { model.installGeminiHooks() },
-                    uninstallAction: { confirmingUninstallGemini = true }
-                )
-                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallGemini) {
-                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
-                        model.uninstallGeminiHooks()
-                    }
-                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
-                } message: {
-                    Text("This will remove NotchTune hooks from ~/.gemini/settings.json.")
-                }
-
-                hookRow(
-                    name: "Antigravity",
-                    installed: model.antigravityHooksInstalled,
-                    busy: model.isAntigravityHookSetupBusy,
-                    configLocationURL: antigravityHookConfigURL,
-                    installAction: { model.installAntigravityHooks() },
-                    uninstallAction: { confirmingUninstallAntigravity = true }
-                )
-                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallAntigravity) {
-                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
-                        model.uninstallAntigravityHooks()
-                    }
-                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
-                } message: {
-                    Text("This will remove NotchTune hooks from ~/.gemini/config/hooks.json.")
-                }
-
-                hookRow(
-                    name: "Kimi CLI",
-                    installed: model.kimiHooksInstalled,
-                    busy: model.isKimiHookSetupBusy,
-                    configLocationURL: model.kimiHookStatus?.configURL,
-                    installAction: { model.installKimiHooks() },
-                    uninstallAction: { confirmingUninstallKimi = true }
-                )
-                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallKimi) {
-                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
-                        model.uninstallKimiHooks()
-                    }
-                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
-                } message: {
-                    Text("This will remove NotchTune hooks from ~/.kimi/config.toml.")
-                }
-
-                HStack {
-                    Spacer()
-                    Button(lang.t("setup.installAll")) {
-                        if !model.claudeHooksInstalled { model.installClaudeHooks() }
-                        if !model.codexHooksInstalled { model.installCodexHooks() }
-                        if !model.openCodePluginInstalled { model.installOpenCodePlugin() }
-                        if !model.qoderHooksInstalled { model.installQoderHooks() }
-                        if !model.qwenCodeHooksInstalled { model.installQwenCodeHooks() }
-                        if !model.factoryHooksInstalled { model.installFactoryHooks() }
-                        if !model.codebuddyHooksInstalled { model.installCodebuddyHooks() }
-                        if !model.cursorHooksInstalled { model.installCursorHooks() }
-                        if !model.geminiHooksInstalled { model.installGeminiHooks() }
-                        if !model.antigravityHooksInstalled { model.installAntigravityHooks() }
-                        if !model.kimiHooksInstalled { model.installKimiHooks() }
-                        if !model.claudeUsageInstalled { model.installClaudeUsageBridge() }
-                    }
-                    .disabled(model.hooksBinaryURL == nil || allReady)
-                }
-            } header: {
-                Text(lang.t("setup.section.hooks"))
-            } footer: {
-                Text(lang.t("setup.section.hooks.footer"))
-                    .settingsFooterStyle()
-            }
-
-            Section {
-                LabeledContent {
-                    if model.claudeUsageInstalled {
-                        HStack(spacing: 10) {
-                            statusBadge(lang.t("setup.usageBridgeReady"))
-                            Button(lang.t("settings.general.uninstall")) {
-                                confirmingUninstallClaudeUsage = true
-                            }
-                        }
-                    } else if model.isClaudeUsageSetupBusy {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Button(lang.t("settings.general.install")) {
-                            model.installClaudeUsageBridge()
-                        }
-                    }
-                } label: {
-                    Text(lang.t("setup.usageBridge"))
-                    Text(lang.t("setup.usageBridgeDesc"))
-                }
-                .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallClaudeUsage) {
-                    Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
-                        model.uninstallClaudeUsageBridge()
-                    }
-                    Button(lang.t("settings.general.cancel"), role: .cancel) {}
-                } message: {
-                    Text(lang.t("settings.general.uninstallConfirmMessage.claudeUsage"))
-                }
-
-                Toggle(lang.t("settings.general.showCodexUsage"), isOn: Binding(
-                    get: { model.showCodexUsage },
-                    set: { model.showCodexUsage = $0 }
-                ))
-            } header: {
-                Text(lang.t("setup.section.usage"))
-            } footer: {
-                Text(lang.t("setup.section.usage.footer"))
-                    .settingsFooterStyle()
-            }
-
-            claudeConfigDirectorySection
-
-            Section(lang.t("setup.section.permissions")) {
-                LabeledContent {
+            SettingsCard(title: lang.t("setup.section.permissions")) {
+                SettingsRow(
+                    lang.t("setup.permissionsTitle"),
+                    subtitle: lang.t("setup.permissionsDesc")
+                ) {
                     Button(lang.t("setup.permissions.open")) {
                         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
                             NSWorkspace.shared.open(url)
                         }
                     }
-                } label: {
-                    Text(lang.t("setup.permissionsTitle"))
-                    Text(lang.t("setup.permissionsDesc"))
                 }
             }
 
-            hookDiagnosticsSection
+            hookDiagnosticsCard
 
             RemoteConnectionSection(model: model)
         }
-        .formStyle(.grouped)
-        .navigationTitle(lang.t("settings.tab.setup"))
     }
 
-    @ViewBuilder
-    private var claudeConfigDirectorySection: some View {
-        Section {
-            LabeledContent {
+    // MARK: Hooks
+
+    private var hooksCard: some View {
+        SettingsCard(
+            title: lang.t("setup.section.hooks"),
+            footer: lang.t("setup.section.hooks.footer")
+        ) {
+            Button(lang.t("setup.installAll")) {
+                if !model.claudeHooksInstalled { model.installClaudeHooks() }
+                if !model.codexHooksInstalled { model.installCodexHooks() }
+                if !model.openCodePluginInstalled { model.installOpenCodePlugin() }
+                if !model.qoderHooksInstalled { model.installQoderHooks() }
+                if !model.qwenCodeHooksInstalled { model.installQwenCodeHooks() }
+                if !model.factoryHooksInstalled { model.installFactoryHooks() }
+                if !model.codebuddyHooksInstalled { model.installCodebuddyHooks() }
+                if !model.cursorHooksInstalled { model.installCursorHooks() }
+                if !model.geminiHooksInstalled { model.installGeminiHooks() }
+                if !model.antigravityHooksInstalled { model.installAntigravityHooks() }
+                if !model.kimiHooksInstalled { model.installKimiHooks() }
+                if !model.claudeUsageInstalled { model.installClaudeUsageBridge() }
+            }
+            .disabled(model.hooksBinaryURL == nil || allReady)
+        } content: {
+            hookRow(
+                name: "Claude Code",
+                tool: .claudeCode,
+                iconTitle: "Claude",
+                installed: model.claudeHooksInstalled,
+                busy: model.isClaudeHookSetupBusy,
+                configLocationURL: model.claudeHookStatus?.settingsURL,
+                installAction: { model.installClaudeHooks() },
+                uninstallAction: { confirmingUninstallClaude = true }
+            )
+            .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallClaude) {
+                Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                    model.uninstallClaudeHooks()
+                }
+                Button(lang.t("settings.general.cancel"), role: .cancel) {}
+            } message: {
+                Text(lang.t("settings.general.uninstallConfirmMessage.claude"))
+            }
+
+            SettingsRowDivider(leadingInset: 44)
+
+            hookRow(
+                name: "Codex",
+                tool: .codex,
+                iconTitle: "Codex",
+                installed: model.codexHooksInstalled,
+                busy: model.isCodexSetupBusy,
+                configLocationURL: codexHookConfigURL,
+                installAction: { model.installCodexHooks() },
+                uninstallAction: { confirmingUninstallCodex = true }
+            )
+            .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallCodex) {
+                Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                    model.uninstallCodexHooks()
+                }
+                Button(lang.t("settings.general.cancel"), role: .cancel) {}
+            } message: {
+                Text(lang.t("settings.general.uninstallConfirmMessage.codex"))
+            }
+
+            SettingsRowDivider(leadingInset: 44)
+
+            hookRow(
+                name: "OpenCode",
+                tool: .openCode,
+                iconTitle: "OpenCode",
+                installed: model.openCodePluginInstalled,
+                busy: model.isOpenCodeSetupBusy,
+                requiresBinary: false,
+                configLocationURL: model.openCodePluginStatus?.configURL,
+                installAction: { model.installOpenCodePlugin() },
+                uninstallAction: { confirmingUninstallOpenCode = true }
+            )
+            .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallOpenCode) {
+                Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                    model.uninstallOpenCodePlugin()
+                }
+                Button(lang.t("settings.general.cancel"), role: .cancel) {}
+            } message: {
+                Text("This will remove the NotchTune plugin from ~/.config/opencode/plugins/.")
+            }
+
+            SettingsRowDivider(leadingInset: 44)
+
+            hookRow(
+                name: "Qoder",
+                tool: .qoder,
+                iconTitle: nil,
+                installed: model.qoderHooksInstalled,
+                busy: model.isQoderHookSetupBusy,
+                configLocationURL: model.qoderHookStatus?.settingsURL,
+                installAction: { model.installQoderHooks() },
+                uninstallAction: { confirmingUninstallQoder = true }
+            )
+            .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallQoder) {
+                Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                    model.uninstallQoderHooks()
+                }
+                Button(lang.t("settings.general.cancel"), role: .cancel) {}
+            } message: {
+                Text("This will remove NotchTune hooks from ~/.qoder/settings.json.")
+            }
+
+            SettingsRowDivider(leadingInset: 44)
+
+            hookRow(
+                name: "Qwen Code",
+                tool: .qwenCode,
+                iconTitle: "Qwen Code",
+                installed: model.qwenCodeHooksInstalled,
+                busy: model.isQwenCodeHookSetupBusy,
+                configLocationURL: model.qwenCodeHookStatus?.settingsURL,
+                installAction: { model.installQwenCodeHooks() },
+                uninstallAction: { confirmingUninstallQwenCode = true }
+            )
+            .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallQwenCode) {
+                Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                    model.uninstallQwenCodeHooks()
+                }
+                Button(lang.t("settings.general.cancel"), role: .cancel) {}
+            } message: {
+                Text("This will remove NotchTune hooks from ~/.qwen/settings.json.")
+            }
+
+            SettingsRowDivider(leadingInset: 44)
+
+            hookRow(
+                name: "Factory",
+                tool: .factory,
+                iconTitle: nil,
+                installed: model.factoryHooksInstalled,
+                busy: model.isFactoryHookSetupBusy,
+                configLocationURL: model.factoryHookStatus?.settingsURL,
+                installAction: { model.installFactoryHooks() },
+                uninstallAction: { confirmingUninstallFactory = true }
+            )
+            .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallFactory) {
+                Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                    model.uninstallFactoryHooks()
+                }
+                Button(lang.t("settings.general.cancel"), role: .cancel) {}
+            } message: {
+                Text("This will remove NotchTune hooks from ~/.factory/settings.json.")
+            }
+
+            SettingsRowDivider(leadingInset: 44)
+
+            hookRow(
+                name: "CodeBuddy",
+                tool: .codebuddy,
+                iconTitle: nil,
+                installed: model.codebuddyHooksInstalled,
+                busy: model.isCodebuddyHookSetupBusy,
+                configLocationURL: model.codebuddyHookStatus?.settingsURL,
+                installAction: { model.installCodebuddyHooks() },
+                uninstallAction: { confirmingUninstallCodebuddy = true }
+            )
+            .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallCodebuddy) {
+                Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                    model.uninstallCodebuddyHooks()
+                }
+                Button(lang.t("settings.general.cancel"), role: .cancel) {}
+            } message: {
+                Text("This will remove NotchTune hooks from ~/.codebuddy/settings.json.")
+            }
+
+            SettingsRowDivider(leadingInset: 44)
+
+            hookRow(
+                name: "Cursor",
+                tool: .cursor,
+                iconTitle: "Cursor",
+                installed: model.cursorHooksInstalled,
+                busy: model.isCursorHookSetupBusy,
+                requiresBinary: true,
+                configLocationURL: model.cursorHookStatus?.hooksURL,
+                installAction: { model.installCursorHooks() },
+                uninstallAction: { confirmingUninstallCursor = true }
+            )
+            .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallCursor) {
+                Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                    model.uninstallCursorHooks()
+                }
+                Button(lang.t("settings.general.cancel"), role: .cancel) {}
+            } message: {
+                Text("This will remove the NotchTune hooks from ~/.cursor/hooks.json.")
+            }
+
+            SettingsRowDivider(leadingInset: 44)
+
+            hookRow(
+                name: "Gemini CLI",
+                tool: .geminiCLI,
+                iconTitle: "Gemini",
+                installed: model.geminiHooksInstalled,
+                busy: model.isGeminiHookSetupBusy,
+                configLocationURL: geminiHookConfigURL,
+                installAction: { model.installGeminiHooks() },
+                uninstallAction: { confirmingUninstallGemini = true }
+            )
+            .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallGemini) {
+                Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                    model.uninstallGeminiHooks()
+                }
+                Button(lang.t("settings.general.cancel"), role: .cancel) {}
+            } message: {
+                Text("This will remove NotchTune hooks from ~/.gemini/settings.json.")
+            }
+
+            SettingsRowDivider(leadingInset: 44)
+
+            hookRow(
+                name: "Antigravity",
+                tool: .antigravity,
+                iconTitle: "Antigravity",
+                installed: model.antigravityHooksInstalled,
+                busy: model.isAntigravityHookSetupBusy,
+                configLocationURL: antigravityHookConfigURL,
+                installAction: { model.installAntigravityHooks() },
+                uninstallAction: { confirmingUninstallAntigravity = true }
+            )
+            .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallAntigravity) {
+                Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                    model.uninstallAntigravityHooks()
+                }
+                Button(lang.t("settings.general.cancel"), role: .cancel) {}
+            } message: {
+                Text("This will remove NotchTune hooks from ~/.gemini/config/hooks.json.")
+            }
+
+            SettingsRowDivider(leadingInset: 44)
+
+            hookRow(
+                name: "Kimi CLI",
+                tool: .kimiCLI,
+                iconTitle: "Kimi",
+                installed: model.kimiHooksInstalled,
+                busy: model.isKimiHookSetupBusy,
+                configLocationURL: model.kimiHookStatus?.configURL,
+                installAction: { model.installKimiHooks() },
+                uninstallAction: { confirmingUninstallKimi = true }
+            )
+            .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallKimi) {
+                Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                    model.uninstallKimiHooks()
+                }
+                Button(lang.t("settings.general.cancel"), role: .cancel) {}
+            } message: {
+                Text("This will remove NotchTune hooks from ~/.kimi/config.toml.")
+            }
+        }
+    }
+
+    // MARK: Usage
+
+    private var usageCard: some View {
+        SettingsCard(
+            title: lang.t("setup.section.usage"),
+            footer: lang.t("setup.section.usage.footer")
+        ) {
+            SettingsRow(
+                lang.t("setup.usageBridge"),
+                subtitle: lang.t("setup.usageBridgeDesc")
+            ) {
+                if model.claudeUsageInstalled {
+                    HStack(spacing: 10) {
+                        SettingsStatusBadge(text: lang.t("setup.usageBridgeReady"))
+                        Button(lang.t("settings.general.uninstall")) {
+                            confirmingUninstallClaudeUsage = true
+                        }
+                    }
+                } else if model.isClaudeUsageSetupBusy {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button(lang.t("settings.general.install")) {
+                        model.installClaudeUsageBridge()
+                    }
+                }
+            }
+            .alert(lang.t("settings.general.uninstallConfirmTitle"), isPresented: $confirmingUninstallClaudeUsage) {
+                Button(lang.t("settings.general.uninstallConfirmAction"), role: .destructive) {
+                    model.uninstallClaudeUsageBridge()
+                }
+                Button(lang.t("settings.general.cancel"), role: .cancel) {}
+            } message: {
+                Text(lang.t("settings.general.uninstallConfirmMessage.claudeUsage"))
+            }
+
+            SettingsRowDivider()
+
+            SettingsToggleRow(lang.t("settings.general.showCodexUsage"), isOn: Binding(
+                get: { model.showCodexUsage },
+                set: { model.showCodexUsage = $0 }
+            ))
+        }
+    }
+
+    // MARK: Claude config directory
+
+    private var claudeConfigDirectoryCard: some View {
+        SettingsCard(
+            title: lang.t("setup.claudeConfigDir.section"),
+            footer: lang.t("setup.claudeConfigDir.footer")
+        ) {
+            SettingsRow {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(lang.t("setup.claudeConfigDir.title"))
+                        .font(SettingsMetrics.rowTitleFont)
+                    Text(ClaudeConfigDirectory.resolved().path)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } accessory: {
                 HStack(spacing: 8) {
                     if ClaudeConfigDirectory.customDirectory != nil {
                         Button(lang.t("setup.claudeConfigDir.reset")) {
@@ -991,17 +1185,7 @@ struct SetupSettingsPane: View {
                         }
                     }
                 }
-            } label: {
-                Text(lang.t("setup.claudeConfigDir.title"))
-                Text(ClaudeConfigDirectory.resolved().path)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
             }
-        } header: {
-            Text(lang.t("setup.claudeConfigDir.section"))
-        } footer: {
-            Text(lang.t("setup.claudeConfigDir.footer"))
-                .settingsFooterStyle()
         }
     }
 
@@ -1011,28 +1195,35 @@ struct SetupSettingsPane: View {
             && model.cursorHooksInstalled && model.geminiHooksInstalled && model.kimiHooksInstalled && model.claudeUsageInstalled
     }
 
-    @ViewBuilder
+    /// First-run welcome: a softly tinted card above the hooks list.
     private var emptyStateBanner: some View {
-        Section {
-            Label {
-                Text(lang.t("setup.banner.noHooks.title"))
-                Text(lang.t("setup.banner.noHooks.message"))
-            } icon: {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.tint)
-            }
-        }
-    }
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(Color.accentColor.gradient))
 
-    private func statusBadge(_ text: String) -> some View {
-        Label {
-            Text(text)
-                .foregroundStyle(.secondary)
-        } icon: {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(lang.t("setup.banner.noHooks.title"))
+                    .font(.system(size: 14, weight: .semibold))
+                Text(lang.t("setup.banner.noHooks.message"))
+                    .font(SettingsMetrics.rowSubtitleFont)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
         }
-        .labelStyle(.titleAndIcon)
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: SettingsMetrics.cardCornerRadius, style: .continuous)
+                .fill(Color.accentColor.opacity(0.1))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: SettingsMetrics.cardCornerRadius, style: .continuous)
+                .strokeBorder(Color.accentColor.opacity(0.22), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
     }
 
     private var codexHookConfigURL: URL? {
@@ -1070,37 +1261,51 @@ struct SetupSettingsPane: View {
         return claude || codex
     }
 
-    @ViewBuilder
-    private var hookDiagnosticsSection: some View {
-        Section(lang.t("setup.section.diagnostics")) {
+    // MARK: Diagnostics
+
+    private var hookDiagnosticsCard: some View {
+        SettingsCard(title: lang.t("setup.section.diagnostics")) {
             if let claudeReport = model.claudeHealthReport, !claudeReport.issues.isEmpty {
                 issueList(report: claudeReport)
+                SettingsRowDivider()
             }
             if let codexReport = model.codexHealthReport, !codexReport.issues.isEmpty {
                 issueList(report: codexReport)
+                SettingsRowDivider()
             }
 
             if model.claudeHealthReport == nil && model.codexHealthReport == nil {
-                LabeledContent(lang.t("setup.diagnostics.notRun")) {
+                SettingsRow {
+                    diagnosticsStatusLabel(
+                        lang.t("setup.diagnostics.notRun"),
+                        systemImage: "stethoscope",
+                        color: .secondary
+                    )
+                } accessory: {
                     Button(lang.t("setup.diagnostics.runCheck")) {
                         model.runHealthChecks()
                     }
                 }
             } else if !hasErrors {
-                LabeledContent {
+                SettingsRow {
+                    diagnosticsStatusLabel(
+                        lang.t("setup.diagnostics.allHealthy"),
+                        systemImage: "checkmark.circle.fill",
+                        color: .green
+                    )
+                } accessory: {
                     Button(lang.t("setup.diagnostics.recheck")) {
                         model.runHealthChecks()
                     }
-                } label: {
-                    Label {
-                        Text(lang.t("setup.diagnostics.allHealthy"))
-                    } icon: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    }
                 }
             } else {
-                LabeledContent {
+                SettingsRow {
+                    diagnosticsStatusLabel(
+                        lang.t("setup.diagnostics.issuesFound"),
+                        systemImage: "exclamationmark.triangle.fill",
+                        color: .orange
+                    )
+                } accessory: {
                     HStack(spacing: 8) {
                         Button(lang.t("setup.diagnostics.recheck")) {
                             model.runHealthChecks()
@@ -1112,27 +1317,32 @@ struct SetupSettingsPane: View {
                             .buttonStyle(.borderedProminent)
                         }
                     }
-                } label: {
-                    Label {
-                        Text(lang.t("setup.diagnostics.issuesFound"))
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                    }
                 }
             }
         }
     }
 
+    private func diagnosticsStatusLabel(_ text: String, systemImage: String, color: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(color)
+            Text(text)
+                .font(SettingsMetrics.rowTitleFont)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     @ViewBuilder
     private func issueList(report: HookHealthReport) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(report.agent == "claude" ? "Claude Code" : "Codex")
-                .font(.headline)
+                .font(.system(size: 14, weight: .semibold))
 
             ForEach(Array(report.issues.enumerated()), id: \.offset) { _, issue in
                 Label {
                     Text(issue.description)
+                        .font(.system(size: 13))
                         .foregroundStyle(issue.severity == .info ? .secondary : .primary)
                         .fixedSize(horizontal: false, vertical: true)
                 } icon: {
@@ -1143,11 +1353,13 @@ struct SetupSettingsPane: View {
 
             if let binaryPath = report.binaryPath {
                 Text("Binary: \(binaryPath)")
-                    .font(.caption)
+                    .font(.system(size: 11.5, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 16)
     }
 
     private func issueIcon(for issue: HookHealthReport.Issue) -> String {
@@ -1164,9 +1376,13 @@ struct SetupSettingsPane: View {
         }
     }
 
+    /// One agent: its logo, name and install state; reveal / uninstall when
+    /// installed, install otherwise.
     @ViewBuilder
     private func hookRow(
         name: String,
+        tool: AgentTool,
+        iconTitle: String?,
         installed: Bool,
         busy: Bool,
         requiresBinary: Bool = true,
@@ -1174,18 +1390,35 @@ struct SetupSettingsPane: View {
         installAction: @escaping () -> Void,
         uninstallAction: @escaping () -> Void
     ) -> some View {
-        LabeledContent(name) {
+        SettingsRow {
+            HStack(spacing: 14) {
+                AgentLogoTile(name: name, tool: tool, iconTitle: iconTitle)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(name)
+                        .font(SettingsMetrics.rowTitleFont)
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(installed ? Color.green : Color.secondary.opacity(0.45))
+                            .frame(width: 6, height: 6)
+                        Text(installed ? lang.t("settings.general.activated") : lang.t("setup.hookMissing"))
+                            .font(SettingsMetrics.rowSubtitleFont)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+        } accessory: {
             if installed {
-                HStack(spacing: 10) {
-                    statusBadge(lang.t("settings.general.activated"))
+                HStack(spacing: 8) {
                     if let configLocationURL {
-                        Button {
+                        SettingsIconButton(
+                            systemName: "folder",
+                            help: lang.t("setup.revealConfigLocation")
+                        ) {
                             revealInFinder(configLocationURL)
-                        } label: {
-                            Image(systemName: "folder")
                         }
-                        .buttonStyle(.borderless)
-                        .help(lang.t("setup.revealConfigLocation"))
                     }
                     Button(lang.t("settings.general.uninstall")) {
                         uninstallAction()
@@ -1218,33 +1451,107 @@ struct SetupSettingsPane: View {
     }
 }
 
+/// The agent's installed app icon when there is one, otherwise a monogram
+/// on the agent's brand color.
+private struct AgentLogoTile: View {
+    let name: String
+    let tool: AgentTool
+    let iconTitle: String?
+
+    private let size: CGFloat = 30
+
+    var body: some View {
+        Group {
+            if let iconTitle, let icon = AgentAppIconProvider.installedAppIcon(forProviderTitle: iconTitle) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+            } else {
+                let color = Color(hex: tool.brandColorHex) ?? .gray
+                RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
+                    .fill(color.gradient)
+                    .overlay(
+                        Text(String(name.prefix(1)))
+                            .font(.system(size: size * 0.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                    )
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
 // MARK: - Music
 
 struct MusicSettingsPane: View {
     var model: AppModel
     @AppStorage("music.connectedApp") private var connectedApp: String = "none"
 
+    private var lang: LanguageManager { model.lang }
+
+    private var spotifyInstalled: Bool {
+        FileManager.default.fileExists(atPath: "/Applications/Spotify.app")
+    }
+
     var body: some View {
-        Form {
-            Section {
-                Picker("Player", selection: $connectedApp) {
-                    Text("None").tag("none")
-                    Text("Apple Music").tag("appleMusic")
-                    if FileManager.default.fileExists(atPath: "/Applications/Spotify.app") {
-                        Text("Spotify").tag("spotify")
+        SettingsPane(
+            title: "Music",
+            subtitle: lang.t("settings.hero.music"),
+            systemImage: SettingsTab.music.icon,
+            color: SettingsTab.music.iconColor
+        ) {
+            SettingsCard(
+                title: "Music Player",
+                footer: "NotchTune will only connect to the selected app. Choose None to disable music controls entirely."
+            ) {
+                SettingsStackedRow("Player") {
+                    HStack(alignment: .top, spacing: 12) {
+                        playerTile(tag: "none", title: "None") {
+                            Image(systemName: "speaker.slash.fill")
+                                .font(.system(size: 26, weight: .medium))
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(.secondary)
+                        }
+                        playerTile(tag: "appleMusic", title: "Apple Music") {
+                            appIcon(atPath: "/System/Applications/Music.app")
+                        }
+                        if spotifyInstalled {
+                            playerTile(tag: "spotify", title: "Spotify") {
+                                appIcon(atPath: "/Applications/Spotify.app")
+                            }
+                        }
                     }
+                    .frame(maxWidth: spotifyInstalled ? .infinity : 420, alignment: .leading)
                 }
-                .pickerStyle(.inline)
-                .labelsHidden()
-            } header: {
-                Text("Music Player")
-            } footer: {
-                Text("NotchTune will only connect to the selected app. Choose None to disable music controls entirely.")
-                    .settingsFooterStyle()
             }
         }
-        .formStyle(.grouped)
-        .navigationTitle("Music")
+    }
+
+    private func playerTile<Thumbnail: View>(
+        tag: String,
+        title: String,
+        @ViewBuilder thumbnail: @escaping () -> Thumbnail
+    ) -> some View {
+        SettingsTile(
+            title: title,
+            isSelected: connectedApp == tag,
+            thumbnailHeight: 84,
+            background: .neutral
+        ) {
+            connectedApp = tag
+        } thumbnail: {
+            thumbnail()
+        }
+    }
+
+    private func appIcon(atPath path: String) -> some View {
+        Image(nsImage: NSWorkspace.shared.icon(forFile: path))
+            .resizable()
+            .interpolation(.high)
+            .frame(width: 52, height: 52)
+            .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
     }
 }
 
@@ -1300,116 +1607,124 @@ struct RemoteConnectionSection: View {
     }
 
     var body: some View {
-        Section {
-            LabeledContent {
+        SettingsCard(
+            title: "Remote (Beta)",
+            footer: "The remote sshd needs `StreamLocalBindUnlink yes` in /etc/ssh/sshd_config for reliable reconnects."
+        ) {
+            SettingsRow(
+                "SSH remote",
+                subtitle: "Monitor Claude Code running on remote servers via SSH."
+            ) {
                 if remoteSessionCount > 0 {
-                    Label {
-                        Text("\(remoteSessionCount) active")
-                            .foregroundStyle(.secondary)
-                    } icon: {
-                        Image(systemName: "circle.fill")
-                            .font(.system(size: 7))
-                            .foregroundStyle(.green)
-                    }
+                    SettingsStatusBadge(
+                        text: "\(remoteSessionCount) active",
+                        systemImage: "circle.fill",
+                        color: .green
+                    )
                 } else {
                     Text("No remote sessions")
+                        .font(SettingsMetrics.rowSubtitleFont)
                         .foregroundStyle(.secondary)
                 }
-            } label: {
-                Text("SSH remote")
-                Text("Monitor Claude Code running on remote servers via SSH.")
             }
 
+            SettingsRowDivider()
+
             remoteSetupStep(
-                title: "1. Deploy hooks to the remote server",
+                number: 1,
+                title: "Deploy hooks to the remote server",
                 description: "Run from the NotchTune repo directory:",
                 command: setupCommand
             )
 
-            VStack(alignment: .leading, spacing: 10) {
+            SettingsRowDivider()
+
+            VStack(alignment: .leading, spacing: 12) {
                 remoteSetupStep(
-                    title: "2. Connect with socket forwarding",
+                    number: 2,
+                    title: "Connect with socket forwarding",
                     description: "Add to ~/.ssh/config (recommended):",
                     command: sshConfigSnippet,
                     multiline: true
                 )
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text("Or connect directly:")
+                        .font(SettingsMetrics.rowSubtitleFont)
                         .foregroundStyle(.secondary)
                     copyableCommand(sshCommand)
                 }
+                .padding(.leading, 34)
             }
-        } header: {
-            Text("Remote (Beta)")
-        } footer: {
-            Text("The remote sshd needs `StreamLocalBindUnlink yes` in /etc/ssh/sshd_config for reliable reconnects.")
-                .settingsFooterStyle()
+            .padding(.bottom, 16)
         }
     }
 
     @ViewBuilder
     private func remoteSetupStep(
+        number: Int,
         title: String,
         description: String,
         command: String,
         multiline: Bool = false
     ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-            Text(description)
-                .foregroundStyle(.secondary)
-            copyableCommand(command, multiline: multiline)
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color.accentColor.gradient))
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(SettingsMetrics.rowTitleFont)
+                    .accessibilityLabel("\(number). \(title)")
+                Text(description)
+                    .font(SettingsMetrics.rowSubtitleFont)
+                    .foregroundStyle(.secondary)
+                copyableCommand(command, multiline: multiline)
+            }
         }
+        .padding(.vertical, 16)
     }
 
     @ViewBuilder
     private func copyableCommand(_ command: String, multiline: Bool = false) -> some View {
         let isCopied = copiedCommand == command
-        GroupBox {
-            HStack(alignment: multiline ? .top : .center) {
-                Text(command)
-                    .font(.system(.callout, design: .monospaced))
-                    .foregroundStyle(.primary)
-                    .lineLimit(multiline ? nil : 1)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-                Spacer(minLength: 8)
-                Button {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(command, forType: .string)
-                    copiedCommand = command
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        if copiedCommand == command {
-                            copiedCommand = nil
-                        }
+        HStack(alignment: multiline ? .top : .center) {
+            Text(command)
+                .font(.system(size: 12.5, design: .monospaced))
+                .foregroundStyle(.primary)
+                .lineLimit(multiline ? nil : 1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+            Spacer(minLength: 8)
+            SettingsIconButton(
+                systemName: isCopied ? "checkmark" : "doc.on.doc",
+                help: "Copy",
+                tint: isCopied ? .green : nil
+            ) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(command, forType: .string)
+                copiedCommand = command
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    if copiedCommand == command {
+                        copiedCommand = nil
                     }
-                } label: {
-                    Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
-                        .foregroundStyle(isCopied ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
                 }
-                .buttonStyle(.borderless)
-                .help("Copy")
             }
-            .padding(.vertical, multiline ? 2 : 0)
         }
-    }
-}
-
-// MARK: - Footer style
-
-extension View {
-    /// Section footers the way System Settings sets them: small secondary
-    /// text, leading-aligned under the section (a macOS grouped `Form`
-    /// otherwise right-aligns footer content).
-    func settingsFooterStyle() -> some View {
-        self
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // Line up with the rows' content inset, not the card edge.
-            .padding(.horizontal, 10)
+        .padding(.leading, 12)
+        .padding(.trailing, 6)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.primary.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        )
     }
 }

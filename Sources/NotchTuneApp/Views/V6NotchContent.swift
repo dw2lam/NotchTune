@@ -243,6 +243,11 @@ struct V6ClosedPill: View {
     var liveLeftWingWidth: CGFloat = 0
     var liveRightWingWidth: CGFloat = 0
 
+    /// Settings preview only: `false` skips the pill's own surface so the
+    /// preview can draw one shared, width-animated surface behind content
+    /// that cross-fades between states. The island always draws it.
+    var showsSurface: Bool = true
+
     @Environment(\.islandChromeMetrics) private var metrics
 
     var body: some View {
@@ -262,6 +267,30 @@ struct V6ClosedPill: View {
         }
     }
 
+    /// Outer width of the surface this configuration draws — mirrors the
+    /// frame math of the bodies below. The settings preview uses it to size
+    /// its own animated surface (`showsSurface == false`).
+    func outerWidth(metrics: IslandChromeMetrics) -> CGFloat {
+        switch layout {
+        case .external:
+            if let liveActivity {
+                return liveActivity.externalPillWidth(metrics: metrics, height: height, minWidth: minWidth)
+            }
+            let labelW = label.map { V6CenterLabelView.intrinsicWidth(of: $0) } ?? 0
+            let rightW = rightSlot.map { V6RightSlotView.intrinsicWidth(of: $0) } ?? 0
+            let labelBlock = label == nil ? 0 : 6 + labelW
+            let rightBlock = rightSlot == nil ? 0 : Self.innerGap + rightW
+            return max(minWidth, height + metrics.closedGlyphSize + labelBlock + rightBlock)
+        case .macbook:
+            if liveActivity != nil, liveLeftWingWidth > 0 {
+                return liveLeftWingWidth + physicalNotchWidth
+                    + max(liveRightWingWidth, metrics.notchedClosedMinimumWingReserve)
+            }
+            let rightWidth = rightSlot.map { V6RightSlotView.intrinsicWidth(of: $0) } ?? 0
+            return metrics.notchedClosedWingReserve(rightSlotWidth: rightWidth) * 2 + physicalNotchWidth
+        }
+    }
+
     // MARK: External live activity (single line — menu bars are ~24pt)
 
     private func externalLiveActivityBody(_ activity: IslandLiveActivity) -> some View {
@@ -269,10 +298,12 @@ struct V6ClosedPill: View {
         let width = activity.externalPillWidth(metrics: metrics, height: height, minWidth: minWidth)
 
         return ZStack {
-            IslandSurfaceBackground(
-                shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
-                glass: glass
-            )
+            if showsSurface {
+                IslandSurfaceBackground(
+                    shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
+                    glass: glass
+                )
+            }
 
             HStack(spacing: 0) {
                 UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger, tint: glyphTint ?? UnifiedBars.paperInk)
@@ -301,10 +332,12 @@ struct V6ClosedPill: View {
         let glyphW = metrics.closedGlyphSize
 
         return ZStack {
-            IslandSurfaceBackground(
-                shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
-                glass: glass
-            )
+            if showsSurface {
+                IslandSurfaceBackground(
+                    shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
+                    glass: glass
+                )
+            }
 
             HStack(spacing: 0) {
                 HStack(spacing: metrics.notchedClosedContentGap) {
@@ -360,10 +393,12 @@ struct V6ClosedPill: View {
         let width = max(minWidth, intrinsic)
 
         return ZStack {
-            IslandSurfaceBackground(
-                shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
-                glass: glass
-            )
+            if showsSurface {
+                IslandSurfaceBackground(
+                    shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
+                    glass: glass
+                )
+            }
 
             HStack(spacing: 0) {
                 UnifiedBars(mode: mode, size: glyphW, character: character, paused: glyphPaused, nudgeTrigger: nudgeTrigger, tint: glyphTint ?? UnifiedBars.paperInk)
@@ -405,10 +440,12 @@ struct V6ClosedPill: View {
         let glyphW = metrics.closedGlyphSize
 
         return ZStack {
-            IslandSurfaceBackground(
-                shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
-                glass: glass
-            )
+            if showsSurface {
+                IslandSurfaceBackground(
+                    shape: V6ClosedPillShape(topFilletRadius: 0, outwardEarRadius: notchEarRadius),
+                    glass: glass
+                )
+            }
 
             HStack(spacing: 0) {
                 HStack {
@@ -942,8 +979,10 @@ private enum RightSlotKey: Hashable {
 
 // MARK: - Settings-tab live preview
 
-/// Fixed-width pill that mimics the real island inside the settings-tab
-/// preview stage. Parameters match what the tab exposes.
+/// The real closed pill, configured for the Personalization preview stage.
+/// Everything past `physicalNotchWidth` is optional so the preview can show
+/// every state the island can be in (live activity, agent tint, glass)
+/// without touching the runtime island's code paths.
 struct IslandPreviewPill: View {
     let mode: UnifiedBars.Mode
     let character: IslandCharacter
@@ -952,9 +991,17 @@ struct IslandPreviewPill: View {
     let layout: V6ClosedLayout
     var height: CGFloat = 32
     let physicalNotchWidth: CGFloat
-    let now: Date
+    var minWidth: CGFloat = 70
+    var glass: ResolvedGlass? = nil
+    var glyphTint: Color? = nil
+    var nudgeTrigger: UUID? = nil
+    var liveActivity: IslandLiveActivity? = nil
+    var liveLeftWingWidth: CGFloat = 0
+    var liveRightWingWidth: CGFloat = 0
+    /// `false` when the preview draws its own animated surface behind.
+    var showsSurface: Bool = true
 
-    var body: some View {
+    private var pill: V6ClosedPill {
         V6ClosedPill(
             mode: mode,
             character: character,
@@ -962,9 +1009,26 @@ struct IslandPreviewPill: View {
             rightSlot: rightSlot,
             layout: layout,
             height: height,
-            physicalNotchWidth: physicalNotchWidth
+            physicalNotchWidth: physicalNotchWidth,
+            minWidth: minWidth,
+            glass: glass,
+            nudgeTrigger: nudgeTrigger,
+            glyphTint: glyphTint,
+            liveActivity: liveActivity,
+            liveLeftWingWidth: liveLeftWingWidth,
+            liveRightWingWidth: liveRightWingWidth,
+            showsSurface: showsSurface
         )
-        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    /// Outer width of the pill's surface for this configuration.
+    func outerWidth(metrics: IslandChromeMetrics) -> CGFloat {
+        pill.outerWidth(metrics: metrics)
+    }
+
+    var body: some View {
+        pill
+            .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 
