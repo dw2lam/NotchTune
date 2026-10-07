@@ -220,9 +220,12 @@ struct IslandPanelView: View {
     }
 
     /// Closed music surfaces draw their own pill; parent `GrowingNotchShape` uses
-    /// agent wing metrics and misaligns / crops them if applied.
+    /// agent wing metrics and misaligns / crops them if applied. Held back
+    /// until the opened surface unmounts so a close still clips the panel
+    /// content down into the notch instead of leaving it to spill past the
+    /// shrinking background.
     private var usesClosedMusicSurfaceClip: Bool {
-        isShowingClosedMusicSurface && !usesOpenedVisualState
+        isShowingClosedMusicSurface && !shouldRenderOpenedSurface
     }
 
     private var activeMusicClipMetrics: MusicNotificationClipMetrics {
@@ -693,7 +696,11 @@ struct IslandPanelView: View {
     /// TimelineView internally for bar animation.
     @ViewBuilder
     private func v6ClosedSurface(panelContentWidth: CGFloat) -> some View {
-        Group {
+        // A ZStack, not a Group: a Group hands the caller's modifiers to each
+        // branch, so the music pill (only allowed once the island closes) got
+        // a fresh `.opacity(1)` on insertion and popped in at the very start
+        // of the close instead of fading in with the delayed tuck.
+        ZStack(alignment: .top) {
             if isShowingClosedMusicSurface {
                 let layout: V6ClosedLayout = isExternalDisplayPlacement ? .external : .macbook
                 let surfaceTrack = isShowingMusicNotification
