@@ -82,6 +82,23 @@ final class ProcessMonitoringCoordinator {
     @ObservationIgnored
     private var agentExitWatchers: [Int32: any DispatchSourceProcess] = [:]
 
+    /// NSWorkspace launch/terminate observers for the apps the monitor cares
+    /// about (Codex.app liveness, terminals it queries), so their launching or
+    /// quitting is reconciled right away even during the idle cadence.
+    @ObservationIgnored
+    private var workspaceObservers: [any NSObjectProtocol] = []
+
+    private static let wakeOnLaunchOrQuitBundleIDs: Set<String> = [
+        "com.openai.codex",
+        "com.mitchellh.ghostty",
+        "com.apple.Terminal",
+        "com.googlecode.iterm2",
+        "com.github.wez.wezterm",
+        "fun.tw93.kaku",
+        "dev.warp.Warp-Stable",
+        "com.todesktop.230313mzl4w4u92",
+    ]
+
     /// The original fixed cadence; used while anything is changing, while a
     /// session needs attention, and while initial sessions are resolving.
     static let activeTickInterval: Duration = .seconds(2)
@@ -134,6 +151,7 @@ final class ProcessMonitoringCoordinator {
             return
         }
 
+        observeRelevantAppLaunches()
         sessionAttachmentMonitorTask = Task { @MainActor [weak self] in
             guard let self else {
                 return
@@ -143,6 +161,28 @@ final class ProcessMonitoringCoordinator {
                 let interval = await self.runMonitorTick()
                 await self.sleepUntilNextTick(interval)
             }
+        }
+    }
+
+    private func observeRelevantAppLaunches() {
+        guard workspaceObservers.isEmpty else {
+            return
+        }
+
+        let center = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
+            let observer = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
+                let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+                guard let bundleID = app?.bundleIdentifier,
+                      Self.wakeOnLaunchOrQuitBundleIDs.contains(bundleID) else {
+                    return
+                }
+
+                MainActor.assumeIsolated {
+                    self?.requestPromptTick()
+                }
+            }
+            workspaceObservers.append(observer)
         }
     }
 
@@ -156,11 +196,16 @@ final class ProcessMonitoringCoordinator {
             watcher.cancel()
         }
         agentExitWatchers.removeAll()
+        for observer in workspaceObservers {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+        workspaceObservers.removeAll()
     }
 
     /// Runs the next monitor tick as soon as the base cadence allows instead
-    /// of waiting out the idle interval. Called for every bridge event and
-    /// when a watched agent process exits.
+    /// of waiting out the idle interval. Called for every bridge event, when
+    /// a watched agent process exits, and when Codex.app or a supported
+    /// terminal launches or quits.
     func requestPromptTick() {
         isPromptTickRequested = true
         monitorSleepTask?.cancel()
