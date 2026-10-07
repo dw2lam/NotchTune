@@ -38,7 +38,7 @@ AppModel
 │     └── OverlayPanelController         // NSPanel + NotchHostingView + NotchEventMonitors
 ├── tour: OnboardingTourController       // guided notch tour state machine
 ├── discovery: SessionDiscoveryCoordinator     // launch-time registry restore + transcript scan
-├── monitoring: ProcessMonitoringCoordinator   // 2s liveness loop (idle-guarded)
+├── monitoring: ProcessMonitoringCoordinator   // adaptive 2s/5s liveness loop (idle-guarded)
 ├── codexAppServer: CodexAppServerCoordinator  // Codex.app thread events
 ├── playerManager: MusicPlayerManager    // Spotify/Apple Music via ScriptingBridge
 ├── myspaceStore: MyspaceStore           // thoughts/attachments/reminders (local JSON)
@@ -71,7 +71,7 @@ get `stateAccessor` closures instead of holding state.
 | Myspace | `MyspaceStore.swift` (thoughts/reminders/attachments; UserNotifications), `Views/MyspacePanelView.swift` (+Reminders) |
 | Onboarding | `OnboardingTourController.swift` (phase machine; demo session id `onboarding-tour-demo`), `Views/Onboarding/` (wizard `OnboardingView`+`OnboardingSteps`, `OnboardingTheme`, `TourCoachView`) |
 | Hooks (app side) | `HookInstallationCoordinator.swift` (install/uninstall + busy flags + usage monitors: Claude 20s / Gemini 60s / Codex 120s, diff-guarded writes) |
-| Session tracking / jump-back | `ProcessMonitoringCoordinator.swift` (2s loop; AppleScript probes SKIPPED when no live sessions + no agent processes), `ActiveAgentProcessDiscovery.swift` (ps/lsof), `ForegroundTerminalSessionProbe.swift`, `TerminalSessionAttachmentProbe.swift`, `TerminalJumpService.swift`, `TerminalJumpTargetResolver.swift`, `TerminalTextSender.swift`, `KeystrokeInjector.swift` (AX) |
+| Session tracking / jump-back | `ProcessMonitoringCoordinator.swift` (adaptive 2s/5s loop, woken by bridge events + agent-exit kqueue watchers; AppleScript probes SKIPPED when no live sessions + no agent processes), `ActiveAgentProcessDiscovery.swift` + `NativeProcessInspector.swift` (sysctl/libproc; ps/lsof only as fallback), `TerminalSnapshotRound.swift` (one terminal query shared by probe + resolver), `ForegroundTerminalSessionProbe.swift`, `TerminalSessionAttachmentProbe.swift`, `TerminalJumpService.swift`, `TerminalJumpTargetResolver.swift`, `TerminalTextSender.swift`, `KeystrokeInjector.swift` (AX) |
 | Settings | `Views/SettingsView.swift` (tabs incl. Setup + Onboarding entries), `Views/AppearanceSettingsPane.swift`, `NudgeSettings.swift`, `NotificationSoundService.swift`, `LaunchAtLoginService.swift`, `UpdateChecker.swift`, `Localization/LanguageManager.swift`, `ResourceBundle.swift` |
 | Harness/debug | `HarnessLaunchConfiguration/HarnessRuntimeMonitor/HarnessArtifactRecorder.swift`, `IslandDebugScenario.swift` (`loadDebugSnapshot` REPLACES SessionState — never use it for additive injection; use `SessionState.insertSession`) |
 
@@ -86,8 +86,17 @@ them rather than growing them further.
 
 ## Idle-performance contracts (don't regress these)
 
-- Process monitor (2s): AppleScript terminal snapshots only run when there are
-  tracked live sessions or discovered agent processes.
+- Process monitor: agent discovery is in-process (sysctl/libproc — never spawn
+  `ps`/`lsof` per tick; they are only the fallback). Ticks run every 2s while
+  anything changes / a session needs attention, otherwise every 5s; bridge
+  events and agent exits (kqueue) wake it early, never <2s apart.
+- Terminal AppleScript/tmux/CLI queries: once per round, shared by
+  `TerminalSessionAttachmentProbe` and `TerminalJumpTargetResolver`; a round
+  is reused until processes/sessions/running terminals change, it failed, or
+  it is 10s old; never for terminals that aren't running; nothing at all with
+  no tracked live sessions and no agent processes.
+  `NOTCHTUNE_MONITOR_BENCH=1 swift test --filter ProcessMonitorBenchmarkTests`
+  measures per-tick and per-minute cost.
 - Closed-pill glyph: idle 8fps / waiting 15fps / running display-rate;
   `glyphPaused` freezes it when opened/fullscreen/auto-hidden.
 - Usage monitors: Claude 20s, Gemini 60s, Codex 120s; `@Observable` writes are

@@ -53,7 +53,7 @@ CLI coding agents are powerful, but they pull attention away from the editor and
 - **Notification sounds** — configurable system sounds with mute toggle
 - **i18n** — English only
 - **Session discovery** — auto-discover from local transcripts, persist across launches
-- **Process discovery** — match active agents via `ps`/`lsof`
+- **Process discovery** — match active agents from the process table (in-process sysctl/libproc, `ps`/`lsof` fallback)
 - **DMG packaging** — signing, notarization, GitHub Actions release workflow
 - **Auto-update** — Sparkle-based automatic updates with appcast
 - **Myspace** — local thoughts, dictated text, copied file/image attachments, and reminders
