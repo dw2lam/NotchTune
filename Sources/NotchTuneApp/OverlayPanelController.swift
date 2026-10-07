@@ -687,14 +687,17 @@ final class OverlayPanelController {
             musicSwipeTravel = 0
             musicSwipeFired = false
         }
+        // This runs for every scroll event anywhere on the Mac: keep the
+        // cheap checks (and the hit test) ahead of `isRunning`, which scans
+        // NSWorkspace's running applications.
         guard !isMomentum,
               let model,
               model.notchStatus == .closed,
               !model.isOverlayDisplayFullscreen,
               model.playerManager.isMusicEnabled,
-              model.playerManager.isRunning,
               !model.playerManager.track.isEmpty(),
-              isPointInClosedSurfaceArea(location) else {
+              isPointInClosedSurfaceArea(location),
+              model.playerManager.isRunning else {
             return
         }
 
