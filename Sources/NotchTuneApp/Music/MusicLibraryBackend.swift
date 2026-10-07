@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import ScriptingBridge
 import ImageIO
 import UniformTypeIdentifiers
 
@@ -72,6 +73,30 @@ enum MusicPlayerProcess {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+    }
+}
+
+// MARK: - Scripting errors
+
+/// Swallows failed Apple Events (no current track, a pid that just quit, a
+/// library still loading…) so they come back as `nil` instead of ever
+/// surfacing as an Objective-C exception on the scripting queue.
+final class MusicScriptingErrorSink: NSObject, SBApplicationDelegate, @unchecked Sendable {
+    static let shared = MusicScriptingErrorSink()
+
+    func eventDidFail(_ event: UnsafePointer<AppleEvent>, withError error: any Error) -> Any? {
+        nil
+    }
+}
+
+extension SBApplication {
+    /// A scripting handle on an ALREADY-RUNNING process. Addressing by pid
+    /// means a later event can't relaunch the app if it quits meanwhile.
+    static func runningInstance(pid: pid_t, timeoutSeconds: Int = 15) -> SBApplication? {
+        guard let app = SBApplication(processIdentifier: pid) else { return nil }
+        app.delegate = MusicScriptingErrorSink.shared
+        app.timeout = timeoutSeconds * 60 // ticks
+        return app
     }
 }
 

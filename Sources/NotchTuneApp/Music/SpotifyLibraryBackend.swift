@@ -44,7 +44,7 @@ final class SpotifyLibraryBackend: MusicLibraryBackend, @unchecked Sendable {
         await withCheckedContinuation { continuation in
             queue.async {
                 guard let pid = MusicPlayerProcess.runningPID(bundleID: MusicConstants.Spotify.bundleID),
-                      let app = SBApplication(processIdentifier: pid) else {
+                      let app = SBApplication.runningInstance(pid: pid, timeoutSeconds: 5) else {
                     continuation.resume(returning: false)
                     return
                 }
@@ -58,7 +58,7 @@ final class SpotifyLibraryBackend: MusicLibraryBackend, @unchecked Sendable {
         await withCheckedContinuation { continuation in
             queue.async {
                 guard let pid = MusicPlayerProcess.runningPID(bundleID: MusicConstants.Spotify.bundleID),
-                      let app = SBApplication(processIdentifier: pid) else {
+                      let app = SBApplication.runningInstance(pid: pid, timeoutSeconds: 5) else {
                     continuation.resume(returning: false)
                     return
                 }

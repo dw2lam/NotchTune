@@ -16,6 +16,7 @@ import SwiftUI
 /// - `NOTCHTUNE_HARNESS_SAMPLE_LIBRARY=1` (fake playlists / songs / pins)
 /// - `NOTCHTUNE_HARNESS_MUSIC_SECTION=collections|songs`
 /// - `NOTCHTUNE_HARNESS_MUSIC_QUERY=<text>` (opens the search field)
+/// - `NOTCHTUNE_HARNESS_MUSIC_PIN=1` (opens Spotify's paste-a-link field)
 struct MusicHarnessOverride: Equatable, Sendable {
     enum PlaybackState: String, Sendable {
         case closed
@@ -29,6 +30,7 @@ struct MusicHarnessOverride: Equatable, Sendable {
     var seedsSampleLibrary: Bool
     var section: MusicLibraryBrowser.Section?
     var query: String?
+    var opensPinField: Bool
 
     static let current = MusicHarnessOverride(environment: ProcessInfo.processInfo.environment)
 
@@ -40,6 +42,7 @@ struct MusicHarnessOverride: Equatable, Sendable {
             "NOTCHTUNE_HARNESS_SAMPLE_LIBRARY",
             "NOTCHTUNE_HARNESS_MUSIC_SECTION",
             "NOTCHTUNE_HARNESS_MUSIC_QUERY",
+            "NOTCHTUNE_HARNESS_MUSIC_PIN",
         ]
         guard keys.contains(where: { environment[$0] != nil }) else { return nil }
 
@@ -54,6 +57,7 @@ struct MusicHarnessOverride: Equatable, Sendable {
         section = environment["NOTCHTUNE_HARNESS_MUSIC_SECTION"]
             .flatMap { MusicLibraryBrowser.Section(rawValue: $0.lowercased()) }
         query = environment["NOTCHTUNE_HARNESS_MUSIC_QUERY"]
+        opensPinField = environment["NOTCHTUNE_HARNESS_MUSIC_PIN"] == "1"
     }
 
     private static func playerValue(_ raw: String) -> MusicPlayerKind? {

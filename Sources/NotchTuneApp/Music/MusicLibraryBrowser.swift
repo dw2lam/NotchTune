@@ -54,6 +54,9 @@ final class MusicLibraryBrowser {
     /// Short, transient feedback ("Couldn't start …", "Pinned …").
     private(set) var statusMessage: String?
     private(set) var artwork: [String: NSImage] = [:]
+    /// Bumped whenever artwork misses are worth retrying (the player started,
+    /// the library was re-read). Rows key their artwork request on it.
+    private(set) var artworkGeneration = 0
 
     private(set) var appleMusicLibrary: MusicLibrarySnapshot
     private(set) var spotifyPins: [MusicLibraryItem]
@@ -162,7 +165,7 @@ final class MusicLibraryBrowser {
     /// Called when the empty state appears. Reads the library only if the
     /// player is ALREADY running and the cached read is stale.
     func activate(now: Date = .now) {
-        isPlayerRunning = backend?.isPlayerRunning() ?? false
+        setPlayerRunning(backend?.isPlayerRunning() ?? false)
         guard isPlayerRunning, canReadLibrary else { return }
         let age = now.timeIntervalSince(appleMusicLibrary.fetchedAt)
         if age > staleInterval || (appleMusicLibrary.playlists.isEmpty && appleMusicLibrary.songs.isEmpty) {
@@ -204,7 +207,7 @@ final class MusicLibraryBrowser {
             }
             guard let self, !Task.isCancelled, self.player == kind else { return }
             self.isLoadingLibrary = false
-            self.isPlayerRunning = backend.isPlayerRunning()
+            self.setPlayerRunning(backend.isPlayerRunning())
             if let snapshot {
                 self.applyLibrary(snapshot)
             } else {
@@ -216,8 +219,20 @@ final class MusicLibraryBrowser {
     private func applyLibrary(_ snapshot: MusicLibrarySnapshot) {
         appleMusicLibrary = snapshot
         store.update { $0.appleMusic = snapshot }
-        // Rows whose artwork failed while the player was closed may succeed now.
+        retryMissingArtwork()
+    }
+
+    /// Rows whose artwork failed (player closed / still launching) may
+    /// succeed now.
+    private func retryMissingArtwork() {
         artworkRequested = Set(artwork.keys)
+        artworkGeneration &+= 1
+    }
+
+    private func setPlayerRunning(_ running: Bool) {
+        guard running != isPlayerRunning else { return }
+        isPlayerRunning = running
+        if running { retryMissingArtwork() }
     }
 
     // MARK: Search
@@ -267,13 +282,14 @@ final class MusicLibraryBrowser {
             let delivered = await backend.play(item)
             guard let self, self.player == kind else { return }
             self.pendingItemID = nil
-            self.isPlayerRunning = backend.isPlayerRunning()
+            self.setPlayerRunning(backend.isPlayerRunning())
             if delivered {
                 self.notePlayed(item)
             } else {
                 self.flash("Couldn't play \u{201C}\(item.title)\u{201D}")
             }
-            if !wasRunning, self.isPlayerRunning {
+            // A cold start, or a cached item that has gone missing: re-read.
+            if (!wasRunning || !delivered), self.isPlayerRunning {
                 self.refreshLibrary()
             }
         }
@@ -465,7 +481,7 @@ final class MusicLibraryBrowser {
                     .bundleIdentifier
                 MainActor.assumeIsolated {
                     guard let self, let bundleID, bundleID == self.player?.bundleID else { return }
-                    self.isPlayerRunning = self.backend?.isPlayerRunning() ?? false
+                    self.setPlayerRunning(self.backend?.isPlayerRunning() ?? false)
                 }
             }
             workspaceObservers.append(token)

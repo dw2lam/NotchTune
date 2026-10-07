@@ -114,9 +114,8 @@ final class AppleMusicLibraryBackend: MusicLibraryBackend, @unchecked Sendable {
         if let scriptingTarget, scriptingTarget.pid == pid {
             app = scriptingTarget.app
         } else {
-            guard let created = SBApplication(processIdentifier: pid) else { return nil }
-            // Ticks (1/60 s): a big library's bulk read can take a few seconds.
-            created.timeout = 15 * 60
+            // A big library's bulk read can take a few seconds.
+            guard let created = SBApplication.runningInstance(pid: pid, timeoutSeconds: 15) else { return nil }
             app = created
             scriptingTarget = (pid, created)
         }
@@ -219,10 +218,11 @@ final class AppleMusicLibraryBackend: MusicLibraryBackend, @unchecked Sendable {
     /// Resolves an item back to a live reference by persistent ID.
     private static func object(for item: MusicLibraryItem, in app: MusicApplication) -> SBObject? {
         let predicate = NSPredicate(format: "persistentID == %@", item.id)
+        let source = librarySource(of: app)
         let candidates: SBElementArray?
         if item.kind.isCollection {
-            candidates = app.playlists?()
-        } else if let source = librarySource(of: app), let library = libraryPlaylist(in: source) {
+            candidates = source?.playlists?() ?? app.playlists?()
+        } else if let source, let library = libraryPlaylist(in: source) {
             candidates = library.tracks?()
         } else {
             candidates = nil

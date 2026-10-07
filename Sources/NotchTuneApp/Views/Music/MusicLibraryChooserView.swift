@@ -8,7 +8,7 @@ struct MusicLibraryChooserView: View {
     let player: MusicPlayerKind
 
     @Environment(\.islandControlGlass) private var usesGlass
-    @State private var isPinFieldOpen = false
+    @State private var isPinFieldOpen = MusicHarnessOverride.current?.opensPinField ?? false
     @State private var pinDraft = ""
     @FocusState private var focusedField: Field?
 
@@ -249,7 +249,7 @@ struct MusicLibraryChooserView: View {
         case (.appleMusic, _) where !library.hasAnyContent && !library.isPlayerRunning:
             MusicChooserMessage(
                 title: "Your playlists, right here",
-                detail: "Apple Music is closed. Load your library to pick something to play."
+                detail: "Apple Music is closed. Loading your library opens it in the background."
             ) {
                 primaryButton("Load Library", systemImage: "music.note.list") {
                     library.loadLibraryLaunchingPlayer()
@@ -309,7 +309,7 @@ struct MusicLibraryChooserView: View {
                         isDisabled: library.pendingItemID != nil && library.pendingItemID != item.id,
                         play: { library.play(item) }
                     )
-                    .task(id: library.isPlayerRunning) {
+                    .task(id: library.artworkGeneration) {
                         library.requestArtwork(for: item)
                     }
                     .contextMenu { contextMenu(for: item) }
@@ -342,6 +342,7 @@ struct MusicLibraryChooserView: View {
             }
             if library.songs.contains(where: { $0.id == item.id }) {
                 Button("Remove from Recent") { library.forget(item) }
+                Button("Clear Recent") { library.clearSpotifyHistory() }
             }
             Divider()
             Button("Copy Spotify Link") {

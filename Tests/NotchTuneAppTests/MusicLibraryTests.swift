@@ -392,6 +392,21 @@ struct MusicLibraryBrowserTests {
     }
 
     @Test
+    func playerStartingRetriesMissingArtwork() {
+        let backend = FakeMusicLibraryBackend(kind: .spotify, running: false)
+        let browser = makeBrowser(player: .spotify, backend: backend)
+        let before = browser.artworkGeneration
+
+        browser.activate()
+        #expect(browser.artworkGeneration == before)
+
+        backend.running = true
+        browser.activate()
+        #expect(browser.isPlayerRunning)
+        #expect(browser.artworkGeneration == before + 1)
+    }
+
+    @Test
     func artworkLoadsOnceFromARunningPlayer() async {
         let backend = FakeMusicLibraryBackend(kind: .appleMusic, running: false)
         let cached = MusicLibrarySnapshot(playlists: samplePlaylists, songs: [], fetchedAt: .now)
