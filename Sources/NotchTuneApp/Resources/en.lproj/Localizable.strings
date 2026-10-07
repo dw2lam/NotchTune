@@ -311,3 +311,30 @@
 "settings.appearance.glass.closedScope.off.note" = "The compact pill stays solid on every display.";
 "settings.appearance.glass.closedScope.externalOnly.note" = "The built-in notch pill stays solid so it still merges with the notch.";
 "settings.appearance.glass.closedScope.always.note" = "Glass everywhere — may break the blend with the physical notch.";
+
+/* Settings — pane hero headers */
+"settings.hero.general" = "Startup, everyday behavior, and a guided tour of the island.";
+"settings.hero.setup" = "Connect your coding agents and keep their hooks healthy.";
+"settings.hero.display" = "Choose which screen the island lives on.";
+"settings.hero.sound" = "Alerts for agents that need you, and nudges for ones you forgot.";
+"settings.hero.music" = "Pick the player NotchTune controls from the notch.";
+"settings.hero.appearance" = "Make the notch yours. Every change shows up live in the preview.";
+"settings.hero.updates" = "Stay on the latest NotchTune.";
+"settings.general.startup" = "Startup";
+"settings.display.chooseScreen" = "Island screen";
+
+/* Settings — Personalization live preview */
+"settings.appearance.state.working" = "Working";
+"settings.appearance.preview.live.working" = "Editing AppModel.swift";
+"settings.appearance.preview.live.finished" = "Polished the settings panel";
+"settings.appearance.preview.phase.idle" = "Idle";
+"settings.appearance.preview.phase.working" = "Working";
+"settings.appearance.preview.phase.waiting" = "Needs approval";
+"settings.appearance.preview.phase.finished" = "Finished";
+"settings.appearance.preview.phase.idle.detail" = "Resting between tasks";
+"settings.appearance.preview.phase.working.live" = "Live activity with a turn timer";
+"settings.appearance.preview.phase.working.detail" = "The character runs while agents work";
+"settings.appearance.preview.phase.waiting.live" = "The notch widens to ask for you";
+"settings.appearance.preview.phase.waiting.detail" = "The character waits for you";
+"settings.appearance.preview.phase.finished.live" = "A quick peek, then it tucks away";
+"settings.appearance.preview.phase.finished.detail" = "Back to rest";
