@@ -226,11 +226,13 @@ enum HarnessArtifactRecorder {
         for window in NSApp.windows where window.isVisible && !(window is NSPanel) {
             // SwiftUI `Window(id:)` scenes carry their id in the identifier;
             // the title follows the selected pane, so it can't be matched.
+            // Headless runs capture only the harness's own hidden windows
+            // (SwiftUI's scene windows are closed and never drawn there).
             let identifier = window.identifier?.rawValue ?? ""
             let name: String
-            if identifier.contains("settings") {
+            if identifier == "harness-settings" || (!HarnessHeadless.isActive && identifier.contains("settings")) {
                 name = "settings"
-            } else if identifier.contains("onboarding") {
+            } else if identifier == "harness-onboarding" || (!HarnessHeadless.isActive && identifier.contains("onboarding")) {
                 name = "onboarding"
             } else {
                 continue

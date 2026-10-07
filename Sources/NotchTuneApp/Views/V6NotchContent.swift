@@ -1000,6 +1000,8 @@ struct IslandPreviewPill: View {
     var liveRightWingWidth: CGFloat = 0
     /// `false` when the preview draws its own animated surface behind.
     var showsSurface: Bool = true
+    /// Freeze the glyph's clock (e.g. Settings window not on screen).
+    var glyphPaused: Bool = false
 
     private var pill: V6ClosedPill {
         V6ClosedPill(
@@ -1012,6 +1014,7 @@ struct IslandPreviewPill: View {
             physicalNotchWidth: physicalNotchWidth,
             minWidth: minWidth,
             glass: glass,
+            glyphPaused: glyphPaused,
             nudgeTrigger: nudgeTrigger,
             glyphTint: glyphTint,
             liveActivity: liveActivity,

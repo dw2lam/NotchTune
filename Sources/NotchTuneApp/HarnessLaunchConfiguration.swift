@@ -186,7 +186,9 @@ enum HarnessHeadless {
     }
 
     /// Identifiers of the windows `openHiddenWindow` creates.
-    static let hostedWindowIDs: Set<String> = ["settings", "onboarding"]
+    /// Distinct from SwiftUI's own `Window(id: "settings")` scene windows,
+    /// which must be closed, not mistaken for (and captured instead of) these.
+    static let hostedWindowIDs: Set<String> = ["harness-settings", "harness-onboarding"]
 
     /// Opens `rootView` in a titled window created BELOW the desktop (never
     /// visible, never key), for the recorder to capture.

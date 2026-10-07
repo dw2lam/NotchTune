@@ -205,6 +205,7 @@ final class AppModel {
             || hooks.openCodePluginInstalled
             || hooks.geminiHooksInstalled
             || hooks.kimiHooksInstalled
+            || hooks.antigravityHooksInstalled
     }
     func refreshCodexHookStatus() { hooks.refreshCodexHookStatus() }
     func refreshClaudeHookStatus() { hooks.refreshClaudeHookStatus() }
@@ -1070,9 +1071,11 @@ final class AppModel {
         }
         completionReplyEnabled = UserDefaults.standard.bool(forKey: Self.completionReplyEnabledDefaultsKey)
         launchAtLoginEnabled = LaunchAtLoginService.shared.isEnabled
+        // First visit: edit the profile of the screen the island is most
+        // likely on (a MacBook's notch), not the external-display one.
         appearanceSettingsProfile = IslandAppearanceDisplayProfile(
             rawValue: UserDefaults.standard.string(forKey: Self.appearanceProfileSettingsDefaultsKey) ?? ""
-        ) ?? .topBar
+        ) ?? (NSScreen.screens.contains(where: \.isNotchedScreen) ? .notch : .topBar)
         notchAppearancePreferences = Self.loadAppearancePreferences(for: .notch)
         topBarAppearancePreferences = Self.loadAppearancePreferences(for: .topBar)
         glassSettings = Self.loadGlassSettings()

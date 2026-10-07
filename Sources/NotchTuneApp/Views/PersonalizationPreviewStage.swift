@@ -335,7 +335,8 @@ struct PersonalizationPreviewStage: View {
             liveActivity: activity,
             liveLeftWingWidth: left,
             liveRightWingWidth: right,
-            showsSurface: false
+            showsSurface: false,
+            glyphPaused: !isOnScreen
         )
     }
 

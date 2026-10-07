@@ -69,7 +69,7 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [model] in
                     if let tab = env["NOTCHTUNE_HARNESS_SETTINGS_TAB"] {
                         HarnessHeadless.openHiddenWindow(
-                            id: "settings", title: "NotchTune Settings",
+                            id: "harness-settings", title: "NotchTune Settings",
                             size: NSSize(width: 860, height: 640),
                             rootView: SettingsView(model: model)
                         )
@@ -79,7 +79,7 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                     }
                     if let raw = env["NOTCHTUNE_HARNESS_ONBOARDING_STEP"], let index = Int(raw) {
                         HarnessHeadless.openHiddenWindow(
-                            id: "onboarding", title: "Welcome to NotchTune",
+                            id: "harness-onboarding", title: "Welcome to NotchTune",
                             size: NSSize(width: 760, height: 610),
                             rootView: OnboardingView(model: model)
                         )
