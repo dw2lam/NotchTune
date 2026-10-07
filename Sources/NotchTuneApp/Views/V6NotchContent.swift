@@ -569,6 +569,12 @@ private struct MusicClosedAlbumArtThumbnail: View {
                     .resizable()
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fill)
+            } else if let player = MusicPlayerKind.selected(), let icon = MusicPlayerIcon.icon(for: player) {
+                // No cover yet / none at all: the player's own app icon.
+                Image(nsImage: icon)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
             } else {
                 Image(systemName: "music.note")
                     .resizable()

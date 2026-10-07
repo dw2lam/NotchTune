@@ -33,9 +33,19 @@ protocol MusicPlayerProtocol {
     func seekTrack(seekerPosition: CGFloat)
     func setVolume(volume: Int)
     func isRunning() -> Bool
+    /// Replay handle + cover URL of the current track. Only asked on a track
+    /// change (never per poll); players without one return `nil`.
+    func currentTrackIdentity() -> MusicTrackIdentity?
+}
+
+struct MusicTrackIdentity: Equatable, Sendable {
+    var playbackURI: String
+    var artworkURL: URL?
 }
 
 extension MusicPlayerProtocol {
+    func currentTrackIdentity() -> MusicTrackIdentity? { nil }
+
     func sendNotification(title: String, message: String) {
         notificationSubject.send(MusicAlertItem(
             title: NSLocalizedString(title, comment: ""),

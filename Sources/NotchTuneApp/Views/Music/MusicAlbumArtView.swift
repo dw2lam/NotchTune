@@ -11,6 +11,9 @@ struct MusicAlbumArtView: View {
     // cover stays up until the new one turns in — no placeholder flash and no
     // glimpse of the next cover before the flip.
     @State private var displayedArt: Image = Image(systemName: "music.note")
+    /// Whether `displayedArt` is a real cover. Without one the tile shows the
+    /// player's app icon (swapped at the same edge-on moment as the art).
+    @State private var displaysRealArt = false
     @State private var displayedVersion: Int = -1
     @State private var flipAngle: Double = 0
     @State private var isFlipping = false
@@ -18,9 +21,7 @@ struct MusicAlbumArtView: View {
     private let halfFlip: TimeInterval = 0.18
 
     var body: some View {
-        displayedArt
-            .resizable()
-            .aspectRatio(1, contentMode: .fill)
+        cover
             .frame(width: imageSize, height: imageSize)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 4)
@@ -40,6 +41,7 @@ struct MusicAlbumArtView: View {
             }
             .onAppear {
                 displayedArt = playerManager.track.albumArt
+                displaysRealArt = playerManager.hasAlbumArt
                 displayedVersion = playerManager.track.artworkVersion
             }
             .onChange(of: playerManager.track.artworkVersion) { _, _ in
@@ -47,6 +49,17 @@ struct MusicAlbumArtView: View {
                 // If a flip is already running, the new cover is picked up when
                 // the in-flight flip finishes (see the re-check in startFlip).
             }
+    }
+
+    @ViewBuilder
+    private var cover: some View {
+        if displaysRealArt {
+            displayedArt
+                .resizable()
+                .aspectRatio(1, contentMode: .fill)
+        } else {
+            MusicPlayerArtworkPlaceholder(player: playerManager.playerKind, size: imageSize)
+        }
     }
 
     /// Half-flip out to edge-on, swap the cover while it's invisible, then
@@ -62,6 +75,7 @@ struct MusicAlbumArtView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + halfFlip) {
             // Edge-on and invisible — the only safe moment to swap the image.
             displayedArt = playerManager.track.albumArt
+            displaysRealArt = playerManager.hasAlbumArt
             displayedVersion = playerManager.track.artworkVersion
             flipAngle = -90 // jump to the far edge; content already swapped
 

@@ -13,6 +13,10 @@ final class MusicPlayerManager {
 
     private var musicApp: (any MusicPlayerProtocol)!
     private var playerAppProvider: MusicPlayerAppProvider!
+    @ObservationIgnored private let harness: MusicHarnessOverride?
+
+    /// What the empty state offers to play from the selected player.
+    let library: MusicLibraryBrowser
 
     var name: String { musicApp.appName }
     var isRunning: Bool { musicApp.isRunning() }
@@ -50,8 +54,31 @@ final class MusicPlayerManager {
     @ObservationIgnored private var userDefaultsObserver: (any NSObjectProtocol)?
     @ObservationIgnored private var albumArtFetchGeneration: UInt64 = 0
 
-    init() {
-        playerAppProvider = MusicPlayerAppProvider(notificationSubject: notificationSubject)
+    init(harness: MusicHarnessOverride? = .current) {
+        self.harness = harness
+        let store: MusicLibraryStore
+        let makeBackend: (MusicPlayerKind) -> any MusicLibraryBackend
+        if let harness {
+            store = MusicLibraryStore(fileURL: nil, seed: harness.seedArchive)
+            makeBackend = { MusicHarnessLibraryBackend(kind: $0, override: harness) }
+        } else {
+            store = MusicLibraryStore(fileURL: MusicLibraryStore.defaultFileURL())
+            makeBackend = MusicLibraryBrowser.liveBackend
+        }
+        library = MusicLibraryBrowser(
+            player: harness?.player ?? MusicPlayerKind.selected(),
+            store: store,
+            metadataResolver: harness == nil ? SpotifyOEmbedResolver() : nil,
+            makeBackend: makeBackend
+        )
+        if let harness {
+            if let section = harness.section { library.section = section }
+            if let query = harness.query {
+                library.beginSearch()
+                library.updateQuery(query)
+            }
+        }
+        playerAppProvider = MusicPlayerAppProvider(notificationSubject: notificationSubject, harness: harness)
         setupMusicApp()
         playStateOrTrackDidChange(nil)
     }
@@ -95,6 +122,8 @@ final class MusicPlayerManager {
     }
 
     private func handleConnectedAppChange() {
+        // Harness runs pin a fake player; Settings changes don't apply.
+        guard harness == nil else { return }
         let currentApp = UserDefaults.standard.string(forKey: musicConnectedAppDefaultsKey) ?? "none"
         let newAppName: String
         switch currentApp {
@@ -104,6 +133,7 @@ final class MusicPlayerManager {
         }
         guard newAppName != connectedAppName else { return }
         setupMusicApp()
+        library.setPlayer(MusicPlayerKind(appName: connectedAppName))
         playStateOrTrackDidChange(nil)
     }
 
@@ -128,8 +158,19 @@ final class MusicPlayerManager {
 
         getPlaybackSettingInfo()
         getNewSongInfo()
+        noteObservedTrack()
         onTrackChange?(track)
         _ = isRunningFromNotification
+    }
+
+    /// A new track started: remember it for the empty state's "Recent" list
+    /// (Spotify only; one extra Apple Event per track change, never per poll).
+    private func noteObservedTrack() {
+        guard !track.isEmpty(), library.player == .spotify,
+              let identity = musicApp.currentTrackIdentity() else { return }
+        track.playbackURI = identity.playbackURI
+        track.artworkURL = identity.artworkURL
+        library.recordNowPlaying(track)
     }
 
     // MARK: - Media & Playback
@@ -157,7 +198,9 @@ final class MusicPlayerManager {
             getCurrentSeekerPosition()
             track = updatedPolled
         }
-        fetchAlbumArt(for: updatedPolled)
+        if !updatedPolled.isEmpty() {
+            fetchAlbumArt(for: updatedPolled)
+        }
         updateFormattedDuration()
     }
 
@@ -284,9 +327,12 @@ final class MusicPlayerManager {
         withAnimation(MusicConstants.mainAnimation) {
             track = updatedPolled
         }
+        noteObservedTrack()
         onTrackChange?(updatedPolled)
         updateFormattedDuration()
-        fetchAlbumArt(for: updatedPolled)
+        if !updatedPolled.isEmpty() {
+            fetchAlbumArt(for: updatedPolled)
+        }
     }
 
     // MARK: - Open music app
@@ -312,6 +358,20 @@ final class MusicPlayerManager {
     }
 
     var isMusicEnabled: Bool { connectedAppName != "None" }
+
+    /// The selected player, `nil` for None.
+    var playerKind: MusicPlayerKind? { MusicPlayerKind(appName: connectedAppName) }
+
+    /// A real track is loaded in a running player. When false the Music tab
+    /// shows the "Nothing playing" chooser instead of transport controls.
+    var hasNowPlaying: Bool {
+        isMusicEnabled && !track.isEmpty() && isRunning
+    }
+
+    /// Whether the current track's real cover has arrived.
+    var hasAlbumArt: Bool {
+        track.nsAlbumArt.size.width > 0 && track.nsAlbumArt.size.height > 0
+    }
 
     var isSpotifyAvailable: Bool {
         FileManager.default.fileExists(atPath: "/Applications/Spotify.app")

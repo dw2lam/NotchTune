@@ -12,6 +12,11 @@ struct PlayerTrack: Equatable {
     var artworkVersion: Int = 0
     var duration: CGFloat = 0.0
     var isLoved: Bool = false
+    /// Player-native handle for replaying this track (Spotify's
+    /// `spotify:track:…` URI). Filled on track change only; ignored by `==`.
+    var playbackURI: String?
+    /// Remote cover URL when the player exposes one (Spotify).
+    var artworkURL: URL?
 
     var isPodcast: Bool { self.duration > MusicConstants.podcastThresholdDurationSec }
 
