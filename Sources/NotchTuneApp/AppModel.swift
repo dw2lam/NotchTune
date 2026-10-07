@@ -501,20 +501,59 @@ final class AppModel {
     /// Session whose "finished" peek is on the pill right now, if any.
     private(set) var finishedPeekSessionID: String?
 
+    /// Everything `islandLiveActivity` depends on, compared to reuse the last
+    /// resolution. The closed pill reads the activity many times per render.
+    private struct IslandLiveActivityInputs: Equatable {
+        var mode: IslandLiveActivityMode
+        var sessions: [AgentSession]
+        var finishedPeekSessionID: String?
+        var runningSince: [String: Date]
+        var attentionSince: [String: Date]
+        /// Music state short of "is the player running" (a process scan,
+        /// asked only when the rest says a chip may show).
+        var musicMayBePlaying: Bool
+    }
+
+    @ObservationIgnored
+    private var islandLiveActivityCache: (inputs: IslandLiveActivityInputs, activity: IslandLiveActivity?)?
+
+    /// Test-only: how many times the live activity was actually resolved.
+    @ObservationIgnored private(set) var islandLiveActivityResolveCountForTests = 0
+
     /// What the closed pill should say, or nil to stay narrow.
+    ///
+    /// Memoized: every input is still READ on each access (so observation
+    /// tracking is unchanged), but the resolution, its string work and the
+    /// player-process check only rerun when one of them changed.
     var islandLiveActivity: IslandLiveActivity? {
-        var activity = IslandLiveActivity.resolve(
+        let inputs = IslandLiveActivityInputs(
             mode: islandLiveActivityMode,
             sessions: surfacedSessions,
             finishedPeekSessionID: finishedPeekSessionID,
             runningSince: runningSince,
-            attentionSince: attentionStartedAt
+            attentionSince: attentionStartedAt,
+            musicMayBePlaying: playerManager.isMusicEnabled
+                && playerManager.isPlaying
+                && !playerManager.track.isEmpty()
+        )
+        if let cache = islandLiveActivityCache, cache.inputs == inputs {
+            return cache.activity
+        }
+
+        islandLiveActivityResolveCountForTests += 1
+        var activity = IslandLiveActivity.resolve(
+            mode: inputs.mode,
+            sessions: inputs.sessions,
+            finishedPeekSessionID: inputs.finishedPeekSessionID,
+            runningSince: inputs.runningSince,
+            attentionSince: inputs.attentionSince
         )
         // Music keeps a foothold while agents work; attention states stay
         // single-minded.
-        if activity?.kind == .working, isMusicPlaybackActive {
+        if activity?.kind == .working, inputs.musicMayBePlaying, playerManager.isRunning {
             activity?.showsMusicChip = true
         }
+        islandLiveActivityCache = (inputs, activity)
         return activity
     }
 
@@ -2730,6 +2769,10 @@ final class AppModel {
 
 
     private var sessionBuckets: (primary: [AgentSession], overflow: [AgentSession]) {
+        // The cache is ObservationIgnored: touch `state` anyway so a view that
+        // only reads the derived lists (surfaced sessions, live activity)
+        // still re-renders when sessions change, not just the first time.
+        _ = state
         if let cached = _cachedSessionBuckets {
             return cached
         }
