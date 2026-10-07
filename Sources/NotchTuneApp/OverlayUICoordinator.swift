@@ -8,7 +8,10 @@ import SwiftUI
 @Observable
 final class OverlayUICoordinator {
 
-    private static let notificationSurfaceAutoCollapseDelay: TimeInterval = NotificationSurfaceMetrics.completionToastDuration
+    /// How long a completion toast stays before it collapses (or rotates to
+    /// the next unseen one). Settable so tests needn't wait the full time.
+    @ObservationIgnored
+    var notificationSurfaceAutoCollapseDelay: TimeInterval = NotificationSurfaceMetrics.completionToastDuration
     private static let musicTrackNotificationDuration: TimeInterval = 2.5
     private static let pointerExitCollapseDelay: Duration = .milliseconds(160)
 
@@ -665,6 +668,10 @@ final class OverlayUICoordinator {
             return
         }
 
+        // Keep a countdown that is already running: this fires for EVERY
+        // agent event, so restarting it here let any busy session pin the
+        // toast open indefinitely.
+        guard notificationAutoCollapseTask == nil else { return }
         updateNotificationAutoCollapse()
     }
 
@@ -711,17 +718,21 @@ final class OverlayUICoordinator {
             return
         }
 
+        let delay = notificationSurfaceAutoCollapseDelay
         notificationAutoCollapseTask = Task { @MainActor [weak self] in
             do {
-                try await Task.sleep(for: .seconds(Self.notificationSurfaceAutoCollapseDelay))
+                try await Task.sleep(for: .seconds(delay))
             } catch {
                 // Task was cancelled (e.g. a new event reset the timer).
                 // Do NOT proceed — the replacement task owns the new timer.
                 return
             }
 
-            guard let self,
-                  self.notchStatus == .opened,
+            guard let self, !Task.isCancelled else { return }
+            // Done counting down: a later state change may arm a fresh one.
+            self.notificationAutoCollapseTask = nil
+
+            guard self.notchStatus == .opened,
                   self.notchOpenReason == .notification,
                   self.islandSurface.autoDismissesWhenPresentedAsNotification(session: self.activeIslandCardSession) else {
                 return

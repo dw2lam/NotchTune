@@ -847,6 +847,37 @@ struct AppModelSessionListTests {
     }
 
     @Test
+    func busyAgentActivityDoesNotKeepPostponingTheCompletionToastCollapse() async throws {
+        let model = AppModel()
+        model.overlay.notificationSurfaceAutoCollapseDelay = 0.2
+        model.state = SessionState(sessions: [
+            listSession(id: "done", phase: .completed, updatedAt: .now),
+            listSession(id: "busy", phase: .running, updatedAt: .now),
+        ])
+        model.notchStatus = .opened
+        model.notchOpenReason = .notification
+        model.islandSurface = .sessionList(actionableSessionID: "done")
+
+        // Another agent keeps working (a tool event every 50ms) for well
+        // past the toast's lifetime: the toast must still collapse on time.
+        for tick in 0..<14 {
+            model.applyTrackedEvent(
+                .activityUpdated(SessionActivityUpdated(
+                    sessionID: "busy",
+                    summary: "Running tool \(tick)",
+                    phase: .running,
+                    timestamp: .now
+                )),
+                updateLastActionMessage: false
+            )
+            try await Task.sleep(for: .milliseconds(50))
+        }
+
+        #expect(model.notchStatus == .closed)
+        #expect(model.notchOpenReason == nil)
+    }
+
+    @Test
     func mergeDiscoveredClaudeSessionsPreservesRegistryJumpTargetAndAddsTranscriptMetadata() {
         let now = Date(timeIntervalSince1970: 2_000)
         let model = AppModel()
