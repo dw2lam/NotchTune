@@ -1328,6 +1328,12 @@ final class AppModel {
         }
     }
 
+    /// Tallest the Agents tab's list may be measured at before it has to
+    /// scroll inside the panel (the window never grows past the screen).
+    var agentsContentHeightCap: CGFloat? {
+        overlay.overlayPanelController.agentsContentHeightCap()
+    }
+
     /// Measured by SwiftUI from Myspace's natural content height.
     var measuredMyspaceContentHeight: CGFloat = 0 {
         didSet {
