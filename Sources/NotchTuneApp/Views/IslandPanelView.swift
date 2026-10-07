@@ -557,6 +557,10 @@ struct IslandPanelView: View {
         let outerBottomPadding: CGFloat = 0
         let openedWidth = max(0, layoutWidth - outerHorizontalPadding)
         let openedHeight = max(closedNotchHeight, layoutHeight - outerBottomPadding)
+        // Read once per pass: each of these walks the wing math, which resolves
+        // `model.islandLiveActivity` several times over.
+        let compact = morphCompact
+        let alignmentOffsetX = macbookNotchAlignmentOffsetX
 
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
@@ -579,10 +583,10 @@ struct IslandPanelView: View {
 
                     v6ClosedSurface(panelContentWidth: resolvedPanelContentWidth)
                         .offset(
-                            x: usesOpenedVisualState ? 0 : macbookNotchAlignmentOffsetX,
+                            x: usesOpenedVisualState ? 0 : alignmentOffsetX,
                             y: closedSurfaceVerticalOffset
                         )
-                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: macbookNotchAlignmentOffsetX)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: alignmentOffsetX)
                         .opacity(usesOpenedVisualState ? 0 : 1)
                         .animation(
                             usesOpenedVisualState
@@ -604,14 +608,14 @@ struct IslandPanelView: View {
                     musicClipMetrics: activeMusicClipMetrics,
                     musicNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
                     morphProgress: morphProgress,
-                    compactW: morphCompact.width,
-                    compactH: morphCompact.height,
+                    compactW: compact.width,
+                    compactH: compact.height,
                     expandedW: openedWidth,
                     expandedH: openedHeight,
-                    compactR: morphCompact.radius,
-                    compactLeftWingWidth: morphCompact.leftWing,
-                    compactNotchGapWidth: morphCompact.notchGap,
-                    compactEarRadius: morphCompact.ear,
+                    compactR: compact.radius,
+                    compactLeftWingWidth: compact.leftWing,
+                    compactNotchGapWidth: compact.notchGap,
+                    compactEarRadius: compact.ear,
                     expandedEarRadius: openedEarRadius
                 ))
             }
@@ -873,17 +877,18 @@ struct IslandPanelView: View {
     /// The one outline the surface morphs through: closed pill (anchored on
     /// the physical notch) → opened panel, with the outward top curve.
     private func morphShape(openedWidth: CGFloat, openedHeight: CGFloat) -> GrowingNotchShape {
-        GrowingNotchShape(
+        let compact = morphCompact
+        return GrowingNotchShape(
             progress: morphProgress,
-            compactW: morphCompact.width,
-            compactH: morphCompact.height,
+            compactW: compact.width,
+            compactH: compact.height,
             expandedW: openedWidth,
             expandedH: openedHeight,
-            compactR: morphCompact.radius,
+            compactR: compact.radius,
             expandedR: OpenedIslandSurfaceShape.openedBottomRadius,
-            compactLeftWingWidth: morphCompact.leftWing,
-            compactNotchGapWidth: morphCompact.notchGap,
-            compactEarRadius: morphCompact.ear,
+            compactLeftWingWidth: compact.leftWing,
+            compactNotchGapWidth: compact.notchGap,
+            compactEarRadius: compact.ear,
             expandedEarRadius: openedEarRadius,
             topOverscan: Self.surfaceTopOverscan
         )
@@ -2217,21 +2222,33 @@ struct IslandPanelView: View {
             return nil
         }
 
-        let formatter = DateComponentsFormatter()
-        formatter.unitsStyle = .abbreviated
-
+        let formatter: DateComponentsFormatter
         if interval >= 86_400 {
-            formatter.allowedUnits = [.day]
-            formatter.maximumUnitCount = 1
+            formatter = Self.dayRemainingFormatter
         } else if interval >= 3_600 {
-            formatter.allowedUnits = [.hour, .minute]
-            formatter.maximumUnitCount = 2
+            formatter = Self.hourMinuteRemainingFormatter
         } else {
-            formatter.allowedUnits = [.minute]
-            formatter.maximumUnitCount = 1
+            formatter = Self.minuteRemainingFormatter
         }
 
         return formatter.string(from: interval)
+    }
+
+    // Built once: these run for every usage window on every header render
+    // (the usage cycler's `.help`), and formatters are costly to create.
+    private static let dayRemainingFormatter = makeRemainingFormatter(units: [.day], maximumUnitCount: 1)
+    private static let hourMinuteRemainingFormatter = makeRemainingFormatter(units: [.hour, .minute], maximumUnitCount: 2)
+    private static let minuteRemainingFormatter = makeRemainingFormatter(units: [.minute], maximumUnitCount: 1)
+
+    private static func makeRemainingFormatter(
+        units: NSCalendar.Unit,
+        maximumUnitCount: Int
+    ) -> DateComponentsFormatter {
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .abbreviated
+        formatter.allowedUnits = units
+        formatter.maximumUnitCount = maximumUnitCount
+        return formatter
     }
 }
 
@@ -3182,8 +3199,12 @@ private struct IslandSessionRow: View {
         let tint = statusTint(for: presence)
         switch stateIndicator {
         case .animatedDot:
-            TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
-                let pulse = presence == .running || isActionable
+            // Only running / actionable dots pulse; every other row's dot is
+            // static, so its timeline stays paused instead of ticking 30×/s
+            // for every idle row while the list is open.
+            let pulses = presence == .running || isActionable
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !pulses)) { context in
+                let pulse = pulses
                     ? (sin(context.date.timeIntervalSinceReferenceDate * 3.2) + 1) / 2
                     : 0
                 Circle()
