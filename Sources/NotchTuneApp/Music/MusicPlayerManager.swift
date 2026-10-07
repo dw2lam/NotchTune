@@ -73,6 +73,7 @@ final class MusicPlayerManager {
         )
         if let harness {
             if let section = harness.section { library.section = section }
+            if let anchor = harness.scrollAnchor { library.scrollAnchors[library.section] = anchor }
             if let query = harness.query {
                 library.beginSearch()
                 library.updateQuery(query)

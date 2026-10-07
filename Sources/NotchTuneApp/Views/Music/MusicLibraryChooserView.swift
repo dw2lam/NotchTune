@@ -315,8 +315,12 @@ struct MusicLibraryChooserView: View {
                     .contextMenu { contextMenu(for: item) }
                 }
             }
+            .scrollTargetLayout()
             .padding(.bottom, 4)
         }
+        .scrollPosition(id: scrollAnchor)
+        // A fresh scroll view per list, so each opens at its own anchor.
+        .id(ScrollIdentity(section: library.section, isSearching: library.isSearchActive))
         .mask {
             // Soft fade where rows scroll under the bottom edge.
             LinearGradient(
@@ -329,6 +333,25 @@ struct MusicLibraryChooserView: View {
                 endPoint: .bottom
             )
         }
+    }
+
+    private struct ScrollIdentity: Hashable {
+        let section: MusicLibraryBrowser.Section
+        let isSearching: Bool
+    }
+
+    /// The section list's top row, remembered across visits. Search results
+    /// are transient, so they always open at the top.
+    private var scrollAnchor: Binding<String?> {
+        let section = library.section
+        let isSearching = library.isSearchActive
+        return Binding(
+            get: { isSearching ? nil : library.scrollAnchors[section] },
+            set: { anchor in
+                guard !isSearching else { return }
+                library.scrollAnchors[section] = anchor
+            }
+        )
     }
 
     @ViewBuilder

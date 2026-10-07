@@ -17,6 +17,10 @@ import SwiftUI
 /// - `NOTCHTUNE_HARNESS_MUSIC_SECTION=collections|songs`
 /// - `NOTCHTUNE_HARNESS_MUSIC_QUERY=<text>` (opens the search field)
 /// - `NOTCHTUNE_HARNESS_MUSIC_PIN=1` (opens Spotify's paste-a-link field)
+/// - `NOTCHTUNE_HARNESS_MUSIC_BROWSE=1` (opens the library over a playing
+///   track, as the now-playing library button does)
+/// - `NOTCHTUNE_HARNESS_MUSIC_SCROLL_TO=<item id>` (the section's list opens
+///   scrolled to that row, as if left there)
 struct MusicHarnessOverride: Equatable, Sendable {
     enum PlaybackState: String, Sendable {
         case closed
@@ -31,6 +35,8 @@ struct MusicHarnessOverride: Equatable, Sendable {
     var section: MusicLibraryBrowser.Section?
     var query: String?
     var opensPinField: Bool
+    var opensLibrary: Bool
+    var scrollAnchor: String?
 
     /// Harness runs, and unit tests (which build real AppModels), use the
     /// fake player — neither may talk to the user's Music / Spotify.
@@ -58,6 +64,8 @@ struct MusicHarnessOverride: Equatable, Sendable {
             .flatMap { MusicLibraryBrowser.Section(rawValue: $0.lowercased()) }
         query = environment["NOTCHTUNE_HARNESS_MUSIC_QUERY"]
         opensPinField = environment["NOTCHTUNE_HARNESS_MUSIC_PIN"] == "1"
+        opensLibrary = environment["NOTCHTUNE_HARNESS_MUSIC_BROWSE"] == "1"
+        scrollAnchor = environment["NOTCHTUNE_HARNESS_MUSIC_SCROLL_TO"]
     }
 
     private static func playerValue(_ raw: String) -> MusicPlayerKind? {

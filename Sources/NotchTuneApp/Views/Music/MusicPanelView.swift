@@ -4,24 +4,75 @@ struct MusicPanelView: View {
     @Bindable var playerManager: MusicPlayerManager
     var horizontalPadding: CGFloat = 24
 
+    /// The library is open over a playing track (the list button beside the
+    /// title). Resets when the panel goes away, so the tab reopens on the
+    /// controls.
+    @State private var isBrowsingLibrary = MusicHarnessOverride.current?.opensLibrary ?? false
+
+    /// What the Music tab shows.
+    enum Mode: Hashable {
+        /// Transport controls for the playing track.
+        case nowPlaying
+        /// The library, with the playing track as a tile that leads back.
+        case library(MusicPlayerKind)
+        /// Nothing playing: the player's icon and its library.
+        case empty(MusicPlayerKind)
+        case none
+
+        static func resolve(showsNowPlaying: Bool, wantsLibrary: Bool, player: MusicPlayerKind?) -> Mode {
+            guard let player else { return showsNowPlaying ? .nowPlaying : .none }
+            if showsNowPlaying {
+                return wantsLibrary ? .library(player) : .nowPlaying
+            }
+            return .empty(player)
+        }
+    }
+
     var body: some View {
         if playerManager.isMusicEnabled {
             Group {
-                if showsNowPlaying {
+                switch mode {
+                case .nowPlaying:
                     musicControls
                         .transition(.opacity)
-                } else if let player = playerManager.playerKind {
+                case .library(let player):
+                    MusicNowPlayingLibraryView(playerManager: playerManager, player: player) {
+                        isBrowsingLibrary = false
+                    }
+                    .padding(.horizontal, horizontalPadding)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+                    .transition(.opacity)
+                case .empty(let player):
                     MusicEmptyStateView(playerManager: playerManager, player: player)
                         .padding(.horizontal, horizontalPadding)
                         .padding(.top, 12)
                         .padding(.bottom, 8)
                         .transition(.opacity)
+                case .none:
+                    EmptyView()
                 }
             }
-            .animation(.easeInOut(duration: 0.25), value: showsNowPlaying)
+            .animation(.easeInOut(duration: 0.25), value: mode)
+            .onChange(of: playerManager.library.deliveredPlayCount) { _, _ in
+                // Picked something: back to the controls, where its cover flips in.
+                isBrowsingLibrary = false
+            }
+            .onChange(of: showsNowPlaying) { _, playing in
+                // Player quit → the empty state already shows the library.
+                if !playing { isBrowsingLibrary = false }
+            }
         } else {
             musicDisabledPlaceholder
         }
+    }
+
+    private var mode: Mode {
+        Mode.resolve(
+            showsNowPlaying: showsNowPlaying,
+            wantsLibrary: isBrowsingLibrary,
+            player: playerManager.playerKind
+        )
     }
 
     /// A real track in a running player → transport controls; otherwise the
@@ -37,6 +88,13 @@ struct MusicPanelView: View {
 
             VStack(spacing: 16) {
                 PlayerTrackDetailsView(playerManager: playerManager)
+                    // Room for the library button, keeping the title centred.
+                    .padding(.horizontal, playerManager.playerKind == nil ? 0 : MusicLibraryButton.side + 6)
+                    .overlay(alignment: .trailing) {
+                        if let player = playerManager.playerKind {
+                            MusicLibraryButton(player: player) { isBrowsingLibrary = true }
+                        }
+                    }
 
                 MusicPlaybackButtonsView(playerManager: playerManager, buttonSize: 22, spacing: 20)
 

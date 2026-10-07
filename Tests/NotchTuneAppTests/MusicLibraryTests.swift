@@ -223,6 +223,24 @@ struct MusicLibraryBrowserTests {
     }
 
     @Test
+    func onlyPlaysThatReachThePlayerCountAsDelivered() async {
+        let backend = FakeMusicLibraryBackend(kind: .appleMusic, running: true, snapshot: .empty)
+        let browser = makeBrowser(player: .appleMusic, backend: backend)
+
+        browser.play(samplePlaylists[0])
+        await waitUntil { browser.pendingItemID == nil }
+        #expect(browser.deliveredPlayCount == 1)
+
+        // A failed play keeps the library open (the count is what returns
+        // the Music tab to its controls).
+        backend.playSucceeds = false
+        browser.play(samplePlaylists[1])
+        await waitUntil { browser.pendingItemID == nil }
+        #expect(browser.deliveredPlayCount == 1)
+        #expect(browser.statusMessage != nil)
+    }
+
+    @Test
     func playingASpotifyPinFloatsItToTheTop() async {
         let backend = FakeMusicLibraryBackend(kind: .spotify, running: true)
         let first = MusicLibraryItem(id: "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M", kind: .playlist, title: "A", subtitle: "Playlist")
@@ -380,11 +398,14 @@ struct MusicLibraryBrowserTests {
         browser.beginSearch()
         browser.updateQuery("x")
 
+        browser.scrollAnchors[.songs] = "S2"
+
         browser.setPlayer(.spotify)
 
         #expect(browser.player == .spotify)
         #expect(browser.section == .collections)
         #expect(!browser.isSearchActive)
+        #expect(browser.scrollAnchors.isEmpty)
 
         browser.setPlayer(nil)
         #expect(browser.collections.isEmpty)
@@ -761,5 +782,29 @@ struct MusicPlayerManagerEmptyStateTests {
         #expect(playing.hasNowPlaying)
         #expect(!playing.hasAlbumArt)
         #expect(playing.library.player == .spotify)
+    }
+}
+
+// MARK: - Music tab mode
+
+struct MusicPanelModeTests {
+    @Test
+    func aPlayingTrackShowsTheControlsUntilTheLibraryIsOpened() {
+        #expect(MusicPanelView.Mode.resolve(showsNowPlaying: true, wantsLibrary: false, player: .spotify) == .nowPlaying)
+        #expect(MusicPanelView.Mode.resolve(showsNowPlaying: true, wantsLibrary: true, player: .spotify) == .library(.spotify))
+    }
+
+    @Test
+    func nothingPlayingAlwaysShowsTheEmptyStateLibrary() {
+        // A library request left over from a track that stopped is moot: the
+        // empty state already lists everything.
+        #expect(MusicPanelView.Mode.resolve(showsNowPlaying: false, wantsLibrary: true, player: .appleMusic) == .empty(.appleMusic))
+        #expect(MusicPanelView.Mode.resolve(showsNowPlaying: false, wantsLibrary: false, player: .appleMusic) == .empty(.appleMusic))
+    }
+
+    @Test
+    func anUnknownPlayerHasNoLibraryToOpen() {
+        #expect(MusicPanelView.Mode.resolve(showsNowPlaying: true, wantsLibrary: true, player: nil) == .nowPlaying)
+        #expect(MusicPanelView.Mode.resolve(showsNowPlaying: false, wantsLibrary: false, player: nil) == .none)
     }
 }

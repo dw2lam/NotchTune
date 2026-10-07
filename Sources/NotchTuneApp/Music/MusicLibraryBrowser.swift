@@ -51,6 +51,13 @@ final class MusicLibraryBrowser {
     private(set) var isSearchingLibrary = false
     /// The item whose play command is in flight.
     private(set) var pendingItemID: String?
+    /// Bumped each time a play command reaches the player, so the Music tab
+    /// can leave the library for the now-playing controls.
+    private(set) var deliveredPlayCount = 0
+    /// The row at the top of each section's list, so the list reopens where
+    /// it was left. Written as the list scrolls; not observed (no re-render
+    /// per scroll step).
+    @ObservationIgnored var scrollAnchors: [Section: String] = [:]
     /// Short, transient feedback ("Couldn't start …", "Pinned …").
     private(set) var statusMessage: String?
     private(set) var artwork: [String: NSImage] = [:]
@@ -162,6 +169,7 @@ final class MusicLibraryBrowser {
         statusMessage = nil
         artwork = [:]
         artworkRequested = []
+        scrollAnchors = [:]
         isPlayerRunning = backend?.isPlayerRunning() ?? false
     }
 
@@ -289,6 +297,7 @@ final class MusicLibraryBrowser {
             self.pendingItemID = nil
             self.setPlayerRunning(backend.isPlayerRunning())
             if delivered {
+                self.deliveredPlayCount &+= 1
                 self.notePlayed(item)
             } else {
                 self.flash("Couldn't play \u{201C}\(item.title)\u{201D}")
