@@ -428,6 +428,86 @@ struct MusicLibraryBrowserTests {
         try? await Task.sleep(for: .milliseconds(30))
         #expect(backend.artworkRequests.count == 2)
     }
+
+    @Test
+    func switchingPlayersMidReadDoesNotLeaveTheLibraryLoadingOrSearching() async {
+        let apple = GatedMusicLibraryBackend(kind: .appleMusic)
+        let spotify = FakeMusicLibraryBackend(kind: .spotify, running: false)
+        let browser = MusicLibraryBrowser(
+            player: .appleMusic,
+            store: MusicLibraryStore(fileURL: nil),
+            metadataResolver: nil,
+            makeBackend: { kind -> any MusicLibraryBackend in kind == .appleMusic ? apple : spotify }
+        )
+        browser.searchDebounce = .zero
+
+        browser.refreshLibrary()
+        browser.beginSearch()
+        browser.updateQuery("night")
+        #expect(browser.isLoadingLibrary)
+        #expect(browser.isSearchingLibrary)
+
+        // Settings → Music: Spotify, then back, while Music is still answering.
+        browser.setPlayer(.spotify)
+        browser.setPlayer(.appleMusic)
+        apple.release()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        // The abandoned reads must not leave spinners (and the "Load Library"
+        // guard) stuck on.
+        #expect(!browser.isLoadingLibrary)
+        #expect(!browser.isSearchingLibrary)
+    }
+}
+
+/// A running Apple Music whose reads hang until `release()` (a big library,
+/// a cold start), so a test can act while one is in flight.
+final class GatedMusicLibraryBackend: MusicLibraryBackend, @unchecked Sendable {
+    let kind: MusicPlayerKind
+    let canReadLibrary = true
+
+    private let lock = NSLock()
+    private var released = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(kind: MusicPlayerKind) {
+        self.kind = kind
+    }
+
+    func release() {
+        let pending: [CheckedContinuation<Void, Never>] = lock.withLock {
+            released = true
+            defer { waiters.removeAll() }
+            return waiters
+        }
+        pending.forEach { $0.resume() }
+    }
+
+    private func waitForRelease() async {
+        await withCheckedContinuation { continuation in
+            let resumeNow = lock.withLock { () -> Bool in
+                if released { return true }
+                waiters.append(continuation)
+                return false
+            }
+            if resumeNow { continuation.resume() }
+        }
+    }
+
+    func isPlayerRunning() -> Bool { true }
+
+    func fetchLibrary() async -> MusicLibrarySnapshot? {
+        await waitForRelease()
+        return MusicLibrarySnapshot(playlists: [], songs: [], fetchedAt: .now)
+    }
+
+    func searchLibrary(_ query: String) async -> [MusicLibraryItem]? {
+        await waitForRelease()
+        return []
+    }
+
+    func artworkData(for item: MusicLibraryItem) async -> Data? { nil }
+    func play(_ item: MusicLibraryItem) async -> Bool { false }
 }
 
 // MARK: - Pure rules

@@ -148,6 +148,11 @@ final class MusicLibraryBrowser {
         guard kind != player || backend == nil else { return }
         refreshTask?.cancel()
         searchTask?.cancel()
+        // The cancelled reads return without touching these (they bail on
+        // cancellation), so clear them here or they stay stuck on — and a
+        // stuck `isLoadingLibrary` disables "Load Library".
+        isLoadingLibrary = false
+        isSearchingLibrary = false
         player = kind
         backend = kind.map(makeBackend)
         section = .collections
