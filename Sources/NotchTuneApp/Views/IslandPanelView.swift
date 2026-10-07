@@ -1450,6 +1450,13 @@ struct IslandPanelView: View {
                     }
                 }
             } else {
+               // The window is capped at the screen (agentsContentHeightCap);
+               // past it the list scrolls instead of being clipped. Always the
+               // same ScrollView — only its height changes — so crossing the
+               // cap never re-creates the rows.
+               let agentsCap = model.agentsContentHeightCap ?? .infinity
+               let agentsMeasured = model.measuredAgentsContentHeight
+               ScrollView(.vertical) {
                VStack(spacing: 0) {
                    // Inside the measured stack: outside it, the window was
                    // sized without the hint and the last rows were clipped.
@@ -1483,6 +1490,10 @@ struct IslandPanelView: View {
                        model.measuredAgentsContentHeight = height
                    }
                }
+               }
+               .scrollBounceBehavior(.basedOnSize)
+               .scrollIndicators(agentsMeasured > agentsCap ? .automatic : .hidden)
+               .frame(height: agentsMeasured > 0 ? min(agentsMeasured, agentsCap) : nil)
             }
             }
             }

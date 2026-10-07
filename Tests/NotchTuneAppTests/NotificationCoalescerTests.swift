@@ -188,6 +188,14 @@ struct NotificationCoalescerTests {
     }
 
     @Test
+    func separateClaudeSessionsInTheSameRepoAreSeparateGroups() {
+        let a = NotificationGroupKey(session: session(id: "claude-a", tool: .claudeCode, cwd: "/tmp/repo"))
+        let b = NotificationGroupKey(session: session(id: "claude-b", tool: .claudeCode, cwd: "/tmp/repo"))
+        #expect(a != b)
+        #expect(a == NotificationGroupKey(session: session(id: "claude-a", tool: .claudeCode, cwd: "/elsewhere")))
+    }
+
+    @Test
     func siblingSessionsInSameToolAndCwdShareAGroup() {
         let a = NotificationGroupKey(session: session(id: "thread-1", cwd: "/tmp/repo"))
         let b = NotificationGroupKey(session: session(id: "thread-2", cwd: "/tmp/repo/"))

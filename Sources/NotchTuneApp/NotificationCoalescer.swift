@@ -50,8 +50,19 @@ struct NotificationGroupKey: Hashable, Sendable {
     init(session: AgentSession) {
         self.init(
             tool: session.tool,
-            workspace: Self.workspaceIdentity(for: session)
+            workspace: Self.groupIdentity(for: session)
         )
+    }
+
+    /// Codex fans one task out into sibling threads in the same folder, so
+    /// those coalesce by workspace. A Claude Code session is one conversation
+    /// (its subagents report inside it): two Claude sessions in the same repo
+    /// are independent and must not swallow each other's completions.
+    private static func groupIdentity(for session: AgentSession) -> String {
+        if session.tool == .claudeCode {
+            return "session:\(session.id)"
+        }
+        return workspaceIdentity(for: session)
     }
 
     private static func workspaceIdentity(for session: AgentSession) -> String {

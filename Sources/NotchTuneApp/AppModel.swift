@@ -1365,6 +1365,23 @@ final class AppModel {
     /// has not had time to read.
     @ObservationIgnored var notificationCardShownAt: Date?
 
+    /// A new approval / question replacing the content of the card already
+    /// on screen (parallel prompts in one session) counts as freshly shown,
+    /// so a stray Return meant for the terminal can't approve a request that
+    /// has been visible for less than the ⏎ guard.
+    func restartCardRevealIfContentReplaced(sessionID: String, by event: AgentEvent) {
+        switch event {
+        case .permissionRequested, .questionAsked:
+            break
+        default:
+            return
+        }
+        guard notchStatus == .opened,
+              notchOpenReason == .notification,
+              activeIslandCardSession?.id == sessionID else { return }
+        notificationCardShownAt = Date()
+    }
+
     var musicNotificationTrack: PlayerTrack?
 
     var surfacedSessions: [AgentSession] {
@@ -2412,6 +2429,7 @@ final class AppModel {
         state.apply(event)
         if let sessionID = event.sessionID {
             noteRunningTransition(sessionID: sessionID, from: priorPhase)
+            restartCardRevealIfContentReplaced(sessionID: sessionID, by: event)
         }
         reconcileIslandSurfaceAfterStateChange()
 

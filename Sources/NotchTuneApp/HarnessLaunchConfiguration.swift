@@ -142,8 +142,19 @@ struct HarnessLaunchConfiguration {
 /// recorder still captures the windows (the window server renders them
 /// wherever they sit).
 enum HarnessHeadless {
-    static let isActive: Bool = ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_SCENARIO"] != nil
-        && ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_ONSCREEN"] != "1"
+    static let isActive: Bool = {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["NOTCHTUNE_HARNESS_ONSCREEN"] != "1" else { return false }
+        // Harness scenarios, and unit tests that create a real overlay panel
+        // (`notchOpen` in AppModel tests) — neither may put windows on screen.
+        return environment["NOTCHTUNE_HARNESS_SCENARIO"] != nil || isRunningTests
+    }()
+
+    static var isRunningTests: Bool {
+        NSClassFromString("XCTestCase") != nil
+            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || ProcessInfo.processInfo.processName.hasSuffix("xctest")
+    }
 
     /// Marketing captures (`NOTCHTUNE_HARNESS_SHOWCASE=1`): clean sessions,
     /// no "install hooks" banner.

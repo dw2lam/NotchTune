@@ -692,7 +692,12 @@ struct MusicHarnessOverrideTests {
     func onlyAppliesToHarnessRunsThatAskForIt() {
         #expect(MusicHarnessOverride(environment: [:]) == nil)
         #expect(MusicHarnessOverride(environment: ["NOTCHTUNE_HARNESS_MUSIC_STATE": "idle"]) == nil)
-        #expect(MusicHarnessOverride(environment: ["NOTCHTUNE_HARNESS_SCENARIO": "sessionList"]) == nil)
+        // A plain harness run still gets the fake (closed) player, never the real apps…
+        #expect(MusicHarnessOverride(environment: ["NOTCHTUNE_HARNESS_SCENARIO": "sessionList"])?.state == .closed)
+        // …unless it explicitly opts into the real ones.
+        #expect(MusicHarnessOverride(environment: [
+            "NOTCHTUNE_HARNESS_SCENARIO": "sessionList", "NOTCHTUNE_HARNESS_MUSIC_REAL": "1",
+        ]) == nil)
     }
 
     @Test

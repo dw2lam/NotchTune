@@ -628,7 +628,11 @@ struct AppModelSessionListTests {
         #expect(model.shouldAutoCollapseOnMouseLeave)
 
         model.handlePointerExitedIslandSurface()
-        try await Task.sleep(for: .milliseconds(240))
+        // Poll rather than sleep a fixed beat: a loaded full-suite run can
+        // overshoot the short collapse delay.
+        for _ in 0..<200 where model.notchStatus != .closed {
+            try await Task.sleep(for: .milliseconds(10))
+        }
 
         #expect(model.notchStatus == .closed)
         #expect(model.notchOpenReason == nil)

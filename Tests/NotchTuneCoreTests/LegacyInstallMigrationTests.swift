@@ -62,12 +62,16 @@ struct LegacyInstallMigrationTests {
 
     @Test
     func defaultsMigrationCopiesLegacyValuesOnceWithoutOverwriting() throws {
-        let suiteName = "notchtune-defaults-test-\(UUID().uuidString)"
-        let legacyDomain = "notchtune-legacy-test-\(UUID().uuidString)"
+        // Fixed names, reset on both ends: a UUID per run left one empty
+        // preferences plist behind in ~/Library/Preferences every time.
+        let suiteName = "notchtune-defaults-test"
+        let legacyDomain = "notchtune-legacy-test"
         guard let defaults = UserDefaults(suiteName: suiteName) else {
             Issue.record("could not create test defaults suite")
             return
         }
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.removePersistentDomain(forName: legacyDomain)
         defer {
             defaults.removePersistentDomain(forName: suiteName)
             defaults.removePersistentDomain(forName: legacyDomain)

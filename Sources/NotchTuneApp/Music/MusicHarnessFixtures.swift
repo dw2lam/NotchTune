@@ -32,19 +32,19 @@ struct MusicHarnessOverride: Equatable, Sendable {
     var query: String?
     var opensPinField: Bool
 
+    /// Harness runs, and unit tests (which build real AppModels), use the
+    /// fake player — neither may talk to the user's Music / Spotify.
     static let current = MusicHarnessOverride(environment: ProcessInfo.processInfo.environment)
+        ?? (HarnessHeadless.isRunningTests
+            ? MusicHarnessOverride(environment: ["NOTCHTUNE_HARNESS_SCENARIO": "unit-tests"])
+            : nil)
 
     init?(environment: [String: String], defaults: UserDefaults = .standard) {
         guard environment["NOTCHTUNE_HARNESS_SCENARIO"] != nil else { return nil }
-        let keys = [
-            "NOTCHTUNE_HARNESS_MUSIC_PLAYER",
-            "NOTCHTUNE_HARNESS_MUSIC_STATE",
-            "NOTCHTUNE_HARNESS_SAMPLE_LIBRARY",
-            "NOTCHTUNE_HARNESS_MUSIC_SECTION",
-            "NOTCHTUNE_HARNESS_MUSIC_QUERY",
-            "NOTCHTUNE_HARNESS_MUSIC_PIN",
-        ]
-        guard keys.contains(where: { environment[$0] != nil }) else { return nil }
+        // Every harness run gets the fake player (closed by default) so a
+        // capture never sends Apple Events to the real Music / Spotify the
+        // user may have running. NOTCHTUNE_HARNESS_MUSIC_REAL=1 opts out.
+        guard environment["NOTCHTUNE_HARNESS_MUSIC_REAL"] != "1" else { return nil }
 
         player = environment["NOTCHTUNE_HARNESS_MUSIC_PLAYER"].flatMap(Self.playerValue)
             ?? MusicPlayerKind.selected(in: defaults)

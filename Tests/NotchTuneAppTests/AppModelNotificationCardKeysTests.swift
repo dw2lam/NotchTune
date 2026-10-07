@@ -17,6 +17,22 @@ struct AppModelNotificationCardKeysTests {
         UserDefaults.standard.removeObject(forKey: "app.suppressFrontmostNotifications")
     }
 
+    @Test
+    func aNewRequestReplacingTheOpenCardRestartsTheReturnGuard() async throws {
+        let model = makeModel()
+        start(model, id: "s1")
+        requestApproval(model, id: "s1")
+        try await waitUntilOpened(model)
+
+        // The first request has been on screen for a while...
+        model.notificationCardShownAt = Date().addingTimeInterval(-5)
+        #expect(model.notificationCardAge() > 1)
+
+        // ...then a second request replaces the card's content in place.
+        requestApproval(model, id: "s1", toolName: "Edit")
+        #expect(model.notificationCardAge() < 0.5)
+    }
+
     private func makeModel() -> AppModel {
         let model = AppModel(
             isNotificationSessionAlreadyFrontmost: { _ in false },
