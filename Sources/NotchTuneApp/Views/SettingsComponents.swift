@@ -30,6 +30,88 @@ enum SettingsMetrics {
     static let footerFont = Font.system(size: 12)
 }
 
+// MARK: - On-screen gate
+
+private struct SettingsWindowIsOnScreenKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    /// False while the Settings window can't be seen — closed or hidden at
+    /// launch, minimized, app hidden, on another Space or fully covered.
+    /// Live previews stop their clocks then: SwiftUI keeps ticking
+    /// `TimelineView`s and `.task` loops in a window nobody can see.
+    var settingsWindowIsOnScreen: Bool {
+        get { self[SettingsWindowIsOnScreenKey.self] }
+        set { self[SettingsWindowIsOnScreenKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Reports whether the hosting window is on screen (its occlusion state
+    /// contains `.visible`) now and whenever that changes.
+    func onWindowOnScreenChange(_ action: @escaping (Bool) -> Void) -> some View {
+        background(WindowOnScreenReader(onChange: action))
+    }
+}
+
+private struct WindowOnScreenReader: NSViewRepresentable {
+    let onChange: (Bool) -> Void
+
+    func makeNSView(context: Context) -> ReaderView {
+        let view = ReaderView()
+        view.onChange = onChange
+        return view
+    }
+
+    func updateNSView(_ view: ReaderView, context: Context) {
+        view.onChange = onChange
+    }
+
+    static func dismantleNSView(_ view: ReaderView, coordinator: ()) {
+        view.stopObserving()
+    }
+
+    final class ReaderView: NSView {
+        var onChange: ((Bool) -> Void)?
+        private var observer: NSObjectProtocol?
+        private var lastReported: Bool?
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            stopObserving()
+            if let window {
+                observer = NotificationCenter.default.addObserver(
+                    forName: NSWindow.didChangeOcclusionStateNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.report() }
+                }
+            }
+            report()
+        }
+
+        func stopObserving() {
+            if let observer {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            observer = nil
+        }
+
+        private func report() {
+            let isOnScreen = window?.occlusionState.contains(.visible) ?? false
+            guard isOnScreen != lastReported else { return }
+            lastReported = isOnScreen
+            // Never write SwiftUI state in the middle of a view update.
+            let onChange = onChange
+            DispatchQueue.main.async { onChange?(isOnScreen) }
+        }
+    }
+}
+
 // MARK: - Icon tile
 
 /// The colored rounded-square icon: 24pt in the sidebar, ~58pt in each

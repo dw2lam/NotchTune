@@ -79,6 +79,7 @@ enum SettingsSection: String, CaseIterable {
 struct SettingsView: View {
     var model: AppModel
     @State private var selectedTab: SettingsTab = .general
+    @State private var isWindowOnScreen = true
 
     private var lang: LanguageManager { model.lang }
 
@@ -88,7 +89,9 @@ struct SettingsView: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
         } detail: {
             detailView
+                .environment(\.settingsWindowIsOnScreen, isWindowOnScreen)
         }
+        .onWindowOnScreenChange { isWindowOnScreen = $0 }
         .frame(minWidth: 780, idealWidth: 860, maxWidth: 1240, minHeight: 540, idealHeight: 640)
         .onReceive(NotificationCenter.default.publisher(for: .notchTuneSelectSetupTab)) { _ in
             selectedTab = .setup

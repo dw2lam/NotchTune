@@ -145,6 +145,7 @@ struct PersonalizationPreviewStage: View {
     static let height: CGFloat = 184
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.settingsWindowIsOnScreen) private var isOnScreen
 
     private var layout: V6ClosedLayout {
         profile == .notch ? .macbook : .external
@@ -172,7 +173,7 @@ struct PersonalizationPreviewStage: View {
             let offsetX = notchAlignmentOffset(for: pill)
 
             ZStack(alignment: .top) {
-                PersonalizationWallpaper(animated: !reduceMotion)
+                PersonalizationWallpaper(animated: !reduceMotion, paused: !isOnScreen)
 
                 ZStack(alignment: .top) {
                     phaseGlow
@@ -652,11 +653,13 @@ private struct PreviewChipBackground: View {
 /// slowly (off for Reduce Motion and for the small tiles).
 struct PersonalizationWallpaper: View {
     var animated: Bool = false
+    /// Holds the drift (window off screen) without resetting it.
+    var paused: Bool = false
 
     var body: some View {
         if animated {
             // The pools drift over tens of seconds; 20 fps is plenty.
-            TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: paused)) { context in
                 layers(time: context.date.timeIntervalSinceReferenceDate)
             }
         } else {
