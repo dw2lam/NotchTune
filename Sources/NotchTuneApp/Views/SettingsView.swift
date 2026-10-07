@@ -858,18 +858,9 @@ struct SetupSettingsPane: View {
             footer: lang.t("setup.section.hooks.footer")
         ) {
             Button(lang.t("setup.installAll")) {
-                if !model.claudeHooksInstalled { model.installClaudeHooks() }
-                if !model.codexHooksInstalled { model.installCodexHooks() }
-                if !model.openCodePluginInstalled { model.installOpenCodePlugin() }
-                if !model.qoderHooksInstalled { model.installQoderHooks() }
-                if !model.qwenCodeHooksInstalled { model.installQwenCodeHooks() }
-                if !model.factoryHooksInstalled { model.installFactoryHooks() }
-                if !model.codebuddyHooksInstalled { model.installCodebuddyHooks() }
-                if !model.cursorHooksInstalled { model.installCursorHooks() }
-                if !model.geminiHooksInstalled { model.installGeminiHooks() }
-                if !model.antigravityHooksInstalled { model.installAntigravityHooks() }
-                if !model.kimiHooksInstalled { model.installKimiHooks() }
-                if !model.claudeUsageInstalled { model.installClaudeUsageBridge() }
+                for step in installAllSteps where !step.installed {
+                    step.install()
+                }
             }
             .disabled(model.hooksBinaryURL == nil || allReady)
         } content: {
@@ -1192,10 +1183,29 @@ struct SetupSettingsPane: View {
         }
     }
 
+    /// Everything "Install All" installs. Its action and its enabled state
+    /// both read this one list, so they can't drift apart (Antigravity was
+    /// installed by the button but missing from its "all ready" check, which
+    /// greyed the button out while Antigravity still needed installing).
+    private var installAllSteps: [(installed: Bool, install: () -> Void)] {
+        [
+            (model.claudeHooksInstalled, model.installClaudeHooks),
+            (model.codexHooksInstalled, model.installCodexHooks),
+            (model.openCodePluginInstalled, model.installOpenCodePlugin),
+            (model.qoderHooksInstalled, model.installQoderHooks),
+            (model.qwenCodeHooksInstalled, model.installQwenCodeHooks),
+            (model.factoryHooksInstalled, model.installFactoryHooks),
+            (model.codebuddyHooksInstalled, model.installCodebuddyHooks),
+            (model.cursorHooksInstalled, model.installCursorHooks),
+            (model.geminiHooksInstalled, model.installGeminiHooks),
+            (model.antigravityHooksInstalled, model.installAntigravityHooks),
+            (model.kimiHooksInstalled, model.installKimiHooks),
+            (model.claudeUsageInstalled, model.installClaudeUsageBridge),
+        ]
+    }
+
     private var allReady: Bool {
-        model.claudeHooksInstalled && model.codexHooksInstalled && model.openCodePluginInstalled
-            && model.qoderHooksInstalled && model.qwenCodeHooksInstalled && model.factoryHooksInstalled && model.codebuddyHooksInstalled
-            && model.cursorHooksInstalled && model.geminiHooksInstalled && model.kimiHooksInstalled && model.claudeUsageInstalled
+        installAllSteps.allSatisfy(\.installed)
     }
 
     /// First-run welcome: a softly tinted card above the hooks list.
