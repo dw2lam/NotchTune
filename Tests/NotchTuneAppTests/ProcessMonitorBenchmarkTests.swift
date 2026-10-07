@@ -209,6 +209,14 @@ struct ProcessMonitorBenchmarkTests {
         let delta = Delta(start, Meter.now())
         report("back-to-back tick", delta, per: Double(tickCount), unit: "tick")
         print("BENCH back-to-back tick: state writes=\(box.writes - writesBefore) over \(tickCount) ticks")
+
+        // Worst case: every tick re-queries the terminals.
+        let fullStart = Meter.now()
+        for _ in 0..<tickCount {
+            coordinator.invalidateTerminalSnapshots()
+            await coordinator.runMonitorTick()
+        }
+        report("forced-full tick", Delta(fullStart, Meter.now()), per: Double(tickCount), unit: "tick")
     }
 
     @Test(.enabled(if: ProcessMonitorBenchmarkTests.isEnabled))

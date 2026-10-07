@@ -2398,6 +2398,8 @@ final class AppModel {
         if ingress == .bridge {
             monitoring.markSessionAttached(for: event)
             monitoring.markSessionProcessAlive(for: event)
+            // Re-tighten the process monitor's cadence and reconcile soon.
+            monitoring.requestPromptTick()
         }
         synchronizeSelection()
         discovery.refreshCodexRolloutTracking()
