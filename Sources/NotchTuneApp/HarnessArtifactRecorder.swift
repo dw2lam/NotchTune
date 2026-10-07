@@ -247,15 +247,12 @@ enum HarnessArtifactRecorder {
     static func recordFilmstrip(model: AppModel, directoryURL: URL) {
         guard let window = orderedVisibleWindows().first else { return }
         let windowNumber = UInt32(window.windowNumber)
-        // Fixed capture rect (CG global coords, top-left origin): a `.null`
-        // rect crops each frame to its visible pixels, which shifts frames.
-        let primaryHeight = NSScreen.screens.first?.frame.maxY ?? 0
-        let bounds = CGRect(
-            x: window.frame.minX,
-            y: primaryHeight - window.frame.maxY,
-            width: window.frame.width,
-            height: window.frame.height
-        )
+        // `.null` = the window's own bounds, wherever it sits. A screen rect
+        // computed from the frame came back blank once headless runs parked
+        // the panel beyond every display (+60000pt): screen-space capture
+        // only covers display area. Ignoring framing keeps every frame the
+        // window's exact, fixed size, so frames stay aligned.
+        let bounds = CGRect.null
         let dir = directoryURL.appendingPathComponent("filmstrip", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
@@ -289,7 +286,9 @@ enum HarnessArtifactRecorder {
                 let target = start.addingTimeInterval(Double(index) * interval)
                 let wait = target.timeIntervalSinceNow
                 if wait > 0 { Thread.sleep(forTimeInterval: wait) }
-                if let image = capture(bounds, 1 << 3, windowNumber, 1 << 3)?.takeRetainedValue() {
+                // optionIncludingWindow = 1 << 3; boundsIgnoreFraming = 1 << 0
+                // | bestResolution = 1 << 3.
+                if let image = capture(bounds, 1 << 3, windowNumber, (1 << 0) | (1 << 3))?.takeRetainedValue() {
                     let ms = Int(Date().timeIntervalSince(start) * 1000)
                     images.append((ms, image))
                 }
