@@ -15,13 +15,13 @@ struct TerminalSessionAttachmentProbe {
 
     typealias ActiveProcessSnapshot = ActiveAgentProcessDiscovery.ProcessSnapshot
 
-    struct GhosttyTerminalSnapshot: Sendable {
+    struct GhosttyTerminalSnapshot: Sendable, Equatable {
         var sessionID: String
         var workingDirectory: String
         var title: String
     }
 
-    struct TerminalTabSnapshot: Sendable {
+    struct TerminalTabSnapshot: Sendable, Equatable {
         var tty: String
         var customTitle: String
     }
@@ -73,7 +73,7 @@ struct TerminalSessionAttachmentProbe {
     private static let liveGraceWindow: TimeInterval = 120
     private static let staleGraceWindow: TimeInterval = 15 * 60
     private static let inactiveClaudeMatchWindow: TimeInterval = 120
-    private static let appleScriptTimeout: TimeInterval = 1.0
+    static let appleScriptTimeout: TimeInterval = 1.0
     private static let fieldSeparator = "\u{1f}"
     private static let recordSeparator = "\u{1e}"
 
@@ -1138,6 +1138,38 @@ struct TerminalSessionAttachmentProbe {
         }
     }
 
+    /// Ghostty snapshots for a shared `TerminalSnapshotRound`: queried once
+    /// with the caller's (longer) timeout and timed, so each consumer can
+    /// apply its own budget to the same answer.
+    func fetchGhosttySnapshots(timeout: TimeInterval) -> TerminalSnapshotRound.Fetch<[GhosttyTerminalSnapshot]> {
+        guard isRunning(bundleIdentifier: "com.mitchellh.ghostty") else {
+            return .notRunning
+        }
+
+        let start = Date()
+        do {
+            let snapshots = try ghosttySnapshots(timeout: timeout)
+            return .fetched(snapshots, elapsed: Date().timeIntervalSince(start))
+        } catch {
+            return .failed
+        }
+    }
+
+    /// Terminal.app snapshots for a shared `TerminalSnapshotRound`.
+    func fetchTerminalSnapshots(timeout: TimeInterval) -> TerminalSnapshotRound.Fetch<[TerminalTabSnapshot]> {
+        guard isRunning(bundleIdentifier: "com.apple.Terminal") else {
+            return .notRunning
+        }
+
+        let start = Date()
+        do {
+            let snapshots = try terminalSnapshots(timeout: timeout)
+            return .fetched(snapshots, elapsed: Date().timeIntervalSince(start))
+        } catch {
+            return .failed
+        }
+    }
+
     private func nonEmptyValue(_ value: String?) -> String? {
         guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else {
@@ -1147,7 +1179,7 @@ struct TerminalSessionAttachmentProbe {
         return trimmed
     }
 
-    private func ghosttySnapshots() throws -> [GhosttyTerminalSnapshot] {
+    private func ghosttySnapshots(timeout: TimeInterval = Self.appleScriptTimeout) throws -> [GhosttyTerminalSnapshot] {
         let script = """
         set fieldSeparator to ASCII character 31
         set recordSeparator to ASCII character 30
@@ -1176,7 +1208,7 @@ struct TerminalSessionAttachmentProbe {
         end tell
         """
 
-        let output = try runAppleScript(script)
+        let output = try runAppleScript(script, timeout: timeout)
         return output
             .split(separator: Character(Self.recordSeparator), omittingEmptySubsequences: true)
             .map(String.init)
@@ -1194,7 +1226,7 @@ struct TerminalSessionAttachmentProbe {
             }
     }
 
-    private func terminalSnapshots() throws -> [TerminalTabSnapshot] {
+    private func terminalSnapshots(timeout: TimeInterval = Self.appleScriptTimeout) throws -> [TerminalTabSnapshot] {
         let script = """
         set fieldSeparator to ASCII character 31
         set recordSeparator to ASCII character 30
@@ -1221,7 +1253,7 @@ struct TerminalSessionAttachmentProbe {
         end tell
         """
 
-        let output = try runAppleScript(script)
+        let output = try runAppleScript(script, timeout: timeout)
         return output
             .split(separator: Character(Self.recordSeparator), omittingEmptySubsequences: true)
             .map(String.init)
@@ -1307,7 +1339,7 @@ struct TerminalSessionAttachmentProbe {
         return String(rest.prefix { $0 != "\"" })
     }
 
-    private func runAppleScript(_ script: String) throws -> String {
+    private func runAppleScript(_ script: String, timeout: TimeInterval = Self.appleScriptTimeout) throws -> String {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         task.arguments = ["-e", script]
@@ -1325,7 +1357,7 @@ struct TerminalSessionAttachmentProbe {
         try task.run()
         MonitorInstrumentation.recordSpawn(executablePath: "/usr/bin/osascript")
         MonitorInstrumentation.recordAppleScript(target: Self.appleScriptTarget(of: script))
-        let waitResult = completionGroup.wait(timeout: .now() + Self.appleScriptTimeout)
+        let waitResult = completionGroup.wait(timeout: .now() + timeout)
         if waitResult == .timedOut {
             task.terminate()
             _ = completionGroup.wait(timeout: .now() + 0.2)

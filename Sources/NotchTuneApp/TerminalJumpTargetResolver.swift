@@ -35,9 +35,31 @@ struct TerminalJumpTargetResolver {
         var title: String
     }
 
-    private static let appleScriptTimeout: TimeInterval = 3
+    static let appleScriptTimeout: TimeInterval = 3
     private static let fieldSeparator = "\u{1F}"
     private static let recordSeparator = "\u{1E}"
+
+    /// Where the resolver gets terminal state from. Each source is only
+    /// called when some session needs it; `nil` means "unavailable" and the
+    /// terminal is skipped, `[]` means "not running / nothing listed".
+    struct SnapshotSources {
+        var ghostty: () -> [GhosttyTerminalSnapshot]?
+        var terminal: () -> [TerminalTabSnapshot]?
+        var tmux: () -> [TmuxPaneSnapshot]?
+        /// WezTerm-family pane listing for a bundle identifier
+        /// (`fun.tw93.kaku` / `com.github.wez.wezterm`).
+        var weztermFamily: (_ bundleIdentifier: String) -> [WeztermFamilySnapshot]?
+    }
+
+    /// Sources that query the terminals directly (AppleScript / CLIs).
+    var liveSources: SnapshotSources {
+        SnapshotSources(
+            ghostty: { fetchGhosttySnapshots() },
+            terminal: { fetchTerminalSnapshots() },
+            tmux: { fetchTmuxSnapshots() },
+            weztermFamily: { bundleID in fetchWeztermFamilySnapshots(bundleIdentifier: bundleID) }
+        )
+    }
 
     // MARK: - Public API
 
@@ -46,6 +68,17 @@ struct TerminalJumpTargetResolver {
     func resolveJumpTargets(
         for sessions: [AgentSession],
         activeProcesses: [ActiveProcessSnapshot]
+    ) -> [String: JumpTarget] {
+        resolveJumpTargets(for: sessions, activeProcesses: activeProcesses, sources: liveSources)
+    }
+
+    /// Same as `resolveJumpTargets(for:activeProcesses:)`, reading terminal
+    /// state from `sources` (e.g. a snapshot round shared with the
+    /// attachment probe) instead of querying every terminal itself.
+    func resolveJumpTargets(
+        for sessions: [AgentSession],
+        activeProcesses: [ActiveProcessSnapshot],
+        sources: SnapshotSources
     ) -> [String: JumpTarget] {
         guard !sessions.isEmpty else { return [:] }
 
@@ -67,7 +100,7 @@ struct TerminalJumpTargetResolver {
         // Tmux: match sessions and resolve their tmux pane info.
         // Also discovers tmux targets for sessions that only have a TTY.
         if !tmuxSessions.isEmpty {
-            let tmuxSnapshots = fetchTmuxSnapshots()
+            let tmuxSnapshots = sources.tmux()
             if let snapshots = tmuxSnapshots {
                 let matched = matchTmuxSnapshots(snapshots, to: tmuxSessions)
                 for (sessionID, snapshot) in matched {
@@ -81,7 +114,7 @@ struct TerminalJumpTargetResolver {
 
         // Ghostty: match sessions to AppleScript snapshots.
         if !ghosttySessions.isEmpty || sessions.contains(where: { needsGhosttyProbe($0) }) {
-            let ghosttySnapshots = fetchGhosttySnapshots()
+            let ghosttySnapshots = sources.ghostty()
             if let snapshots = ghosttySnapshots {
                 let allGhosttyCandidates = sessions.filter {
                     normalizedTerminalName(for: $0.jumpTarget?.terminalApp) == "ghostty"
@@ -102,8 +135,7 @@ struct TerminalJumpTargetResolver {
             for session in weztermFamilySessions {
                 let terminalName = normalizedTerminalName(for: session.jumpTarget?.terminalApp) ?? ""
                 let bundleID = terminalName == "kaku" ? "fun.tw93.kaku" : "com.github.wez.wezterm"
-                if let cliPath = resolveWeztermFamilyCLIPath(for: bundleID),
-                   let snapshots = fetchWeztermFamilySnapshots(cliPath: cliPath, bundleIdentifier: bundleID) {
+                if let snapshots = sources.weztermFamily(bundleID) {
                     let matched = matchWeztermFamilySnapshots(snapshots, to: [session])
                     for (sessionID, snapshot) in matched {
                         if let corrected = correctedWeztermFamilyJumpTarget(
@@ -118,7 +150,7 @@ struct TerminalJumpTargetResolver {
 
         // Terminal.app: match sessions to AppleScript snapshots.
         if !terminalSessions.isEmpty {
-            let terminalSnapshots = fetchTerminalSnapshots()
+            let terminalSnapshots = sources.terminal()
             if let snapshots = terminalSnapshots {
                 let matched = matchTerminalSnapshots(snapshots, to: terminalSessions)
                 for (sessionID, snapshot) in matched {
@@ -616,6 +648,15 @@ struct TerminalJumpTargetResolver {
         }
 
         return nil
+    }
+
+    /// `nil` when the CLI cannot be found or the listing fails.
+    private func fetchWeztermFamilySnapshots(bundleIdentifier: String) -> [WeztermFamilySnapshot]? {
+        guard let cliPath = resolveWeztermFamilyCLIPath(for: bundleIdentifier) else {
+            return nil
+        }
+
+        return fetchWeztermFamilySnapshots(cliPath: cliPath, bundleIdentifier: bundleIdentifier)
     }
 
     private func fetchWeztermFamilySnapshots(cliPath: String, bundleIdentifier: String) -> [WeztermFamilySnapshot]? {

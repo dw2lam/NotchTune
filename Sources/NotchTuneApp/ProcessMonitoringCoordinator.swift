@@ -83,32 +83,32 @@ final class ProcessMonitoringCoordinator {
         let probe = self.terminalSessionAttachmentProbe
         let resolver = self.terminalJumpTargetResolver
         let liveSessions = self.state.sessions.filter(\.isTrackedLiveSession)
-        let (snapshots, ghosttyAvail, terminalAvail, jumpTargets) = await Task.detached(
+        let (result, round, jumpTargets) = await Task.detached(
             priority: .utility
-        ) { () -> (
-            [ActiveProcessSnapshot],
-            TerminalSessionAttachmentProbe.SnapshotAvailability<TerminalSessionAttachmentProbe.GhosttyTerminalSnapshot>?,
-            TerminalSessionAttachmentProbe.SnapshotAvailability<TerminalSessionAttachmentProbe.TerminalTabSnapshot>?,
-            [String: JumpTarget]
-        ) in
-            let s = discovery.discover()
+        ) { () -> (ActiveAgentProcessDiscovery.DiscoveryResult, TerminalSnapshotRound?, [String: JumpTarget]) in
+            let result = discovery.discoverDetailed()
             // Idle guard: with no tracked live sessions and no agent
             // processes on the system there is nothing to attach —
             // skip the AppleScript terminal snapshots entirely (they
             // wake Ghostty/Terminal.app on every 2s cycle otherwise).
-            guard !liveSessions.isEmpty || !s.isEmpty else {
-                return (s, nil, nil, [:])
+            guard !liveSessions.isEmpty || !result.snapshots.isEmpty else {
+                return (result, nil, [:])
             }
-            let g = probe.ghosttySnapshotAvailability()
-            let t = probe.terminalSnapshotAvailability()
-            let j = resolver.resolveJumpTargets(for: liveSessions, activeProcesses: s)
-            return (s, g, t, j)
+            // One query per running terminal, shared by the attachment probe
+            // and the jump-target resolver.
+            let round = TerminalSnapshotRound.fetch(using: probe)
+            let jumpTargets = resolver.resolveJumpTargets(
+                for: liveSessions,
+                activeProcesses: result.snapshots,
+                sources: round.resolverSources(live: resolver.liveSources, isTmuxRunning: result.isTmuxRunning)
+            )
+            return (result, round, jumpTargets)
         }.value
-        MonitorInstrumentation.recordTick(full: ghosttyAvail != nil)
+        MonitorInstrumentation.recordTick(full: round != nil)
         self.reconcileSessionAttachments(
-            activeProcesses: snapshots,
-            ghosttyAvailability: ghosttyAvail,
-            terminalAvailability: terminalAvail,
+            activeProcesses: result.snapshots,
+            ghosttyAvailability: round?.ghosttyAvailability,
+            terminalAvailability: round?.terminalAvailability,
             preResolvedJumpTargets: jumpTargets
         )
     }
