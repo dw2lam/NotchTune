@@ -657,6 +657,36 @@ struct MusicLibraryStoreTests {
 
 // MARK: - Harness override + manager
 
+@MainActor
+struct MusicPlayerIconTests {
+    @Test
+    func aMissingPlayerIsNotLookedUpOnEveryRender() {
+        MusicPlayerIcon.resetForTests()
+        defer { MusicPlayerIcon.resetForTests() }
+        var lookups = 0
+        MusicPlayerIcon.resolveAppURL = { _ in
+            lookups += 1
+            return nil
+        }
+
+        let start = Date()
+        for frame in 0..<20 {
+            #expect(MusicPlayerIcon.icon(for: .spotify, now: start.addingTimeInterval(Double(frame) / 60)) == nil)
+        }
+        #expect(lookups == 1)
+
+        // Installed meanwhile: picked up once the miss has aged out.
+        MusicPlayerIcon.resolveAppURL = { _ in
+            lookups += 1
+            return URL(fileURLWithPath: "/System/Applications/Music.app")
+        }
+        let later = start.addingTimeInterval(MusicPlayerIcon.missRetryInterval + 1)
+        #expect(MusicPlayerIcon.icon(for: .spotify, now: later) != nil)
+        #expect(MusicPlayerIcon.icon(for: .spotify, now: later) != nil)
+        #expect(lookups == 2)
+    }
+}
+
 struct MusicHarnessOverrideTests {
     @Test
     func onlyAppliesToHarnessRunsThatAskForIt() {

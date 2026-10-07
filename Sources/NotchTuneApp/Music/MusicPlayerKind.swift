@@ -62,13 +62,33 @@ enum MusicPlayerKind: String, CaseIterable, Codable, Sendable {
 @MainActor
 enum MusicPlayerIcon {
     private static var cache: [MusicPlayerKind: NSImage] = [:]
+    /// When a player was last found not installed. A selected-but-missing
+    /// player is looked up again at most every `missRetryInterval` instead
+    /// of on every render (LaunchServices query + file check each time).
+    private static var misses: [MusicPlayerKind: Date] = [:]
+    static let missRetryInterval: TimeInterval = 60
+    /// Seam for tests.
+    static var resolveAppURL: (MusicPlayerKind) -> URL? = { $0.appURL }
 
-    static func icon(for kind: MusicPlayerKind) -> NSImage? {
+    static func icon(for kind: MusicPlayerKind, now: Date = .now) -> NSImage? {
         if let cached = cache[kind] { return cached }
-        guard let url = kind.appURL else { return nil }
+        if let missedAt = misses[kind], now.timeIntervalSince(missedAt) < missRetryInterval {
+            return nil
+        }
+        guard let url = resolveAppURL(kind) else {
+            misses[kind] = now
+            return nil
+        }
+        misses[kind] = nil
         let icon = NSWorkspace.shared.icon(forFile: url.path)
         icon.size = NSSize(width: 256, height: 256)
         cache[kind] = icon
         return icon
+    }
+
+    static func resetForTests() {
+        cache = [:]
+        misses = [:]
+        resolveAppURL = { $0.appURL }
     }
 }
