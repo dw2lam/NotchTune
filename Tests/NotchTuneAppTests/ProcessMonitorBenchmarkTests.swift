@@ -166,6 +166,24 @@ struct ProcessMonitorBenchmarkTests {
         """)
     }
 
+    /// The in-process discovery must find exactly what the `ps` + `lsof`
+    /// subprocess path finds on this machine.
+    @Test(.enabled(if: ProcessMonitorBenchmarkTests.isEnabled))
+    func nativeDiscoveryMatchesSubprocessDiscovery() {
+        let native = ActiveAgentProcessDiscovery()
+        let subprocess = ActiveAgentProcessDiscovery(commandRunner: ActiveAgentProcessDiscovery.commandOutput)
+
+        func key(_ snapshot: ActiveProcessSnapshot) -> String {
+            "\(snapshot.tool.rawValue)|\(snapshot.sessionID ?? "-")|\(snapshot.workingDirectory ?? "-")|\(snapshot.terminalTTY ?? "-")|\(snapshot.terminalApp ?? "-")|\(snapshot.transcriptPath ?? "-")|\(snapshot.tmuxTarget ?? "-")"
+        }
+
+        let nativeSnapshots = native.discover().map(key).sorted()
+        let subprocessSnapshots = subprocess.discover().map(key).sorted()
+        print("BENCH equivalence native:\n  " + nativeSnapshots.joined(separator: "\n  "))
+        print("BENCH equivalence ps+lsof:\n  " + subprocessSnapshots.joined(separator: "\n  "))
+        #expect(nativeSnapshots == subprocessSnapshots)
+    }
+
     @Test(.enabled(if: ProcessMonitorBenchmarkTests.isEnabled))
     func perTickCost() async {
         let tickCount = Int(ProcessInfo.processInfo.environment["NOTCHTUNE_MONITOR_BENCH_TICKS"] ?? "") ?? 8
@@ -215,3 +233,29 @@ struct ProcessMonitorBenchmarkTests {
     }
 }
 
+extension ProcessMonitorBenchmarkTests {
+    @Test(.enabled(if: ProcessMonitorBenchmarkTests.isEnabled))
+    func nativeInspectorBreakdown() {
+        let n = 20
+        func time(_ label: String, _ body: () -> Void) {
+            body()
+            let start = clock_gettime_nsec_np(CLOCK_PROCESS_CPUTIME_ID)
+            for _ in 0..<n { body() }
+            let end = clock_gettime_nsec_np(CLOCK_PROCESS_CPUTIME_ID)
+            print("BENCH breakdown \(label): \(String(format: "%.3f", Double(end - start) / 1e6 / Double(n)))ms cpu/call")
+        }
+        time("processTable()") { _ = NativeProcessInspector.processTable() }
+        time("CommandLineReader.init") { _ = NativeProcessInspector.CommandLineReader() }
+        let table = NativeProcessInspector.processTable() ?? []
+        let ttyEntries = table.filter { $0.terminalTTY != nil }
+        time("commandLine x\(ttyEntries.count) tty procs") {
+            let reader = NativeProcessInspector.CommandLineReader()
+            for entry in ttyEntries { _ = reader.commandLine(pid: entry.pid, shortName: entry.shortName) }
+        }
+        let agents = ActiveAgentProcessDiscovery().discoverDetailed().agentProcessIDs
+        time("openFiles x\(agents.count) agents") {
+            for pid in agents { _ = NativeProcessInspector.openFiles(pid: pid) }
+        }
+        time("discover()") { _ = ActiveAgentProcessDiscovery().discover() }
+    }
+}
