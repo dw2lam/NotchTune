@@ -1142,15 +1142,21 @@ final class OverlayPanelController {
                 && rectContainsIncludingEdges(retentionRect, point: screenLocation))
     }
 
+    /// Where an active file drag keeps the drop target open: the whole drawn
+    /// surface — the closed strip (`notchRect.height`) PLUS the drop box under
+    /// it. It used to stop `fileDragTargetHeight` below the top edge, short of
+    /// the box's lower part, so moving the file onto "Throw anything in"
+    /// closed the target before it could be dropped.
     nonisolated static func fileDragRetentionRect(
         notchRect: NSRect,
         openedWidth: CGFloat
     ) -> NSRect {
-        NSRect(
+        let height = notchRect.height + fileDragTargetHeight
+        return NSRect(
             x: notchRect.midX - openedWidth / 2,
-            y: notchRect.maxY - fileDragTargetHeight,
+            y: notchRect.maxY - height,
             width: openedWidth,
-            height: fileDragTargetHeight
+            height: height
         )
     }
 
@@ -1229,8 +1235,12 @@ final class OverlayPanelController {
         }
         // Use at least the empty-state height so the window doesn't shrink
         // when sessions come and go while opened. Notifications are the
-        // exception: a toast is exactly as tall as its content.
-        let minimumHeight = isNotification ? 0 : Self.openedEmptyStateHeight
+        // exception: a toast is exactly as tall as its content. So is the
+        // file-drop box, which must match `fileDragRetentionRect` — the floor
+        // stretched it to 200pt, past the area that keeps it open.
+        let minimumHeight = isNotification || model.notchOpenReason == .drag
+            ? 0
+            : Self.openedEmptyStateHeight
         let height = closedHeight + max(contentHeight, minimumHeight) + Self.openedContentBottomPadding + insets.bottom
 
         return CGSize(

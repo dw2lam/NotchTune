@@ -189,14 +189,52 @@ struct OverlayPanelControllerTests {
     }
 
     @Test
-    func activeFileDragUsesACompactRetentionArea() {
+    func activeFileDragRetentionCoversTheStripAndTheDropBox() {
         let notchRect = NSRect(x: 500, y: 962, width: 224, height: 38)
         let retentionRect = OverlayPanelController.fileDragRetentionRect(
             notchRect: notchRect,
             openedWidth: 520
         )
 
-        #expect(retentionRect == NSRect(x: 352, y: 896, width: 520, height: 104))
+        // 38pt closed strip + the 104pt drop box below it.
+        #expect(retentionRect == NSRect(x: 352, y: 858, width: 520, height: 142))
+    }
+
+    /// Regression: the drop box was drawn ~200pt tall under the strip while
+    /// the retention area stopped 104pt below the top edge, so dragging onto
+    /// the box's "Throw anything in" label closed it before the drop.
+    @Test @MainActor
+    func theWholeDrawnDropBoxKeepsAFileDragOpen() throws {
+        let screen = try #require(NSScreen.screens.first)
+        let model = AppModel()
+        let controller = OverlayPanelController()
+        controller.model = model
+        model.notchStatus = .opened
+        model.notchOpenReason = .drag
+
+        let closedHeight = screen.closedIslandHeight(density: model.islandDensity)
+        let size = controller.openedPanelSizeForTests(on: screen)
+        // The opened surface SwiftUI draws: the window minus its shadow inset.
+        let drawnHeight = size.height - IslandChromeMetrics.openedShadowBottomInset
+        let openedWidth = controller.openedPanelWidth(for: screen)
+        let top = screen.frame.maxY
+        let notchRect = NSRect(
+            x: screen.frame.midX - 100, y: top - closedHeight,
+            width: 200, height: closedHeight
+        )
+        let retention = OverlayPanelController.fileDragRetentionRect(
+            notchRect: notchRect,
+            openedWidth: openedWidth
+        )
+
+        // The box's centre (where its label sits) and its bottom edge both
+        // keep the target open.
+        let boxCentre = NSPoint(x: screen.frame.midX, y: top - closedHeight - (drawnHeight - closedHeight) / 2)
+        let boxBottom = NSPoint(x: screen.frame.midX, y: top - drawnHeight)
+        #expect(OverlayPanelController.rectContainsIncludingEdges(retention, point: boxCentre))
+        #expect(OverlayPanelController.rectContainsIncludingEdges(retention, point: boxBottom))
+        // …and the box is the designed size, not stretched to the 200pt floor.
+        #expect(drawnHeight == closedHeight + 104)
     }
 
     @Test
