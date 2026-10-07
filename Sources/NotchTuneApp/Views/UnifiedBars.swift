@@ -33,125 +33,24 @@ struct UnifiedBars: View {
     @State private var nudgeBounce: CGFloat = 0
 
     var body: some View {
-        // Match the redraw cadence to what each state actually needs. `.running`
-        // keeps display sync for its 5fps frame-swap + bounce; the others only
-        // move slowly (or not at all), so a coarse periodic schedule is visually
-        // identical at a fraction of the wakeups. Hidden → no schedule at all.
-        Group {
-            if paused {
-                canvas(time: 0)
-            } else {
-                switch mode {
-                case .running:
-                    // A 5fps frame-swap + a gentle bounce: 30fps is visually
-                    // identical to display sync (up to 120Hz on ProMotion) at a
-                    // quarter of the redraws while agents work.
-                    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { canvas(time: $0.date.timeIntervalSinceReferenceDate) }
-                case .waiting:
-                    // The cross-pulse cosine reads smooth well below 30fps.
-                    TimelineView(.periodic(from: .now, by: 1.0 / 15.0)) { canvas(time: $0.date.timeIntervalSinceReferenceDate) }
-                case .idle:
-                    // Idle's only motion is a 0.15s blink every 3s; 8fps still
-                    // guarantees ≥1 frame inside the blink window while nearly
-                    // halving the 24/7 Canvas redraw cost of the closed pill.
-                    TimelineView(.periodic(from: .now, by: 1.0 / 8.0)) { canvas(time: $0.date.timeIntervalSinceReferenceDate) }
+        // Core Animation drives every mode (see PixelCharacterView): no
+        // per-frame SwiftUI work. Hidden/frozen → static frame, no animation.
+        PixelCharacterView(character: character, mode: mode, paused: paused, tint: tint)
+            .frame(width: size, height: size)
+            .offset(y: -nudgeBounce * size / Self.box)
+            .onChange(of: nudgeTrigger) { _, newValue in
+                // Skip while hidden/frozen — no point animating an off-screen glyph.
+                guard newValue != nil, !paused else { return }
+                // Jump up sharply, then settle back with a springy landing.
+                withAnimation(.easeOut(duration: 0.16)) { nudgeBounce = 3 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.5)) { nudgeBounce = 0 }
                 }
             }
-        }
-        .frame(width: size, height: size)
-        .onChange(of: nudgeTrigger) { _, newValue in
-            // Skip while hidden/frozen — no point animating an off-screen glyph.
-            guard newValue != nil, !paused else { return }
-            // Jump up sharply, then settle back with a springy landing.
-            withAnimation(.easeOut(duration: 0.16)) { nudgeBounce = 3 }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
-                withAnimation(.spring(response: 0.34, dampingFraction: 0.5)) { nudgeBounce = 0 }
-            }
-        }
-    }
-
-    private func canvas(time: TimeInterval) -> some View {
-        Canvas { context, canvasSize in
-            withScaledContext(context, canvasSize) { ctx in
-                drawCharacter(context: ctx, time: time)
-            }
-        }
-    }
-
-    // MARK: - Drawing
-
-    private func withScaledContext(
-        _ context: GraphicsContext,
-        _ canvasSize: CGSize,
-        body: (GraphicsContext) -> Void
-    ) {
-        var ctx = context
-        let side = min(canvasSize.width, canvasSize.height)
-        let scale = side / Self.box
-        let dx = (canvasSize.width - side) / 2
-        let dy = (canvasSize.height - side) / 2
-        ctx.translateBy(x: dx, y: dy)
-        ctx.scaleBy(x: scale, y: scale)
-        body(ctx)
-    }
-
-    private func drawCharacter(context: GraphicsContext, time: TimeInterval) {
-        var frame = character.idleFrame
-        let runningFrame = character.runningFrame
-        let eyeCoordinate = character.eyeCoordinate
-
-        var bounce: CGFloat = 0.0
-        var opacity: Double = 1.0
-
-        switch mode {
-        case .running:
-            let isEvenFrame = (Int(time * 5.0) % 2 == 0)
-            if !isEvenFrame {
-                frame = runningFrame
-            }
-            bounce = character.runningBounce(time: time)
-
-        case .idle:
-            let isBlinking = (time.truncatingRemainder(dividingBy: 3.0) < 0.15)
-            if isBlinking, let eyeCoordinate {
-                frame[eyeCoordinate.row][eyeCoordinate.column] = 1
-            }
-
-        case .waiting:
-            let progress = time.truncatingRemainder(dividingBy: 1.8) / 1.8
-            let wave = 0.5 - 0.5 * cos(progress * 2 * .pi)
-            opacity = 0.45 + 0.55 * wave
-        }
-
-        let pixelSize: CGFloat = 1.6
-        let gap: CGFloat = 0.35
-        let gridSize: Int = 9
-        let totalSize = CGFloat(gridSize) * pixelSize + CGFloat(gridSize - 1) * gap
-        let startX = (Self.box - totalSize) / 2
-        let startY = (Self.box - totalSize) / 2 - bounce - nudgeBounce
-
-        for r in 0..<gridSize {
-            for c in 0..<gridSize {
-                if frame[r][c] == 1 {
-                    let rect = CGRect(
-                        x: startX + CGFloat(c) * (pixelSize + gap),
-                        y: startY + CGFloat(r) * (pixelSize + gap),
-                        width: pixelSize,
-                        height: pixelSize
-                    )
-                    let path = Path(
-                        roundedRect: rect,
-                        cornerSize: CGSize(width: 0.2, height: 0.2)
-                    )
-                    context.fill(path, with: .color(tint.opacity(opacity)))
-                }
-            }
-        }
     }
 }
 
-private extension IslandCharacter {
-    typealias PixelFrame = [[Int]]
+extension IslandCharacter {
 
     var title: String {
         switch self {
@@ -300,6 +199,17 @@ private extension IslandCharacter {
         case .crab: (0, 1)
         case .duck: (1, 5)
         case .claude: (3, 2)
+        }
+    }
+
+    /// One full period of `runningBounce` (for Core Animation keyframes).
+    var runningBouncePeriod: TimeInterval {
+        switch self {
+        case .dino: 0.2      // |sin(5πt)|
+        case .ghost: 1.0     // sin(2πt)
+        case .crab: 1.0 / 6  // |sin(6πt)|
+        case .duck: 0.25     // |sin(4πt)|
+        case .claude: 0.25   // |sin(4πt)|
         }
     }
 
