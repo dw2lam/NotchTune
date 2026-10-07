@@ -981,6 +981,9 @@ private struct MyspaceMediaStripCell: View {
     let onDelete: () -> Void
 
     @State private var thumbnail: NSImage?
+    /// Finder icon for files QuickLook can't thumbnail. Resolved once in
+    /// `.task`: read from body it hit NSWorkspace on every parallax frame.
+    @State private var fileIcon: NSImage?
     @State private var hovering = false
 
     var body: some View {
@@ -999,8 +1002,8 @@ private struct MyspaceMediaStripCell: View {
                                 .aspectRatio(contentMode: .fill)
                                 .scaleEffect(1.22)
                                 .offset(x: offset)
-                        } else {
-                            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                        } else if let fileIcon {
+                            Image(nsImage: fileIcon)
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
                                 .padding(14)
@@ -1040,6 +1043,7 @@ private struct MyspaceMediaStripCell: View {
         .onTapGesture(perform: onOpen)
         .onHover { hovering = $0 }
         .task(id: url) {
+            fileIcon = NSWorkspace.shared.icon(forFile: url.path)
             let scale = NSScreen.main?.backingScaleFactor ?? 2
             let request = QLThumbnailGenerator.Request(
                 fileAt: url,
