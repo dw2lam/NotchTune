@@ -43,7 +43,10 @@ struct UnifiedBars: View {
             } else {
                 switch mode {
                 case .running:
-                    TimelineView(.animation) { canvas(time: $0.date.timeIntervalSinceReferenceDate) }
+                    // A 5fps frame-swap + a gentle bounce: 30fps is visually
+                    // identical to display sync (up to 120Hz on ProMotion) at a
+                    // quarter of the redraws while agents work.
+                    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { canvas(time: $0.date.timeIntervalSinceReferenceDate) }
                 case .waiting:
                     // The cross-pulse cosine reads smooth well below 30fps.
                     TimelineView(.periodic(from: .now, by: 1.0 / 15.0)) { canvas(time: $0.date.timeIntervalSinceReferenceDate) }

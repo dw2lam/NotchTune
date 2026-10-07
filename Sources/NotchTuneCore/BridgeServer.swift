@@ -2407,6 +2407,7 @@ public final class BridgeServer: @unchecked Sendable {
     /// Measured from the subagent's LAST hook event, so a long-running agent
     /// that keeps calling tools is never dropped while it works.
     static let subagentStaleTimeout: TimeInterval = 10 * 60
+    static let subagentHeartbeatInterval: TimeInterval = 15
 
     private func cleanUpStaleSubagents(forSession sessionID: String) {
         guard var metadata = localState.session(id: sessionID)?.claudeMetadata,
@@ -2453,7 +2454,13 @@ public final class BridgeServer: @unchecked Sendable {
         let now = Date.now
         var metadata = session.claudeMetadata ?? ClaudeSessionMetadata()
         if let index = metadata.activeSubagents.firstIndex(where: { $0.agentID == agentID }) {
-            metadata.activeSubagents[index].lastActivityAt = now
+            // Coarse heartbeat: staleness is judged in minutes, so refreshing
+            // it on every tool event would only churn metadata updates (and
+            // UI invalidations) while a busy subagent works.
+            let lastSeen = metadata.activeSubagents[index].lastActivityAt ?? .distantPast
+            if now.timeIntervalSince(lastSeen) >= Self.subagentHeartbeatInterval {
+                metadata.activeSubagents[index].lastActivityAt = now
+            }
             if metadata.activeSubagents[index].agentType == nil {
                 metadata.activeSubagents[index].agentType = payload.agentType
             }
