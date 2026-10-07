@@ -220,9 +220,12 @@ struct IslandPanelView: View {
     }
 
     /// Closed music surfaces draw their own pill; parent `GrowingNotchShape` uses
-    /// agent wing metrics and misaligns / crops them if applied.
+    /// agent wing metrics and misaligns / crops them if applied. Held back
+    /// until the opened surface unmounts so a close still clips the panel
+    /// content down into the notch instead of leaving it to spill past the
+    /// shrinking background.
     private var usesClosedMusicSurfaceClip: Bool {
-        isShowingClosedMusicSurface && !usesOpenedVisualState
+        isShowingClosedMusicSurface && !shouldRenderOpenedSurface
     }
 
     private var activeMusicClipMetrics: MusicNotificationClipMetrics {
@@ -554,6 +557,10 @@ struct IslandPanelView: View {
         let outerBottomPadding: CGFloat = 0
         let openedWidth = max(0, layoutWidth - outerHorizontalPadding)
         let openedHeight = max(closedNotchHeight, layoutHeight - outerBottomPadding)
+        // Read once per pass: each of these walks the wing math, which resolves
+        // `model.islandLiveActivity` several times over.
+        let compact = morphCompact
+        let alignmentOffsetX = macbookNotchAlignmentOffsetX
 
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
@@ -576,10 +583,10 @@ struct IslandPanelView: View {
 
                     v6ClosedSurface(panelContentWidth: resolvedPanelContentWidth)
                         .offset(
-                            x: usesOpenedVisualState ? 0 : macbookNotchAlignmentOffsetX,
+                            x: usesOpenedVisualState ? 0 : alignmentOffsetX,
                             y: closedSurfaceVerticalOffset
                         )
-                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: macbookNotchAlignmentOffsetX)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: alignmentOffsetX)
                         .opacity(usesOpenedVisualState ? 0 : 1)
                         .animation(
                             usesOpenedVisualState
@@ -601,14 +608,14 @@ struct IslandPanelView: View {
                     musicClipMetrics: activeMusicClipMetrics,
                     musicNotchGapWidth: isExternalDisplayPlacement ? 0 : macbookPhysicalNotchWidth,
                     morphProgress: morphProgress,
-                    compactW: morphCompact.width,
-                    compactH: morphCompact.height,
+                    compactW: compact.width,
+                    compactH: compact.height,
                     expandedW: openedWidth,
                     expandedH: openedHeight,
-                    compactR: morphCompact.radius,
-                    compactLeftWingWidth: morphCompact.leftWing,
-                    compactNotchGapWidth: morphCompact.notchGap,
-                    compactEarRadius: morphCompact.ear,
+                    compactR: compact.radius,
+                    compactLeftWingWidth: compact.leftWing,
+                    compactNotchGapWidth: compact.notchGap,
+                    compactEarRadius: compact.ear,
                     expandedEarRadius: openedEarRadius
                 ))
             }
@@ -635,7 +642,11 @@ struct IslandPanelView: View {
                 model.notchOpen(reason: .click)
             }
         }
-        .onChange(of: layoutWidth) { _, newWidth in
+        // `initial: true`: the panel is created at its final width, so without
+        // it this never fired and every wing cap that reads `panelContentWidth`
+        // stayed on the 484pt seed (live-activity and music titles truncated
+        // far short of their budget).
+        .onChange(of: layoutWidth, initial: true) { _, newWidth in
             if newWidth > 0 {
                 panelContentWidth = newWidth
             }
@@ -689,7 +700,11 @@ struct IslandPanelView: View {
     /// TimelineView internally for bar animation.
     @ViewBuilder
     private func v6ClosedSurface(panelContentWidth: CGFloat) -> some View {
-        Group {
+        // A ZStack, not a Group: a Group hands the caller's modifiers to each
+        // branch, so the music pill (only allowed once the island closes) got
+        // a fresh `.opacity(1)` on insertion and popped in at the very start
+        // of the close instead of fading in with the delayed tuck.
+        ZStack(alignment: .top) {
             if isShowingClosedMusicSurface {
                 let layout: V6ClosedLayout = isExternalDisplayPlacement ? .external : .macbook
                 let surfaceTrack = isShowingMusicNotification
@@ -862,17 +877,18 @@ struct IslandPanelView: View {
     /// The one outline the surface morphs through: closed pill (anchored on
     /// the physical notch) → opened panel, with the outward top curve.
     private func morphShape(openedWidth: CGFloat, openedHeight: CGFloat) -> GrowingNotchShape {
-        GrowingNotchShape(
+        let compact = morphCompact
+        return GrowingNotchShape(
             progress: morphProgress,
-            compactW: morphCompact.width,
-            compactH: morphCompact.height,
+            compactW: compact.width,
+            compactH: compact.height,
             expandedW: openedWidth,
             expandedH: openedHeight,
-            compactR: morphCompact.radius,
+            compactR: compact.radius,
             expandedR: OpenedIslandSurfaceShape.openedBottomRadius,
-            compactLeftWingWidth: morphCompact.leftWing,
-            compactNotchGapWidth: morphCompact.notchGap,
-            compactEarRadius: morphCompact.ear,
+            compactLeftWingWidth: compact.leftWing,
+            compactNotchGapWidth: compact.notchGap,
+            compactEarRadius: compact.ear,
             expandedEarRadius: openedEarRadius,
             topOverscan: Self.surfaceTopOverscan
         )
@@ -1049,7 +1065,11 @@ struct IslandPanelView: View {
                     .help("\(window.label) weekly limit")
             }
 
-            headerIconButton(systemName: "gearshape.fill", tint: .white.opacity(0.62)) {
+            headerIconButton(
+                systemName: "gearshape.fill",
+                tint: .white.opacity(0.62),
+                accessibilityLabel: "Settings"
+            ) {
                 model.showSettings()
             }
 
@@ -1070,7 +1090,7 @@ struct IslandPanelView: View {
     private func headerIconButton(
         systemName: String,
         tint: Color,
-        accessibilityLabel: String? = nil,
+        accessibilityLabel: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -1082,7 +1102,9 @@ struct IslandPanelView: View {
             fallbackFill: .white.opacity(0.08),
             foreground: model.glassSettings.usesGlassControls ? .white.opacity(0.78) : tint
         ))
-        .accessibilityLabel(accessibilityLabel ?? systemName)
+        // Required: the old `?? systemName` fallback made VoiceOver read the
+        // gear as "gearshape.fill".
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var openedContent: some View {
@@ -1248,9 +1270,19 @@ struct IslandPanelView: View {
         return .white.opacity(model.glassSettings.usesGlassControls ? 0.5 : 0.4)
     }
 
+    private var showsInstallHooksHint: Bool {
+        !model.hasAnyInstalledAgent && !isNotificationMode && !HarnessHeadless.isShowcase
+    }
+
+    /// The populated list renders the hint itself (see `sessionList`) so the
+    /// measured height that sizes the panel includes it.
+    private var showsSessionRows: Bool {
+        !model.shouldShowSessionBootstrapPlaceholder && !model.islandListSessions.isEmpty
+    }
+
     private var agentsContent: some View {
         VStack(spacing: 8) {
-            if !model.hasAnyInstalledAgent, !isNotificationMode, !HarnessHeadless.isShowcase {
+            if showsInstallHooksHint, !showsSessionRows {
                 installHooksHint
                     .padding(.horizontal, sessionListSideInset)
                     .padding(.top, 8)
@@ -1399,17 +1431,17 @@ struct IslandPanelView: View {
                         }
                     }
 
-                Group {
-                    if model.measuredNotificationContentHeight > cap {
-                        ScrollView(.vertical) {
-                            content
-                        }
-                        .scrollIndicators(.automatic)
-                        .frame(height: cap)
-                    } else {
-                        content
-                    }
+                // Always the same ScrollView (only its height and indicators
+                // change): switching between a scrolling and a plain branch
+                // re-created the card whenever it crossed the cap, wiping its
+                // state (a collapse undone, an "Other" pick dropped).
+                let measured = model.measuredNotificationContentHeight
+                ScrollView(.vertical) {
+                    content
                 }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollIndicators(measured > cap ? .automatic : .hidden)
+                .frame(height: measured > 0 ? min(measured, cap) : nil)
                 .onHover { hovering in
                     if hovering {
                         model.notePointerInsideIslandSurface()
@@ -1419,6 +1451,15 @@ struct IslandPanelView: View {
                 }
             } else {
                VStack(spacing: 0) {
+                   // Inside the measured stack: outside it, the window was
+                   // sized without the hint and the last rows were clipped.
+                   if showsInstallHooksHint {
+                       installHooksHint
+                           .padding(.horizontal, sessionListSideInset)
+                           .padding(.top, 8)
+                           .padding(.bottom, 8)
+                   }
+
                    sessionPanelHeader(referenceDate: referenceDate)
 
                    VStack(spacing: 0) {
@@ -2181,21 +2222,33 @@ struct IslandPanelView: View {
             return nil
         }
 
-        let formatter = DateComponentsFormatter()
-        formatter.unitsStyle = .abbreviated
-
+        let formatter: DateComponentsFormatter
         if interval >= 86_400 {
-            formatter.allowedUnits = [.day]
-            formatter.maximumUnitCount = 1
+            formatter = Self.dayRemainingFormatter
         } else if interval >= 3_600 {
-            formatter.allowedUnits = [.hour, .minute]
-            formatter.maximumUnitCount = 2
+            formatter = Self.hourMinuteRemainingFormatter
         } else {
-            formatter.allowedUnits = [.minute]
-            formatter.maximumUnitCount = 1
+            formatter = Self.minuteRemainingFormatter
         }
 
         return formatter.string(from: interval)
+    }
+
+    // Built once: these run for every usage window on every header render
+    // (the usage cycler's `.help`), and formatters are costly to create.
+    private static let dayRemainingFormatter = makeRemainingFormatter(units: [.day], maximumUnitCount: 1)
+    private static let hourMinuteRemainingFormatter = makeRemainingFormatter(units: [.hour, .minute], maximumUnitCount: 2)
+    private static let minuteRemainingFormatter = makeRemainingFormatter(units: [.minute], maximumUnitCount: 1)
+
+    private static func makeRemainingFormatter(
+        units: NSCalendar.Unit,
+        maximumUnitCount: Int
+    ) -> DateComponentsFormatter {
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .abbreviated
+        formatter.allowedUnits = units
+        formatter.maximumUnitCount = maximumUnitCount
+        return formatter
     }
 }
 
@@ -3050,6 +3103,7 @@ private struct IslandSessionRow: View {
             }
             .buttonStyle(.plain)
             .disabled(replyText.trimmingCharacters(in: .whitespaces).isEmpty)
+            .accessibilityLabel(lang.t("question.sendReply"))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -3145,8 +3199,12 @@ private struct IslandSessionRow: View {
         let tint = statusTint(for: presence)
         switch stateIndicator {
         case .animatedDot:
-            TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
-                let pulse = presence == .running || isActionable
+            // Only running / actionable dots pulse; every other row's dot is
+            // static, so its timeline stays paused instead of ticking 30×/s
+            // for every idle row while the list is open.
+            let pulses = presence == .running || isActionable
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !pulses)) { context in
+                let pulse = pulses
                     ? (sin(context.date.timeIntervalSinceReferenceDate * 3.2) + 1) / 2
                     : 0
                 Circle()

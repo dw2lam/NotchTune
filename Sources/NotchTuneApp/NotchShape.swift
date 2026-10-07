@@ -29,6 +29,10 @@ struct GrowingNotchShape: Shape {
     /// light line along the screen edge — the surface reads as continuous
     /// with the hardware notch / menu bar.
     var topOverscan: CGFloat = 0
+    /// Clip to nothing (a rect far larger than the view) instead of the
+    /// surface outline. Lets a caller turn clipping off without swapping the
+    /// clipped view's identity (see `NotchSurfaceClipModifier`).
+    var isUnbounded = false
 
     /// Progress + the compact geometry, so switching the compact target
     /// (pill ↔ hardware notch) animates instead of jumping.
@@ -56,6 +60,10 @@ struct GrowingNotchShape: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
+        if isUnbounded {
+            return Path(rect.insetBy(dx: -Self.unboundedOutset, dy: -Self.unboundedOutset))
+        }
+
         let w = compactW + (expandedW - compactW) * progress
         let h = compactH + (expandedH - compactH) * progress
         let r = min(compactR + (expandedR - compactR) * progress, h / 2, w / 2)
@@ -73,6 +81,8 @@ struct GrowingNotchShape: Shape {
 
         return Self.surfacePath(x: x, width: w, height: h, bottomRadius: r, earRadius: e, topOverscan: topOverscan)
     }
+
+    nonisolated static let unboundedOutset: CGFloat = 4096
 
     /// Flat top edge (flared outward by `earRadius`), straight sides, rounded
     /// bottom. Shared by the morph clip, the growing background and the
@@ -127,26 +137,27 @@ struct NotchSurfaceClipModifier: ViewModifier {
     var expandedEarRadius: CGFloat = 0
 
     func body(content: Content) -> some View {
-        if usesMusicNotificationClip {
-            // Closed music surfaces (notification + compact) draw their own
-            // V6ClosedPillShape. Parent GrowingNotchShape uses agent wing metrics
-            // and misaligns them, which reads as extra side padding.
-            content
-        } else {
-            content.clipShape(
-                GrowingNotchShape(
-                    progress: morphProgress,
-                    compactW: compactW,
-                    compactH: compactH,
-                    expandedW: expandedW,
-                    expandedH: expandedH,
-                    compactR: compactR,
-                    compactLeftWingWidth: compactLeftWingWidth,
-                    compactNotchGapWidth: compactNotchGapWidth,
-                    compactEarRadius: compactEarRadius,
-                    expandedEarRadius: expandedEarRadius
-                )
+        // Closed music surfaces (notification + compact) draw their own
+        // V6ClosedPillShape. Parent GrowingNotchShape uses agent wing metrics
+        // and misaligns them, which reads as extra side padding — so the clip
+        // goes unbounded for them. It stays ONE `clipShape` either way: an
+        // `if` here swapped the whole surface's identity on every open/close
+        // next to a music pill, re-mounting the opened panel mid-close (its
+        // content vanished on frame 1 and the music pill popped in at once).
+        content.clipShape(
+            GrowingNotchShape(
+                progress: morphProgress,
+                compactW: compactW,
+                compactH: compactH,
+                expandedW: expandedW,
+                expandedH: expandedH,
+                compactR: compactR,
+                compactLeftWingWidth: compactLeftWingWidth,
+                compactNotchGapWidth: compactNotchGapWidth,
+                compactEarRadius: compactEarRadius,
+                expandedEarRadius: expandedEarRadius,
+                isUnbounded: usesMusicNotificationClip
             )
-        }
+        )
     }
 }
