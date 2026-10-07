@@ -527,7 +527,8 @@ enum HarnessArtifactRecorder {
             return nil
         }
 
-        return snapshotAXNode(from: matchingWindow)
+        var visited = Set<AXUIElement>()
+        return snapshotAXNode(from: matchingWindow, visited: &visited)
     }
 
     private static func axWindowScore(
@@ -552,16 +553,21 @@ enum HarnessArtifactRecorder {
 
     private static func snapshotAXNode(
         from element: AXUIElement,
-        depth: Int = 0
+        depth: Int = 0,
+        visited: inout Set<AXUIElement>
     ) -> HarnessArtifactReport.AccessibilityNode? {
-        guard depth <= 16 else {
+        // The AX graph isn't a tree: the application element turns up again
+        // below the window, and re-walking it (every window, every menu) to
+        // depth 16 stalled each capture for about a minute. Visit each
+        // element once.
+        guard depth <= 16, visited.insert(element).inserted else {
             return nil
         }
 
         let children = copyAXElementArrayValue(
             of: element,
             attribute: kAXChildrenAttribute as CFString
-        )?.compactMap { snapshotAXNode(from: $0, depth: depth + 1) } ?? []
+        )?.compactMap { snapshotAXNode(from: $0, depth: depth + 1, visited: &visited) } ?? []
 
         let role = copyStringValue(of: element, attribute: kAXRoleAttribute as CFString)
         let subrole = copyStringValue(of: element, attribute: kAXSubroleAttribute as CFString)
