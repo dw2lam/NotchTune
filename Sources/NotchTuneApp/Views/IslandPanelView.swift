@@ -635,7 +635,11 @@ struct IslandPanelView: View {
                 model.notchOpen(reason: .click)
             }
         }
-        .onChange(of: layoutWidth) { _, newWidth in
+        // `initial: true`: the panel is created at its final width, so without
+        // it this never fired and every wing cap that reads `panelContentWidth`
+        // stayed on the 484pt seed (live-activity and music titles truncated
+        // far short of their budget).
+        .onChange(of: layoutWidth, initial: true) { _, newWidth in
             if newWidth > 0 {
                 panelContentWidth = newWidth
             }
