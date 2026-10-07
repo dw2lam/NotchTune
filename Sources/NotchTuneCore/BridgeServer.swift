@@ -889,7 +889,10 @@ public final class BridgeServer: @unchecked Sendable {
 
             let currentPhase = localState.session(id: payload.sessionID)?.phase ?? .completed
             let notificationPhase: SessionPhase
-            if payload.isIdleNotification {
+            // The idle prompt also fires while background subagents still
+            // work after the main turn: the held completion settles the
+            // session when they finish, not the idle prompt.
+            if payload.isIdleNotification, deferredClaudeCompletions[payload.sessionID] == nil {
                 notificationPhase = .completed
             } else {
                 // Notifications are informational — never escalate phase to running.
@@ -1007,7 +1010,10 @@ public final class BridgeServer: @unchecked Sendable {
             ensureClaudeSessionExists(for: payload)
             synchronizeClaudeJumpTarget(for: payload)
             let sessionWasAlreadyCompleted = localState.session(id: payload.sessionID)?.phase == .completed
-            if !sessionWasAlreadyCompleted {
+            // Once the main turn is over (completed, or held for background
+            // agents) the subagent's `last_assistant_message` must not replace
+            // the main turn's final message.
+            if !sessionWasAlreadyCompleted, deferredClaudeCompletions[payload.sessionID] == nil {
                 synchronizeClaudeMetadata(for: payload)
             }
 
@@ -2449,7 +2455,10 @@ public final class BridgeServer: @unchecked Sendable {
         // A straggler after SubagentStop must not resurrect the agent.
         guard stoppedClaudeSubagents[agentID] == nil else { return }
         ensureClaudeSessionExists(for: payload)
-        guard let session = localState.session(id: payload.sessionID) else { return }
+        // Nor may one in flight when Claude Code quit reopen the session
+        // (a resume sends SessionStart first, which clears the flag).
+        guard let session = localState.session(id: payload.sessionID),
+              !session.isSessionEnded else { return }
 
         let now = Date.now
         var metadata = session.claudeMetadata ?? ClaudeSessionMetadata()
@@ -2664,6 +2673,22 @@ public final class BridgeServer: @unchecked Sendable {
         guard active.isEmpty else { return false }
 
         deferredClaudeCompletions.removeValue(forKey: sessionID)
+        // Drop the tool mirrored from the subagents, as the main turn's Stop
+        // did for its own; it would otherwise headline the next turn.
+        if var metadata = localState.session(id: sessionID)?.claudeMetadata,
+           metadata.currentTool != nil || metadata.currentToolInputPreview != nil {
+            metadata.currentTool = nil
+            metadata.currentToolInputPreview = nil
+            emit(
+                .claudeSessionMetadataUpdated(
+                    ClaudeSessionMetadataUpdated(
+                        sessionID: sessionID,
+                        claudeMetadata: metadata,
+                        timestamp: .now
+                    )
+                )
+            )
+        }
         emit(
             .sessionCompleted(
                 SessionCompleted(
