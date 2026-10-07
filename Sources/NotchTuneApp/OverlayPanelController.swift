@@ -30,6 +30,12 @@ final class OverlayPanelController {
     private static let notificationMeasuredContentPadding: CGFloat = 8
     private static let notificationEstimatedVerticalInsets: CGFloat = 36
     private static let openedEmptyStateHeight: CGFloat = 200
+    /// Tab bar (36) + notch header gap (12) the Agents tab adds around its
+    /// measured list.
+    private static let agentsTabChromeHeight: CGFloat = 36 + 12
+    /// Breathing room kept between the opened panel and the bottom of the
+    /// usable screen.
+    private static let openedScreenBottomMargin: CGFloat = 24
     nonisolated private static let fileDragTargetHeight: CGFloat = 104
     private static let questionCardBaseHeight: CGFloat = 110
     private static let questionCardMaxHeight: CGFloat = 420
@@ -687,14 +693,17 @@ final class OverlayPanelController {
             musicSwipeTravel = 0
             musicSwipeFired = false
         }
+        // This runs for every scroll event anywhere on the Mac: keep the
+        // cheap checks (and the hit test) ahead of `isRunning`, which scans
+        // NSWorkspace's running applications.
         guard !isMomentum,
               let model,
               model.notchStatus == .closed,
               !model.isOverlayDisplayFullscreen,
               model.playerManager.isMusicEnabled,
-              model.playerManager.isRunning,
               !model.playerManager.track.isEmpty(),
-              isPointInClosedSurfaceArea(location) else {
+              isPointInClosedSurfaceArea(location),
+              model.playerManager.isRunning else {
             return
         }
 
@@ -1206,12 +1215,23 @@ final class OverlayPanelController {
         let panelWidth = isNotification
             ? notificationPanelWidth(for: screen)
             : openedPanelWidth(for: screen)
-        let contentHeight = openedContentHeight(for: model, on: screen)
+        let closedHeight = screen.closedIslandHeight(density: model.islandDensity)
+        var contentHeight = openedContentHeight(for: model, on: screen)
+        if !isNotification {
+            // The window hangs from the top edge: a long session list must
+            // not push it past the bottom of the screen (notifications have
+            // their own, smaller budget).
+            contentHeight = min(contentHeight, Self.maxOpenedContentHeight(
+                availableHeight: Self.availableHeightBelowTop(of: screen),
+                closedHeight: closedHeight,
+                bottomInset: insets.bottom
+            ))
+        }
         // Use at least the empty-state height so the window doesn't shrink
         // when sessions come and go while opened. Notifications are the
         // exception: a toast is exactly as tall as its content.
         let minimumHeight = isNotification ? 0 : Self.openedEmptyStateHeight
-        let height = screen.closedIslandHeight(density: model.islandDensity) + max(contentHeight, minimumHeight) + Self.openedContentBottomPadding + insets.bottom
+        let height = closedHeight + max(contentHeight, minimumHeight) + Self.openedContentBottomPadding + insets.bottom
 
         return CGSize(
             width: panelWidth + Self.openedContentWidthPadding + (insets.horizontal * 2),
@@ -1220,6 +1240,42 @@ final class OverlayPanelController {
     }
 
     /// Constant insets — always opened size since the window never shrinks.
+    /// Tallest the opened (browsing) content may be: everything below the
+    /// closed strip has to end above the bottom of the usable screen. Never
+    /// below the empty-state height.
+    static func maxOpenedContentHeight(
+        availableHeight: CGFloat,
+        closedHeight: CGFloat,
+        bottomInset: CGFloat
+    ) -> CGFloat {
+        let budget = availableHeight - closedHeight - openedContentBottomPadding
+            - bottomInset - openedScreenBottomMargin
+        return max(openedEmptyStateHeight, budget.rounded(.down))
+    }
+
+    /// From the top of the screen down to the top of the Dock (or the
+    /// screen's bottom edge when the Dock lives elsewhere / hides).
+    private static func availableHeightBelowTop(of screen: NSScreen) -> CGFloat {
+        screen.frame.maxY - screen.visibleFrame.minY
+    }
+
+    /// Height the Agents tab's measured list (`measuredAgentsContentHeight`)
+    /// may reach before the window would run off the screen; past it the
+    /// list has to scroll. `nil` before there is a target screen.
+    func agentsContentHeightCap() -> CGFloat? {
+        guard let model, let screen = resolveTargetScreen() else { return nil }
+        return Self.maxOpenedContentHeight(
+            availableHeight: Self.availableHeightBelowTop(of: screen),
+            closedHeight: screen.closedIslandHeight(density: model.islandDensity),
+            bottomInset: panelShadowInsets.bottom
+        ) - Self.agentsTabChromeHeight
+    }
+
+    /// Test seam: the opened panel's size on `screen` for the current model.
+    func openedPanelSizeForTests(on screen: NSScreen) -> CGSize {
+        panelSize(for: model, on: screen)
+    }
+
     private var panelShadowInsets: (horizontal: CGFloat, bottom: CGFloat) {
         (
             horizontal: IslandChromeMetrics.openedShadowHorizontalInset,
@@ -1315,8 +1371,7 @@ final class OverlayPanelController {
 
         if model.islandActiveTab == .agents, model.measuredAgentsContentHeight > 0 {
             // Agents tab uses measured height + tab bar height + notch header height
-            let tabBarHeight: CGFloat = 36 // Estimated tab bar height
-            return model.measuredAgentsContentHeight + tabBarHeight + 12
+            return model.measuredAgentsContentHeight + Self.agentsTabChromeHeight
         }
 
         let rowHeights = visibleSessions.map { session -> CGFloat in

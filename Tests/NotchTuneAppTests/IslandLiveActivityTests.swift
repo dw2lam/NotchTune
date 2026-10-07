@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import SwiftUI
 import Testing
 @testable import NotchTuneApp
@@ -229,6 +230,52 @@ struct IslandLiveActivityModelTests {
     }
 
     @Test
+    func liveActivityIsResolvedOnceUntilAnInputChanges() {
+        let model = AppModel()
+        var session = AgentSession(
+            id: "s", title: "Codex · s", tool: .codex, origin: .live,
+            attachmentState: .attached, phase: .running, summary: "Running", updatedAt: .now,
+            codexMetadata: CodexSessionMetadata(currentTool: "Read", currentCommandPreview: "Sources/AppModel.swift")
+        )
+        session.isProcessAlive = true
+        model.state = SessionState(sessions: [session])
+
+        // The closed pill reads it ~15 times per render pass.
+        for _ in 0..<15 { _ = model.islandLiveActivity }
+        #expect(model.islandLiveActivity?.subtitle == "Reading AppModel.swift")
+        #expect(model.islandLiveActivityResolveCountForTests == 1)
+
+        session.codexMetadata?.currentTool = "Bash"
+        session.codexMetadata?.currentCommandPreview = "swift test"
+        model.state = SessionState(sessions: [session])
+        #expect(model.islandLiveActivity?.subtitle == "Running swift test")
+        #expect(model.islandLiveActivityResolveCountForTests == 2)
+
+        model.islandLiveActivityMode = .events
+        #expect(model.islandLiveActivity == nil)
+        #expect(model.islandLiveActivityResolveCountForTests == 3)
+    }
+
+    @Test
+    func memoizedLiveActivityStillInvalidatesItsObservers() {
+        let model = AppModel()
+        var session = AgentSession(
+            id: "s", title: "Codex · s", tool: .codex, origin: .live,
+            attachmentState: .attached, phase: .running, summary: "Running", updatedAt: .now
+        )
+        session.isProcessAlive = true
+        model.state = SessionState(sessions: [session])
+        _ = model.islandLiveActivity // warm every cache
+
+        let changes = ObservationFlag()
+        withObservationTracking { _ = model.islandLiveActivity } onChange: { changes.fire() }
+        session.phase = .waitingForApproval
+        model.state = SessionState(sessions: [session])
+        #expect(changes.fired)
+        #expect(model.islandLiveActivity?.kind == .needsApproval)
+    }
+
+    @Test
     func finishedPeekIsSkippedWhenLiveActivityIsOff() {
         let model = AppModel()
         model.islandLiveActivityMode = .off
@@ -238,4 +285,11 @@ struct IslandLiveActivityModelTests {
         model.beginFinishedPeek(for: "s")
         #expect(model.finishedPeekSessionID == "s")
     }
+}
+
+private final class ObservationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _fired = false
+    var fired: Bool { lock.withLock { _fired } }
+    func fire() { lock.withLock { _fired = true } }
 }

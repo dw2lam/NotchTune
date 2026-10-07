@@ -847,6 +847,37 @@ struct AppModelSessionListTests {
     }
 
     @Test
+    func busyAgentActivityDoesNotKeepPostponingTheCompletionToastCollapse() async throws {
+        let model = AppModel()
+        model.overlay.notificationSurfaceAutoCollapseDelay = 0.2
+        model.state = SessionState(sessions: [
+            listSession(id: "done", phase: .completed, updatedAt: .now),
+            listSession(id: "busy", phase: .running, updatedAt: .now),
+        ])
+        model.notchStatus = .opened
+        model.notchOpenReason = .notification
+        model.islandSurface = .sessionList(actionableSessionID: "done")
+
+        // Another agent keeps working (a tool event every 50ms) for well
+        // past the toast's lifetime: the toast must still collapse on time.
+        for tick in 0..<14 {
+            model.applyTrackedEvent(
+                .activityUpdated(SessionActivityUpdated(
+                    sessionID: "busy",
+                    summary: "Running tool \(tick)",
+                    phase: .running,
+                    timestamp: .now
+                )),
+                updateLastActionMessage: false
+            )
+            try await Task.sleep(for: .milliseconds(50))
+        }
+
+        #expect(model.notchStatus == .closed)
+        #expect(model.notchOpenReason == nil)
+    }
+
+    @Test
     func mergeDiscoveredClaudeSessionsPreservesRegistryJumpTargetAndAddsTranscriptMetadata() {
         let now = Date(timeIntervalSince1970: 2_000)
         let model = AppModel()
@@ -1309,13 +1340,13 @@ struct AppModelSessionListTests {
     @Test
     func nextUnseenCompletionSkipsShownSessionsUntilTheyCompleteAgain() {
         let now = Date()
-        let model = AppModel()
-        model.completedStaleThreshold = .fiveMinutes
-
+        let model = toastRotationModel()
         model.state = SessionState(sessions: [
-            listSession(id: "a", phase: .completed, updatedAt: now.addingTimeInterval(-10)),
-            listSession(id: "b", phase: .completed, updatedAt: now.addingTimeInterval(-20)),
+            listSession(id: "a", phase: .running, updatedAt: now.addingTimeInterval(-30)),
+            listSession(id: "b", phase: .running, updatedAt: now.addingTimeInterval(-30)),
         ])
+        completeForToast(model, id: "b", at: now.addingTimeInterval(-20))
+        completeForToast(model, id: "a", at: now.addingTimeInterval(-10))
 
         #expect(model.nextUnseenCompletedSessionID == "a")
         model.markCompletionToastShown(for: "a")
@@ -1324,11 +1355,90 @@ struct AppModelSessionListTests {
         #expect(model.nextUnseenCompletedSessionID == nil)
 
         // "a" finishes another turn: it becomes unseen again.
-        model.state = SessionState(sessions: [
-            listSession(id: "a", phase: .completed, updatedAt: now),
-            listSession(id: "b", phase: .completed, updatedAt: now.addingTimeInterval(-20)),
-        ])
+        model.applyTrackedEvent(
+            .activityUpdated(SessionActivityUpdated(
+                sessionID: "a", summary: "Prompt: more", phase: .running, timestamp: now.addingTimeInterval(-5)
+            )),
+            updateLastActionMessage: false
+        )
+        completeForToast(model, id: "a", at: now)
         #expect(model.nextUnseenCompletedSessionID == "a")
+    }
+
+    @Test
+    func laterEventsOnAShownCompletionDoNotMakeItUnseenAgain() {
+        let now = Date()
+        let model = toastRotationModel()
+        model.state = SessionState(sessions: [
+            listSession(id: "a", phase: .running, updatedAt: now.addingTimeInterval(-30)),
+        ])
+        completeForToast(model, id: "a", at: now.addingTimeInterval(-20))
+        model.markCompletionToastShown(for: "a")
+        #expect(model.nextUnseenCompletedSessionID == nil)
+
+        // Claude's 60s idle prompt and a metadata refresh land on the
+        // already-finished session; neither is a new completion.
+        model.applyTrackedEvent(
+            .activityUpdated(SessionActivityUpdated(
+                sessionID: "a", summary: "Claude is waiting for your input", phase: .completed, timestamp: now.addingTimeInterval(-5)
+            )),
+            updateLastActionMessage: false
+        )
+        model.applyTrackedEvent(
+            .jumpTargetUpdated(JumpTargetUpdated(
+                sessionID: "a",
+                jumpTarget: JumpTarget(terminalApp: "Ghostty", workspaceName: "a", paneTitle: "codex ~/a", workingDirectory: "/tmp/a"),
+                timestamp: now
+            )),
+            updateLastActionMessage: false
+        )
+
+        #expect(model.nextUnseenCompletedSessionID == nil)
+    }
+
+    @Test
+    func interruptedAndEndedSessionsAreNotRotatedIntoTheToast() {
+        let now = Date()
+        let model = toastRotationModel()
+        model.state = SessionState(sessions: [
+            listSession(id: "stopped", phase: .running, updatedAt: now.addingTimeInterval(-30)),
+            listSession(id: "quit", phase: .running, updatedAt: now.addingTimeInterval(-30)),
+        ])
+        // The user stopped one agent and quit the other: neither bumped the
+        // notch, so the toast must not resurface them either.
+        completeForToast(model, id: "stopped", at: now.addingTimeInterval(-10), isInterrupt: true)
+        completeForToast(model, id: "quit", at: now.addingTimeInterval(-5), isSessionEnd: true)
+
+        #expect(model.completionToastRing.map(\.id) == ["quit", "stopped"])
+        #expect(model.nextUnseenCompletedSessionID == nil)
+    }
+
+    /// A model whose coalescer never settles during a test, so completions
+    /// stay off screen.
+    private func toastRotationModel() -> AppModel {
+        let model = AppModel()
+        model.completedStaleThreshold = .fiveMinutes
+        model.notificationCoalescingPolicy = NotificationCoalescingPolicy(completionSettleSeconds: 3_600)
+        return model
+    }
+
+    private func completeForToast(
+        _ model: AppModel,
+        id: String,
+        at timestamp: Date,
+        isInterrupt: Bool? = nil,
+        isSessionEnd: Bool? = nil
+    ) {
+        model.applyTrackedEvent(
+            .sessionCompleted(SessionCompleted(
+                sessionID: id,
+                summary: "Done",
+                timestamp: timestamp,
+                isInterrupt: isInterrupt,
+                isSessionEnd: isSessionEnd
+            )),
+            updateLastActionMessage: false
+        )
     }
 
     @Test

@@ -501,20 +501,59 @@ final class AppModel {
     /// Session whose "finished" peek is on the pill right now, if any.
     private(set) var finishedPeekSessionID: String?
 
+    /// Everything `islandLiveActivity` depends on, compared to reuse the last
+    /// resolution. The closed pill reads the activity many times per render.
+    private struct IslandLiveActivityInputs: Equatable {
+        var mode: IslandLiveActivityMode
+        var sessions: [AgentSession]
+        var finishedPeekSessionID: String?
+        var runningSince: [String: Date]
+        var attentionSince: [String: Date]
+        /// Music state short of "is the player running" (a process scan,
+        /// asked only when the rest says a chip may show).
+        var musicMayBePlaying: Bool
+    }
+
+    @ObservationIgnored
+    private var islandLiveActivityCache: (inputs: IslandLiveActivityInputs, activity: IslandLiveActivity?)?
+
+    /// Test-only: how many times the live activity was actually resolved.
+    @ObservationIgnored private(set) var islandLiveActivityResolveCountForTests = 0
+
     /// What the closed pill should say, or nil to stay narrow.
+    ///
+    /// Memoized: every input is still READ on each access (so observation
+    /// tracking is unchanged), but the resolution, its string work and the
+    /// player-process check only rerun when one of them changed.
     var islandLiveActivity: IslandLiveActivity? {
-        var activity = IslandLiveActivity.resolve(
+        let inputs = IslandLiveActivityInputs(
             mode: islandLiveActivityMode,
             sessions: surfacedSessions,
             finishedPeekSessionID: finishedPeekSessionID,
             runningSince: runningSince,
-            attentionSince: attentionStartedAt
+            attentionSince: attentionStartedAt,
+            musicMayBePlaying: playerManager.isMusicEnabled
+                && playerManager.isPlaying
+                && !playerManager.track.isEmpty()
+        )
+        if let cache = islandLiveActivityCache, cache.inputs == inputs {
+            return cache.activity
+        }
+
+        islandLiveActivityResolveCountForTests += 1
+        var activity = IslandLiveActivity.resolve(
+            mode: inputs.mode,
+            sessions: inputs.sessions,
+            finishedPeekSessionID: inputs.finishedPeekSessionID,
+            runningSince: inputs.runningSince,
+            attentionSince: inputs.attentionSince
         )
         // Music keeps a foothold while agents work; attention states stay
         // single-minded.
-        if activity?.kind == .working, isMusicPlaybackActive {
+        if activity?.kind == .working, inputs.musicMayBePlaying, playerManager.isRunning {
             activity?.showsMusicChip = true
         }
+        islandLiveActivityCache = (inputs, activity)
         return activity
     }
 
@@ -1289,6 +1328,12 @@ final class AppModel {
         }
     }
 
+    /// Tallest the Agents tab's list may be measured at before it has to
+    /// scroll inside the panel (the window never grows past the screen).
+    var agentsContentHeightCap: CGFloat? {
+        overlay.overlayPanelController.agentsContentHeightCap()
+    }
+
     /// Measured by SwiftUI from Myspace's natural content height.
     var measuredMyspaceContentHeight: CGFloat = 0 {
         didSet {
@@ -1945,14 +1990,25 @@ final class AppModel {
     // MARK: - Completion toast rotation
 
     /// Completion timestamps the toast has already shown, keyed by session.
-    /// A later completion (newer activity date) counts as unseen again.
+    /// A later completion counts as unseen again.
     private(set) var completionToastShownAt: [String: Date] = [:]
+
+    /// When each session last finished a turn the toast may show: a fresh
+    /// completion that is neither an interrupt nor a session end (those
+    /// never bump the notch). "Unseen" is judged against this, not
+    /// `updatedAt`, which every later event (idle prompt, metadata) bumps.
+    @ObservationIgnored private var toastableCompletionAt: [String: Date] = [:]
+
+    private func noteToastableCompletion(_ payload: SessionCompleted) {
+        let isToastable = payload.isInterrupt != true && payload.isSessionEnd != true
+        toastableCompletionAt[payload.sessionID] = isToastable ? Date() : nil
+    }
 
     func markCompletionToastShown(for sessionID: String) {
         guard let session = state.session(id: sessionID), session.phase == .completed else {
             return
         }
-        completionToastShownAt[sessionID] = session.islandActivityDate
+        completionToastShownAt[sessionID] = toastableCompletionAt[sessionID] ?? Date()
     }
 
     /// Recently finished sessions, newest first, that the toast can rotate
@@ -1981,9 +2037,10 @@ final class AppModel {
     var nextUnseenCompletedSessionID: String? {
         let currentID = islandSurface.sessionID
         return completionToastRing.first { session in
-            guard session.id != currentID else { return false }
+            guard session.id != currentID,
+                  let completedAt = toastableCompletionAt[session.id] else { return false }
             guard let shownAt = completionToastShownAt[session.id] else { return true }
-            return session.islandActivityDate > shownAt
+            return completedAt > shownAt
         }?.id
     }
 
@@ -2383,6 +2440,9 @@ final class AppModel {
         // (with sound) is decided by the coalescer below, after the settle
         // window, through the single presentation path — so completions honour
         // `suppressFrontmostNotifications` like approvals and questions do.
+        if case let .sessionCompleted(payload) = event, !wasAlreadyCompleted {
+            noteToastableCompletion(payload)
+        }
         if case let .sessionCompleted(payload) = event, !wasAlreadyCompleted, payload.isInterrupt != true, payload.isSessionEnd != true {
             completionFlashSessionID = payload.sessionID
 
@@ -2715,6 +2775,10 @@ final class AppModel {
 
 
     private var sessionBuckets: (primary: [AgentSession], overflow: [AgentSession]) {
+        // The cache is ObservationIgnored: touch `state` anyway so a view that
+        // only reads the derived lists (surfaced sessions, live activity)
+        // still re-renders when sessions change, not just the first time.
+        _ = state
         if let cached = _cachedSessionBuckets {
             return cached
         }

@@ -114,6 +114,93 @@ struct ClaudeSubagentLivenessTests {
     }
 
     @Test
+    func deferredCompletionKeepsTheMainTurnMessageAndDropsTheSubagentTool() async throws {
+        let rig = try await BridgeRig()
+        defer { rig.tearDown() }
+        let id = "liveness-deferred-message"
+
+        try rig.send(.userPromptSubmit, id, prompt: "Investigate in the background")
+        try rig.send(
+            .postToolUse, id,
+            toolName: "Agent",
+            toolInput: .object(["description": .string("Probe"), "subagent_type": .string("Explore")]),
+            toolResponse: .object([
+                "status": .string("async_launched"),
+                "agentId": .string("bg-msg"),
+            ])
+        )
+        try rig.send(.stop, id, lastAssistantMessage: "Main turn done.")
+        _ = try await rig.session(id) { $0.phase == .running && $0.claudeMetadata?.activeSubagents.count == 1 }
+
+        try rig.send(.preToolUse, id, agentID: "bg-msg", agentType: "Explore",
+                     toolName: "Bash", toolInput: .object(["command": .string("swift test")]))
+        _ = try await rig.session(id) { $0.claudeMetadata?.currentTool == "Bash" }
+
+        // SubagentStop carries the SUBAGENT's final message, not the main turn's.
+        try rig.send(.subagentStop, id, agentID: "bg-msg", agentType: "Explore",
+                     lastAssistantMessage: "Subagent report: all green.")
+        let session = try await rig.session(id) { $0.phase == .completed }
+        #expect(session.summary == "Main turn done.")
+        #expect(session.claudeMetadata?.lastAssistantMessage == "Main turn done.")
+        #expect(session.completionAssistantMessageText == "Main turn done.")
+        // The subagent's mirrored tool must not outlive the turn.
+        #expect(session.claudeMetadata?.currentTool == nil)
+        #expect(session.claudeMetadata?.currentToolInputPreview == nil)
+    }
+
+    @Test
+    func idleNotificationWhileBackgroundAgentsWorkKeepsTheSessionLive() async throws {
+        let rig = try await BridgeRig()
+        defer { rig.tearDown() }
+        let id = "liveness-idle-notification"
+
+        try rig.send(.userPromptSubmit, id, prompt: "Go")
+        try rig.send(
+            .postToolUse, id,
+            toolName: "Agent",
+            toolResponse: .object([
+                "status": .string("async_launched"),
+                "agentId": .string("bg-idle"),
+            ])
+        )
+        try rig.send(.stop, id, lastAssistantMessage: "Launched.")
+        _ = try await rig.session(id) { $0.phase == .running && $0.claudeMetadata?.activeSubagents.count == 1 }
+
+        // Claude Code's 60s idle prompt fires while the background agent works.
+        try rig.send(.notification, id, message: "Claude is waiting for your input", notificationType: "idle_prompt")
+        try await Task.sleep(for: .milliseconds(150))
+        var session = try await rig.session(id) { _ in true }
+        #expect(session.phase == .running)
+        #expect(await !rig.hasCompletion(id))
+
+        // The held completion is still delivered as a fresh completion.
+        try rig.send(.subagentStop, id, agentID: "bg-idle")
+        session = try await rig.session(id) { $0.phase == .completed }
+        #expect(session.summary == "Launched.")
+        #expect(await rig.hasCompletion(id))
+    }
+
+    @Test
+    func subagentActivityAfterSessionEndDoesNotReopenTheSession() async throws {
+        let rig = try await BridgeRig()
+        defer { rig.tearDown() }
+        let id = "liveness-session-end"
+
+        try rig.send(.userPromptSubmit, id, prompt: "Go")
+        try rig.send(.stop, id, lastAssistantMessage: "Done.")
+        try rig.send(.sessionEnd, id)
+        _ = try await rig.session(id) { $0.isSessionEnded }
+
+        // A background agent's tool hook still in flight when Claude Code quit.
+        try rig.send(.postToolUseFailure, id, agentID: "bg-late", agentType: "Explore", toolName: "Bash")
+        try await Task.sleep(for: .milliseconds(150))
+        let session = try await rig.session(id) { _ in true }
+        #expect(session.phase == .completed)
+        #expect(session.isSessionEnded)
+        #expect(session.claudeMetadata?.activeSubagents.isEmpty ?? true)
+    }
+
+    @Test
     func backgroundTasksDecodesLenientlyAndNeverBreaksTheHook() throws {
         let good = #"{"cwd":"/tmp","hook_event_name":"SubagentStop","session_id":"s","agent_id":"a","background_tasks":[{"id":"a","type":"subagent","status":"running","agent_type":"Explore","extra":{"x":1}},{"id":"b","type":"shell","status":"running","command":"npm run dev"}]}"#
         let decoded = try JSONDecoder().decode(ClaudeHookPayload.self, from: Data(good.utf8))
@@ -168,6 +255,8 @@ private final class BridgeRig: @unchecked Sendable {
         toolInput: ClaudeHookJSONValue? = nil,
         toolResponse: ClaudeHookJSONValue? = nil,
         prompt: String? = nil,
+        message: String? = nil,
+        notificationType: String? = nil,
         lastAssistantMessage: String? = nil,
         backgroundTasks: [ClaudeBackgroundTask]? = nil
     ) throws {
@@ -184,6 +273,8 @@ private final class BridgeRig: @unchecked Sendable {
                     toolInput: toolInput,
                     toolResponse: toolResponse,
                     prompt: prompt,
+                    message: message,
+                    notificationType: notificationType,
                     lastAssistantMessage: lastAssistantMessage,
                     backgroundTasks: backgroundTasks
                 )

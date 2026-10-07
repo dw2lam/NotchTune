@@ -1,5 +1,6 @@
 import AppKit
 import Testing
+import NotchTuneCore
 @testable import NotchTuneApp
 
 struct OverlayPanelControllerTests {
@@ -274,6 +275,44 @@ struct OverlayPanelControllerTests {
         #expect(model.notchStatus == .closed)
         #expect(model.notchOpenReason == nil)
         #expect(model.islandActiveTab == .reminders)
+    }
+
+    @Test @MainActor
+    func longAgentsListNeverGrowsThePanelPastTheScreen() throws {
+        let screen = try #require(NSScreen.screens.first)
+        let model = AppModel()
+        let controller = OverlayPanelController()
+        controller.model = model
+        var session = AgentSession(
+            id: "s", title: "Codex · s", tool: .codex, origin: .live,
+            attachmentState: .attached, phase: .running, summary: "Running", updatedAt: .now
+        )
+        session.isProcessAlive = true
+        model.state = SessionState(sessions: [session])
+        model.islandActiveTab = .agents
+        model.notchStatus = .opened
+        model.notchOpenReason = .click
+        // Forty sessions' worth of rows, as SwiftUI would measure them.
+        model.measuredAgentsContentHeight = 40 * 64
+
+        let size = controller.openedPanelSizeForTests(on: screen)
+        #expect(size.height <= screen.frame.maxY - screen.visibleFrame.minY)
+
+        // A short list keeps its natural height.
+        model.measuredAgentsContentHeight = 120
+        #expect(controller.openedPanelSizeForTests(on: screen).height < size.height)
+    }
+
+    @Test @MainActor
+    func openedContentBudgetLeavesRoomBelowAndKeepsTheEmptyStateFloor() {
+        let budget = OverlayPanelController.maxOpenedContentHeight(
+            availableHeight: 1_100, closedHeight: 32, bottomInset: 24
+        )
+        #expect(budget < 1_100 - 32 - 24)
+        #expect(budget > 900)
+        #expect(OverlayPanelController.maxOpenedContentHeight(
+            availableHeight: 150, closedHeight: 32, bottomInset: 24
+        ) == 200)
     }
 
     // MARK: - closedIslandHeight (single source of truth for the closed pill)
