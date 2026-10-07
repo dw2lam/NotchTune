@@ -141,8 +141,33 @@ struct PersonalizationPreviewStage: View {
     let finishHop: UUID?
     let isAutoCycling: Bool
     let lang: LanguageManager
+    /// Resolved once per stage value: it walks `NSScreen.screens` (~0.2 ms a
+    /// call) and the layout reads it ~30 times per pass — on every phase,
+    /// every setting and every frame of a window resize.
+    private let screen: PersonalizationPreviewScreen
 
     static let height: CGFloat = 184
+
+    init(
+        preferences: IslandAppearancePreferences,
+        profile: IslandAppearanceDisplayProfile,
+        glassSettings: LiquidGlassSettings,
+        phase: PersonalizationPreviewPhase,
+        phaseStartedAt: Date,
+        finishHop: UUID?,
+        isAutoCycling: Bool,
+        lang: LanguageManager
+    ) {
+        self.preferences = preferences
+        self.profile = profile
+        self.glassSettings = glassSettings
+        self.phase = phase
+        self.phaseStartedAt = phaseStartedAt
+        self.finishHop = finishHop
+        self.isAutoCycling = isAutoCycling
+        self.lang = lang
+        self.screen = .resolve(profile: profile, density: preferences.density)
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.settingsWindowIsOnScreen) private var isOnScreen
@@ -153,10 +178,6 @@ struct PersonalizationPreviewStage: View {
 
     private var metrics: IslandChromeMetrics {
         .metrics(for: preferences.density)
-    }
-
-    private var screen: PersonalizationPreviewScreen {
-        .resolve(profile: profile, density: preferences.density)
     }
 
     var body: some View {
