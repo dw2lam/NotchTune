@@ -40,30 +40,122 @@ struct ActiveAgentProcessDiscovery {
         }
     }
 
-    private struct RunningProcess {
-        var pid: String
-        var parentPID: String
-        var terminalTTY: String?
-        var command: String
+    /// Result of one discovery pass.
+    struct DiscoveryResult: Sendable {
+        var snapshots: [ProcessSnapshot]
+        /// PIDs of the processes behind `snapshots` (used as exit-watch hints).
+        var agentProcessIDs: [Int32]
+        /// Whether any `tmux` process exists; `nil` when unknown (the `ps`
+        /// fallback has no kernel short names). Without a tmux process every
+        /// `tmux list-*` query fails, so callers can skip spawning tmux.
+        var isTmuxRunning: Bool?
     }
+
+    /// One process-table row — `ps -Ao pid=,ppid=,tty=,command=`. The command
+    /// line is loaded lazily on the native path: only agent candidates (TTY
+    /// processes) and the parents walked to find their terminal need it.
+    private final class RunningProcess {
+        let pid: String
+        let parentPID: String
+        let terminalTTY: String?
+        /// Kernel short name; `nil` on the `ps` path.
+        let shortName: String?
+        private var loadedCommand: String?
+        private let nativePID: pid_t
+        private let commandLineReader: NativeProcessInspector.CommandLineReader?
+
+        init(pid: String, parentPID: String, terminalTTY: String?, command: String) {
+            self.pid = pid
+            self.parentPID = parentPID
+            self.terminalTTY = terminalTTY
+            self.shortName = nil
+            self.loadedCommand = command
+            self.nativePID = 0
+            self.commandLineReader = nil
+        }
+
+        init(entry: NativeProcessInspector.ProcessEntry, reader: NativeProcessInspector.CommandLineReader) {
+            self.pid = String(entry.pid)
+            self.parentPID = String(entry.parentPID)
+            self.terminalTTY = entry.terminalTTY
+            self.shortName = entry.shortName
+            self.loadedCommand = nil
+            self.nativePID = entry.pid
+            self.commandLineReader = reader
+        }
+
+        var command: String {
+            if let loadedCommand {
+                return loadedCommand
+            }
+
+            let value = commandLineReader?.commandLine(pid: nativePID, shortName: shortName ?? "") ?? ""
+            loadedCommand = value
+            return value
+        }
+    }
+
+    /// Per-`discover()` memo: the process table plus tmux answers that are the
+    /// same for every agent in the pass (previously re-queried per agent).
+    private final class DiscoveryPass {
+        let processes: [RunningProcess]
+        let processesByPID: [String: RunningProcess]
+        let isTmuxRunning: Bool?
+        var tmuxPath: String??
+        var tmuxServerSocketPath: String??
+        var tmuxPaneOutputs: [String: String?] = [:]
+        var tmuxClientOutputs: [String: String?] = [:]
+
+        init(processes: [RunningProcess], isTmuxRunning: Bool?) {
+            self.processes = processes
+            self.isTmuxRunning = isTmuxRunning
+            var byPID: [String: RunningProcess] = [:]
+            byPID.reserveCapacity(processes.count)
+            for process in processes {
+                byPID[process.pid] = process
+            }
+            self.processesByPID = byPID
+        }
+    }
+
+    /// The working directory and open file paths of a process — the parts of
+    /// `lsof -a -p <pid> -Fn` discovery reads.
+    private typealias OpenFiles = NativeProcessInspector.OpenFiles
 
     typealias CommandRunner = @Sendable (_ executablePath: String, _ arguments: [String]) -> String?
 
     private let commandRunner: CommandRunner
+    /// `true` for the production discovery: read the process table and open
+    /// files in-process (sysctl/libproc) and only fall back to spawning
+    /// `ps`/`lsof` through `commandRunner` when the kernel refuses a query.
+    /// Injected runners (tests) keep the text-parsing path.
+    private let usesNativeProcessAPIs: Bool
 
-    init(commandRunner: @escaping CommandRunner = Self.commandOutput) {
+    init() {
+        self.commandRunner = Self.commandOutput
+        self.usesNativeProcessAPIs = true
+    }
+
+    init(commandRunner: @escaping CommandRunner) {
         self.commandRunner = commandRunner
+        self.usesNativeProcessAPIs = false
     }
 
     func discover() -> [ProcessSnapshot] {
-        let processes = runningProcesses()
+        discoverDetailed().snapshots
+    }
+
+    func discoverDetailed() -> DiscoveryResult {
+        let pass = makeDiscoveryPass()
+        let processes = pass.processes
         guard !processes.isEmpty else {
-            return []
+            return DiscoveryResult(snapshots: [], agentProcessIDs: [], isTmuxRunning: pass.isTmuxRunning)
         }
 
-        let processesByPID = Dictionary(uniqueKeysWithValues: processes.map { ($0.pid, $0) })
+        let processesByPID = pass.processesByPID
 
         var snapshots: [ProcessSnapshot] = []
+        var agentProcessIDs: [Int32] = []
         var claimedKeys: Set<String> = []
 
         for process in processes {
@@ -72,7 +164,7 @@ struct ActiveAgentProcessDiscovery {
             }
 
             if isCodexProcess(command: process.command) {
-                guard let snapshot = codexSnapshot(for: process, processesByPID: processesByPID) else {
+                guard let snapshot = codexSnapshot(for: process, pass: pass) else {
                     continue
                 }
 
@@ -82,11 +174,12 @@ struct ActiveAgentProcessDiscovery {
                 }
 
                 snapshots.append(snapshot)
+                agentProcessIDs.append(Int32(process.pid) ?? 0)
                 continue
             }
 
             if isClaudeProcess(command: process.command) {
-                guard let snapshot = claudeSnapshot(for: process, processesByPID: processesByPID) else {
+                guard let snapshot = claudeSnapshot(for: process, pass: pass) else {
                     continue
                 }
 
@@ -96,12 +189,12 @@ struct ActiveAgentProcessDiscovery {
                 }
 
                 snapshots.append(snapshot)
+                agentProcessIDs.append(Int32(process.pid) ?? 0)
                 continue
             }
 
             if isOpenCodeProcess(command: process.command) {
-                let lsofOutput = lsofOutput(pid: process.pid)
-                let cwd = lsofOutput.flatMap(workingDirectory(from:))
+                let cwd = openFiles(pid: process.pid, includeDescriptors: false)?.workingDirectory
 
                 // Deduplicate by TTY and working directory instead of PID.
                 // Wrappers like `npm exec` and their child `node` process share the same TTY and CWD.
@@ -139,8 +232,7 @@ struct ActiveAgentProcessDiscovery {
                 if snapshot.terminalApp == nil, let agentTTY = process.terminalTTY {
                     if let (tmuxTarget, hostTerminalApp, socketPath) = resolveTmuxInfo(
                         agentTTY: agentTTY,
-                        processes: processesByPID.values.map { $0 },
-                        processesByPID: processesByPID
+                        pass: pass
                     ) {
                         snapshot.terminalApp = hostTerminalApp
                         snapshot.tmuxTarget = tmuxTarget
@@ -149,6 +241,7 @@ struct ActiveAgentProcessDiscovery {
                 }
 
                 snapshots.append(snapshot)
+                agentProcessIDs.append(Int32(process.pid) ?? 0)
                 continue
             }
 
@@ -158,14 +251,14 @@ struct ActiveAgentProcessDiscovery {
                     continue
                 }
 
-                let lsofOutput = lsofOutput(pid: process.pid)
                 snapshots.append(ProcessSnapshot(
                     tool: .geminiCLI,
                     sessionID: nil,
-                    workingDirectory: lsofOutput.flatMap(workingDirectory(from:)),
+                    workingDirectory: openFiles(pid: process.pid, includeDescriptors: false)?.workingDirectory,
                     terminalTTY: process.terminalTTY,
                     terminalApp: terminalApp(for: process, processesByPID: processesByPID)
                 ))
+                agentProcessIDs.append(Int32(process.pid) ?? 0)
                 continue
             }
 
@@ -175,14 +268,14 @@ struct ActiveAgentProcessDiscovery {
                     continue
                 }
 
-                let lsofOutput = lsofOutput(pid: process.pid)
                 snapshots.append(ProcessSnapshot(
                     tool: .antigravity,
                     sessionID: nil,
-                    workingDirectory: lsofOutput.flatMap(workingDirectory(from:)),
+                    workingDirectory: openFiles(pid: process.pid, includeDescriptors: false)?.workingDirectory,
                     terminalTTY: process.terminalTTY,
                     terminalApp: terminalApp(for: process, processesByPID: processesByPID)
                 ))
+                agentProcessIDs.append(Int32(process.pid) ?? 0)
                 continue
             }
 
@@ -192,22 +285,43 @@ struct ActiveAgentProcessDiscovery {
                     continue
                 }
 
-                let lsofOutput = lsofOutput(pid: process.pid)
                 snapshots.append(ProcessSnapshot(
                     tool: .kimiCLI,
                     sessionID: nil,
-                    workingDirectory: lsofOutput.flatMap(workingDirectory(from:)),
+                    workingDirectory: openFiles(pid: process.pid, includeDescriptors: false)?.workingDirectory,
                     terminalTTY: process.terminalTTY,
                     terminalApp: terminalApp(for: process, processesByPID: processesByPID)
                 ))
+                agentProcessIDs.append(Int32(process.pid) ?? 0)
                 continue
             }
         }
 
-        return snapshots
+        return DiscoveryResult(
+            snapshots: snapshots,
+            agentProcessIDs: agentProcessIDs,
+            isTmuxRunning: pass.isTmuxRunning
+        )
     }
 
-    private func runningProcesses() -> [RunningProcess] {
+    private func makeDiscoveryPass() -> DiscoveryPass {
+        if usesNativeProcessAPIs, let entries = NativeProcessInspector.processTable() {
+            let reader = NativeProcessInspector.CommandLineReader()
+            // `ps -A` orders rows by controlling-terminal device, then pid; the
+            // claim keys below are first-come-first-served, so keep that order.
+            let processes = entries
+                .sorted { lhs, rhs in
+                    lhs.ttyDevice != rhs.ttyDevice ? lhs.ttyDevice < rhs.ttyDevice : lhs.pid < rhs.pid
+                }
+                .map { RunningProcess(entry: $0, reader: reader) }
+            let isTmuxRunning = entries.contains { $0.shortName == "tmux" }
+            return DiscoveryPass(processes: processes, isTmuxRunning: isTmuxRunning)
+        }
+
+        return DiscoveryPass(processes: psRunningProcesses(), isTmuxRunning: nil)
+    }
+
+    private func psRunningProcesses() -> [RunningProcess] {
         guard let output = commandRunner("/bin/ps", ["-Ao", "pid=,ppid=,tty=,command="]) else {
             return []
         }
@@ -239,10 +353,10 @@ struct ActiveAgentProcessDiscovery {
 
     private func codexSnapshot(
         for process: RunningProcess,
-        processesByPID: [String: RunningProcess]
+        pass: DiscoveryPass
     ) -> ProcessSnapshot? {
-        guard let lsofOutput = lsofOutput(pid: process.pid),
-              let transcriptPath = bestCodexTranscriptPath(in: lsofOutput),
+        guard let openFiles = openFiles(pid: process.pid, includeDescriptors: true),
+              let transcriptPath = bestCodexTranscriptPath(in: openFiles),
               let sessionID = firstUUID(in: transcriptPath) else {
             return nil
         }
@@ -250,17 +364,16 @@ struct ActiveAgentProcessDiscovery {
         var snapshot = ProcessSnapshot(
             tool: .codex,
             sessionID: sessionID,
-            workingDirectory: workingDirectory(from: lsofOutput),
+            workingDirectory: openFiles.workingDirectory,
             terminalTTY: process.terminalTTY,
-            terminalApp: terminalApp(for: process, processesByPID: processesByPID)
+            terminalApp: terminalApp(for: process, processesByPID: pass.processesByPID)
         )
 
         // If terminalApp is nil and we have a TTY, try to resolve tmux info
         if snapshot.terminalApp == nil, let agentTTY = process.terminalTTY {
             if let (tmuxTarget, hostTerminalApp, socketPath) = resolveTmuxInfo(
                 agentTTY: agentTTY,
-                processes: processesByPID.values.map { $0 },
-                processesByPID: processesByPID
+                pass: pass
             ) {
                 snapshot.terminalApp = hostTerminalApp
                 snapshot.tmuxTarget = tmuxTarget
@@ -271,8 +384,8 @@ struct ActiveAgentProcessDiscovery {
         return snapshot
     }
 
-    private func bestCodexTranscriptPath(in lsofOutput: String) -> String? {
-        let paths = allMatchingPaths(in: lsofOutput, containing: "/.codex/sessions/", suffix: ".jsonl")
+    private func bestCodexTranscriptPath(in openFiles: OpenFiles) -> String? {
+        let paths = allMatchingPaths(in: openFiles, containing: "/.codex/sessions/", suffix: ".jsonl")
         guard !paths.isEmpty else {
             return nil
         }
@@ -292,10 +405,10 @@ struct ActiveAgentProcessDiscovery {
 
     private func claudeSnapshot(
         for process: RunningProcess,
-        processesByPID: [String: RunningProcess]
+        pass: DiscoveryPass
     ) -> ProcessSnapshot? {
-        let lsofOutput = lsofOutput(pid: process.pid)
-        let workingDirectory = lsofOutput.flatMap(workingDirectory(from:))
+        let openFiles = openFiles(pid: process.pid, includeDescriptors: true)
+        let workingDirectory = openFiles?.workingDirectory
 
         // Subagent processes run in .claude/worktrees/agent-*/ directories.
         // They are tracked as metadata on the parent session, not as separate sessions.
@@ -303,7 +416,7 @@ struct ActiveAgentProcessDiscovery {
             return nil
         }
 
-        let transcriptPath = lsofOutput.flatMap {
+        let transcriptPath = openFiles.flatMap {
             bestClaudeTranscriptPath(in: $0, workingDirectory: workingDirectory)
         }
         let sessionID = transcriptPath.flatMap(firstUUID(in:))
@@ -318,7 +431,7 @@ struct ActiveAgentProcessDiscovery {
             sessionID: sessionID,
             workingDirectory: workingDirectory,
             terminalTTY: process.terminalTTY,
-            terminalApp: terminalApp(for: process, processesByPID: processesByPID),
+            terminalApp: terminalApp(for: process, processesByPID: pass.processesByPID),
             transcriptPath: transcriptPath
         )
 
@@ -326,8 +439,7 @@ struct ActiveAgentProcessDiscovery {
         if snapshot.terminalApp == nil, let agentTTY = process.terminalTTY {
             if let (tmuxTarget, hostTerminalApp, socketPath) = resolveTmuxInfo(
                 agentTTY: agentTTY,
-                processes: processesByPID.values.map { $0 },
-                processesByPID: processesByPID
+                pass: pass
             ) {
                 snapshot.terminalApp = hostTerminalApp
                 snapshot.tmuxTarget = tmuxTarget
@@ -338,8 +450,8 @@ struct ActiveAgentProcessDiscovery {
         return snapshot
     }
 
-    private func bestClaudeTranscriptPath(in lsofOutput: String, workingDirectory: String?) -> String? {
-        let paths = allMatchingPaths(in: lsofOutput, containing: "/.claude/projects/", suffix: ".jsonl")
+    private func bestClaudeTranscriptPath(in openFiles: OpenFiles, workingDirectory: String?) -> String? {
+        let paths = allMatchingPaths(in: openFiles, containing: "/.claude/projects/", suffix: ".jsonl")
         guard !paths.isEmpty else {
             return nil
         }
@@ -358,22 +470,8 @@ struct ActiveAgentProcessDiscovery {
         return paths.first
     }
 
-    private func allMatchingPaths(in lsofOutput: String, containing fragment: String, suffix: String) -> [String] {
-        var results: [String] = []
-        for line in lsofOutput.split(whereSeparator: \.isNewline) {
-            guard line.first == "n" else {
-                continue
-            }
-
-            let value = String(line.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard value.contains(fragment), value.hasSuffix(suffix) else {
-                continue
-            }
-
-            results.append(value)
-        }
-
-        return results
+    private func allMatchingPaths(in openFiles: OpenFiles, containing fragment: String, suffix: String) -> [String] {
+        openFiles.paths.filter { $0.contains(fragment) && $0.hasSuffix(suffix) }
     }
 
     private func terminalApp(
@@ -388,7 +486,14 @@ struct ActiveAgentProcessDiscovery {
               currentParentPID != "1",
               visited.insert(currentParentPID).inserted,
               let parent = processesByPID[currentParentPID] {
-            if let terminalApp = recognizedTerminalApp(for: parent.command) {
+            let parentCommand = parent.command
+            // `ps` rows with an empty command were dropped from the table, which
+            // ended the walk; keep that behaviour for lazily loaded commands.
+            guard !parentCommand.isEmpty else {
+                return nil
+            }
+
+            if let terminalApp = recognizedTerminalApp(for: parentCommand) {
                 return terminalApp
             }
 
@@ -494,8 +599,27 @@ struct ActiveAgentProcessDiscovery {
         return nil
     }
 
-    private func lsofOutput(pid: String) -> String? {
-        commandRunner("/usr/sbin/lsof", ["-a", "-p", pid, "-Fn"])
+    /// Working directory (and, with `includeDescriptors`, open file paths) of
+    /// a process: libproc on the native path, `lsof -a -p <pid> -Fn` otherwise
+    /// or when libproc refuses.
+    private func openFiles(pid: String, includeDescriptors: Bool) -> OpenFiles? {
+        if usesNativeProcessAPIs,
+           let pidValue = pid_t(pid),
+           let openFiles = NativeProcessInspector.openFiles(pid: pidValue, includeDescriptors: includeDescriptors) {
+            return openFiles
+        }
+
+        guard let output = commandRunner("/usr/sbin/lsof", ["-a", "-p", pid, "-Fn"]) else {
+            return nil
+        }
+
+        return OpenFiles(
+            workingDirectory: workingDirectory(from: output),
+            paths: output
+                .split(whereSeparator: \.isNewline)
+                .filter { $0.first == "n" }
+                .map { String($0.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines) }
+        )
     }
 
     private func workingDirectory(from lsofOutput: String) -> String? {
@@ -520,9 +644,12 @@ struct ActiveAgentProcessDiscovery {
         return nil
     }
 
+    private static let uuidRegex = try? NSRegularExpression(
+        pattern: #"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"#
+    )
+
     private func firstUUID(in text: String) -> String? {
-        let pattern = #"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+        guard let regex = Self.uuidRegex else {
             return nil
         }
 
@@ -725,7 +852,7 @@ struct ActiveAgentProcessDiscovery {
             || firstToken.hasSuffix("/claude")
     }
 
-    private static func commandOutput(executablePath: String, arguments: [String]) -> String? {
+    static func commandOutput(executablePath: String, arguments: [String]) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executablePath)
         process.arguments = arguments
@@ -751,6 +878,7 @@ struct ActiveAgentProcessDiscovery {
 
         do {
             try process.run()
+            MonitorInstrumentation.recordSpawn(executablePath: executablePath)
         } catch {
             return nil
         }
@@ -800,50 +928,81 @@ struct ActiveAgentProcessDiscovery {
 
     private func resolveTmuxInfo(
         agentTTY: String,
-        processes: [RunningProcess],
-        processesByPID: [String: RunningProcess]
+        pass: DiscoveryPass
     ) -> (target: String, hostTerminalApp: String?, socketPath: String?)? {
-        guard let tmuxPath = resolveTmuxPath() else {
+        // No tmux process at all: every `tmux list-*` query below would fail
+        // ("no server running"), so skip spawning tmux (and `which`).
+        if pass.isTmuxRunning == false {
             return nil
         }
 
-        // Find tmux-server process to extract socket path if custom
-        var socketPath: String? = nil
-        for process in processes {
-            if isTmuxServerProcess(command: process.command) {
-                // Extract socket path from tmux-server command line
-                let parts = process.command.split(separator: " ").map(String.init)
-                for (index, part) in parts.enumerated() {
-                    if (part == "-S" || part == "-L"), parts.indices.contains(index + 1) {
-                        socketPath = String(parts[index + 1])
-                        break
-                    }
-                }
-                break
-            }
+        if pass.tmuxPath == nil {
+            pass.tmuxPath = .some(resolveTmuxPath())
+        }
+        guard let tmuxPath = pass.tmuxPath ?? nil else {
+            return nil
         }
 
+        // Find tmux-server process to extract socket path if custom.
+        // Computed once per pass: it is the same for every agent.
+        if pass.tmuxServerSocketPath == nil {
+            pass.tmuxServerSocketPath = .some(tmuxServerSocketPath(in: pass))
+        }
+        let socketPath = pass.tmuxServerSocketPath ?? nil
+
         // Query tmux list-panes to find the pane matching our TTY
-        guard let tmuxTarget = queryTmuxTarget(agentTTY: agentTTY, tmuxPath: tmuxPath, socketPath: socketPath) else {
+        guard let tmuxTarget = queryTmuxTarget(agentTTY: agentTTY, tmuxPath: tmuxPath, socketPath: socketPath, pass: pass) else {
             return nil
         }
 
         // Find the terminal app hosting the tmux client connected to this pane
-        guard let hostTerminalApp = findTmuxClientTerminal(tmuxPath: tmuxPath, socketPath: socketPath, processesByPID: processesByPID) else {
+        guard let hostTerminalApp = findTmuxClientTerminal(tmuxPath: tmuxPath, socketPath: socketPath, pass: pass) else {
             return nil
         }
 
         return (tmuxTarget, hostTerminalApp, socketPath)
     }
 
-    private func queryTmuxTarget(agentTTY: String, tmuxPath: String, socketPath: String?) -> String? {
-        var args: [String] = ["list-panes", "-a", "-F", "#{pane_tty}\t#{session_name}:#{window_index}.#{pane_index}"]
+    private func tmuxServerSocketPath(in pass: DiscoveryPass) -> String? {
+        for process in pass.processes {
+            // On the native path the kernel short name identifies tmux
+            // processes without loading every command line in the table.
+            if let shortName = process.shortName, shortName != "tmux" {
+                continue
+            }
 
-        if let socketPath = socketPath {
-            args = ["-S", socketPath] + args
+            if isTmuxServerProcess(command: process.command) {
+                // Extract socket path from tmux-server command line
+                let parts = process.command.split(separator: " ").map(String.init)
+                for (index, part) in parts.enumerated() {
+                    if (part == "-S" || part == "-L"), parts.indices.contains(index + 1) {
+                        return String(parts[index + 1])
+                    }
+                }
+                return nil
+            }
         }
 
-        guard let output = commandRunner(tmuxPath, args) else {
+        return nil
+    }
+
+    private func queryTmuxTarget(agentTTY: String, tmuxPath: String, socketPath: String?, pass: DiscoveryPass) -> String? {
+        let cacheKey = socketPath ?? ""
+        let output: String?
+        if let cached = pass.tmuxPaneOutputs[cacheKey] {
+            output = cached
+        } else {
+            var args: [String] = ["list-panes", "-a", "-F", "#{pane_tty}\t#{session_name}:#{window_index}.#{pane_index}"]
+
+            if let socketPath = socketPath {
+                args = ["-S", socketPath] + args
+            }
+
+            output = commandRunner(tmuxPath, args)
+            pass.tmuxPaneOutputs[cacheKey] = .some(output)
+        }
+
+        guard let output else {
             return nil
         }
 
@@ -867,18 +1026,28 @@ struct ActiveAgentProcessDiscovery {
     private func findTmuxClientTerminal(
         tmuxPath: String,
         socketPath: String?,
-        processesByPID: [String: RunningProcess]
+        pass: DiscoveryPass
     ) -> String? {
-        var args: [String] = ["list-clients", "-F", "#{client_tty}"]
+        let cacheKey = socketPath ?? ""
+        let output: String?
+        if let cached = pass.tmuxClientOutputs[cacheKey] {
+            output = cached
+        } else {
+            var args: [String] = ["list-clients", "-F", "#{client_tty}"]
 
-        if let socketPath = socketPath {
-            args = ["-S", socketPath] + args
+            if let socketPath = socketPath {
+                args = ["-S", socketPath] + args
+            }
+
+            output = commandRunner(tmuxPath, args)
+            pass.tmuxClientOutputs[cacheKey] = .some(output)
         }
 
-        guard let output = commandRunner(tmuxPath, args) else {
+        guard let output else {
             return nil
         }
 
+        let processesByPID = pass.processesByPID
         for clientTTYLine in output.split(separator: "\n") {
             let clientTTY = clientTTYLine.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !clientTTY.isEmpty else {

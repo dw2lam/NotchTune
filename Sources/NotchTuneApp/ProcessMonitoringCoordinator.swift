@@ -30,7 +30,11 @@ final class ProcessMonitoringCoordinator {
     var onCodexAppRunningChanged: ((_ isRunning: Bool) -> Void)?
 
     @ObservationIgnored
-    let activeAgentProcessDiscovery = ActiveAgentProcessDiscovery()
+    let activeAgentProcessDiscovery: ActiveAgentProcessDiscovery
+
+    /// Queries the terminals for a new snapshot round (injectable for tests).
+    @ObservationIgnored
+    private let terminalRoundFetcher: @Sendable (TerminalSessionAttachmentProbe) -> TerminalSnapshotRound
 
     @ObservationIgnored
     private let terminalSessionAttachmentProbe = TerminalSessionAttachmentProbe()
@@ -44,11 +48,100 @@ final class ProcessMonitoringCoordinator {
     @ObservationIgnored
     private var wasCodexAppRunning = false
 
+    // MARK: Adaptive cadence state (see `runMonitorTick()`)
+
+    /// Terminal snapshots shared by the attachment probe and the jump-target
+    /// resolver. "Light" ticks reuse it while nothing that could change the
+    /// terminals' answer has changed; "full" ticks query the terminals again.
+    @ObservationIgnored
+    private var terminalRound: TerminalSnapshotRound?
+
+    @ObservationIgnored
+    private var lastProcessSnapshots: [ActiveProcessSnapshot]?
+
+    /// Tracked live sessions as the last tick left them; a difference at the
+    /// start of the next tick means something else (a bridge event, startup
+    /// discovery) changed them in between.
+    @ObservationIgnored
+    private var sessionFingerprintAfterLastTick: [SessionFingerprint]?
+
+    @ObservationIgnored
+    private var fastCadenceUntil: ContinuousClock.Instant?
+
+    @ObservationIgnored
+    private var lastTickStartedAt: ContinuousClock.Instant?
+
+    @ObservationIgnored
+    private var isPromptTickRequested = false
+
+    @ObservationIgnored
+    private var monitorSleepTask: Task<Void, Never>?
+
+    /// kqueue exit watchers for the discovered agent processes, so an agent
+    /// exiting is noticed immediately even during the slower idle cadence.
+    @ObservationIgnored
+    private var agentExitWatchers: [Int32: any DispatchSourceProcess] = [:]
+
+    /// NSWorkspace launch/terminate observers for the apps the monitor cares
+    /// about (Codex.app liveness, terminals it queries), so their launching or
+    /// quitting is reconciled right away even during the idle cadence.
+    @ObservationIgnored
+    private var workspaceObservers: [any NSObjectProtocol] = []
+
+    private static let wakeOnLaunchOrQuitBundleIDs: Set<String> = [
+        "com.openai.codex",
+        "com.mitchellh.ghostty",
+        "com.apple.Terminal",
+        "com.googlecode.iterm2",
+        "com.github.wez.wezterm",
+        "fun.tw93.kaku",
+        "dev.warp.Warp-Stable",
+        "com.todesktop.230313mzl4w4u92",
+    ]
+
+    /// The original fixed cadence; used while anything is changing, while a
+    /// session needs attention, and while initial sessions are resolving.
+    static let activeTickInterval: Duration = .seconds(2)
+    /// Cadence once processes, sessions and terminals have been stable for
+    /// `fastCadenceWindow`.
+    static let idleTickInterval: Duration = .seconds(5)
+    /// Light ticks reuse terminal snapshots at most this long.
+    static let terminalRoundMaxAge: Duration = .seconds(10)
+
+    /// How long the fast cadence is kept after the last observed change
+    /// (instance-level so tests can shorten it).
+    @ObservationIgnored
+    var fastCadenceWindow: Duration = .seconds(6)
+
+    private struct SessionFingerprint: Equatable {
+        var id: String
+        var attachmentState: SessionAttachmentState
+        var isProcessAlive: Bool
+        var jumpTarget: JumpTarget?
+    }
+
+    private struct TickOutcome: Sendable {
+        var discovery: ActiveAgentProcessDiscovery.DiscoveryResult
+        var round: TerminalSnapshotRound?
+        var isFreshRound: Bool
+        var jumpTargets: [String: JumpTarget]
+    }
+
     private static let cursorStalenessTimeout: TimeInterval = 600  // 10 minutes
 
     private var state: SessionState {
         get { stateAccessor?() ?? SessionState() }
         set { stateUpdater?(newValue) }
+    }
+
+    init(
+        activeAgentProcessDiscovery: ActiveAgentProcessDiscovery = ActiveAgentProcessDiscovery(),
+        terminalRoundFetcher: @escaping @Sendable (TerminalSessionAttachmentProbe) -> TerminalSnapshotRound = {
+            TerminalSnapshotRound.fetch(using: $0)
+        }
+    ) {
+        self.activeAgentProcessDiscovery = activeAgentProcessDiscovery
+        self.terminalRoundFetcher = terminalRoundFetcher
     }
 
     // MARK: - Monitoring lifecycle
@@ -58,56 +151,261 @@ final class ProcessMonitoringCoordinator {
             return
         }
 
+        observeRelevantAppLaunches()
         sessionAttachmentMonitorTask = Task { @MainActor [weak self] in
             guard let self else {
                 return
             }
 
             while !Task.isCancelled {
-                let discovery = self.activeAgentProcessDiscovery
-                let probe = self.terminalSessionAttachmentProbe
-                let resolver = self.terminalJumpTargetResolver
-                let liveSessions = self.state.sessions.filter(\.isTrackedLiveSession)
-                let (snapshots, ghosttyAvail, terminalAvail, jumpTargets) = await Task.detached(
-                    priority: .utility
-                ) { () -> (
-                    [ActiveProcessSnapshot],
-                    TerminalSessionAttachmentProbe.SnapshotAvailability<TerminalSessionAttachmentProbe.GhosttyTerminalSnapshot>?,
-                    TerminalSessionAttachmentProbe.SnapshotAvailability<TerminalSessionAttachmentProbe.TerminalTabSnapshot>?,
-                    [String: JumpTarget]
-                ) in
-                    let s = discovery.discover()
-                    // Idle guard: with no tracked live sessions and no agent
-                    // processes on the system there is nothing to attach —
-                    // skip the AppleScript terminal snapshots entirely (they
-                    // wake Ghostty/Terminal.app on every 2s cycle otherwise).
-                    guard !liveSessions.isEmpty || !s.isEmpty else {
-                        return (s, nil, nil, [:])
-                    }
-                    let g = probe.ghosttySnapshotAvailability()
-                    let t = probe.terminalSnapshotAvailability()
-                    let j = resolver.resolveJumpTargets(for: liveSessions, activeProcesses: s)
-                    return (s, g, t, j)
-                }.value
-                self.reconcileSessionAttachments(
-                    activeProcesses: snapshots,
-                    ghosttyAvailability: ghosttyAvail,
-                    terminalAvailability: terminalAvail,
-                    preResolvedJumpTargets: jumpTargets
-                )
-                try? await Task.sleep(for: .seconds(2))
+                let interval = await self.runMonitorTick()
+                await self.sleepUntilNextTick(interval)
             }
         }
     }
 
+    private func observeRelevantAppLaunches() {
+        guard workspaceObservers.isEmpty else {
+            return
+        }
+
+        let center = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
+            let observer = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
+                let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+                guard let bundleID = app?.bundleIdentifier,
+                      Self.wakeOnLaunchOrQuitBundleIDs.contains(bundleID) else {
+                    return
+                }
+
+                MainActor.assumeIsolated {
+                    self?.requestPromptTick()
+                }
+            }
+            workspaceObservers.append(observer)
+        }
+    }
+
+    /// Stops the background monitor loop (used by benchmarks and teardown).
+    func stopMonitoring() {
+        sessionAttachmentMonitorTask?.cancel()
+        sessionAttachmentMonitorTask = nil
+        monitorSleepTask?.cancel()
+        monitorSleepTask = nil
+        for watcher in agentExitWatchers.values {
+            watcher.cancel()
+        }
+        agentExitWatchers.removeAll()
+        for observer in workspaceObservers {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+        workspaceObservers.removeAll()
+    }
+
+    /// Runs the next monitor tick as soon as the base cadence allows instead
+    /// of waiting out the idle interval. Called for every bridge event, when
+    /// a watched agent process exits, and when Codex.app or a supported
+    /// terminal launches or quits.
+    func requestPromptTick() {
+        isPromptTickRequested = true
+        monitorSleepTask?.cancel()
+    }
+
+    private func sleepUntilNextTick(_ interval: Duration) async {
+        if !isPromptTickRequested {
+            let sleeper = Task<Void, Never> {
+                try? await Task.sleep(for: interval)
+            }
+            monitorSleepTask = sleeper
+            await withTaskCancellationHandler {
+                await sleeper.value
+            } onCancel: {
+                sleeper.cancel()
+            }
+            monitorSleepTask = nil
+        }
+
+        // Woken early: still never start ticks closer together than the
+        // original cadence.
+        if let lastTickStartedAt {
+            let earliest = lastTickStartedAt.advanced(by: Self.activeTickInterval)
+            if ContinuousClock.now < earliest {
+                try? await Task.sleep(until: earliest, clock: .continuous)
+            }
+        }
+    }
+
+    /// One pass of the background monitor: discover agent processes (and,
+    /// when needed, terminal snapshots) off the main actor, then reconcile on
+    /// it. Returns how long to wait before the next tick.
+    ///
+    /// Process discovery runs every tick (it is in-process and cheap). The
+    /// terminal AppleScript queries run only on a "full" tick: when the agent
+    /// process set changed, tracked sessions changed outside the monitor, a
+    /// terminal app launched or quit, initial sessions are still resolving,
+    /// the previous answer was unavailable/slow, or it is older than
+    /// `terminalRoundMaxAge`. Other ticks reuse the previous round.
+    @discardableResult
+    func runMonitorTick() async -> Duration {
+        let tickStart = ContinuousClock.now
+        lastTickStartedAt = tickStart
+        let wasPromptTick = isPromptTickRequested
+        isPromptTickRequested = false
+
+        let discovery = self.activeAgentProcessDiscovery
+        let probe = self.terminalSessionAttachmentProbe
+        let resolver = self.terminalJumpTargetResolver
+        let fetchTerminalRound = self.terminalRoundFetcher
+        let liveSessions = self.state.sessions.filter(\.isTrackedLiveSession)
+
+        let sessionFingerprint = Self.sessionFingerprint(of: liveSessions)
+        let sessionsChanged = sessionFingerprint != sessionFingerprintAfterLastTick
+        let reusableRound = terminalRound.flatMap { round in
+            round.isReusable && round.createdAt.duration(to: tickStart) < Self.terminalRoundMaxAge ? round : nil
+        }
+        let wasResolvingInitialSessions = isResolvingInitialLiveSessions
+        let mustRefreshTerminals = sessionsChanged || wasResolvingInitialSessions
+        let previousProcesses = lastProcessSnapshots
+
+        let outcome = await Task.detached(priority: .utility) { () -> TickOutcome in
+            let result = discovery.discoverDetailed()
+            let processes = result.snapshots
+            // Idle guard: with no tracked live sessions and no agent
+            // processes on the system there is nothing to attach —
+            // skip the AppleScript terminal snapshots entirely (they
+            // wake Ghostty/Terminal.app on every cycle otherwise).
+            guard !liveSessions.isEmpty || !processes.isEmpty else {
+                return TickOutcome(discovery: result, round: nil, isFreshRound: false, jumpTargets: [:])
+            }
+
+            let round: TerminalSnapshotRound
+            if !mustRefreshTerminals,
+               processes == previousProcesses,
+               let reusableRound,
+               reusableRound.runningApps == TerminalSnapshotRound.currentRunningApps() {
+                round = reusableRound
+            } else {
+                round = fetchTerminalRound(probe)
+            }
+
+            let jumpTargets = resolver.resolveJumpTargets(
+                for: liveSessions,
+                activeProcesses: processes,
+                sources: round.resolverSources(live: resolver.liveSources, isTmuxRunning: result.isTmuxRunning)
+            )
+            return TickOutcome(
+                discovery: result,
+                round: round,
+                isFreshRound: round !== reusableRound,
+                jumpTargets: jumpTargets
+            )
+        }.value
+
+        let processes = outcome.discovery.snapshots
+        let processesChanged = processes != previousProcesses
+        lastProcessSnapshots = processes
+        let previousRound = terminalRound
+        terminalRound = outcome.round
+        updateAgentExitWatchers(for: outcome.discovery.agentProcessIDs)
+        MonitorInstrumentation.recordTick(full: outcome.isFreshRound)
+
+        // Sessions can change (bridge events) while the off-main work runs;
+        // then this tick worked from stale session data, so make sure the next
+        // one refreshes the terminals instead of reusing this round.
+        let sessionsChangedDuringTick = Self.sessionFingerprint(
+            of: state.sessions.filter(\.isTrackedLiveSession)
+        ) != sessionFingerprint
+
+        let stateChanged = reconcileSessionAttachments(
+            activeProcesses: processes,
+            ghosttyAvailability: outcome.round?.ghosttyAvailability,
+            terminalAvailability: outcome.round?.terminalAvailability,
+            preResolvedJumpTargets: outcome.jumpTargets
+        )
+        let liveSessionsAfterTick = state.sessions.filter(\.isTrackedLiveSession)
+        sessionFingerprintAfterLastTick = sessionsChangedDuringTick
+            ? nil
+            : Self.sessionFingerprint(of: liveSessionsAfterTick)
+
+        // Cadence: stay at the original 2 s while anything is changing, then
+        // back off. Bridge events and agent exits cut the wait short anyway.
+        let terminalsChanged: Bool = {
+            guard outcome.isFreshRound, let fresh = outcome.round else {
+                return false
+            }
+            guard let previousRound else {
+                return true
+            }
+            return !fresh.hasSameTerminalState(as: previousRound)
+        }()
+        let now = ContinuousClock.now
+        if wasPromptTick || sessionsChanged || processesChanged || terminalsChanged || stateChanged {
+            fastCadenceUntil = now.advanced(by: fastCadenceWindow)
+        }
+
+        let needsAttention = liveSessionsAfterTick.contains { $0.phase.requiresAttention }
+        let isInFastWindow = fastCadenceUntil.map { now < $0 } ?? false
+        if needsAttention || wasResolvingInitialSessions || isResolvingInitialLiveSessions || isInFastWindow {
+            return Self.activeTickInterval
+        }
+
+        return Self.idleTickInterval
+    }
+
+    /// Drops the cached terminal snapshots so the next tick queries the
+    /// terminals again (benchmarks; also safe to call any time).
+    func invalidateTerminalSnapshots() {
+        terminalRound = nil
+    }
+
+    private static func sessionFingerprint(of sessions: [AgentSession]) -> [SessionFingerprint] {
+        sessions
+            .map {
+                SessionFingerprint(
+                    id: $0.id,
+                    attachmentState: $0.attachmentState,
+                    isProcessAlive: $0.isProcessAlive,
+                    jumpTarget: $0.jumpTarget
+                )
+            }
+            .sorted { $0.id < $1.id }
+    }
+
+    private func updateAgentExitWatchers(for pids: [Int32]) {
+        let wanted = Set(pids.filter { $0 > 0 })
+
+        for (pid, watcher) in agentExitWatchers where !wanted.contains(pid) {
+            watcher.cancel()
+            agentExitWatchers[pid] = nil
+        }
+
+        for pid in wanted where agentExitWatchers[pid] == nil {
+            let watcher = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .main)
+            watcher.setEventHandler { [weak self] in
+                MainActor.assumeIsolated {
+                    self?.handleAgentProcessExit(pid)
+                }
+            }
+            watcher.resume()
+            agentExitWatchers[pid] = watcher
+        }
+    }
+
+    private func handleAgentProcessExit(_ pid: Int32) {
+        agentExitWatchers.removeValue(forKey: pid)?.cancel()
+        requestPromptTick()
+    }
+
     // MARK: - Reconciliation
 
+    /// Returns `true` when the session state changed.
+    @discardableResult
     func reconcileSessionAttachments(
         activeProcesses: [ActiveProcessSnapshot]? = nil,
         ghosttyAvailability: TerminalSessionAttachmentProbe.SnapshotAvailability<TerminalSessionAttachmentProbe.GhosttyTerminalSnapshot>? = nil,
         terminalAvailability: TerminalSessionAttachmentProbe.SnapshotAvailability<TerminalSessionAttachmentProbe.TerminalTabSnapshot>? = nil,
         preResolvedJumpTargets: [String: JumpTarget]? = nil
-    ) {
+    ) -> Bool {
         let activeProcesses = activeProcesses ?? activeAgentProcessDiscovery.discover()
 
         // Work on a local copy to avoid triggering didSet (and its queue.sync +
@@ -143,11 +441,12 @@ final class ProcessMonitoringCoordinator {
         let sessions = local.sessions.filter(\.isTrackedLiveSession)
         guard !sessions.isEmpty else {
             // Flush local changes only if something actually changed.
-            if local != originalState {
+            let changed = local != originalState
+            if changed {
                 state = local
             }
-            isResolvingInitialLiveSessions = false
-            return
+            setResolvingInitialLiveSessionsFinished()
+            return changed
         }
 
         let resolutionReport: TerminalSessionAttachmentProbe.ResolutionReport
@@ -178,7 +477,10 @@ final class ProcessMonitoringCoordinator {
         _ = local.reconcileJumpTargets(jumpTargetUpdates)
 
         // Phase 1: populate isProcessAlive in parallel with existing system.
-        let aliveIDs = sessionIDsWithAliveProcesses(activeProcesses: activeProcesses)
+        let aliveIDs = sessionIDsWithAliveProcesses(
+            activeProcesses: activeProcesses,
+            isCodexAppRunning: isCodexAppRunning
+        )
         _ = local.markProcessLiveness(
             aliveSessionIDs: aliveIDs,
             isCodexAppRunning: isCodexAppRunning
@@ -211,16 +513,25 @@ final class ProcessMonitoringCoordinator {
 
         guard anyChange else {
             if resolutionReport.isAuthoritative {
-                isResolvingInitialLiveSessions = false
+                setResolvingInitialLiveSessionsFinished()
             }
-            return
+            return false
         }
 
         if resolutionReport.isAuthoritative {
-            isResolvingInitialLiveSessions = false
+            setResolvingInitialLiveSessionsFinished()
         }
         onSessionsReconciled?()
         onPersistenceNeeded?()
+        return true
+    }
+
+    /// Clears the startup flag without touching the observable property when
+    /// it is already clear (every tick used to re-assign it).
+    private func setResolvingInitialLiveSessionsFinished() {
+        if isResolvingInitialLiveSessions {
+            isResolvingInitialLiveSessions = false
+        }
     }
 
     // MARK: - Event helpers
@@ -281,7 +592,8 @@ final class ProcessMonitoringCoordinator {
     /// heuristics (e.g. bundle-ID liveness for Cursor, PID matching for
     /// Codex/Claude/Gemini).
     func sessionIDsWithAliveProcesses(
-        activeProcesses: [ActiveProcessSnapshot]
+        activeProcesses: [ActiveProcessSnapshot],
+        isCodexAppRunning knownCodexAppRunning: Bool? = nil
     ) -> Set<String> {
         var aliveIDs: Set<String> = []
         let sessions = state.sessions
@@ -293,7 +605,9 @@ final class ProcessMonitoringCoordinator {
                 .compactMap(\.sessionID)
         )
         // Codex.app sessions: keep alive while the desktop app is running.
-        let isCodexAppRunning = Self.isCodexDesktopAppRunning()
+        // (The caller usually just checked; enumerating every running app
+        // twice per tick is wasted work.)
+        let isCodexAppRunning = knownCodexAppRunning ?? Self.isCodexDesktopAppRunning()
         for session in sessions where session.tool == .codex && !session.isDemoSession {
             if session.isCodexAppSession {
                 if isCodexAppRunning { aliveIDs.insert(session.id) }
@@ -419,7 +733,8 @@ final class ProcessMonitoringCoordinator {
         // after a staleness window so the notch clears when the user is
         // no longer interacting with the conversation.  Cursor has no
         // "tab closed" hook, so this timeout is the best available proxy.
-        let isCursorRunning = !NSRunningApplication.runningApplications(
+        let hasCursorSessions = sessions.contains { $0.tool == .cursor && !$0.isDemoSession }
+        let isCursorRunning = hasCursorSessions && !NSRunningApplication.runningApplications(
             withBundleIdentifier: "com.todesktop.230313mzl4w4u92"
         ).isEmpty
         if isCursorRunning {
