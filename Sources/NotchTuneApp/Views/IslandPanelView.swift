@@ -1252,9 +1252,19 @@ struct IslandPanelView: View {
         return .white.opacity(model.glassSettings.usesGlassControls ? 0.5 : 0.4)
     }
 
+    private var showsInstallHooksHint: Bool {
+        !model.hasAnyInstalledAgent && !isNotificationMode && !HarnessHeadless.isShowcase
+    }
+
+    /// The populated list renders the hint itself (see `sessionList`) so the
+    /// measured height that sizes the panel includes it.
+    private var showsSessionRows: Bool {
+        !model.shouldShowSessionBootstrapPlaceholder && !model.islandListSessions.isEmpty
+    }
+
     private var agentsContent: some View {
         VStack(spacing: 8) {
-            if !model.hasAnyInstalledAgent, !isNotificationMode, !HarnessHeadless.isShowcase {
+            if showsInstallHooksHint, !showsSessionRows {
                 installHooksHint
                     .padding(.horizontal, sessionListSideInset)
                     .padding(.top, 8)
@@ -1423,6 +1433,15 @@ struct IslandPanelView: View {
                 }
             } else {
                VStack(spacing: 0) {
+                   // Inside the measured stack: outside it, the window was
+                   // sized without the hint and the last rows were clipped.
+                   if showsInstallHooksHint {
+                       installHooksHint
+                           .padding(.horizontal, sessionListSideInset)
+                           .padding(.top, 8)
+                           .padding(.bottom, 8)
+                   }
+
                    sessionPanelHeader(referenceDate: referenceDate)
 
                    VStack(spacing: 0) {
