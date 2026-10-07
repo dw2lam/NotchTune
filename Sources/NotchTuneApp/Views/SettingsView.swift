@@ -363,13 +363,12 @@ struct DisplaySettingsPane: View {
 
 struct SoundSettingsPane: View {
     var model: AppModel
-    @State private var customSounds: [String] = []
+    @State private var customSounds: [String] = NotificationSoundService.availableCustomSounds()
+    /// The system sounds, listed when the pane is created — not by a
+    /// directory read on every render (twice per body: both pickers).
+    @State private var availableSounds: [String] = NotificationSoundService.availableSounds()
 
     private var lang: LanguageManager { model.lang }
-
-    private var availableSounds: [String] {
-        NotificationSoundService.availableSounds()
-    }
 
     var body: some View {
         SettingsPane(
