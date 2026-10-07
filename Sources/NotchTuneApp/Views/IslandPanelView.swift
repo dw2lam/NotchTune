@@ -1413,17 +1413,17 @@ struct IslandPanelView: View {
                         }
                     }
 
-                Group {
-                    if model.measuredNotificationContentHeight > cap {
-                        ScrollView(.vertical) {
-                            content
-                        }
-                        .scrollIndicators(.automatic)
-                        .frame(height: cap)
-                    } else {
-                        content
-                    }
+                // Always the same ScrollView (only its height and indicators
+                // change): switching between a scrolling and a plain branch
+                // re-created the card whenever it crossed the cap, wiping its
+                // state (a collapse undone, an "Other" pick dropped).
+                let measured = model.measuredNotificationContentHeight
+                ScrollView(.vertical) {
+                    content
                 }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollIndicators(measured > cap ? .automatic : .hidden)
+                .frame(height: measured > 0 ? min(measured, cap) : nil)
                 .onHover { hovering in
                     if hovering {
                         model.notePointerInsideIslandSurface()
