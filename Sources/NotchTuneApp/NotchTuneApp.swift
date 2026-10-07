@@ -70,7 +70,7 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                     if let tab = env["NOTCHTUNE_HARNESS_SETTINGS_TAB"] {
                         HarnessHeadless.openHiddenWindow(
                             id: "settings", title: "NotchTune Settings",
-                            size: NSSize(width: 780, height: 560),
+                            size: NSSize(width: 860, height: 640),
                             rootView: SettingsView(model: model)
                         )
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -234,7 +234,7 @@ struct NotchTuneApp: App {
         }
         .windowResizability(.contentSize)
         .windowToolbarStyle(.unified)
-        .defaultSize(width: 740, height: 620)
+        .defaultSize(width: 860, height: 640)
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {

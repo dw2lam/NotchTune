@@ -38,16 +38,23 @@ enum AgentAppIconProvider {
         "Qwen Code": "agent-logo-qwen",
     ]
 
+    /// The installed application's own icon, or nil when the agent's app
+    /// isn't installed — never the bundled logo fallback.
+    static func installedAppIcon(forProviderTitle title: String) -> NSImage? {
+        guard let candidates = bundleIdentifiers[title] else { return nil }
+        for bundleID in candidates {
+            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                return NSWorkspace.shared.icon(forFile: url.path)
+            }
+        }
+        return nil
+    }
+
     private static func resolve(title: String) -> NSImage? {
         // Prefer the REAL installed app's icon.
-        if let candidates = bundleIdentifiers[title] {
-            for bundleID in candidates {
-                if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-                    let icon = NSWorkspace.shared.icon(forFile: url.path)
-                    icon.size = NSSize(width: 28, height: 28)
-                    return icon
-                }
-            }
+        if let icon = installedAppIcon(forProviderTitle: title) {
+            icon.size = NSSize(width: 28, height: 28)
+            return icon
         }
 
         // CLI-only agents fall back to the bundled brand logo.
