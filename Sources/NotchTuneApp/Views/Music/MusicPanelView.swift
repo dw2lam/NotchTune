@@ -6,10 +6,29 @@ struct MusicPanelView: View {
 
     var body: some View {
         if playerManager.isMusicEnabled {
-            musicControls
+            Group {
+                if showsNowPlaying {
+                    musicControls
+                        .transition(.opacity)
+                } else if let player = playerManager.playerKind {
+                    MusicEmptyStateView(playerManager: playerManager, player: player)
+                        .padding(.horizontal, horizontalPadding)
+                        .padding(.top, 12)
+                        .padding(.bottom, 8)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: showsNowPlaying)
         } else {
             musicDisabledPlaceholder
         }
+    }
+
+    /// A real track in a running player → transport controls; otherwise the
+    /// "Nothing playing" chooser. Reading the library's (observable) running
+    /// flag re-evaluates this when the player quits or launches.
+    private var showsNowPlaying: Bool {
+        playerManager.hasNowPlaying && playerManager.library.isPlayerRunning
     }
 
     private var musicControls: some View {

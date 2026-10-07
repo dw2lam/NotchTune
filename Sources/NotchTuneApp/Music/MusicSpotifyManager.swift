@@ -31,11 +31,25 @@ class MusicSpotifyManager: MusicPlayerProtocol {
 
     func getTrackInfo() -> PlayerTrack {
         var track = PlayerTrack()
-        track.title = app.currentTrack?.name ?? "Unknown Title"
-        track.artist = app.currentTrack?.artist ?? "Unknown Artist"
-        track.album = app.currentTrack?.album ?? "Unknown Artist"
+        let name = app.currentTrack?.name
+        let artist = app.currentTrack?.artist
+        // Spotify open with nothing queued: report an empty track (→ the
+        // "Nothing playing" state), not "Unknown Title".
+        guard name != nil || artist != nil else { return track }
+        track.title = name ?? "Unknown Title"
+        track.artist = artist ?? "Unknown Artist"
+        track.album = app.currentTrack?.album ?? "Unknown Album"
         track.duration = CGFloat(app.currentTrack?.duration ?? 0) / 1000
         return track
+    }
+
+    func currentTrackIdentity() -> MusicTrackIdentity? {
+        guard isRunning(), let track = app.currentTrack,
+              let uri = track.id?(), uri.hasPrefix("spotify:") else { return nil }
+        return MusicTrackIdentity(
+            playbackURI: uri,
+            artworkURL: track.artworkUrl.flatMap(URL.init(string:))
+        )
     }
 
     func getAlbumArt(completion: @escaping @Sendable (MusicFetchedAlbumArt?) -> Void) {
