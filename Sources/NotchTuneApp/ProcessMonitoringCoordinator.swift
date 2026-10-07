@@ -159,7 +159,7 @@ final class ProcessMonitoringCoordinator {
             if local != originalState {
                 state = local
             }
-            isResolvingInitialLiveSessions = false
+            setResolvingInitialLiveSessionsFinished()
             return
         }
 
@@ -191,7 +191,10 @@ final class ProcessMonitoringCoordinator {
         _ = local.reconcileJumpTargets(jumpTargetUpdates)
 
         // Phase 1: populate isProcessAlive in parallel with existing system.
-        let aliveIDs = sessionIDsWithAliveProcesses(activeProcesses: activeProcesses)
+        let aliveIDs = sessionIDsWithAliveProcesses(
+            activeProcesses: activeProcesses,
+            isCodexAppRunning: isCodexAppRunning
+        )
         _ = local.markProcessLiveness(
             aliveSessionIDs: aliveIDs,
             isCodexAppRunning: isCodexAppRunning
@@ -224,16 +227,24 @@ final class ProcessMonitoringCoordinator {
 
         guard anyChange else {
             if resolutionReport.isAuthoritative {
-                isResolvingInitialLiveSessions = false
+                setResolvingInitialLiveSessionsFinished()
             }
             return
         }
 
         if resolutionReport.isAuthoritative {
-            isResolvingInitialLiveSessions = false
+            setResolvingInitialLiveSessionsFinished()
         }
         onSessionsReconciled?()
         onPersistenceNeeded?()
+    }
+
+    /// Clears the startup flag without touching the observable property when
+    /// it is already clear (every tick used to re-assign it).
+    private func setResolvingInitialLiveSessionsFinished() {
+        if isResolvingInitialLiveSessions {
+            isResolvingInitialLiveSessions = false
+        }
     }
 
     // MARK: - Event helpers
@@ -294,7 +305,8 @@ final class ProcessMonitoringCoordinator {
     /// heuristics (e.g. bundle-ID liveness for Cursor, PID matching for
     /// Codex/Claude/Gemini).
     func sessionIDsWithAliveProcesses(
-        activeProcesses: [ActiveProcessSnapshot]
+        activeProcesses: [ActiveProcessSnapshot],
+        isCodexAppRunning knownCodexAppRunning: Bool? = nil
     ) -> Set<String> {
         var aliveIDs: Set<String> = []
         let sessions = state.sessions
@@ -306,7 +318,9 @@ final class ProcessMonitoringCoordinator {
                 .compactMap(\.sessionID)
         )
         // Codex.app sessions: keep alive while the desktop app is running.
-        let isCodexAppRunning = Self.isCodexDesktopAppRunning()
+        // (The caller usually just checked; enumerating every running app
+        // twice per tick is wasted work.)
+        let isCodexAppRunning = knownCodexAppRunning ?? Self.isCodexDesktopAppRunning()
         for session in sessions where session.tool == .codex && !session.isDemoSession {
             if session.isCodexAppSession {
                 if isCodexAppRunning { aliveIDs.insert(session.id) }
@@ -432,7 +446,8 @@ final class ProcessMonitoringCoordinator {
         // after a staleness window so the notch clears when the user is
         // no longer interacting with the conversation.  Cursor has no
         // "tab closed" hook, so this timeout is the best available proxy.
-        let isCursorRunning = !NSRunningApplication.runningApplications(
+        let hasCursorSessions = sessions.contains { $0.tool == .cursor && !$0.isDemoSession }
+        let isCursorRunning = hasCursorSessions && !NSRunningApplication.runningApplications(
             withBundleIdentifier: "com.todesktop.230313mzl4w4u92"
         ).isEmpty
         if isCursorRunning {
