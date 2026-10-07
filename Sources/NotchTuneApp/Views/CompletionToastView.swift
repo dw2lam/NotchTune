@@ -230,6 +230,7 @@ struct CompletionToastView: View {
             }
             .buttonStyle(.plain)
             .disabled(trimmedReply.isEmpty)
+            .accessibilityLabel(lang.t("question.sendReply"))
 
             Button {
                 withAnimation(.easeInOut(duration: 0.18)) {

@@ -1060,7 +1060,11 @@ struct IslandPanelView: View {
                     .help("\(window.label) weekly limit")
             }
 
-            headerIconButton(systemName: "gearshape.fill", tint: .white.opacity(0.62)) {
+            headerIconButton(
+                systemName: "gearshape.fill",
+                tint: .white.opacity(0.62),
+                accessibilityLabel: "Settings"
+            ) {
                 model.showSettings()
             }
 
@@ -1081,7 +1085,7 @@ struct IslandPanelView: View {
     private func headerIconButton(
         systemName: String,
         tint: Color,
-        accessibilityLabel: String? = nil,
+        accessibilityLabel: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -1093,7 +1097,9 @@ struct IslandPanelView: View {
             fallbackFill: .white.opacity(0.08),
             foreground: model.glassSettings.usesGlassControls ? .white.opacity(0.78) : tint
         ))
-        .accessibilityLabel(accessibilityLabel ?? systemName)
+        // Required: the old `?? systemName` fallback made VoiceOver read the
+        // gear as "gearshape.fill".
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var openedContent: some View {
@@ -3080,6 +3086,7 @@ private struct IslandSessionRow: View {
             }
             .buttonStyle(.plain)
             .disabled(replyText.trimmingCharacters(in: .whitespaces).isEmpty)
+            .accessibilityLabel(lang.t("question.sendReply"))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
