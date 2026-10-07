@@ -79,6 +79,7 @@ enum SettingsSection: String, CaseIterable {
 struct SettingsView: View {
     var model: AppModel
     @State private var selectedTab: SettingsTab = .general
+    @State private var isWindowOnScreen = true
 
     private var lang: LanguageManager { model.lang }
 
@@ -88,7 +89,9 @@ struct SettingsView: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
         } detail: {
             detailView
+                .environment(\.settingsWindowIsOnScreen, isWindowOnScreen)
         }
+        .onWindowOnScreenChange { isWindowOnScreen = $0 }
         .frame(minWidth: 780, idealWidth: 860, maxWidth: 1240, minHeight: 540, idealHeight: 640)
         .onReceive(NotificationCenter.default.publisher(for: .notchTuneSelectSetupTab)) { _ in
             selectedTab = .setup
@@ -360,13 +363,12 @@ struct DisplaySettingsPane: View {
 
 struct SoundSettingsPane: View {
     var model: AppModel
-    @State private var customSounds: [String] = []
+    @State private var customSounds: [String] = NotificationSoundService.availableCustomSounds()
+    /// The system sounds, listed when the pane is created — not by a
+    /// directory read on every render (twice per body: both pickers).
+    @State private var availableSounds: [String] = NotificationSoundService.availableSounds()
 
     private var lang: LanguageManager { model.lang }
-
-    private var availableSounds: [String] {
-        NotificationSoundService.availableSounds()
-    }
 
     var body: some View {
         SettingsPane(
@@ -855,18 +857,9 @@ struct SetupSettingsPane: View {
             footer: lang.t("setup.section.hooks.footer")
         ) {
             Button(lang.t("setup.installAll")) {
-                if !model.claudeHooksInstalled { model.installClaudeHooks() }
-                if !model.codexHooksInstalled { model.installCodexHooks() }
-                if !model.openCodePluginInstalled { model.installOpenCodePlugin() }
-                if !model.qoderHooksInstalled { model.installQoderHooks() }
-                if !model.qwenCodeHooksInstalled { model.installQwenCodeHooks() }
-                if !model.factoryHooksInstalled { model.installFactoryHooks() }
-                if !model.codebuddyHooksInstalled { model.installCodebuddyHooks() }
-                if !model.cursorHooksInstalled { model.installCursorHooks() }
-                if !model.geminiHooksInstalled { model.installGeminiHooks() }
-                if !model.antigravityHooksInstalled { model.installAntigravityHooks() }
-                if !model.kimiHooksInstalled { model.installKimiHooks() }
-                if !model.claudeUsageInstalled { model.installClaudeUsageBridge() }
+                for step in installAllSteps where !step.installed {
+                    step.install()
+                }
             }
             .disabled(model.hooksBinaryURL == nil || allReady)
         } content: {
@@ -1189,10 +1182,29 @@ struct SetupSettingsPane: View {
         }
     }
 
+    /// Everything "Install All" installs. Its action and its enabled state
+    /// both read this one list, so they can't drift apart (Antigravity was
+    /// installed by the button but missing from its "all ready" check, which
+    /// greyed the button out while Antigravity still needed installing).
+    private var installAllSteps: [(installed: Bool, install: () -> Void)] {
+        [
+            (model.claudeHooksInstalled, model.installClaudeHooks),
+            (model.codexHooksInstalled, model.installCodexHooks),
+            (model.openCodePluginInstalled, model.installOpenCodePlugin),
+            (model.qoderHooksInstalled, model.installQoderHooks),
+            (model.qwenCodeHooksInstalled, model.installQwenCodeHooks),
+            (model.factoryHooksInstalled, model.installFactoryHooks),
+            (model.codebuddyHooksInstalled, model.installCodebuddyHooks),
+            (model.cursorHooksInstalled, model.installCursorHooks),
+            (model.geminiHooksInstalled, model.installGeminiHooks),
+            (model.antigravityHooksInstalled, model.installAntigravityHooks),
+            (model.kimiHooksInstalled, model.installKimiHooks),
+            (model.claudeUsageInstalled, model.installClaudeUsageBridge),
+        ]
+    }
+
     private var allReady: Bool {
-        model.claudeHooksInstalled && model.codexHooksInstalled && model.openCodePluginInstalled
-            && model.qoderHooksInstalled && model.qwenCodeHooksInstalled && model.factoryHooksInstalled && model.codebuddyHooksInstalled
-            && model.cursorHooksInstalled && model.geminiHooksInstalled && model.kimiHooksInstalled && model.claudeUsageInstalled
+        installAllSteps.allSatisfy(\.installed)
     }
 
     /// First-run welcome: a softly tinted card above the hooks list.
@@ -1491,8 +1503,11 @@ struct MusicSettingsPane: View {
 
     private var lang: LanguageManager { model.lang }
 
+    /// Through LaunchServices (cached), like the rest of the music code: a
+    /// Spotify installed outside /Applications (e.g. ~/Applications, where
+    /// its installer goes without admin rights) still gets its tile.
     private var spotifyInstalled: Bool {
-        FileManager.default.fileExists(atPath: "/Applications/Spotify.app")
+        MusicPlayerIcon.icon(for: .spotify) != nil
     }
 
     var body: some View {
@@ -1515,11 +1530,11 @@ struct MusicSettingsPane: View {
                                 .foregroundStyle(.secondary)
                         }
                         playerTile(tag: "appleMusic", title: "Apple Music") {
-                            appIcon(atPath: "/System/Applications/Music.app")
+                            appIcon(for: .appleMusic)
                         }
                         if spotifyInstalled {
                             playerTile(tag: "spotify", title: "Spotify") {
-                                appIcon(atPath: "/Applications/Spotify.app")
+                                appIcon(for: .spotify)
                             }
                         }
                     }
@@ -1546,8 +1561,10 @@ struct MusicSettingsPane: View {
         }
     }
 
-    private func appIcon(atPath path: String) -> some View {
-        Image(nsImage: NSWorkspace.shared.icon(forFile: path))
+    /// The player's real app icon, cached — not a fresh NSWorkspace icon
+    /// load on every render.
+    private func appIcon(for kind: MusicPlayerKind) -> some View {
+        Image(nsImage: MusicPlayerIcon.icon(for: kind) ?? NSWorkspace.shared.icon(for: .application))
             .resizable()
             .interpolation(.high)
             .frame(width: 52, height: 52)

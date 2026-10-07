@@ -18,6 +18,7 @@ struct AppearanceSettingsPane: View {
     @State private var finishHop: UUID?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.settingsWindowIsOnScreen) private var isOnScreen
 
     private var lang: LanguageManager { model.lang }
     private var editingProfile: IslandAppearanceDisplayProfile { model.appearanceSettingsProfile }
@@ -38,7 +39,9 @@ struct AppearanceSettingsPane: View {
             liquidGlassCard
             sessionListCard
         }
-        .task(id: previewPin) {
+        // Restarts when the pin changes or the window is hidden / shown:
+        // nobody needs the cycle while the window can't be seen.
+        .task(id: PreviewDriver(pin: previewPin, isOnScreen: isOnScreen)) {
             await runPreview()
         }
     }
@@ -120,6 +123,7 @@ struct AppearanceSettingsPane: View {
             showPreviewPhase(pinned)
             return
         }
+        guard isOnScreen else { return }
         while !Task.isCancelled {
             try? await Task.sleep(for: previewPhase.dwell)
             guard !Task.isCancelled else { return }
@@ -140,6 +144,11 @@ struct AppearanceSettingsPane: View {
                 finishHop = UUID()
             }
         }
+    }
+
+    private struct PreviewDriver: Equatable {
+        let pin: PersonalizationPreviewPin
+        let isOnScreen: Bool
     }
 
     // MARK: - Character
@@ -739,12 +748,14 @@ private struct CharacterTileSprite: View {
 
     @Environment(\.settingsTileIsHovered) private var isHovered
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.settingsWindowIsOnScreen) private var isOnScreen
 
     var body: some View {
         UnifiedBars(
             mode: (isSelected || isHovered) && !reduceMotion ? .running : .idle,
             size: 42,
-            character: character
+            character: character,
+            paused: !isOnScreen
         )
         .frame(width: 46, height: 46)
     }
@@ -755,13 +766,15 @@ private struct AgentColorChip: View {
     let tool: AgentTool
     let character: IslandCharacter
 
+    @Environment(\.settingsWindowIsOnScreen) private var isOnScreen
+
     private var color: Color {
         Color(hex: tool.brandColorHex) ?? UnifiedBars.paperInk
     }
 
     var body: some View {
         HStack(spacing: 8) {
-            UnifiedBars(mode: .idle, size: 20, character: character, tint: color)
+            UnifiedBars(mode: .idle, size: 20, character: character, paused: !isOnScreen, tint: color)
                 .frame(width: 22, height: 22)
                 .padding(4)
                 .background(
@@ -853,6 +866,8 @@ private struct SessionListPanelPreview: View {
     let profile: IslandAppearanceDisplayProfile
     let lang: LanguageManager
 
+    @Environment(\.settingsWindowIsOnScreen) private var isOnScreen
+
     private var items: [AppearanceSessionPreviewItem] {
         sections.flatMap(\.items)
     }
@@ -913,7 +928,7 @@ private struct SessionListPanelPreview: View {
 
     private var panelHead: some View {
         HStack(spacing: 8) {
-            UnifiedBars(mode: .waiting, size: 22)
+            UnifiedBars(mode: .waiting, size: 22, paused: !isOnScreen)
                 .frame(width: 24, height: 24)
 
             Text(lang.t("island.sessionList.title").uppercased())
@@ -1088,6 +1103,8 @@ private struct SessionListLivePreviewRow: View {
     let sideInset: CGFloat
     let lang: LanguageManager
 
+    @Environment(\.settingsWindowIsOnScreen) private var isOnScreen
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 10) {
@@ -1252,11 +1269,11 @@ private struct SessionListLivePreviewRow: View {
     private var glyphView: some View {
         switch item.phase {
         case .idle:
-            UnifiedBars(mode: .idle, size: 16, tint: tint)
+            UnifiedBars(mode: .idle, size: 16, paused: !isOnScreen, tint: tint)
         case .running:
-            UnifiedBars(mode: .running, size: 16, tint: tint)
+            UnifiedBars(mode: .running, size: 16, paused: !isOnScreen, tint: tint)
         case .approval, .answer:
-            UnifiedBars(mode: .waiting, size: 16, tint: tint)
+            UnifiedBars(mode: .waiting, size: 16, paused: !isOnScreen, tint: tint)
         case .done:
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 13, weight: .semibold))
