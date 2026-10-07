@@ -1504,8 +1504,11 @@ struct MusicSettingsPane: View {
 
     private var lang: LanguageManager { model.lang }
 
+    /// Through LaunchServices (cached), like the rest of the music code: a
+    /// Spotify installed outside /Applications (e.g. ~/Applications, where
+    /// its installer goes without admin rights) still gets its tile.
     private var spotifyInstalled: Bool {
-        FileManager.default.fileExists(atPath: "/Applications/Spotify.app")
+        MusicPlayerIcon.icon(for: .spotify) != nil
     }
 
     var body: some View {
@@ -1528,11 +1531,11 @@ struct MusicSettingsPane: View {
                                 .foregroundStyle(.secondary)
                         }
                         playerTile(tag: "appleMusic", title: "Apple Music") {
-                            appIcon(atPath: "/System/Applications/Music.app")
+                            appIcon(for: .appleMusic)
                         }
                         if spotifyInstalled {
                             playerTile(tag: "spotify", title: "Spotify") {
-                                appIcon(atPath: "/Applications/Spotify.app")
+                                appIcon(for: .spotify)
                             }
                         }
                     }
@@ -1559,8 +1562,10 @@ struct MusicSettingsPane: View {
         }
     }
 
-    private func appIcon(atPath path: String) -> some View {
-        Image(nsImage: NSWorkspace.shared.icon(forFile: path))
+    /// The player's real app icon, cached — not a fresh NSWorkspace icon
+    /// load on every render.
+    private func appIcon(for kind: MusicPlayerKind) -> some View {
+        Image(nsImage: MusicPlayerIcon.icon(for: kind) ?? NSWorkspace.shared.icon(for: .application))
             .resizable()
             .interpolation(.high)
             .frame(width: 52, height: 52)
