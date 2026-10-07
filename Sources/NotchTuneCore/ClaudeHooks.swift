@@ -214,19 +214,87 @@ public struct ClaudeSubagentInfo: Equatable, Codable, Sendable {
     public var summary: String?
     public var taskDescription: String?
     public var startedAt: Date?
+    /// Last hook event seen from this subagent (its own tool calls carry
+    /// `agent_id`). Staleness is measured from here, not from `startedAt`,
+    /// so a long-running background agent isn't dropped while it works.
+    public var lastActivityAt: Date?
+    /// Launched with `run_in_background`: may keep running after the main
+    /// turn's `Stop`. Foreground subagents can't outlive the turn.
+    public var isBackground: Bool?
 
     public init(
         agentID: String,
         agentType: String? = nil,
         summary: String? = nil,
         taskDescription: String? = nil,
-        startedAt: Date? = nil
+        startedAt: Date? = nil,
+        lastActivityAt: Date? = nil,
+        isBackground: Bool? = nil
     ) {
         self.agentID = agentID
         self.agentType = agentType
         self.summary = summary
         self.taskDescription = taskDescription
         self.startedAt = startedAt
+        self.lastActivityAt = lastActivityAt
+        self.isBackground = isBackground
+    }
+}
+
+/// One entry of Claude Code's `background_tasks` hook field: work that keeps
+/// running after the main turn ends (background subagents, background shells).
+/// Decoded leniently — an unexpected shape must never break a hook.
+public struct ClaudeBackgroundTask: Equatable, Codable, Sendable {
+    public var id: String
+    public var type: String?
+    public var status: String?
+    public var description: String?
+    public var agentType: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, status, description
+        case agentType = "agent_type"
+    }
+
+    public init(id: String, type: String? = nil, status: String? = nil, description: String? = nil, agentType: String? = nil) {
+        self.id = id
+        self.type = type
+        self.status = status
+        self.description = description
+        self.agentType = agentType
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? container.decode(String.self, forKey: .id)) ?? ""
+        type = try? container.decode(String.self, forKey: .type)
+        status = try? container.decode(String.self, forKey: .status)
+        description = try? container.decode(String.self, forKey: .description)
+        agentType = try? container.decode(String.self, forKey: .agentType)
+    }
+
+    /// A background subagent that is still working.
+    public var isRunningSubagent: Bool {
+        type == "subagent" && status == "running" && !id.isEmpty
+    }
+}
+
+/// `background_tasks` as sent by Claude Code. A value that isn't a list of
+/// task objects decodes to `tasks == nil` instead of failing the payload.
+public struct ClaudeBackgroundTaskList: Equatable, Codable, Sendable {
+    public var tasks: [ClaudeBackgroundTask]?
+
+    public init(tasks: [ClaudeBackgroundTask]?) {
+        self.tasks = tasks
+    }
+
+    public init(from decoder: any Decoder) throws {
+        tasks = try? decoder.singleValueContainer().decode([ClaudeBackgroundTask].self)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(tasks)
     }
 }
 
@@ -362,6 +430,11 @@ public struct ClaudeHookPayload: Equatable, Codable, Sendable {
     public var errorDetails: String?
     public var isInterrupt: Bool?
     public var agentTranscriptPath: String?
+    /// Work still running outside the main turn (Claude Code sends this on
+    /// `SubagentStop` / `Stop`). Lenient: a malformed value decodes as
+    /// "unknown" (nil), never as an empty list.
+    public var backgroundTaskList: ClaudeBackgroundTaskList?
+    public var backgroundTasks: [ClaudeBackgroundTask]? { backgroundTaskList?.tasks }
     public var terminalApp: String?
     public var terminalSessionID: String?
     public var terminalTTY: String?
@@ -406,6 +479,7 @@ public struct ClaudeHookPayload: Equatable, Codable, Sendable {
         case errorDetails = "error_details"
         case isInterrupt = "is_interrupt"
         case agentTranscriptPath = "agent_transcript_path"
+        case backgroundTaskList = "background_tasks"
         case terminalApp = "terminal_app"
         case terminalSessionID = "terminal_session_id"
         case terminalTTY = "terminal_tty"
@@ -440,6 +514,7 @@ public struct ClaudeHookPayload: Equatable, Codable, Sendable {
         errorDetails: String? = nil,
         isInterrupt: Bool? = nil,
         agentTranscriptPath: String? = nil,
+        backgroundTasks: [ClaudeBackgroundTask]? = nil,
         terminalApp: String? = nil,
         terminalSessionID: String? = nil,
         terminalTTY: String? = nil,
@@ -472,6 +547,7 @@ public struct ClaudeHookPayload: Equatable, Codable, Sendable {
         self.errorDetails = errorDetails
         self.isInterrupt = isInterrupt
         self.agentTranscriptPath = agentTranscriptPath
+        self.backgroundTaskList = backgroundTasks.map { ClaudeBackgroundTaskList(tasks: $0) }
         self.terminalApp = terminalApp
         self.terminalSessionID = terminalSessionID
         self.terminalTTY = terminalTTY

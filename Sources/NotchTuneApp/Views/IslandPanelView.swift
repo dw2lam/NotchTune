@@ -1875,21 +1875,23 @@ struct IslandPanelView: View {
 
         Button {
             let next = providers[(index + 1) % providers.count]
-            withAnimation(.smooth(duration: 0.28)) {
+            withAnimation(.easeInOut(duration: 0.32)) {
                 selectedUsageProviderID = next.id
             }
         } label: {
             HStack(spacing: 7) {
-                ViewThatFits(in: .horizontal) {
-                    usageProviderLine(provider, leading: .appIcon, showsResets: true)
-                    usageProviderLine(provider, leading: .appIcon)
-                    usageProviderLine(provider, leading: .appIcon, peakOnly: true)
+                // Crossfade in place: both providers share one ZStack slot, so
+                // the outgoing one fades out under the incoming one instead of
+                // the two sitting side by side mid-transition.
+                ZStack(alignment: .leading) {
+                    ViewThatFits(in: .horizontal) {
+                        usageProviderLine(provider, leading: .appIcon, showsResets: true)
+                        usageProviderLine(provider, leading: .appIcon)
+                        usageProviderLine(provider, leading: .appIcon, peakOnly: true)
+                    }
+                    .id(provider.id)
+                    .transition(.opacity)
                 }
-                .id(provider.id)
-                .transition(.asymmetric(
-                    insertion: .move(edge: .bottom).combined(with: .opacity),
-                    removal: .move(edge: .top).combined(with: .opacity)
-                ))
 
                 if providers.count > 1 {
                     HStack(spacing: 3) {

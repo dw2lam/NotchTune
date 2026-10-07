@@ -5,6 +5,29 @@ import Testing
 import NotchTuneCore
 
 struct IslandLiveActivityTests {
+    @Test
+    func workingPillSaysAgentsAreWorkingWhenOnlySubagentsRun() {
+        var session = AgentSession(
+            id: "bg", title: "Claude Code · api", tool: .claudeCode, origin: .live,
+            attachmentState: .attached, phase: .running, summary: "2 agents working", updatedAt: .now
+        )
+        session.claudeMetadata = ClaudeSessionMetadata(
+            activeSubagents: [
+                ClaudeSubagentInfo(agentID: "a", agentType: "Explore", isBackground: true),
+                ClaudeSubagentInfo(agentID: "b", agentType: "general-purpose", isBackground: true),
+            ]
+        )
+        let activity = IslandLiveActivity.resolve(
+            mode: .active, sessions: [session], finishedPeekSessionID: nil,
+            runningSince: [:], attentionSince: [:]
+        )
+        #expect(activity?.kind == .working)
+        #expect(activity?.subtitle == "2 agents working")
+
+        session.claudeMetadata?.activeSubagents.removeLast()
+        #expect(IslandLiveActivity.subagentsPhrase(session) == "Explore agent working")
+    }
+
     private let now = Date(timeIntervalSince1970: 10_000)
 
     private func session(

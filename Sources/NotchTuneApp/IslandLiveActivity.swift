@@ -115,6 +115,7 @@ struct IslandLiveActivity: Equatable, Sendable {
                 title: "\(session.tool.displayName) · \(workspaceName(of: session))",
                 subtitle: firstNonEmpty(
                     session.currentToolName.map { activityPhrase(tool: $0, session: session) },
+                    subagentsPhrase(session),
                     session.latestUserPromptText
                 ),
                 since: runningSince[session.id] ?? session.updatedAt,
@@ -126,6 +127,17 @@ struct IslandLiveActivity: Equatable, Sendable {
     private static func workspaceName(of session: AgentSession) -> String {
         let name = session.spotlightWorkspaceName.trimmingCharacters(in: .whitespacesAndNewlines)
         return name.isEmpty ? session.tool.displayName : name
+    }
+
+    /// "Explore agent working" / "3 agents working" while Claude subagents run
+    /// (e.g. background agents after the main turn ended).
+    static func subagentsPhrase(_ session: AgentSession) -> String? {
+        let active = session.claudeMetadata?.activeSubagents ?? []
+        switch active.count {
+        case 0: return nil
+        case 1: return "\(active[0].agentType.map { "\($0) agent" } ?? "Subagent") working"
+        default: return "\(active.count) agents working"
+        }
     }
 
     /// "Editing AppModel.swift", "Running swift test", or the raw tool name.

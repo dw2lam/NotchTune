@@ -72,6 +72,14 @@ public final class BridgeServer: @unchecked Sendable {
     private var pendingCursorInteractions: [String: PendingCursorInteraction] = [:]
     /// Caches Agent tool description from preToolUse for use by the next subagentStart.
     private var pendingAgentDescriptions: [String: String] = [:]
+    /// Main-turn completions held back while background subagents keep
+    /// working (keyed by session). Delivered when the last one stops.
+    private var deferredClaudeCompletions: [String: DeferredClaudeCompletion] = [:]
+    /// Subagents that already sent `SubagentStop`, so a late event from one
+    /// can't re-register it and pin the session live.
+    private var stoppedClaudeSubagents: [String: Date] = [:]
+    /// Sessions with a pending stale-subagent sweep scheduled.
+    private var scheduledSubagentSweeps: Set<String> = []
     /// Maps toolUseID → temporary task ID for TaskCreate, so postToolUse can update with real ID.
     private var pendingTaskCreations: [String: PendingTaskCreation] = [:]
     private var stateSnapshot = SessionState()
@@ -635,12 +643,17 @@ public final class BridgeServer: @unchecked Sendable {
     }
 
     private func handleClaudeHook(_ payload: ClaudeHookPayload, from clientID: UUID) {
-        // Subagent processes fire their own hooks with agentID set.
-        // The parent session already receives SubagentStart/SubagentStop events,
-        // so we suppress subagent hooks to avoid creating duplicate sessions.
-        if payload.agentID != nil,
+        // Subagents fire their own tool hooks with `agent_id` set. They carry
+        // the PARENT's session_id and transcript path (verified against Claude
+        // Code's payloads), so they can't create a duplicate session — and they
+        // are the only sign of life from background subagents once the main
+        // turn has stopped. Use them to keep the parent live; their permission
+        // prompts still fall back to the terminal (approvals are keyed per
+        // session, so a subagent's would clobber the main agent's).
+        if let agentID = payload.agentID,
            payload.hookEventName != .subagentStart,
            payload.hookEventName != .subagentStop {
+            noteClaudeSubagentActivity(payload, agentID: agentID)
             send(.response(.acknowledged), to: clientID)
             return
         }
@@ -671,6 +684,8 @@ public final class BridgeServer: @unchecked Sendable {
             send(.response(.acknowledged), to: clientID)
 
         case .userPromptSubmit:
+            // A new turn supersedes a completion still held for background agents.
+            deferredClaudeCompletions.removeValue(forKey: payload.sessionID)
             clearStaleClaudeInteractionIfNeeded(for: payload.sessionID)
             ensureClaudeSessionExists(for: payload)
             synchronizeClaudeJumpTarget(for: payload)
@@ -789,6 +804,7 @@ public final class BridgeServer: @unchecked Sendable {
             synchronizeClaudeJumpTarget(for: payload)
             synchronizeClaudeMetadata(for: payload)
             pendingClaudeToolContexts.removeValue(forKey: payload.permissionCorrelationKey)
+            registerLaunchedBackgroundAgent(payload)
 
             // After TaskCreate completes, update the temporary ID with the real task_id from the response
             if payload.toolName == "TaskCreate",
@@ -898,15 +914,24 @@ public final class BridgeServer: @unchecked Sendable {
             synchronizeClaudeJumpTarget(for: payload)
             synchronizeClaudeMetadata(for: payload)
 
-            // Turn is complete — all subagents from this turn must be finished.
-            clearAllActiveSubagents(fromSession: payload.sessionID)
             dropPendingClaudeContexts(forSession: payload.sessionID)
+            let stopSummary = payload.lastAssistantMessage ?? payload.assistantMessagePreview ?? "\(payload.resolvedAgentTool.displayName) completed the turn."
+
+            // Background subagents outlive the turn: hold the completion and
+            // keep the session live until they finish.
+            if deferCompletionForBackgroundSubagents(payload, summary: stopSummary) {
+                send(.response(.acknowledged), to: clientID)
+                return
+            }
+
+            // Turn is complete and nothing runs in the background.
+            clearAllActiveSubagents(fromSession: payload.sessionID)
 
             emit(
                 .sessionCompleted(
                     SessionCompleted(
                         sessionID: payload.sessionID,
-                        summary: payload.lastAssistantMessage ?? payload.assistantMessagePreview ?? "\(payload.resolvedAgentTool.displayName) completed the turn.",
+                        summary: stopSummary,
                         timestamp: .now,
                         isInterrupt: payload.isInterrupt
                     )
@@ -920,15 +945,22 @@ public final class BridgeServer: @unchecked Sendable {
             synchronizeClaudeJumpTarget(for: payload)
             synchronizeClaudeMetadata(for: payload)
 
-            // Turn failed — all subagents from this turn must be finished.
-            clearAllActiveSubagents(fromSession: payload.sessionID)
             dropPendingClaudeContexts(forSession: payload.sessionID)
+            let failureSummary = payload.error ?? payload.lastAssistantMessage ?? payload.assistantMessagePreview ?? "\(payload.resolvedAgentTool.displayName) failed to finish the turn."
+
+            if deferCompletionForBackgroundSubagents(payload, summary: failureSummary) {
+                send(.response(.acknowledged), to: clientID)
+                return
+            }
+
+            // Turn failed and nothing runs in the background.
+            clearAllActiveSubagents(fromSession: payload.sessionID)
 
             emit(
                 .sessionCompleted(
                     SessionCompleted(
                         sessionID: payload.sessionID,
-                        summary: payload.error ?? payload.lastAssistantMessage ?? payload.assistantMessagePreview ?? "\(payload.resolvedAgentTool.displayName) failed to finish the turn.",
+                        summary: failureSummary,
                         timestamp: .now,
                         isInterrupt: payload.isInterrupt
                     )
@@ -943,12 +975,16 @@ public final class BridgeServer: @unchecked Sendable {
 
             if let agentID = payload.agentID {
                 let desc = pendingAgentDescriptions.removeValue(forKey: payload.sessionID)
+                let existing = localState.session(id: payload.sessionID)?
+                    .claudeMetadata?.activeSubagents.first { $0.agentID == agentID }
                 addSubagent(
                     ClaudeSubagentInfo(
                         agentID: agentID,
-                        agentType: payload.agentType,
-                        taskDescription: desc,
-                        startedAt: .now
+                        agentType: payload.agentType ?? existing?.agentType,
+                        taskDescription: desc ?? existing?.taskDescription,
+                        startedAt: existing?.startedAt ?? .now,
+                        lastActivityAt: .now,
+                        isBackground: existing?.isBackground
                     ),
                     toSession: payload.sessionID
                 )
@@ -975,8 +1011,21 @@ public final class BridgeServer: @unchecked Sendable {
                 synchronizeClaudeMetadata(for: payload)
             }
 
+            pruneStoppedSubagents()
             if let agentID = payload.agentID {
+                stoppedClaudeSubagents[agentID] = .now
                 removeSubagent(agentID: agentID, fromSession: payload.sessionID)
+            }
+            reconcileBackgroundSubagents(payload, excluding: payload.agentID)
+
+            // Main turn already over and held for background agents: deliver
+            // the completion once the last one is done, otherwise stay live.
+            if deferredClaudeCompletions[payload.sessionID] != nil {
+                if !completeDeferredClaudeTurnIfIdle(sessionID: payload.sessionID) {
+                    emitBackgroundAgentsActivity(sessionID: payload.sessionID)
+                }
+                send(.response(.acknowledged), to: clientID)
+                return
             }
 
             if sessionWasAlreadyCompleted {
@@ -1023,6 +1072,7 @@ public final class BridgeServer: @unchecked Sendable {
             synchronizeClaudeMetadata(for: payload)
 
             // Session is ending — clean up any lingering subagents.
+            deferredClaudeCompletions.removeValue(forKey: payload.sessionID)
             clearAllActiveSubagents(fromSession: payload.sessionID)
             dropPendingClaudeContexts(forSession: payload.sessionID)
 
@@ -2354,7 +2404,9 @@ public final class BridgeServer: @unchecked Sendable {
     /// Removes subagents that have been inactive for too long.
     /// Called on each hook event from the parent session as a fallback
     /// in case `SubagentStop` was never received (e.g. hook connection dropped).
-    private static let subagentStaleTimeout: TimeInterval = 3 * 60  // 3 minutes
+    /// Measured from the subagent's LAST hook event, so a long-running agent
+    /// that keeps calling tools is never dropped while it works.
+    static let subagentStaleTimeout: TimeInterval = 10 * 60
 
     private func cleanUpStaleSubagents(forSession sessionID: String) {
         guard var metadata = localState.session(id: sessionID)?.claudeMetadata,
@@ -2365,11 +2417,12 @@ public final class BridgeServer: @unchecked Sendable {
         let now = Date.now
         let before = metadata.activeSubagents.count
         metadata.activeSubagents.removeAll { sub in
-            guard let started = sub.startedAt else { return false }
-            return now.timeIntervalSince(started) > Self.subagentStaleTimeout
+            guard let lastSeen = sub.lastActivityAt ?? sub.startedAt else { return false }
+            return now.timeIntervalSince(lastSeen) > Self.subagentStaleTimeout
         }
 
         guard metadata.activeSubagents.count != before else { return }
+        defer { completeDeferredClaudeTurnIfIdle(sessionID: sessionID) }
 
         emit(
             .claudeSessionMetadataUpdated(
@@ -2380,6 +2433,286 @@ public final class BridgeServer: @unchecked Sendable {
                 )
             )
         )
+    }
+
+    // MARK: - Subagent liveness
+
+    struct DeferredClaudeCompletion: Sendable {
+        let summary: String
+        let isInterrupt: Bool?
+    }
+
+    /// A subagent's own hook event (tool use etc.): register / refresh it on
+    /// the parent session, mirror what it is doing, and keep the parent live.
+    private func noteClaudeSubagentActivity(_ payload: ClaudeHookPayload, agentID: String) {
+        // A straggler after SubagentStop must not resurrect the agent.
+        guard stoppedClaudeSubagents[agentID] == nil else { return }
+        ensureClaudeSessionExists(for: payload)
+        guard let session = localState.session(id: payload.sessionID) else { return }
+
+        let now = Date.now
+        var metadata = session.claudeMetadata ?? ClaudeSessionMetadata()
+        if let index = metadata.activeSubagents.firstIndex(where: { $0.agentID == agentID }) {
+            metadata.activeSubagents[index].lastActivityAt = now
+            if metadata.activeSubagents[index].agentType == nil {
+                metadata.activeSubagents[index].agentType = payload.agentType
+            }
+        } else {
+            metadata.activeSubagents.append(
+                ClaudeSubagentInfo(
+                    agentID: agentID,
+                    agentType: payload.agentType,
+                    taskDescription: pendingAgentDescriptions.removeValue(forKey: payload.sessionID),
+                    startedAt: now,
+                    lastActivityAt: now
+                )
+            )
+        }
+
+        // Show what the subagent is doing as the session's current tool.
+        if payload.hookEventName == .preToolUse {
+            let update = payload.defaultClaudeMetadata
+            if let tool = update.currentTool {
+                metadata.currentTool = tool
+                metadata.currentToolInputPreview = update.currentToolInputPreview
+            }
+        }
+
+        if metadata != session.claudeMetadata {
+            emit(
+                .claudeSessionMetadataUpdated(
+                    ClaudeSessionMetadataUpdated(
+                        sessionID: payload.sessionID,
+                        claudeMetadata: metadata,
+                        timestamp: now
+                    )
+                )
+            )
+        }
+
+        // Activity after the session already finished (a background agent the
+        // Stop didn't know about): wake it, and re-deliver the completion
+        // when the agents are done instead of leaving it running forever.
+        if session.phase == .completed, deferredClaudeCompletions[payload.sessionID] == nil {
+            deferredClaudeCompletions[payload.sessionID] = DeferredClaudeCompletion(
+                summary: metadata.lastAssistantMessage ?? session.summary,
+                isInterrupt: nil
+            )
+        }
+
+        // Keep the parent live (never override a pending approval/question).
+        if !session.phase.requiresAttention {
+            emitBackgroundAgentsActivity(sessionID: payload.sessionID)
+        }
+        if deferredClaudeCompletions[payload.sessionID] != nil {
+            scheduleSubagentSweep(for: payload.sessionID)
+        }
+    }
+
+    /// `Agent` launched with `run_in_background` returns at once with
+    /// `status: async_launched` and the agent's id — register it as a
+    /// background subagent right away (SubagentStart isn't reliably sent).
+    private func registerLaunchedBackgroundAgent(_ payload: ClaudeHookPayload) {
+        guard payload.toolName == "Agent" || payload.toolName == "Task",
+              case let .object(response) = payload.toolResponse,
+              case let .string(status) = response["status"],
+              status == "async_launched",
+              case let .string(agentID) = response["agentId"],
+              !agentID.isEmpty,
+              stoppedClaudeSubagents[agentID] == nil,
+              var metadata = localState.session(id: payload.sessionID)?.claudeMetadata
+                ?? (hasSession(id: payload.sessionID) ? ClaudeSessionMetadata() : nil) else {
+            return
+        }
+
+        var description: String?
+        if case let .string(text) = response["description"] { description = text }
+        var agentType: String?
+        if case let .object(input) = payload.toolInput, case let .string(type) = input["subagent_type"] {
+            agentType = type
+        }
+
+        let now = Date.now
+        if let index = metadata.activeSubagents.firstIndex(where: { $0.agentID == agentID }) {
+            metadata.activeSubagents[index].isBackground = true
+            metadata.activeSubagents[index].lastActivityAt = now
+        } else {
+            metadata.activeSubagents.append(
+                ClaudeSubagentInfo(
+                    agentID: agentID,
+                    agentType: agentType,
+                    taskDescription: description,
+                    startedAt: now,
+                    lastActivityAt: now,
+                    isBackground: true
+                )
+            )
+        }
+        pendingAgentDescriptions.removeValue(forKey: payload.sessionID)
+        emit(
+            .claudeSessionMetadataUpdated(
+                ClaudeSessionMetadataUpdated(
+                    sessionID: payload.sessionID,
+                    claudeMetadata: metadata,
+                    timestamp: now
+                )
+            )
+        )
+    }
+
+    /// Brings `activeSubagents` in line with `background_tasks` when the
+    /// payload carries it (it lists background work only): listed running
+    /// subagents are kept / added as background, background ones no longer
+    /// listed are dropped. Foreground entries are left alone. Returns the
+    /// subagents still active afterwards.
+    @discardableResult
+    private func reconcileBackgroundSubagents(_ payload: ClaudeHookPayload, excluding excludedID: String?) -> [ClaudeSubagentInfo] {
+        guard var metadata = localState.session(id: payload.sessionID)?.claudeMetadata else {
+            return []
+        }
+        guard let tasks = payload.backgroundTasks else {
+            return metadata.activeSubagents
+        }
+
+        let now = Date.now
+        let running = tasks.filter {
+            $0.isRunningSubagent && $0.id != excludedID && stoppedClaudeSubagents[$0.id] == nil
+        }
+        let runningIDs = Set(running.map(\.id))
+        var next = metadata.activeSubagents.filter { sub in
+            sub.isBackground == true ? runningIDs.contains(sub.agentID) : true
+        }
+        for index in next.indices where runningIDs.contains(next[index].agentID) {
+            next[index].isBackground = true
+        }
+        for task in running where !next.contains(where: { $0.agentID == task.id }) {
+            next.append(
+                ClaudeSubagentInfo(
+                    agentID: task.id,
+                    agentType: task.agentType,
+                    taskDescription: task.description,
+                    startedAt: now,
+                    lastActivityAt: now,
+                    isBackground: true
+                )
+            )
+        }
+
+        if next != metadata.activeSubagents {
+            metadata.activeSubagents = next
+            emit(
+                .claudeSessionMetadataUpdated(
+                    ClaudeSessionMetadataUpdated(
+                        sessionID: payload.sessionID,
+                        claudeMetadata: metadata,
+                        timestamp: now
+                    )
+                )
+            )
+        }
+        return next
+    }
+
+    /// At the main turn's Stop: if background subagents are still running,
+    /// hold the completion, keep only the background subagents (foreground
+    /// ones can't outlive the turn) and keep the session live. Returns true
+    /// when the completion was deferred.
+    private func deferCompletionForBackgroundSubagents(_ payload: ClaudeHookPayload, summary: String) -> Bool {
+        let sessionID = payload.sessionID
+        // Foreground subagents can't outlive the turn; background ones can.
+        let remaining = reconcileBackgroundSubagents(payload, excluding: nil)
+            .filter { $0.isBackground == true }
+
+        guard !remaining.isEmpty,
+              var metadata = localState.session(id: sessionID)?.claudeMetadata else {
+            deferredClaudeCompletions.removeValue(forKey: sessionID)
+            return false
+        }
+
+        if metadata.activeSubagents != remaining {
+            metadata.activeSubagents = remaining
+            emit(
+                .claudeSessionMetadataUpdated(
+                    ClaudeSessionMetadataUpdated(
+                        sessionID: sessionID,
+                        claudeMetadata: metadata,
+                        timestamp: .now
+                    )
+                )
+            )
+        }
+
+        deferredClaudeCompletions[sessionID] = DeferredClaudeCompletion(summary: summary, isInterrupt: payload.isInterrupt)
+        emitBackgroundAgentsActivity(sessionID: sessionID)
+        scheduleSubagentSweep(for: sessionID)
+        return true
+    }
+
+    /// Delivers a held completion once no subagents remain. Returns true if
+    /// it completed the session.
+    @discardableResult
+    private func completeDeferredClaudeTurnIfIdle(sessionID: String) -> Bool {
+        guard let deferred = deferredClaudeCompletions[sessionID] else { return false }
+        let active = localState.session(id: sessionID)?.claudeMetadata?.activeSubagents ?? []
+        guard active.isEmpty else { return false }
+
+        deferredClaudeCompletions.removeValue(forKey: sessionID)
+        emit(
+            .sessionCompleted(
+                SessionCompleted(
+                    sessionID: sessionID,
+                    summary: deferred.summary,
+                    timestamp: .now,
+                    isInterrupt: deferred.isInterrupt
+                )
+            )
+        )
+        return true
+    }
+
+    /// "Explore agent working" / "3 agents working", phase running.
+    private func emitBackgroundAgentsActivity(sessionID: String) {
+        guard let session = localState.session(id: sessionID) else { return }
+        let active = session.claudeMetadata?.activeSubagents ?? []
+        let summary: String
+        switch active.count {
+        case 0: summary = session.summary
+        case 1: summary = "\(active[0].agentType.map { "\($0) agent" } ?? "Subagent") working"
+        default: summary = "\(active.count) agents working"
+        }
+        guard session.phase != .running || session.summary != summary else { return }
+        emit(
+            .activityUpdated(
+                SessionActivityUpdated(
+                    sessionID: sessionID,
+                    summary: summary,
+                    phase: .running,
+                    timestamp: .now
+                )
+            )
+        )
+    }
+
+    /// While a completion is held, re-check periodically so an agent that
+    /// died without SubagentStop can't keep the session live forever.
+    private func scheduleSubagentSweep(for sessionID: String) {
+        guard !scheduledSubagentSweeps.contains(sessionID) else { return }
+        scheduledSubagentSweeps.insert(sessionID)
+        queue.asyncAfter(deadline: .now() + 60) { [weak self] in
+            guard let self else { return }
+            self.scheduledSubagentSweeps.remove(sessionID)
+            self.pruneStoppedSubagents()
+            guard self.deferredClaudeCompletions[sessionID] != nil else { return }
+            self.cleanUpStaleSubagents(forSession: sessionID)
+            if !self.completeDeferredClaudeTurnIfIdle(sessionID: sessionID) {
+                self.scheduleSubagentSweep(for: sessionID)
+            }
+        }
+    }
+
+    private func pruneStoppedSubagents() {
+        let cutoff = Date.now.addingTimeInterval(-30 * 60)
+        stoppedClaudeSubagents = stoppedClaudeSubagents.filter { $0.value > cutoff }
     }
 
     /// Drops cached preToolUse/Agent/TaskCreate context for a session.

@@ -31,19 +31,6 @@ struct NotchTuneHooksCLI {
     }
 
     static func main() {
-        fputs("[NotchTuneHooks] HOOK CALLED\n", stderr)
-        let logURL = URL(fileURLWithPath: "/tmp/notchtune-hooks.log")
-        let startLog = "[NotchTuneHooks] main() started, args: \(CommandLine.arguments.joined(separator: " "))\n"
-        if let data = startLog.data(using: .utf8) {
-            if let handle = try? FileHandle(forWritingTo: logURL) {
-                handle.seekToEndOfFile()
-                handle.write(data)
-                handle.closeFile()
-            } else {
-                try? data.write(to: logURL, options: .atomic)
-            }
-        }
-
         do {
             // Allow wrappers to delegate one child process away from NotchTune without changing global hook installation.
             // Lets an external controller skip NotchTune hooks for this child process only, without touching the global install.
@@ -55,7 +42,6 @@ struct NotchTuneHooksCLI {
             guard !input.isEmpty else {
                 return
             }
-            try? input.write(to: URL(fileURLWithPath: "/tmp/open-island-input.json"), options: .atomic)
 
             let arguments = Array(CommandLine.arguments.dropFirst())
             let sourceString = rawSourceString(arguments: arguments)
@@ -63,8 +49,6 @@ struct NotchTuneHooksCLI {
                 logStderr("unsupported hook source: \(sourceString ?? "nil")")
                 return
             }
-            let logURL = URL(fileURLWithPath: "/tmp/notchtune-hooks.log")
-            try? "[NotchTuneHooks] VERIFY BINARY source: \(sourceString ?? "nil"), input size: \(input.count)\n".data(using: .utf8)?.write(to: logURL, options: .atomic)
             let decoder = JSONDecoder()
             let client = BridgeCommandClient(socketURL: BridgeSocketLocation.currentURL())
 
