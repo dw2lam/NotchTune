@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import os
 
 /// In-process replacements for the `ps` and `lsof` subprocesses the process
 /// monitor used to spawn every tick, built on `sysctl` and libproc.
@@ -96,11 +97,24 @@ enum NativeProcessInspector {
         return nil
     }
 
+    /// `devname(3)` scans `/dev` (~0.5 ms per call), and a character
+    /// device number always maps to the same node name, so successful
+    /// lookups are remembered for the life of the process. Failures are not
+    /// cached: a new pty's node may not exist yet.
+    private static let ttyNameCache = OSAllocatedUnfairLock(initialState: [dev_t: String]())
+
     /// `ps` prints `??` for processes without a controlling terminal (`NODEV`)
     /// and the `devname` of the terminal otherwise.
     private static func ttyName(for device: dev_t) -> String? {
-        guard device != dev_t(bitPattern: UInt32.max),
-              let name = devname(device, S_IFCHR) else {
+        guard device != dev_t(bitPattern: UInt32.max) else {
+            return nil
+        }
+
+        if let cached = ttyNameCache.withLock({ $0[device] }) {
+            return cached
+        }
+
+        guard let name = devname(device, S_IFCHR) else {
             return nil
         }
 
@@ -109,7 +123,9 @@ enum NativeProcessInspector {
             return nil
         }
 
-        return value.hasPrefix("/dev/") ? value : "/dev/\(value)"
+        let path = value.hasPrefix("/dev/") ? value : "/dev/\(value)"
+        ttyNameCache.withLock { $0[device] = path }
+        return path
     }
 
     // MARK: - Command lines
