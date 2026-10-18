@@ -308,8 +308,24 @@
 "settings.appearance.glass.tintStrength" = "Tint strength";
 "settings.appearance.glass.openView" = "Glass on the expanded panel";
 
+/* Settings — General welcome */
+"settings.welcome.greeting.morning" = "Good morning";
+"settings.welcome.greeting.morning.named" = "Good morning, %@";
+"settings.welcome.greeting.afternoon" = "Good afternoon";
+"settings.welcome.greeting.afternoon.named" = "Good afternoon, %@";
+"settings.welcome.greeting.evening" = "Good evening";
+"settings.welcome.greeting.evening.named" = "Good evening, %@";
+"settings.welcome.greeting.night" = "Working late?";
+"settings.welcome.greeting.night.named" = "Working late, %@?";
+"settings.welcome.agents.needYou.one" = "An agent needs you";
+"settings.welcome.agents.needYou.other" = "%d agents need you";
+"settings.welcome.agents.working.one" = "An agent is working";
+"settings.welcome.agents.working.other" = "%d agents are working";
+"settings.welcome.agents.quiet" = "All quiet. Your island is resting.";
+"settings.welcome.shortcuts" = "Shortcuts";
+"settings.welcome.shortcut.appearance" = "Personalize";
+
 /* Settings — pane hero headers */
-"settings.hero.general" = "Startup, everyday behavior, and a guided tour of the island.";
 "settings.hero.setup" = "Connect your coding agents and keep their hooks healthy.";
 "settings.hero.display" = "Choose which screen the island lives on.";
 "settings.hero.sound" = "Alerts for agents that need you, and nudges for ones you forgot.";

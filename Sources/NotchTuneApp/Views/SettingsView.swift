@@ -99,7 +99,7 @@ struct SettingsView: View {
         }
         .background {
             GeometryReader { proxy in
-                SettingsPaneGlow(tint: selectedTab.tint, window: proxy)
+                SettingsPaneGlow(tint: glowTint, window: proxy)
             }
             .ignoresSafeArea()
         }
@@ -115,6 +115,11 @@ struct SettingsView: View {
                 selectedTab = tab
             }
         }
+    }
+
+    /// General's glow follows the welcome's colour for the hour.
+    private var glowTint: SettingsTint {
+        selectedTab == .general ? SettingsWelcome.dayPart(at: Date()).tint : selectedTab.tint
     }
 
     // MARK: Sidebar
@@ -283,8 +288,8 @@ private struct SettingsSidebarRow<Glyph: View>: View {
     }
 }
 
-/// The sidebar's foot: the island's character and the running version, a
-/// quiet reminder of whose settings these are.
+/// The sidebar's foot: the user's character and name over the running
+/// version, a quiet reminder of whose settings these are.
 private struct SettingsSidebarSignature: View {
     var model: AppModel
 
@@ -293,18 +298,26 @@ private struct SettingsSidebarSignature: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 9) {
             PixelCharacterView(
                 character: model.islandCharacter,
                 mode: .idle,
                 paused: true,
-                tint: SettingsTheme.paper.opacity(0.5)
+                tint: SettingsTheme.paper.opacity(0.62)
             )
-            .frame(width: 15, height: 15)
-            Text(version.isEmpty ? "NotchTune" : "NotchTune \(version)")
-                .font(.system(size: 11, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(SettingsTheme.paper.opacity(0.36))
+            .frame(width: 18, height: 18)
+            VStack(alignment: .leading, spacing: 1) {
+                if let name = SettingsWelcome.userFirstName {
+                    Text(name)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(SettingsTheme.paper.opacity(0.62))
+                        .lineLimit(1)
+                }
+                Text(version.isEmpty ? "NotchTune" : "NotchTune \(version)")
+                    .font(.system(size: 11, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(SettingsTheme.paper.opacity(0.36))
+            }
         }
         .padding(.horizontal, 10)
         .padding(.bottom, 6)
@@ -320,11 +333,10 @@ struct GeneralSettingsPane: View {
     private var lang: LanguageManager { model.lang }
 
     var body: some View {
-        SettingsPane(
-            title: lang.t("settings.tab.general"),
-            subtitle: lang.t("settings.hero.general"),
-            systemImage: SettingsTab.general.icon
-        ) {
+        // Settings opens here, so its hero is a welcome rather than a title.
+        SettingsPane(title: lang.t("settings.tab.general")) {
+            SettingsWelcomeHero(model: model)
+        } content: {
             SettingsCard(title: lang.t("settings.general.startup")) {
                 SettingsToggleRow(lang.t("settings.general.launchAtLogin"), isOn: Binding(
                     get: { model.launchAtLoginEnabled },
