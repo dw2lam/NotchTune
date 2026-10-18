@@ -8,7 +8,7 @@ export interface ReleaseInfo {
 }
 
 const FALLBACK: ReleaseInfo = {
-  version: '0.1.2',
+  version: '2.1.5',
   downloadUrl: 'https://github.com/dw2lam/NotchTune/releases/latest',
 };
 
