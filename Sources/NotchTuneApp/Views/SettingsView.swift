@@ -30,8 +30,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Mono paper glyph, in the island tab bar's outline style (Setup shares
-    /// the Agents tab's terminal, Music the Music tab's note).
+    /// The section's glyph, in the island tab bar's outline style (Setup
+    /// shares the Agents tab's terminal, Music the Music tab's note).
     var icon: String {
         switch self {
         case .general:    "gearshape"
@@ -42,6 +42,22 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .music:      "music.note"
         case .updates:    "arrow.down.circle"
         case .about:      "info.circle"
+        }
+    }
+
+    /// The section's colour, from its sidebar tile to the glow behind its
+    /// hero. Setup and Display take the app icon's grass and sky; About the
+    /// pixel dino's cream.
+    var tint: SettingsTint {
+        switch self {
+        case .general:    .graphite
+        case .setup:      .grass
+        case .display:    .sky
+        case .sound:      .rose
+        case .music:      .ember
+        case .appearance: .violet
+        case .updates:    .indigo
+        case .about:      .paper
         }
     }
 
@@ -73,15 +89,21 @@ struct SettingsView: View {
     private var lang: LanguageManager { model.lang }
 
     var body: some View {
-        // One ink surface, like the island: a floating sidebar panel beside
-        // the pane, no split-view divider.
+        // One glass surface: a floating sidebar panel beside the pane, no
+        // split-view divider.
         HStack(spacing: 0) {
             sidebar
             detailView
                 .environment(\.settingsWindowIsOnScreen, isWindowOnScreen)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(SettingsTheme.window.ignoresSafeArea())
+        .background {
+            GeometryReader { proxy in
+                SettingsPaneGlow(tint: selectedTab.tint, window: proxy)
+            }
+            .ignoresSafeArea()
+        }
+        .background(SettingsWindowGlass().ignoresSafeArea())
         .settingsTheme()
         .onWindowOnScreenChange { isWindowOnScreen = $0 }
         .frame(minWidth: 780, idealWidth: 860, maxWidth: 1240, minHeight: 540, idealHeight: 640)
@@ -125,7 +147,7 @@ struct SettingsView: View {
         .padding(8)
         .frame(width: SettingsTheme.sidebarWidth)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(SettingsCardBackground(cornerRadius: SettingsTheme.surfaceRadius))
+        .background(SettingsPanelBackground())
         .padding(.leading, 10)
         .padding(.vertical, 10)
         .accessibilityElement(children: .contain)
@@ -139,23 +161,26 @@ struct SettingsView: View {
             // being picked there (the edited profile's, which may not be
             // the one on screen right now), swapping as you choose.
             let character = model.appearancePreferences(for: model.appearanceSettingsProfile).character
-            ZStack {
-                PixelCharacterView(
-                    character: character,
-                    mode: .idle,
-                    paused: true,
-                    tint: SettingsTheme.paper
-                )
-                .id(character)
-                .transition(.opacity.combined(with: .scale(scale: 0.6)))
+            SettingsGlyphTile(size: Self.sidebarTileSize, tint: tab.tint) {
+                ZStack {
+                    PixelCharacterView(
+                        character: character,
+                        mode: .idle,
+                        paused: true,
+                        tint: tab.tint.glyph
+                    )
+                    .id(character)
+                    .transition(.opacity.combined(with: .scale(scale: 0.6)))
+                }
+                .frame(width: 15, height: 15)
+                .animation(.smooth(duration: 0.3), value: character)
             }
-            .frame(width: 17, height: 17)
-            .animation(.smooth(duration: 0.3), value: character)
         } else {
-            Image(systemName: tab.icon)
-                .font(.system(size: 12.5, weight: .semibold))
+            SettingsGlyphTile(systemName: tab.icon, size: Self.sidebarTileSize, tint: tab.tint)
         }
     }
+
+    private static let sidebarTileSize: CGFloat = 22
 
     // MARK: Detail
 
@@ -181,13 +206,43 @@ struct SettingsView: View {
                 AboutSettingsPane(model: model)
             }
         }
+        .environment(\.settingsTint, selectedTab.tint)
         .id(selectedTab)
         .transition(.opacity)
     }
 }
 
-/// One sidebar entry, styled like the island's tab bar: a mono glyph and a
-/// label, the selected one on a paper pill that slides between rows.
+/// The shown section's colour, glowing up from behind its hero tile across
+/// the window's glass (sidebar included), so it never ends in an edge.
+private struct SettingsPaneGlow: View {
+    let tint: SettingsTint
+    let window: GeometryProxy
+
+    var body: some View {
+        let size = window.size
+        // Where the hero tile sits: past the sidebar, in the pane's column,
+        // under the title bar.
+        let sidebar = SettingsTheme.sidebarWidth + 10
+        let paneWidth = max(size.width - sidebar, 0)
+        let hero = CGPoint(
+            x: sidebar + SettingsMetrics.columnLeadingInset(forPaneWidth: paneWidth)
+                + SettingsMetrics.paneHorizontalPadding + SettingsMetrics.heroIconSize / 2,
+            y: window.safeAreaInsets.top + SettingsMetrics.paneTopPadding + 6 + SettingsMetrics.heroIconSize / 2
+        )
+        RadialGradient(
+            colors: [tint.bottom.opacity(0.34), tint.bottom.opacity(0.12), tint.bottom.opacity(0)],
+            center: UnitPoint(x: hero.x / max(size.width, 1), y: hero.y / max(size.height, 1)),
+            startRadius: 0,
+            endRadius: 460
+        )
+        .animation(.smooth(duration: 0.35), value: tint)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// One sidebar entry: the section's coloured tile and a label, the
+/// selected one on a sky pill that slides between rows.
 private struct SettingsSidebarRow<Glyph: View>: View {
     let title: String
     let isSelected: Bool
@@ -201,18 +256,18 @@ private struct SettingsSidebarRow<Glyph: View>: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 glyph()
-                    .frame(width: 20, height: 20)
+                    .frame(width: 22, height: 22)
                 Text(title)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(SettingsTheme.paper.opacity(isSelected ? 0.97 : (isHovered ? 0.8 : 0.58)))
-            .padding(.horizontal, 10)
+            .foregroundStyle(isSelected ? SettingsTheme.onAccent : SettingsTheme.paper.opacity(isHovered ? 0.92 : 0.78))
+            .padding(.horizontal, 8)
             .frame(height: 34)
             .background {
                 let shape = RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
                 if isSelected {
-                    IslandGlassBezel(shape: shape, tint: nil, isEmphasized: true)
+                    SettingsAccentThumb(shape: shape)
                         .matchedGeometryEffect(id: "settingsSidebarSelection", in: selectionNamespace)
                 } else if isHovered {
                     shape.fill(SettingsTheme.hoverFill)
@@ -764,6 +819,7 @@ struct AboutSettingsPane: View {
                     title: "View NotchTune source",
                     subtitle: "Open source on GitHub",
                     systemImage: "chevron.left.forwardslash.chevron.right",
+                    tint: .graphite,
                     url: "https://github.com/dw2lam/NotchTune"
                 )
 
@@ -773,6 +829,7 @@ struct AboutSettingsPane: View {
                     title: "Forked from Open Vibe Island",
                     subtitle: "Octane0411/open-vibe-island",
                     systemImage: "arrow.triangle.branch",
+                    tint: .grass,
                     url: "https://github.com/Octane0411/open-vibe-island"
                 )
 
@@ -782,6 +839,7 @@ struct AboutSettingsPane: View {
                     title: "Music foundation from Tuneful",
                     subtitle: "martinfekete10/Tuneful",
                     systemImage: "music.note",
+                    tint: .ember,
                     url: "https://github.com/martinfekete10/Tuneful"
                 )
 
@@ -791,6 +849,7 @@ struct AboutSettingsPane: View {
                     title: "Created by David",
                     subtitle: "dw2lam",
                     systemImage: "person.fill",
+                    tint: .sky,
                     url: "https://github.com/dw2lam"
                 )
             }
@@ -864,18 +923,19 @@ struct AboutSettingsPane: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// A credit row that opens its page in the browser: a small notch glyph
-    /// tile, title + secondary line, a trailing "open externally" arrow.
+    /// A credit row that opens its page in the browser: a small coloured
+    /// glyph tile, title + secondary line, a trailing "open externally" arrow.
     private func creditLinkRow(
         title: String,
         subtitle: String,
         systemImage: String,
+        tint: SettingsTint,
         url: String
     ) -> some View {
         Link(destination: URL(string: url)!) {
             SettingsRow {
                 HStack(spacing: 12) {
-                    SettingsGlyphTile(systemName: systemImage, size: 30)
+                    SettingsGlyphTile(systemName: systemImage, size: 30, tint: tint)
                     SettingsRowLabel(title: title, subtitle: subtitle)
                 }
             } accessory: {
@@ -1247,7 +1307,7 @@ struct SetupSettingsPane: View {
                     Text(lang.t("setup.claudeConfigDir.title"))
                         .font(SettingsMetrics.rowTitleFont)
                     Text(ClaudeConfigDirectory.resolved().path)
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -1302,14 +1362,15 @@ struct SetupSettingsPane: View {
         installAllSteps.allSatisfy(\.installed)
     }
 
-    /// First-run welcome: a softly tinted card above the hooks list.
+    /// First-run welcome: a card washed in the sky accent above the hooks
+    /// list.
     private var emptyStateBanner: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: "sparkles")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(SettingsTheme.ink)
+                .foregroundStyle(SettingsTheme.onAccent)
                 .frame(width: 36, height: 36)
-                .background(Circle().fill(SettingsTheme.paper))
+                .background(Circle().fill(SettingsTheme.accent))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(lang.t("setup.banner.noHooks.title"))
@@ -1324,11 +1385,11 @@ struct SetupSettingsPane: View {
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: SettingsMetrics.cardCornerRadius, style: .continuous)
-                .fill(SettingsTheme.paper.opacity(0.08))
+                .fill(SettingsTheme.accent.opacity(0.14))
         )
         .overlay(
             RoundedRectangle(cornerRadius: SettingsMetrics.cardCornerRadius, style: .continuous)
-                .strokeBorder(SettingsTheme.paper.opacity(0.18), lineWidth: 1)
+                .strokeBorder(SettingsTheme.accent.opacity(0.35), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
     }
@@ -1459,7 +1520,7 @@ struct SetupSettingsPane: View {
 
             if let binaryPath = report.binaryPath {
                 Text("Binary: \(binaryPath)")
-                    .font(.system(size: 11.5, design: .monospaced))
+                    .font(.system(size: 11.5))
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             }
@@ -1577,7 +1638,7 @@ private struct AgentLogoTile: View {
                 let color = Color(hex: tool.brandColorHex) ?? SettingsTheme.paper
                 SettingsGlyphTile(size: size) {
                     Text(String(name.prefix(1)))
-                        .font(.system(size: size * 0.48, weight: .bold, design: .rounded))
+                        .font(.system(size: size * 0.48, weight: .bold))
                         .foregroundStyle(color)
                 }
             }
@@ -1777,10 +1838,11 @@ struct RemoteConnectionSection: View {
     ) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text("\(number)")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(SettingsTheme.ink)
+                .font(.system(size: 12, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(SettingsTheme.onAccent)
                 .frame(width: 22, height: 22)
-                .background(Circle().fill(SettingsTheme.paper.opacity(0.9)))
+                .background(Circle().fill(SettingsTheme.accent))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -1801,7 +1863,7 @@ struct RemoteConnectionSection: View {
         let isCopied = copiedCommand == command
         HStack(alignment: multiline ? .top : .center) {
             Text(command)
-                .font(.system(size: 12.5, design: .monospaced))
+                .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(.primary)
                 .lineLimit(multiline ? nil : 1)
                 .truncationMode(.middle)
