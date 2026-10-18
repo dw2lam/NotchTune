@@ -414,9 +414,11 @@ final class OverlayUICoordinator {
 
     func refreshFullscreenState() {
         guard let appModel else { return }
-        // Harness scenarios render deterministically whatever the user has
-        // full-screen on that display (it used to blank the captures).
+        // Harness scenarios and unit tests behave the same whatever the user
+        // has full-screen on that display (it blanked captures, and failed
+        // tests that open the notch while a full-screen app was up).
         let fullscreen = !appModel.disablesOverlayEventMonitoringDuringHarness
+            && !HarnessHeadless.isRunningTests
             && FullscreenDisplayDetection.isOverlayScreenInFullscreen(
                 preferredScreenID: preferredOverlayScreenID
             )
