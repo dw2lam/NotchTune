@@ -289,7 +289,7 @@ private enum DebugSessionFactory {
     }
 
     static func recentCompletedSession(now: Date) -> AgentSession {
-        AgentSession(
+        var session = AgentSession(
             id: "session-recent",
             title: "Codex · open-agent-sdk",
             tool: .codex,
@@ -311,6 +311,8 @@ private enum DebugSessionFactory {
                 lastAssistantMessage: "Done. I pulled out the key differences related to autoresearch."
             )
         )
+        session.taskSummary = TaskSummary(commandCount: 3, duration: 47)
+        return session
     }
 
     static func inactiveSession(
@@ -422,7 +424,7 @@ private enum DebugSessionFactory {
     }
 
     static func completionSession(now: Date) -> AgentSession {
-        AgentSession(
+        var session = AgentSession(
             id: "session-completion",
             title: "Codex · open-island",
             tool: .codex,
@@ -444,6 +446,14 @@ private enum DebugSessionFactory {
                 lastAssistantMessage: "The plan file is written. Are your hooks firing?"
             )
         )
+        session.taskSummary = TaskSummary(
+            fileCount: 4,
+            fileNames: ["IslandDebugScenario.swift", "DevPage.swift", "MockCards.swift"],
+            commandCount: 5,
+            tests: .passed,
+            duration: 192
+        )
+        return session
     }
 
     static func longCompletionSession(now: Date) -> AgentSession {

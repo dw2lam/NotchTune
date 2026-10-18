@@ -82,6 +82,9 @@ public final class BridgeServer: @unchecked Sendable {
     private var scheduledSubagentSweeps: Set<String> = []
     /// Maps toolUseID → temporary task ID for TaskCreate, so postToolUse can update with real ID.
     private var pendingTaskCreations: [String: PendingTaskCreation] = [:]
+    /// Each session's current turn (files edited, commands, tests), for the
+    /// `TaskSummary` its completion carries.
+    private var taskActivity = TaskActivityTracker()
     private var stateSnapshot = SessionState()
     /// Local working state: tracks sessions emitted by this server between
     /// snapshot pushes from AppModel. This is NOT a duplicate of AppModel's
@@ -515,6 +518,7 @@ public final class BridgeServer: @unchecked Sendable {
             synchronizeJumpTarget(for: payload)
             synchronizeCodexMetadata(for: payload)
             let prompt = payload.prompt ?? payload.promptPreview ?? "User submitted a prompt to Codex."
+            taskActivity.beginTurn(sessionID: payload.sessionID, at: .now)
             emit(
                 .activityUpdated(
                     SessionActivityUpdated(
@@ -590,6 +594,14 @@ public final class BridgeServer: @unchecked Sendable {
             let command = payload.commandPreview ?? "Bash command"
             let responsePreview = payload.toolResponsePreview
             let summary = responsePreview.map { "Bash finished: \(command) · \($0)" } ?? "Bash finished: \(command)"
+            taskActivity.recordToolUse(
+                sessionID: payload.sessionID,
+                toolName: payload.toolName ?? "Bash",
+                input: payload.toolInput?.rawValue ?? payload.commandText.map { .object(["command": .string($0)]) },
+                response: payload.toolResponse,
+                failed: false,
+                at: .now
+            )
 
             emit(
                 .activityUpdated(
@@ -607,7 +619,13 @@ public final class BridgeServer: @unchecked Sendable {
             ensureSessionExists(for: payload)
             synchronizeJumpTarget(for: payload)
             synchronizeCodexMetadata(for: payload)
-            emit(Self.codexStopEvent(for: payload, timestamp: .now))
+            emit(
+                Self.codexStopEvent(
+                    for: payload,
+                    timestamp: .now,
+                    taskSummary: taskActivity.summary(sessionID: payload.sessionID, finishedAt: .now)
+                )
+            )
             send(.response(.acknowledged), to: clientID)
         }
     }
@@ -619,7 +637,11 @@ public final class BridgeServer: @unchecked Sendable {
     /// fresh completion the user should be bumped about. Those still settle
     /// the session to `.completed` so state stays consistent, but through
     /// `activityUpdated`, which is not a notification-bearing event.
-    static func codexStopEvent(for payload: CodexHookPayload, timestamp: Date) -> AgentEvent {
+    static func codexStopEvent(
+        for payload: CodexHookPayload,
+        timestamp: Date,
+        taskSummary: TaskSummary? = nil
+    ) -> AgentEvent {
         let summary = payload.lastAssistantMessage ?? payload.assistantMessagePreview ?? "Codex completed the turn."
 
         if payload.stopHookActive == true {
@@ -637,7 +659,8 @@ public final class BridgeServer: @unchecked Sendable {
             SessionCompleted(
                 sessionID: payload.sessionID,
                 summary: summary,
-                timestamp: timestamp
+                timestamp: timestamp,
+                taskSummary: taskSummary
             )
         )
     }
@@ -653,6 +676,7 @@ public final class BridgeServer: @unchecked Sendable {
         if let agentID = payload.agentID,
            payload.hookEventName != .subagentStart,
            payload.hookEventName != .subagentStop {
+            recordClaudeToolUse(payload)
             noteClaudeSubagentActivity(payload, agentID: agentID)
             send(.response(.acknowledged), to: clientID)
             return
@@ -686,6 +710,7 @@ public final class BridgeServer: @unchecked Sendable {
         case .userPromptSubmit:
             // A new turn supersedes a completion still held for background agents.
             deferredClaudeCompletions.removeValue(forKey: payload.sessionID)
+            taskActivity.beginTurn(sessionID: payload.sessionID, at: .now)
             clearStaleClaudeInteractionIfNeeded(for: payload.sessionID)
             ensureClaudeSessionExists(for: payload)
             synchronizeClaudeJumpTarget(for: payload)
@@ -805,6 +830,7 @@ public final class BridgeServer: @unchecked Sendable {
             synchronizeClaudeMetadata(for: payload)
             pendingClaudeToolContexts.removeValue(forKey: payload.permissionCorrelationKey)
             registerLaunchedBackgroundAgent(payload)
+            recordClaudeToolUse(payload)
 
             // After TaskCreate completes, update the temporary ID with the real task_id from the response
             if payload.toolName == "TaskCreate",
@@ -852,6 +878,7 @@ public final class BridgeServer: @unchecked Sendable {
             synchronizeClaudeJumpTarget(for: payload)
             synchronizeClaudeMetadata(for: payload)
             pendingClaudeToolContexts.removeValue(forKey: payload.permissionCorrelationKey)
+            recordClaudeToolUse(payload)
 
             emit(
                 .activityUpdated(
@@ -936,7 +963,8 @@ public final class BridgeServer: @unchecked Sendable {
                         sessionID: payload.sessionID,
                         summary: stopSummary,
                         timestamp: .now,
-                        isInterrupt: payload.isInterrupt
+                        isInterrupt: payload.isInterrupt,
+                        taskSummary: taskActivity.summary(sessionID: payload.sessionID, finishedAt: .now)
                     )
                 )
             )
@@ -965,7 +993,8 @@ public final class BridgeServer: @unchecked Sendable {
                         sessionID: payload.sessionID,
                         summary: failureSummary,
                         timestamp: .now,
-                        isInterrupt: payload.isInterrupt
+                        isInterrupt: payload.isInterrupt,
+                        taskSummary: taskActivity.summary(sessionID: payload.sessionID, finishedAt: .now)
                     )
                 )
             )
@@ -1079,6 +1108,7 @@ public final class BridgeServer: @unchecked Sendable {
 
             // Session is ending — clean up any lingering subagents.
             deferredClaudeCompletions.removeValue(forKey: payload.sessionID)
+            taskActivity.endSession(payload.sessionID)
             clearAllActiveSubagents(fromSession: payload.sessionID)
             dropPendingClaudeContexts(forSession: payload.sessionID)
 
@@ -2451,6 +2481,26 @@ public final class BridgeServer: @unchecked Sendable {
 
     /// A subagent's own hook event (tool use etc.): register / refresh it on
     /// the parent session, mirror what it is doing, and keep the parent live.
+    /// A finished (or failed) tool call, main agent or subagent, toward the
+    /// turn's `TaskSummary`.
+    private func recordClaudeToolUse(_ payload: ClaudeHookPayload) {
+        let failed: Bool
+        switch payload.hookEventName {
+        case .postToolUse: failed = false
+        // An interrupt isn't a failure: the run's result is just unknown.
+        case .postToolUseFailure: failed = payload.isInterrupt != true
+        default: return
+        }
+        taskActivity.recordToolUse(
+            sessionID: payload.sessionID,
+            toolName: payload.toolName,
+            input: payload.toolInput,
+            response: payload.hookEventName == .postToolUse ? payload.toolResponse : nil,
+            failed: failed,
+            at: .now
+        )
+    }
+
     private func noteClaudeSubagentActivity(_ payload: ClaudeHookPayload, agentID: String) {
         // A straggler after SubagentStop must not resurrect the agent.
         guard stoppedClaudeSubagents[agentID] == nil else { return }
@@ -2695,7 +2745,9 @@ public final class BridgeServer: @unchecked Sendable {
                     sessionID: sessionID,
                     summary: deferred.summary,
                     timestamp: .now,
-                    isInterrupt: deferred.isInterrupt
+                    isInterrupt: deferred.isInterrupt,
+                    // Timed to the last background agent: that's when the turn's work ended.
+                    taskSummary: taskActivity.summary(sessionID: sessionID, finishedAt: .now)
                 )
             )
         )

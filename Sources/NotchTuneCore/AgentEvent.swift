@@ -113,19 +113,23 @@ public struct SessionCompleted: Equatable, Codable, Sendable {
     /// turn-level completion (`Stop`/`StopFailure`) where the CLI is still
     /// running and waiting for the next user prompt.
     public var isSessionEnd: Bool?
+    /// What the finished turn did (files, tests, time), when it did anything.
+    public var taskSummary: TaskSummary?
 
     public init(
         sessionID: String,
         summary: String,
         timestamp: Date,
         isInterrupt: Bool? = nil,
-        isSessionEnd: Bool? = nil
+        isSessionEnd: Bool? = nil,
+        taskSummary: TaskSummary? = nil
     ) {
         self.sessionID = sessionID
         self.summary = summary
         self.timestamp = timestamp
         self.isInterrupt = isInterrupt
         self.isSessionEnd = isSessionEnd
+        self.taskSummary = taskSummary
     }
 }
 

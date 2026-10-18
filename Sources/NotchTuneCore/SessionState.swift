@@ -102,6 +102,10 @@ public struct SessionState: Equatable, Sendable {
             if !preservesActionableState {
                 session.phase = payload.phase
                 session.summary = payload.summary
+                if payload.phase == .running {
+                    // Back at work: the last turn's summary no longer applies.
+                    session.taskSummary = nil
+                }
                 if payload.phase != .waitingForApproval {
                     session.permissionRequest = nil
                 }
@@ -147,6 +151,10 @@ public struct SessionState: Equatable, Sendable {
             session.permissionRequest = nil
             session.questionPrompt = nil
             session.updatedAt = payload.timestamp
+            // A bare completion (session end, a denial) keeps the turn's summary.
+            if let taskSummary = payload.taskSummary {
+                session.taskSummary = taskSummary
+            }
             if payload.isSessionEnd == true {
                 session.isSessionEnded = true
             }
