@@ -134,6 +134,7 @@
 "settings.sound.notifications" = "Notification Sounds";
 "settings.sound.mute" = "Mute";
 "settings.sound.selectSound" = "Notification sound";
+"settings.sound.notchTuneSounds" = "NotchTune Sounds";
 "settings.sound.systemSounds" = "System Sounds";
 "settings.sound.customSounds" = "Custom Sounds";
 "settings.sound.addCustomSound" = "Add Custom Sound…";
