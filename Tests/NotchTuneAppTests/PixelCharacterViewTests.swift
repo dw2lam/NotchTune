@@ -108,10 +108,14 @@ struct PixelCharacterViewTests {
 struct PixelCharacterSpriteTests {
     @Test
     func persistedCharacterNamesNeverChange() {
-        for name in ["dino", "ghost", "crab", "duck", "claude"] {
+        for name in ["dino", "ghost", "crab", "duck", "claude", "cat", "robot", "octopus", "frog", "slime",
+                     "blob", "poo", "johnPork", "tungTung", "tralalero", "bombardiro",
+                     "ballerina", "chimpanzini", "lirili", "patapim"] {
             #expect(IslandCharacter(rawValue: name) != nil, "\(name) must keep decoding")
         }
-        #expect(IslandCharacter.allCases.count >= 10)
+        // The Personalization grid is five wide: keep the cast a multiple of five.
+        #expect(IslandCharacter.allCases.count >= 20)
+        #expect(IslandCharacter.allCases.count % 5 == 0)
     }
 
     @Test

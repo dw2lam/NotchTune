@@ -174,6 +174,17 @@ enum IslandCharacter: String, CaseIterable, Identifiable, Sendable {
     case octopus
     case frog
     case slime
+    case blob
+    case poo
+    // Italian brainrot and friends.
+    case johnPork
+    case tungTung
+    case tralalero
+    case bombardiro
+    case ballerina
+    case chimpanzini
+    case lirili
+    case patapim
 
     var id: String { rawValue }
 }

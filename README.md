@@ -11,7 +11,7 @@ Monitor your agents and music all in one place.
 - **Music controls**: Control Spotify or Apple Music from the notch, including playback, track details, artwork, progress, shuffle, repeat, love, volume, and quick open actions.
 - **Agent monitoring**: Track local coding-agent sessions from the menu bar or notch, including running state, waiting approvals, questions, completions, subagents, and usage summaries.
 - **Myspace**: Save dictated thoughts, drop in images or files, and keep time-based reminders in a local personal space.
-- **Character personalization**: Choose the island character that fits your setup, including dino, cat, and dog appearances.
+- **Character personalization**: Choose from twenty pixel characters for the island, from the dino and Claude's Clawd to a goopy blob and Italian-brainrot favourites like Tung Tung Tung Sahur.
 - **Notch-aware layouts**: Runs as a real notch surface on MacBook displays and falls back to a clean top-center bar on external or non-notch screens.
 - **Local, native, and open source**: Built with SwiftUI and AppKit. No Electron shell, no telemetry, and no remote server dependency.
 - **Automatic updates**: Signed releases update in place through the open-source Sparkle framework.
