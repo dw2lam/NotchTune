@@ -1,51 +1,43 @@
 import { ClosedPill, type PillMode } from '../mock';
 import { usePhone } from '../hooks/useMedia';
 import { Shot } from '../components/Shot';
-import { SecHead } from '../components/SecHead';
+import { Section } from '../components/Section';
 
-const MOMENTS: { label: string; key: string; note: string; mode: PillMode }[] = [
+const MOMENTS: { label: string; tone: string; mode: PillMode; said: string }[] = [
   {
-    label: 'Working', key: 'k-work', note: 'What it’s doing, and for how long.',
-    mode: { kind: 'live', char: 'dino', activity: { kind: 'working', title: 'Claude · api', subtitle: 'Running swift test', timer: '3:12' } },
+    label: 'Working', tone: 'work', said: 'Claude in api, running swift test, 1 minute 47 seconds in',
+    mode: { kind: 'live', char: 'dino', activity: { kind: 'working', title: 'Claude · api', subtitle: 'Running swift test', timer: '1:47' } },
   },
   {
-    label: 'Needs you', key: 'k-wait', note: 'Amber the moment it’s waiting on you.',
+    label: 'Needs you', tone: 'wait', said: 'Codex needs approval for git push origin main',
     mode: { kind: 'live', char: 'dino', activity: { kind: 'approval', title: 'Codex needs approval', subtitle: 'git push origin main', timer: '0:21' } },
   },
   {
-    label: 'Finished', key: 'k-done', note: 'A quiet check, then out of the way.',
-    mode: { kind: 'live', char: 'dino', activity: { kind: 'finished', title: 'Claude finished', subtitle: 'Edited 4 files · 3m 12s' } },
+    label: 'Finished', tone: 'done', said: 'Claude finished: the build passes, after 2 minutes 40 seconds',
+    mode: { kind: 'live', char: 'dino', activity: { kind: 'finished', title: 'Claude finished', subtitle: 'Build passes · 2m 40s' } },
   },
 ];
 
 export default function Agents() {
   const phone = usePhone();
   return (
-    <section id="agents" className="sec sec-paper" aria-labelledby="agents-title">
-      <div className="frame">
-        <SecHead
-          num="02" label="Agents" note="Live activity" id="agents-title"
-          title={<>Watch it work without opening anything.</>}
-          lede="While Claude Code or Codex runs, the closed notch widens to show what it’s doing and for how long. It turns amber the moment an agent needs you, and checks off quietly when it’s done."
-        />
-        <div className="stage moments">
-          {MOMENTS.map((m) => (
-            <div className="moment reveal" key={m.label}>
-              <div className="moment-key">
-                <span className="label"><i className={m.key} aria-hidden="true" />{m.label}</span>
-                <p>{m.note}</p>
-              </div>
-              <div className="moment-shot">
-                <Shot label={`The closed notch, ${m.label.toLowerCase()}: ${m.mode.kind === 'live' ? `${m.mode.activity.title}, ${m.mode.activity.subtitle ?? ''}` : ''}`}>
-                  <div className="zoom-pill">
-                    <ClosedPill layout={phone ? 'pill' : 'notch'} mode={m.mode} />
-                  </div>
-                </Shot>
-              </div>
+    <Section
+      id="agents" index="02" label="In the notch"
+      title="See it work without looking away."
+      line="The closed notch widens with what an agent is doing, turns amber when it needs you, and checks off when it’s done."
+    >
+      <div className="slab slab-cascade reveal">
+        {MOMENTS.map((m) => (
+          <div className={`card moment m-${m.tone}`} key={m.label}>
+            <div className="hang">
+              <Shot label={`The closed notch, ${m.label.toLowerCase()}: ${m.said}.`}>
+                <ClosedPill layout={phone ? 'pill' : 'notch'} alignNotch={false} mode={m.mode} />
+              </Shot>
             </div>
-          ))}
-        </div>
+            <p className="tag">{m.label}</p>
+          </div>
+        ))}
       </div>
-    </section>
+    </Section>
   );
 }

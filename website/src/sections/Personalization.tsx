@@ -1,8 +1,7 @@
-import type { ReactNode } from 'react';
-import { PixelArt } from '../components/PixelArt';
+import type { CSSProperties, ReactNode } from 'react';
+import { PixelArt, PixelPair } from '../components/PixelArt';
 import { Shot } from '../components/Shot';
-import { PlateImage } from '../components/Plate';
-import { SecHead } from '../components/SecHead';
+import { Section } from '../components/Section';
 
 type Tint = 'graphite' | 'grass' | 'violet' | 'sky' | 'rose' | 'ember';
 
@@ -85,39 +84,49 @@ function SettingsShot() {
   );
 }
 
+/* The app's twenty characters, in its picker order. */
+const CHARACTERS: [string, string][] = [
+  ['dino', 'Dino'], ['ghost', 'Ghost'], ['crab', 'Crab'], ['duck', 'Duck'], ['claude', 'Claude'],
+  ['cat', 'Cat'], ['robot', 'Robot'], ['octopus', 'Octopus'], ['frog', 'Frog'], ['slime', 'Slime'],
+  ['blob', 'Blob'], ['poo', 'Poo'], ['johnPork', 'John Pork'], ['tungTung', 'Tung Tung'], ['tralalero', 'Tralalero'],
+  ['bombardiro', 'Bombardiro'], ['ballerina', 'Ballerina'], ['chimpanzini', 'Chimpanzini'], ['lirili', 'Lirilì'], ['patapim', 'Patapim'],
+];
+
+/* The character picker, with the three ways a character can move. */
+function Picker() {
+  return (
+    <div className="picker">
+      <div className="picker-head"><b>Character</b><span>20</span></div>
+      <div className="picker-grid">
+        {CHARACTERS.map(([id], i) => (
+          <span className={`picker-tile${id === 'claude' ? ' on' : ''}`} style={{ '--i': i } as CSSProperties} key={id}>
+            <PixelPair char={id} />
+          </span>
+        ))}
+      </div>
+      <div className="picker-foot">
+        <span>Motion</span>
+        <span className="ss-seg"><span className="on">Calm</span><span>Lively</span><span>Still</span></span>
+      </div>
+    </div>
+  );
+}
+
 export default function Personalization() {
   return (
-    <section id="personalize" aria-labelledby="personalize-title">
-      <div className="sec sec-ink" style={{ paddingBottom: 'clamp(40px, 5vw, 72px)' }}>
-        <div className="frame">
-          <SecHead
-            num="09" label="Personalization" note="Sync both displays" id="personalize-title" flip
-            title={<>Make it yours, on every display.</>}
-            lede="Settings come in frosted glass, with a welcome that greets you by name. Style your MacBook notch and an external display separately, or press Sync and change both at once."
-          />
-        </div>
+    <Section
+      id="personalize" index="06" label="Personalization" wide
+      title="Make it yours."
+      line="Twenty characters, frosted Settings, and Sync to style the MacBook notch and an external display at once."
+    >
+      <div className="slab slab-ss reveal">
+        <Shot className="ss-shot" label="The NotchTune Settings window on Personalization: previews of the MacBook notch and an external display side by side, linked, with SYNC lit.">
+          <SettingsShot />
+        </Shot>
+        <Shot className="card picker-card" label={`The character picker with all twenty characters: ${CHARACTERS.map(([, n]) => n).join(', ')}. Claude is selected, and Motion is set to Calm, with Lively and Still.`}>
+          <Picker />
+        </Shot>
       </div>
-      <div className="plate plate-settings">
-        <PlateImage />
-        <div className="frame">
-          <div className="settings-row reveal">
-            <Shot label="The NotchTune Settings window on Personalization: previews of the MacBook notch and an external display side by side, linked, with SYNC lit.">
-              <SettingsShot />
-            </Shot>
-            <Shot label="The General welcome card: Good evening, with the character on a little notch stage and An agent is working.">
-              <div className="welcome">
-                <span className="welcome-stage"><PixelArt char="claude" /></span>
-                <div>
-                  <strong>Good evening</strong>
-                  <span className="welcome-status"><i />An agent is working</span>
-                  <small>NotchTune 2.1.5 · Up to date</small>
-                </div>
-              </div>
-            </Shot>
-          </div>
-        </div>
-        <p className="plate-cap"><b>Fig. 09</b>Settings in frosted glass, over the same night.</p>
-      </div>
-    </section>
+    </Section>
   );
 }

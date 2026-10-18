@@ -1,9 +1,7 @@
-import { IslandPanel, UsageCycler, KeyHint } from '../mock';
+import { KeyHint } from '../mock';
 import { JumpIcon, ReplyIcon, ChevronLeftIcon, ChevronRightIcon } from '../mock/icons';
-import { USAGE_PROVIDERS, MODEL_WEEKLY } from '../lib/demoData';
-import { usePhone } from '../hooks/useMedia';
 import { Shot } from '../components/Shot';
-import { SecHead } from '../components/SecHead';
+import { Section, Bare } from '../components/Section';
 
 /* The completion card as 2.1.5 draws it (CompletionToastView with
    TaskSummaryLine under the header). */
@@ -51,28 +49,21 @@ function CompletionCard() {
 }
 
 export default function Summaries() {
-  const phone = usePhone();
   return (
-    <section id="summaries" className="sec sec-paper" aria-labelledby="summaries-title">
-      <div className="frame">
-        <SecHead
-          num="04" label="Finished tasks" note="New in 2.1.5" id="summaries-title"
-          title={<>Know what got done.</>}
-          lede="When an agent finishes, a small card says what changed: files edited, tests run and whether they passed, and how long it took. It’s worked out on your Mac from the session itself."
-        />
-        <div className="stage edge reveal">
-          <div className="hang at-end">
+    <Section
+      id="summaries" index="03" label="Task summaries" flip
+      title="Every finished task, in one line."
+      line="Files edited, tests run and how long it took, worked out on your Mac from the session itself."
+    >
+      <div className="slab reveal">
+        <div className="card">
+          <div className="hang">
             <Shot label="A completion card: Codex finished in api. Edited 4 files, tests passed, 3 minutes 12 seconds, with Jump to Ghostty and Reply.">
-              <div className="zoom-shot">
-                <IslandPanel usage={<UsageCycler providers={USAGE_PROVIDERS} initial={1} />} modelWeekly={MODEL_WEEKLY} glass="off" showNotchGap={!phone}>
-                  <CompletionCard />
-                </IslandPanel>
-              </div>
+              <Bare><CompletionCard /></Bare>
             </Shot>
           </div>
-          <p className="fig"><b>Fig. 04</b>Return jumps back to the right terminal. Usage limits and their resets sit in the header.</p>
         </div>
       </div>
-    </section>
+    </Section>
   );
 }
