@@ -66,6 +66,8 @@ struct OnboardingView: View {
             footer
         }
         .environment(\.settingsWindowIsOnScreen, isWindowOnScreen)
+        // Characters here move the way the island's do (Calm / Lively / Still).
+        .environment(\.islandCharacterMotion, model.islandCharacterMotion)
         .background(OnboardingStepGlow(tint: step.tint))
         .background(SettingsWindowGlass().ignoresSafeArea())
         // Settings' look: dark glass, paper type, the sky accent, capsule

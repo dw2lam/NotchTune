@@ -95,6 +95,32 @@ struct PixelCharacterViewTests {
     }
 
     @Test
+    func reduceMotionHoldsEachStatesOwnFrame() {
+        #expect(PixelCharacterView.effectiveMotion(explicit: .lively, environment: .calm, reduceMotion: true) == .still)
+        #expect(PixelCharacterView.effectiveMotion(explicit: nil, environment: .lively, reduceMotion: true) == .still)
+        #expect(PixelCharacterView.effectiveMotion(explicit: nil, environment: .lively, reduceMotion: false) == .lively)
+        #expect(PixelCharacterView.effectiveMotion(explicit: .calm, environment: .lively, reduceMotion: false) == .calm)
+        // Still keeps the "needs you" pose instead of falling back to rest.
+        for character in IslandCharacter.allCases {
+            let sprite = character.sprite
+            let waiting = sprite.sequence(for: .waiting, motion: .still)
+            #expect(waiting.steps.count == 1, "\(character)")
+            #expect(waiting.motion == nil, "\(character)")
+            #expect(sprite.frames[waiting.steps[0].frame] != sprite.rest, "\(character)")
+        }
+    }
+
+    @Test
+    func largeSpritesAreDrawnWithoutFillingTheCache() {
+        let color = CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
+        let before = PixelCharacterRenderer.cachedImageCount
+        let frame = IslandCharacter.dino.sprite.rest
+        let image = PixelCharacterRenderer.image(frame: frame, color: color, side: 70, scale: 2)
+        #expect(image != nil)
+        #expect(PixelCharacterRenderer.cachedImageCount <= before)
+    }
+
+    @Test
     func retinaNotchGlyphDrawsOnWholePixels() {
         // 24pt at 2x: 3px cells, so every dot starts on a pixel boundary.
         let geometry = PixelCharacterRenderer.geometry(columns: 14, rows: 14, side: 24, scale: 2)

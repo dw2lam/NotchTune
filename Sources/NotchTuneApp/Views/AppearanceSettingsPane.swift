@@ -38,7 +38,7 @@ struct AppearanceSettingsPane: View {
             PersonalizationHeroCharacter(
                 clock: clock,
                 character: editingPreferences.character,
-                paused: !isOnScreen || reduceMotion
+                paused: !isOnScreen
             )
             .frame(width: 34, height: 34)
             .id(editingPreferences.character)

@@ -13,8 +13,20 @@ struct PixelCharacterView: NSViewRepresentable {
     var paused: Bool
     var tint: Color
     /// `nil` follows the environment's `islandCharacterMotion` (the
-    /// user's Character motion setting where the island sets it).
+    /// user's Character motion setting where the island sets it). Reduce
+    /// Motion overrides either with Still.
     var motion: IslandCharacterMotion? = nil
+
+    /// Reduce Motion holds each state's own frame (the "needs you" pose
+    /// included): no frame loops, no hop or sway. (`paused` is for views
+    /// nobody can see, and shows the resting frame.)
+    static func effectiveMotion(
+        explicit: IslandCharacterMotion?,
+        environment: IslandCharacterMotion,
+        reduceMotion: Bool
+    ) -> IslandCharacterMotion {
+        reduceMotion ? .still : (explicit ?? environment)
+    }
 
     func makeNSView(context: Context) -> PixelCharacterNSView {
         PixelCharacterNSView()
@@ -22,13 +34,18 @@ struct PixelCharacterView: NSViewRepresentable {
 
     func updateNSView(_ view: PixelCharacterNSView, context: Context) {
         let rgba = NSColor(tint).usingColorSpace(.sRGB) ?? .white
+        let motion = Self.effectiveMotion(
+            explicit: motion,
+            environment: context.environment.islandCharacterMotion,
+            reduceMotion: context.environment.accessibilityReduceMotion
+        )
         view.apply(
             PixelCharacterNSView.Config(
                 character: character,
                 mode: mode,
                 paused: paused,
                 rgba: [rgba.redComponent, rgba.greenComponent, rgba.blueComponent, rgba.alphaComponent],
-                motion: motion ?? context.environment.islandCharacterMotion
+                motion: motion
             )
         )
     }
@@ -171,8 +188,14 @@ enum PixelCharacterRenderer {
     static let dotRatio: CGFloat = 0.9
     /// Opacity of '+' (dim) pixels.
     static let dimAlpha: CGFloat = 0.38
-    /// Images kept across views; cleared when it overflows.
+    /// Images kept across views. When full, the least recently used half
+    /// goes, so the closed pill's frames (drawn constantly) stay.
     static let cacheLimit = 384
+    /// Only glyphs up to this side are cached: the notch's own sizes. The
+    /// bigger Settings and onboarding sprites are drawn on demand (their
+    /// running animation holds its images), so they don't stay resident
+    /// all day after the window closes.
+    static let cachedSideLimit: CGFloat = 32
 
     struct Geometry: Equatable {
         /// Bitmap side in pixels.
@@ -213,19 +236,35 @@ enum PixelCharacterRenderer {
         let scale: CGFloat
     }
 
-    @MainActor private static var cache: [Key: CGImage] = [:]
+    private struct Entry {
+        let image: CGImage?
+        var lastUse: UInt64
+    }
+
+    @MainActor private static var cache: [Key: Entry] = [:]
+    @MainActor private static var useClock: UInt64 = 0
 
     @MainActor static var cachedImageCount: Int { cache.count }
 
     @MainActor
     static func image(frame: PixelFrame, color: CGColor, side: CGFloat, scale: CGFloat) -> CGImage? {
+        guard side <= cachedSideLimit else {
+            return draw(frame: frame, color: color, side: side, scale: scale)
+        }
         let rgba = color.components ?? [1, 1, 1, 1]
         let key = Key(frame: frame, rgba: rgba, side: side, scale: scale)
-        if let cached = cache[key] { return cached }
+        useClock &+= 1
+        if let cached = cache[key] {
+            cache[key]?.lastUse = useClock
+            return cached.image
+        }
 
         let image = draw(frame: frame, color: color, side: side, scale: scale)
-        if cache.count >= cacheLimit { cache.removeAll(keepingCapacity: true) }
-        cache[key] = image
+        if cache.count >= cacheLimit {
+            let stale = cache.sorted { $0.value.lastUse < $1.value.lastUse }.prefix(cacheLimit / 2)
+            for (staleKey, _) in stale { cache.removeValue(forKey: staleKey) }
+        }
+        cache[key] = Entry(image: image, lastUse: useClock)
         return image
     }
 

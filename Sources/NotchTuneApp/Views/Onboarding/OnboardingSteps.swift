@@ -384,7 +384,7 @@ struct OnboardingMusicStep: View {
 struct OnboardingPersonalizeStep: View {
     var model: AppModel
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.settingsWindowIsOnScreen) private var isOnScreen
 
     var body: some View {
         VStack(spacing: 24) {
@@ -399,7 +399,7 @@ struct OnboardingPersonalizeStep: View {
                     PixelCharacterView(
                         character: model.islandCharacter,
                         mode: .idle,
-                        paused: reduceMotion,
+                        paused: !isOnScreen,
                         tint: SettingsTint.violet.glyph
                     )
                     .frame(width: 38, height: 38)
