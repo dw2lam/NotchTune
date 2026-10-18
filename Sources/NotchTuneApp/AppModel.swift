@@ -97,6 +97,8 @@ final class AppModel {
     let codexAppServer = CodexAppServerCoordinator()
     let playerManager = MusicPlayerManager()
     let myspaceStore = MyspaceStore()
+    /// Meeting heads-ups and quiet-during-meetings (opt-in, read-only).
+    let calendar = CalendarHeadsUpService.makeDefault()
     let updateChecker = UpdateChecker()
 
     var notchStatus: NotchStatus {
@@ -553,6 +555,7 @@ final class AppModel {
         /// Music state short of "is the player running" (a process scan,
         /// asked only when the rest says a chip may show).
         var musicMayBePlaying: Bool
+        var meeting: CalendarEventSnapshot?
     }
 
     @ObservationIgnored
@@ -575,7 +578,8 @@ final class AppModel {
             attentionSince: attentionStartedAt,
             musicMayBePlaying: playerManager.isMusicEnabled
                 && playerManager.isPlaying
-                && !playerManager.track.isEmpty()
+                && !playerManager.track.isEmpty(),
+            meeting: calendar.headsUp
         )
         if let cache = islandLiveActivityCache, cache.inputs == inputs {
             return cache.activity
@@ -587,7 +591,8 @@ final class AppModel {
             sessions: inputs.sessions,
             finishedPeekSessionID: inputs.finishedPeekSessionID,
             runningSince: inputs.runningSince,
-            attentionSince: inputs.attentionSince
+            attentionSince: inputs.attentionSince,
+            meeting: inputs.meeting
         )
         // Music keeps a foothold while agents work; attention states stay
         // single-minded.
@@ -1052,8 +1057,13 @@ final class AppModel {
         return TerminalJumpService.bundleIdentifiers(forTerminalAppName: terminalApp).contains(frontmost)
     }
 
+    /// Muted by the user, or quieted for a meeting in progress.
+    var isSoundSilencedNow: Bool {
+        isSoundMuted || calendar.isQuietingNow
+    }
+
     private func fireSessionNudge(for sessionID: String) {
-        NotificationSoundService.play(type: .nudge, isMuted: isSoundMuted)
+        NotificationSoundService.play(type: .nudge, isMuted: isSoundSilencedNow)
         nudgeTrigger = UUID()
     }
 
@@ -1174,7 +1184,7 @@ final class AppModel {
             self?.markCompletionToastShown(for: sessionID)
         }
         overlay.isSoundMutedAccessor = { [weak self] in
-            self?.isSoundMuted ?? false
+            self?.isSoundSilencedNow ?? false
         }
         overlay.ignoresPointerExitAccessor = { [weak self] in
             self?.ignoresPointerExitDuringHarness ?? false
@@ -1239,6 +1249,7 @@ final class AppModel {
             }
         }
         refreshOverlayDisplayConfiguration()
+        calendar.start()
         hasFinishedInit = true
         reconcileCompactMusicView()
         overlay.refreshFullscreenState()
@@ -1315,7 +1326,7 @@ final class AppModel {
     }
 
     var isIslandInactive: Bool {
-        agentsAreIdle && !shouldShowCompactMusicView
+        agentsAreIdle && !shouldShowCompactMusicView && calendar.headsUp == nil
     }
 
     /// Collapse the closed notch when nothing needs the surface: no running or
@@ -1326,6 +1337,7 @@ final class AppModel {
             && musicNotificationTrack == nil
             && !hasClosedMusicPresence
             && agentsAreIdle
+            && calendar.headsUp == nil
     }
 
     var shouldAutoHideIsland: Bool {
@@ -2737,6 +2749,13 @@ final class AppModel {
         guard notificationSurfaceIsEligibleForPresentation(surface, ingress: ingress),
               let sessionID = surface.sessionID,
               let session = state.session(id: sessionID) else {
+            return
+        }
+
+        // In a meeting: a finished task waits in the list with a quiet pill
+        // flash; approvals and questions still open.
+        if calendar.isQuietingNow, session.phase == .completed {
+            showSubtleCompletion(sessionID: sessionID, bounce: false)
             return
         }
 

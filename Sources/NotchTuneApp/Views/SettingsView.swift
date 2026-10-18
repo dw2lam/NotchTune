@@ -587,6 +587,8 @@ struct SoundSettingsPane: View {
             }
 
             nudgeCard
+
+            CalendarSettingsCard(model: model)
         }
         .onAppear {
             loadCustomSounds()

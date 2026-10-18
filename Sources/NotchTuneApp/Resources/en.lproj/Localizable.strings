@@ -130,6 +130,28 @@
 
 /* Settings - Sound */
 "settings.sound.notifications" = "Notification Sounds";
+
+/* Settings — Sound → Meetings (calendar heads-up) */
+"settings.calendar.title" = "Meetings";
+"settings.calendar.footer" = "NotchTune reads your calendars on this Mac only, to time the heads-up. Nothing is sent anywhere.";
+"settings.calendar.headsUp" = "Heads-up before meetings";
+"settings.calendar.headsUp.note" = "The notch shows your next meeting a few minutes before it starts, with Join for Zoom, Meet, Teams, Webex and FaceTime links. All-day and declined events are skipped.";
+"settings.calendar.access.title" = "Calendar access";
+"settings.calendar.access.request" = "Allow Access";
+"settings.calendar.access.request.note" = "NotchTune needs to read your calendars to know when meetings start.";
+"settings.calendar.access.denied" = "Calendar access is off";
+"settings.calendar.access.denied.note" = "Allow NotchTune under Privacy & Security → Calendars in System Settings.";
+"settings.calendar.access.openSettings" = "Open System Settings";
+"settings.calendar.access.unavailable" = "Calendar access needs the installed app";
+"settings.calendar.access.unavailable.note" = "This build can't ask for calendar access. Use NotchTune from your Applications folder.";
+"settings.calendar.next" = "Next meeting";
+"settings.calendar.next.none" = "Nothing in the next 24 hours";
+"settings.calendar.leadTime" = "Heads-up";
+"settings.calendar.leadTime.minutes" = "%d min";
+"settings.calendar.quiet" = "Quiet NotchTune during meetings";
+"settings.calendar.quiet.note" = "While a busy meeting is on: no NotchTune sounds, and finished tasks wait in the list instead of popping open. Approvals and questions still show.";
+"settings.calendar.calendars" = "Calendars";
+"settings.calendar.calendars.note" = "Heads-ups come from the calendars ticked here.";
 "settings.sound.mute" = "Mute";
 "settings.sound.selectSound" = "Notification sound";
 "settings.sound.notchTuneSounds" = "NotchTune Sounds";
