@@ -45,6 +45,8 @@ public struct CodexTrackedSessionRecord: Equatable, Codable, Sendable {
     public var updatedAt: Date
     public var jumpTarget: JumpTarget?
     public var codexMetadata: CodexSessionMetadata?
+    /// The last finished turn's summary, so a relaunch still shows it.
+    public var taskSummary: TaskSummary?
 
     public init(
         sessionID: String,
@@ -55,7 +57,8 @@ public struct CodexTrackedSessionRecord: Equatable, Codable, Sendable {
         phase: SessionPhase,
         updatedAt: Date,
         jumpTarget: JumpTarget? = nil,
-        codexMetadata: CodexSessionMetadata? = nil
+        codexMetadata: CodexSessionMetadata? = nil,
+        taskSummary: TaskSummary? = nil
     ) {
         self.sessionID = sessionID
         self.title = title
@@ -66,6 +69,7 @@ public struct CodexTrackedSessionRecord: Equatable, Codable, Sendable {
         self.updatedAt = updatedAt
         self.jumpTarget = jumpTarget
         self.codexMetadata = codexMetadata
+        self.taskSummary = taskSummary
     }
 
     public init(session: AgentSession) {
@@ -78,7 +82,8 @@ public struct CodexTrackedSessionRecord: Equatable, Codable, Sendable {
             phase: session.phase,
             updatedAt: session.updatedAt,
             jumpTarget: session.jumpTarget,
-            codexMetadata: session.codexMetadata
+            codexMetadata: session.codexMetadata,
+            taskSummary: session.taskSummary
         )
     }
 
@@ -99,6 +104,7 @@ public struct CodexTrackedSessionRecord: Equatable, Codable, Sendable {
         // restarted sessions continue to use app-level liveness rather than
         // falling back to CLI subprocess matching (which would kill them).
         session.isCodexAppSession = jumpTarget?.terminalApp == "Codex.app"
+        session.taskSummary = taskSummary
         return session
     }
 
@@ -112,6 +118,7 @@ public struct CodexTrackedSessionRecord: Equatable, Codable, Sendable {
         case updatedAt
         case jumpTarget
         case codexMetadata
+        case taskSummary
     }
 
     public init(from decoder: any Decoder) throws {
@@ -125,6 +132,7 @@ public struct CodexTrackedSessionRecord: Equatable, Codable, Sendable {
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         jumpTarget = try container.decodeIfPresent(JumpTarget.self, forKey: .jumpTarget)
         codexMetadata = try container.decodeIfPresent(CodexSessionMetadata.self, forKey: .codexMetadata)
+        taskSummary = try container.decodeIfPresent(TaskSummary.self, forKey: .taskSummary)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -138,6 +146,7 @@ public struct CodexTrackedSessionRecord: Equatable, Codable, Sendable {
         try container.encode(updatedAt, forKey: .updatedAt)
         try container.encodeIfPresent(jumpTarget, forKey: .jumpTarget)
         try container.encodeIfPresent(codexMetadata, forKey: .codexMetadata)
+        try container.encodeIfPresent(taskSummary, forKey: .taskSummary)
     }
 }
 
@@ -461,6 +470,17 @@ public struct CodexRolloutSnapshot: Equatable, Sendable {
     public var currentCommandPreview: String?
     public var isCompleted: Bool
     public var isInterrupted: Bool
+    /// The current turn's edits, commands and test runs. Codex's standard
+    /// hooks don't report tool calls, so its `TaskSummary` comes from here.
+    var turnActivity: TaskTurnActivity?
+    /// When the turn finished (`task_complete` / `turn_aborted`).
+    var turnFinishedAt: Date?
+    /// Commands and patches in flight by call id, for end events that don't
+    /// repeat them.
+    var pendingCommands: [String: String] = [:]
+    var pendingPatchPaths: [String: [String]] = [:]
+    /// A prompt already opened the turn its `task_started` will announce.
+    var turnOpenedByPrompt = false
 
     public init(
         summary: String? = nil,
@@ -484,6 +504,12 @@ public struct CodexRolloutSnapshot: Equatable, Sendable {
         self.currentCommandPreview = currentCommandPreview
         self.isCompleted = isCompleted
         self.isInterrupted = isInterrupted
+    }
+
+    /// What the current (or just finished) turn did.
+    public var taskSummary: TaskSummary? {
+        guard let turnActivity else { return nil }
+        return turnActivity.summary(finishedAt: turnFinishedAt ?? updatedAt ?? turnActivity.lastActivityAt)
     }
 
     public var metadata: CodexSessionMetadata {
@@ -575,7 +601,8 @@ public enum CodexRolloutReducer {
                             sessionID: sessionID,
                             summary: newSummary,
                             timestamp: timestamp,
-                            isInterrupt: newSnapshot.isInterrupted
+                            isInterrupt: newSnapshot.isInterrupted,
+                            taskSummary: newSnapshot.taskSummary
                         )
                     )
                 )
@@ -603,6 +630,7 @@ public enum CodexRolloutReducer {
     ) {
         switch payload["type"] as? String {
         case "task_started", "turn_started":
+            beginTurnActivity(at: timestamp, isPrompt: false, in: &snapshot)
             snapshot.phase = .running
             snapshot.isCompleted = false
             snapshot.isInterrupted = false
@@ -612,6 +640,7 @@ public enum CodexRolloutReducer {
                 break
             }
 
+            beginTurnActivity(at: timestamp, isPrompt: true, in: &snapshot)
             applyUserMessage(message, timestamp: timestamp, to: &snapshot)
             return
         case "agent_message":
@@ -622,6 +651,8 @@ public enum CodexRolloutReducer {
             applyAssistantMessage(message, timestamp: timestamp, to: &snapshot)
             return
         case "task_complete", "turn_complete":
+            snapshot.turnFinishedAt = timestamp ?? snapshot.turnFinishedAt
+            snapshot.turnOpenedByPrompt = false
             snapshot.currentTool = nil
             snapshot.currentCommandPreview = nil
             snapshot.phase = .completed
@@ -635,6 +666,8 @@ public enum CodexRolloutReducer {
                 snapshot.summary = snapshot.summary ?? "Codex completed the turn."
             }
         case "turn_aborted":
+            snapshot.turnFinishedAt = timestamp ?? snapshot.turnFinishedAt
+            snapshot.turnOpenedByPrompt = false
             snapshot.currentTool = nil
             snapshot.currentCommandPreview = nil
             snapshot.phase = .completed
@@ -644,6 +677,10 @@ public enum CodexRolloutReducer {
         case "agent_reasoning", "agent_reasoning_raw_content", "agent_reasoning_section_break":
             applyThinking(to: &snapshot)
         case "exec_command_begin":
+            if let callID = payload["call_id"] as? String, let command = commandText(fromCommandValue: payload["command"]),
+               snapshot.pendingCommands.count < maxPendingCalls {
+                snapshot.pendingCommands[callID] = command
+            }
             applyToolActivity(
                 "exec_command",
                 preview: commandPreview(fromCommandValue: payload["command"]),
@@ -656,14 +693,20 @@ public enum CodexRolloutReducer {
                 to: &snapshot
             )
         case "exec_command_end":
+            recordCommandEnd(payload, timestamp: timestamp, in: &snapshot)
             applyThinking(to: &snapshot)
         case "patch_apply_begin", "patch_apply_updated":
+            if let callID = payload["call_id"] as? String, let paths = changedPaths(from: payload), !paths.isEmpty,
+               snapshot.pendingPatchPaths.count < maxPendingCalls {
+                snapshot.pendingPatchPaths[callID] = paths
+            }
             applyToolActivity(
                 "apply_patch",
                 preview: changesPreview(from: payload),
                 to: &snapshot
             )
         case "patch_apply_end":
+            recordPatchEnd(payload, timestamp: timestamp, in: &snapshot)
             applyThinking(to: &snapshot)
         case "mcp_tool_call_begin":
             if let toolName = mcpToolName(from: payload) {
@@ -1064,6 +1107,73 @@ public enum CodexRolloutReducer {
         default:
             return nil
         }
+    }
+
+    // MARK: Turn activity (the turn's TaskSummary)
+
+    private static let maxPendingCalls = 64
+
+    /// A turn starts at its prompt, or at `task_started` when no prompt came
+    /// first. A prompt sent while a turn runs steers that turn.
+    private static func beginTurnActivity(at timestamp: Date?, isPrompt: Bool, in snapshot: inout CodexRolloutSnapshot) {
+        if isPrompt {
+            guard snapshot.turnActivity == nil || snapshot.isCompleted else { return }
+            snapshot.turnOpenedByPrompt = true
+        } else if snapshot.turnOpenedByPrompt {
+            snapshot.turnOpenedByPrompt = false
+            return
+        }
+        snapshot.turnActivity = TaskTurnActivity(startedAt: timestamp, lastActivityAt: timestamp ?? .distantPast)
+        snapshot.turnFinishedAt = nil
+        snapshot.pendingCommands.removeAll()
+        snapshot.pendingPatchPaths.removeAll()
+    }
+
+    /// A finished command, while the turn is still running (tool events
+    /// trailing a finished turn don't change what it did).
+    private static func recordCommandEnd(_ payload: [String: Any], timestamp: Date?, in snapshot: inout CodexRolloutSnapshot) {
+        let callID = payload["call_id"] as? String
+        let pending = callID.flatMap { snapshot.pendingCommands.removeValue(forKey: $0) }
+        guard !snapshot.isCompleted,
+              let command = commandText(fromCommandValue: payload["command"]) ?? pending else {
+            return
+        }
+        let exitCode = (payload["exit_code"] as? NSNumber)?.intValue
+        let date = timestamp ?? snapshot.updatedAt ?? .distantPast
+        var turn = snapshot.turnActivity ?? TaskTurnActivity(startedAt: nil, lastActivityAt: date)
+        turn.recordCommand(command, succeeded: exitCode.map { $0 == 0 }, at: date)
+        snapshot.turnActivity = turn
+    }
+
+    /// A patch that went through: its files were edited (a rename's key is
+    /// its one file).
+    private static func recordPatchEnd(_ payload: [String: Any], timestamp: Date?, in snapshot: inout CodexRolloutSnapshot) {
+        let callID = payload["call_id"] as? String
+        let pending = callID.flatMap { snapshot.pendingPatchPaths.removeValue(forKey: $0) }
+        let succeeded = (payload["success"] as? Bool) ?? ((payload["status"] as? String) == "completed")
+        guard !snapshot.isCompleted, succeeded else { return }
+        let paths = changedPaths(from: payload).flatMap { $0.isEmpty ? nil : $0 } ?? pending ?? []
+        guard !paths.isEmpty else { return }
+        let date = timestamp ?? snapshot.updatedAt ?? .distantPast
+        var turn = snapshot.turnActivity ?? TaskTurnActivity(startedAt: nil, lastActivityAt: date)
+        turn.recordEdits(paths, at: date)
+        snapshot.turnActivity = turn
+    }
+
+    /// The whole command line (unclipped): a script string, or an exec argv.
+    private static func commandText(fromCommandValue value: Any?) -> String? {
+        if let command = value as? String, !command.isEmpty {
+            return command
+        }
+        if let parts = value as? [Any] {
+            let words = parts.compactMap { $0 as? String }
+            return words.isEmpty ? nil : TaskActivityClassifier.commandLine(fromArgv: words)
+        }
+        return nil
+    }
+
+    private static func changedPaths(from payload: [String: Any]) -> [String]? {
+        (payload["changes"] as? [String: Any]).map { $0.keys.sorted() }
     }
 
     private static func changesPreview(from payload: [String: Any]) -> String? {

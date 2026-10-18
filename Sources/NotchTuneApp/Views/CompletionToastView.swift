@@ -36,6 +36,8 @@ struct CompletionToastView: View {
     private static let bottomInset: CGFloat = 12
     private static let rowSpacing: CGFloat = 6
     private static let actionRowHeight: CGFloat = 28
+    /// `TaskSummaryLine` at 11pt.
+    private static let summaryRowHeight: CGFloat = 14
     private static let previewFont = Font.system(size: 12.5, weight: .regular)
 
     var body: some View {
@@ -59,7 +61,7 @@ struct CompletionToastView: View {
                     .font(Self.previewFont)
                     .foregroundStyle(V6Palette.paper.opacity(0.88))
                     .lineSpacing(1.5)
-                    .lineLimit(NotificationSurfaceMetrics.previewLineLimit - (taskSummary == nil ? 0 : 1))
+                    .lineLimit(Self.previewLineLimit(hasSummary: taskSummary != nil))
                     .truncationMode(.tail)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -316,6 +318,12 @@ struct CompletionToastView: View {
 
     // MARK: - Height estimate (window sizing before the first SwiftUI measure)
 
+    /// The reply preview gives up a line to the summary row, so the card
+    /// keeps its height.
+    nonisolated static func previewLineLimit(hasSummary: Bool) -> Int {
+        NotificationSurfaceMetrics.previewLineLimit - (hasSummary ? 1 : 0)
+    }
+
     /// Estimates the toast height so the panel opens at (nearly) its final
     /// size instead of flashing a tall blank surface and shrinking.
     nonisolated static func estimatedHeight(
@@ -324,6 +332,10 @@ struct CompletionToastView: View {
         hasPrompt: Bool
     ) -> CGFloat {
         var height = topInset + 18 + rowSpacing
+        let hasSummary = session.taskSummary.map { !$0.isEmpty } ?? false
+        if hasSummary {
+            height += summaryRowHeight + rowSpacing
+        }
         if hasPrompt {
             height += 14 + rowSpacing
         }
@@ -338,7 +350,7 @@ struct CompletionToastView: View {
                 attributes: [.font: font]
             )
             let lines = min(
-                CGFloat(NotificationSurfaceMetrics.previewLineLimit),
+                CGFloat(previewLineLimit(hasSummary: hasSummary)),
                 max(1, ceil(rect.height / lineHeight))
             )
             height += lines * lineHeight + rowSpacing
