@@ -256,7 +256,9 @@ struct PersonalizationPreviewStage: View {
         .environment(\.islandChromeMetrics, metrics)
         .environment(\.islandNotchEarRadius, earRadius)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(lang.t("settings.appearance.preview"))
+        // Synced, two stages show side by side: say which display each is.
+        .accessibilityLabel(zoneLabel.map { "\(lang.t("settings.appearance.preview")), \($0.title)" }
+            ?? lang.t("settings.appearance.preview"))
         .accessibilityValue("\(phaseTitle). \(phaseDetail)")
     }
 

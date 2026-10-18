@@ -107,56 +107,68 @@ struct MusicNowPlayingTile: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-        cover
-            .frame(width: size, height: size)
-            .overlay {
-                // Keeps the caption / controls legible on a bright cover.
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(isHovering ? 0.12 : 0), location: 0),
-                        .init(color: .black.opacity(0), location: isHovering ? 0.32 : 0.45),
-                        .init(color: .black.opacity(isHovering ? 0.82 : 0.68), location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-            .overlay(alignment: .topLeading) { badge }
-            .overlay(alignment: .topTrailing) {
-                if isHovering {
-                    expandButton
-                        .transition(.opacity)
+        // The cover itself (outside the tiny controls) returns to the full
+        // player: a real button, so VoiceOver and the keyboard reach it.
+        Button(action: action) {
+            cover
+                .frame(width: size, height: size)
+                .overlay {
+                    // Keeps the caption / controls legible on a bright cover.
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black.opacity(isHovering ? 0.12 : 0), location: 0),
+                            .init(color: .black.opacity(0), location: isHovering ? 0.32 : 0.45),
+                            .init(color: .black.opacity(isHovering ? 0.82 : 0.68), location: 1),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 }
+                .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Show the full player")
+        .overlay(alignment: .topLeading) { badge.accessibilityHidden(true) }
+        // The hover extras stay in the view tree, faded out and click-through
+        // while the pointer is away, so assistive tech can always reach them.
+        .overlay(alignment: .topTrailing) {
+            expandButton
+                .opacity(isHovering ? 1 : 0)
+                .allowsHitTesting(isHovering)
+                // The cover button already does this.
+                .accessibilityHidden(true)
+        }
+        .overlay(alignment: .bottom) {
+            ZStack(alignment: .bottom) {
+                caption
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(isHovering ? 0 : 1)
+                    .accessibilityHidden(true)
+                MusicTileMiniControls(playerManager: playerManager)
+                    .opacity(isHovering ? 1 : 0)
+                    .allowsHitTesting(isHovering)
             }
-            .overlay(alignment: .bottom) {
-                ZStack(alignment: .bottom) {
-                    if isHovering {
-                        MusicTileMiniControls(playerManager: playerManager)
-                            .transition(.opacity)
-                    } else {
-                        caption
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .transition(.opacity)
-                    }
-                }
-            }
-            .clipShape(shape)
-            .overlay { shape.stroke(.white.opacity(0.08), lineWidth: 0.5) }
-            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-            .contentShape(shape)
-            // The cover itself (outside the tiny controls) returns to the
-            // full player, as before.
-            .onTapGesture(perform: action)
-            .onHover { hovering in
-                withAnimation(.easeOut(duration: 0.18)) { isHovering = hovering }
-                setHoldsPositionUpdates(hovering)
-            }
-            .onAppear { if isHovering { setHoldsPositionUpdates(true) } }
-            .onDisappear { setHoldsPositionUpdates(false) }
-            .help("Show the full player")
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Now playing: \(playerManager.track.title)")
-            .accessibilityAction(named: "Show the full player", action)
+        }
+        .clipShape(shape)
+        .overlay { shape.stroke(.white.opacity(0.08), lineWidth: 0.5).allowsHitTesting(false) }
+        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+        .contentShape(shape)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.18)) { isHovering = hovering }
+            setHoldsPositionUpdates(hovering)
+        }
+        .onAppear { if isHovering { setHoldsPositionUpdates(true) } }
+        .onDisappear { setHoldsPositionUpdates(false) }
+        .help("Show the full player")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(nowPlayingLabel)
+    }
+
+    private var nowPlayingLabel: String {
+        let artist = playerManager.track.artist.trimmingCharacters(in: .whitespacesAndNewlines)
+        return artist.isEmpty
+            ? "Now playing: \(playerManager.track.title)"
+            : "Now playing: \(playerManager.track.title), \(artist)"
     }
 
     private func setHoldsPositionUpdates(_ holds: Bool) {
