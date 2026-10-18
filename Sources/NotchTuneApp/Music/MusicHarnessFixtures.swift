@@ -94,6 +94,15 @@ struct MusicHarnessOverride: Equatable, Sendable {
 
     static let sampleTrack: PlayerTrack = {
         var track = PlayerTrack()
+        // Marketing captures (`NOTCHTUNE_HARNESS_SHOWCASE=1`) use a made-up
+        // track, so no real artist or song appears on the site.
+        if HarnessHeadless.isShowcase {
+            track.title = "Still Water"
+            track.artist = "Juniper Coast"
+            track.album = "Night Swims"
+            track.duration = 236
+            return track
+        }
         track.title = "Midnight City"
         track.artist = "M83"
         track.album = "Hurry Up, We're Dreaming"
@@ -235,9 +244,14 @@ enum MusicHarnessSamples {
         MusicLibraryItem(id: "spotify:track:3FtYbEfBqAlGO46NUDQSAt", kind: .song, title: "Electric Feel", subtitle: "MGMT"),
     ]
 
-    /// Same strongly coloured square as `AppModel.harnessSampleAlbumArt`.
+    /// Same strongly coloured square as `AppModel.harnessSampleAlbumArt`, or
+    /// the image at `NOTCHTUNE_HARNESS_MUSIC_ART=<path>` (an original cover).
     static func albumArt() -> NSImage {
-        NSImage(size: NSSize(width: 600, height: 600), flipped: false) { rect in
+        if let path = ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_MUSIC_ART"],
+           let image = NSImage(contentsOfFile: path) {
+            return image
+        }
+        return NSImage(size: NSSize(width: 600, height: 600), flipped: false) { rect in
             let gradient = NSGradient(colors: [.systemPink, .systemOrange, .systemTeal])
             gradient?.draw(in: rect, angle: 90)
             return true

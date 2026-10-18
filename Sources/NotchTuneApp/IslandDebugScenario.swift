@@ -18,6 +18,8 @@ enum IslandDebugScenario: String, CaseIterable, Identifiable {
     /// Closed with no agent sessions, so a playing track owns the pill.
     case closedMusic
     case closedNeedsApproval
+    /// Closed, during the few seconds a just-finished task peeks on the pill.
+    case closedFinished
     case sessionList
     case approvalCard
     case questionCard
@@ -34,6 +36,8 @@ enum IslandDebugScenario: String, CaseIterable, Identifiable {
             "Closed Notch · Music Only"
         case .closedNeedsApproval:
             "Closed Notch · Needs Approval"
+        case .closedFinished:
+            "Closed Notch · Finished"
         case .sessionList:
             "Session List"
         case .approvalCard:
@@ -55,6 +59,8 @@ enum IslandDebugScenario: String, CaseIterable, Identifiable {
             "Collapsed notch with no agents, so the compact music pill shows."
         case .closedNeedsApproval:
             "Collapsed notch widened into the amber needs-approval live activity."
+        case .closedFinished:
+            "Collapsed notch peeking a just-finished task and its summary."
         case .sessionList:
             "Manual expanded list with running, active, and inactive session rows."
         case .approvalCard:
@@ -105,6 +111,22 @@ enum IslandDebugScenario: String, CaseIterable, Identifiable {
                 notchOpenReason: nil,
                 islandSurface: .sessionList(),
                 sessions: DebugSessionFactory.notificationSessions(lead: session, now: now),
+                selectedSessionID: session.id
+            )
+
+        case .closedFinished:
+            // Another agent is still working: with every agent idle the closed
+            // notch tucks away, so the peek shows while something else runs.
+            let session = DebugSessionFactory.finishedPeekSession(now: now)
+            let working = DebugSessionFactory.listSessions(now: now).first { $0.phase == .running }
+            return IslandDebugSnapshot(
+                title: title,
+                summary: summary,
+                previewHeight: 78,
+                notchStatus: .closed,
+                notchOpenReason: nil,
+                islandSurface: .sessionList(),
+                sessions: [session] + (working.map { [$0] } ?? []),
                 selectedSessionID: session.id
             )
 
@@ -424,6 +446,7 @@ private enum DebugSessionFactory {
     }
 
     static func completionSession(now: Date) -> AgentSession {
+        if isShowcase { return ShowcaseSessionFactory.completionSession(now: now) }
         var session = AgentSession(
             id: "session-completion",
             title: "Codex · open-island",
@@ -453,6 +476,15 @@ private enum DebugSessionFactory {
             tests: .passed,
             duration: 192
         )
+        return session
+    }
+
+    /// The task `closedFinished` peeks: a different one from the completion
+    /// card's, so the two captures don't repeat each other.
+    static func finishedPeekSession(now: Date) -> AgentSession {
+        if isShowcase { return ShowcaseSessionFactory.finishedPeekSession(now: now) }
+        var session = recentCompletedSession(now: now)
+        session.updatedAt = now
         return session
     }
 
@@ -498,7 +530,7 @@ private enum ShowcaseSessionFactory {
                 id: "showcase-api", workspace: "api", phase: .running, age: 40, now: now,
                 initial: "Add rate limiting to the upload endpoint",
                 latest: "Looks good, run the test suite",
-                assistant: nil, tool: "Bash", preview: "swift test --parallel"
+                assistant: nil, tool: "Bash", preview: "swift test"
             ),
             codex(
                 id: "showcase-web", workspace: "web", age: 60, now: now,
@@ -508,7 +540,7 @@ private enum ShowcaseSessionFactory {
             ),
             claude(
                 id: "showcase-docs", workspace: "docs", phase: .completed, age: 4 * 60, now: now,
-                initial: "Write the release notes for 2.1.2",
+                initial: "Write the release notes for 2.1.5",
                 latest: "Keep it short",
                 assistant: "Drafted the notes: six features and two fixes, with install steps.",
                 tool: nil, preview: nil
@@ -523,21 +555,57 @@ private enum ShowcaseSessionFactory {
     }
 
     static func approvalSession(now: Date) -> AgentSession {
-        var session = claude(
-            id: "showcase-api", workspace: "api", phase: .waitingForApproval, age: 12, now: now,
-            initial: "Add rate limiting to the upload endpoint",
-            latest: "Ship it",
-            assistant: "Tests pass. Pushing the branch.",
-            tool: "Bash", preview: "git push origin main"
+        var session = AgentSession(
+            id: "showcase-api", title: "Codex · api", tool: .codex, origin: .demo,
+            attachmentState: .attached, phase: .waitingForApproval,
+            summary: "Codex wants to run git push origin main",
+            updatedAt: now.addingTimeInterval(-12),
+            jumpTarget: jump("api", "showcase-api"),
+            codexMetadata: CodexSessionMetadata(
+                initialUserPrompt: "Add rate limiting to the upload endpoint",
+                lastUserPrompt: "Ship it",
+                lastAssistantMessage: "Tests pass. Pushing the branch.",
+                currentTool: "exec_command",
+                currentCommandPreview: "git push origin main"
+            )
         )
-        session.summary = "Claude Code wants to run git push origin main"
         session.permissionRequest = PermissionRequest(
             title: "Run command",
-            summary: "Claude Code wants to run git push origin main",
+            summary: "Codex wants to run git push origin main",
             affectedPath: "",
             primaryActionTitle: "Allow",
             secondaryActionTitle: "Deny"
         )
+        return session
+    }
+
+    static func completionSession(now: Date) -> AgentSession {
+        var session = claude(
+            id: "showcase-checkout", workspace: "web", phase: .completed, age: 8, now: now,
+            initial: "The checkout page is slow on first load",
+            latest: "Make it faster, then run the tests",
+            assistant: "Done. Checkout now loads in 1.2 s instead of 3.4 s: product images load lazily and the cart query is cached. All 128 tests pass.",
+            tool: nil, preview: nil
+        )
+        session.taskSummary = TaskSummary(
+            fileCount: 4,
+            fileNames: ["CheckoutPage.tsx", "cart.ts", "images.ts"],
+            commandCount: 6,
+            tests: .passed,
+            duration: 192
+        )
+        return session
+    }
+
+    static func finishedPeekSession(now: Date) -> AgentSession {
+        var session = claude(
+            id: "showcase-docs", workspace: "docs", phase: .completed, age: 1, now: now,
+            initial: "Write the release notes for 2.1.5",
+            latest: "Keep it short",
+            assistant: "Drafted the notes: six features, two fixes and the install steps.",
+            tool: nil, preview: nil
+        )
+        session.taskSummary = TaskSummary(fileCount: 2, fileNames: ["CHANGELOG.md", "README.md"], duration: 48)
         return session
     }
 
