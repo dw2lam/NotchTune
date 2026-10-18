@@ -129,19 +129,21 @@ struct NotificationSoundService {
         case system(String)
     }
 
-    /// Resolves a stored name: a bundled `notchtune.<slug>`, then a custom
-    /// file name (with extension), else a system sound name. A bundled id
-    /// that no longer ships falls back to the default sound.
-    static func source(for name: String) -> SoundSource {
-        if name.hasPrefix(bundledSoundPrefix) {
-            if let sound = bundledSounds.first(where: { $0.id == name }) {
-                return .bundled(sound.url)
-            }
-            return .system(defaultSoundName)
+    /// Resolves a stored name: a bundled `notchtune.<slug>` that ships, then
+    /// a custom file name (with extension), else a system sound name. A
+    /// custom file may itself be called `notchtune.wav`, so the prefix alone
+    /// never decides; a bundled id that no longer ships (and isn't a custom
+    /// file) falls back to the default sound.
+    static func source(for name: String, customDirectory: URL? = nil) -> SoundSource {
+        if name.hasPrefix(bundledSoundPrefix), let sound = bundledSounds.first(where: { $0.id == name }) {
+            return .bundled(sound.url)
         }
-        let customURL = customSoundsDirectory.appendingPathComponent(name)
+        let customURL = (customDirectory ?? customSoundsDirectory).appendingPathComponent(name)
         if FileManager.default.fileExists(atPath: customURL.path) {
             return .custom(customURL)
+        }
+        if name.hasPrefix(bundledSoundPrefix) {
+            return .system(defaultSoundName)
         }
         return .system(name)
     }

@@ -100,6 +100,21 @@ struct NotificationSoundPackTests {
     }
 
     @Test
+    func aCustomFileNamedLikeThePackStaysCustom() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NotchTuneSoundTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("notchtune.wav")
+        try Data([0]).write(to: file)
+
+        #expect(NotificationSoundService.source(for: "notchtune.wav", customDirectory: directory) == .custom(file))
+        // A shipping pack id still resolves to the pack.
+        let first = try #require(NotificationSoundService.bundledSounds.first)
+        #expect(NotificationSoundService.source(for: first.id, customDirectory: directory) == .bundled(first.url))
+    }
+
+    @Test
     func slugsBecomeTitles() {
         #expect(NotificationSoundService.title(forSlug: "ding-dong") == "Ding Dong")
         #expect(NotificationSoundService.title(forSlug: "coin") == "Coin")
