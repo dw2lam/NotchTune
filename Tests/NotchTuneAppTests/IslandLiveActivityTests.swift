@@ -285,6 +285,19 @@ struct IslandLiveActivityModelTests {
         model.beginFinishedPeek(for: "s")
         #expect(model.finishedPeekSessionID == "s")
     }
+
+    @Test
+    func theLastAgentFinishingStillShowsItsPeek() {
+        // Nothing running, no music: the closed notch would normally tuck
+        // away, which hid the "finished" peek of the agent that just ended.
+        let model = AppModel()
+        model.islandLiveActivityMode = .active
+        model.notchStatus = .closed
+        #expect(model.shouldHideClosedNotch)
+        model.beginFinishedPeek(for: "s")
+        #expect(!model.shouldHideClosedNotch)
+        #expect(!model.isIslandInactive)
+    }
 }
 
 private final class ObservationFlag: @unchecked Sendable {

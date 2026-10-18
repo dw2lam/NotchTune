@@ -1330,17 +1330,21 @@ final class AppModel {
 
     var isIslandInactive: Bool {
         agentsAreIdle && !shouldShowCompactMusicView && calendar.headsUp == nil
+            && finishedPeekSessionID == nil
     }
 
     /// Collapse the closed notch when nothing needs the surface: no running or
-    /// attention sessions, no active music playback (paused is fine), and no
-    /// transient track notification. Peek-on-hover still reveals the pill.
+    /// attention sessions, no active music playback (paused is fine), no
+    /// transient track notification, and no finished peek (the last agent
+    /// finishing leaves everything idle, which hid its own "finished").
+    /// Peek-on-hover still reveals the pill.
     var shouldHideClosedNotch: Bool {
         notchStatus != .opened
             && musicNotificationTrack == nil
             && !hasClosedMusicPresence
             && agentsAreIdle
             && calendar.headsUp == nil
+            && finishedPeekSessionID == nil
     }
 
     var shouldAutoHideIsland: Bool {
