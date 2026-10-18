@@ -14,40 +14,42 @@ struct OnboardingWelcomeStep: View {
                 .resizable()
                 .interpolation(.high)
                 .frame(width: 104, height: 104)
+                .shadow(color: SettingsTint.sky.bottom.opacity(0.45), radius: 22, y: 8)
                 .accessibilityHidden(true)
 
             Text("Welcome to NotchTune")
-                .font(.largeTitle.weight(.bold))
-                .padding(.top, 12)
+                .font(.system(size: 30, weight: .bold))
+                .foregroundStyle(.primary)
+                .padding(.top, 14)
 
             Text("A calm home for your work, right in the notch.")
-                .font(.title3)
+                .font(.system(size: 15))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.top, 6)
 
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 18) {
                 OnboardingFeatureRow(
                     symbol: "terminal.fill",
-                    color: .blue,
+                    tint: .grass,
                     title: "Live AI Agents",
                     detail: "Follow Claude Code, Codex, and more. Approve requests and jump back to the right terminal."
                 )
                 OnboardingFeatureRow(
                     symbol: "music.note",
-                    color: .pink,
+                    tint: .ember,
                     title: "Music at a Glance",
                     detail: "Artwork, progress, and playback controls for Apple Music or Spotify."
                 )
                 OnboardingFeatureRow(
                     symbol: "square.grid.2x2.fill",
-                    color: .orange,
+                    tint: .violet,
                     title: "Myspace",
                     detail: "Drop files and jot down quick thoughts, always one hover away."
                 )
                 OnboardingFeatureRow(
                     symbol: "bell.fill",
-                    color: .red,
+                    tint: .rose,
                     title: "Reminders",
                     detail: "Timed nudges that appear right where you're already looking."
                 )
@@ -57,34 +59,6 @@ struct OnboardingWelcomeStep: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 8)
-    }
-}
-
-/// Colored symbol in a fixed column, bold title, secondary description.
-struct OnboardingFeatureRow: View {
-    let symbol: String
-    let color: Color
-    let title: String
-    let detail: String
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            Image(systemName: symbol)
-                .font(.system(size: 28, weight: .regular))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(color)
-                .frame(width: 44)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                Text(detail)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -106,8 +80,8 @@ struct OnboardingAgentsStep: View {
     var body: some View {
         VStack(spacing: 20) {
             OnboardingStepHeader(
-                symbol: "apple.terminal.on.rectangle.fill",
-                color: .blue,
+                symbol: "terminal.fill",
+                tint: .grass,
                 title: "Connect Your AI Tools",
                 detail: "Install the integrations for the agents you use."
             )
@@ -149,6 +123,7 @@ struct OnboardingAgentsStep: View {
                     .padding(.top, 6)
                 } label: {
                     Text("More Claude-Compatible Agents")
+                        .font(SettingsMetrics.rowSubtitleFont.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.top, 4)
@@ -160,7 +135,7 @@ struct OnboardingAgentsStep: View {
                             .foregroundStyle(.secondary)
                     } icon: {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.yellow)
+                            .foregroundStyle(SettingsTheme.caution)
                     }
                     .font(.callout)
                     .padding(.top, 4)
@@ -192,7 +167,7 @@ struct OnboardingAgentsStep: View {
     ) -> some View {
         OnboardingRow(
             icon: "terminal.fill",
-            iconColor: installed ? .green : .gray,
+            tint: installed ? .grass : .graphite,
             title: name
         ) {
             if installed {
@@ -218,7 +193,7 @@ struct OnboardingPermissionsStep: View {
         VStack(spacing: 24) {
             OnboardingStepHeader(
                 symbol: "hand.raised.fill",
-                color: .blue,
+                tint: .indigo,
                 title: "Privacy & Permissions",
                 detail: "NotchTune asks only for what it uses. You can change these any time in System Settings."
             )
@@ -226,7 +201,7 @@ struct OnboardingPermissionsStep: View {
             OnboardingGroup {
                 OnboardingRow(
                     icon: "accessibility",
-                    iconColor: .blue,
+                    tint: .sky,
                     title: "Accessibility",
                     detail: "Focus the right terminal window and pane when you jump back to a session."
                 ) {
@@ -243,7 +218,7 @@ struct OnboardingPermissionsStep: View {
 
                 OnboardingRow(
                     icon: "bell.badge.fill",
-                    iconColor: .red,
+                    tint: .rose,
                     title: "Notifications",
                     detail: "Tell you when an agent finishes and deliver timed reminders."
                 ) {
@@ -254,7 +229,7 @@ struct OnboardingPermissionsStep: View {
 
                 OnboardingRow(
                     icon: "gearshape.2.fill",
-                    iconColor: .gray,
+                    tint: .graphite,
                     title: "Automation",
                     detail: "Jump back to supported terminals and control your music player. macOS asks the first time it's needed."
                 ) {
@@ -273,7 +248,7 @@ struct OnboardingPermissionsStep: View {
             OnboardingStatusLabel(text: "Allowed")
         case "Denied":
             HStack(spacing: 10) {
-                Text("Off").foregroundStyle(.secondary)
+                Text("Off").font(SettingsMetrics.rowSubtitleFont).foregroundStyle(.secondary)
                 Button("Open Settings…") {
                     openNotificationSettings()
                 }
@@ -283,7 +258,7 @@ struct OnboardingPermissionsStep: View {
         default:
             // Checking… / Unavailable (no bundle, e.g. `swift run`) / Unknown.
             HStack(spacing: 10) {
-                Text(notificationAuthorization).foregroundStyle(.secondary)
+                Text(notificationAuthorization).font(SettingsMetrics.rowSubtitleFont).foregroundStyle(.secondary)
                 Button("Allow", action: requestNotifications)
                     .disabled(true)
             }
@@ -315,7 +290,7 @@ struct OnboardingMusicStep: View {
         VStack(spacing: 28) {
             OnboardingStepHeader(
                 symbol: "music.note",
-                color: .pink,
+                tint: .ember,
                 title: "Choose Your Music Player",
                 detail: "Control playback and see what's playing, with artwork and progress, right from the notch."
             )
@@ -353,7 +328,7 @@ struct OnboardingMusicStep: View {
             .frame(maxWidth: 460)
 
             Text("macOS asks once for Automation permission the first time NotchTune talks to your player.")
-                .font(.callout)
+                .font(SettingsMetrics.footerFont)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
@@ -367,30 +342,27 @@ struct OnboardingMusicStep: View {
         icon: NSImage?,
         action: @escaping () -> Void
     ) -> some View {
-        OnboardingChoiceTile(
+        SettingsTile(
             title: title,
-            detail: detail,
+            subtitle: detail,
             isSelected: selection == tag,
+            thumbnailHeight: 86,
+            background: .neutral,
             action: {
                 selection = tag
                 action()
             }
         ) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(.quinary)
-                if let icon {
-                    Image(nsImage: icon)
-                        .resizable()
-                        .interpolation(.high)
-                        .frame(width: 64, height: 64)
-                } else {
-                    Image(systemName: "speaker.slash.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(.secondary)
-                }
+            if let icon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 60, height: 60)
+            } else {
+                Image(systemName: "speaker.slash.fill")
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundStyle(SettingsTheme.paper.opacity(0.5))
             }
-            .frame(width: 112, height: 86)
         }
     }
 
@@ -412,39 +384,48 @@ struct OnboardingMusicStep: View {
 struct OnboardingPersonalizeStep: View {
     var model: AppModel
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack(spacing: 24) {
             // The preview IS the real notch: the island is pinned open while
             // this step is visible (`beginAppearanceLivePreview`).
             OnboardingStepHeader(
-                symbol: "paintpalette.fill",
-                color: .purple,
-                rendering: .multicolor,
                 title: "Make It Yours",
                 detail: "Your island is open at the top of the screen. Changes here apply to it instantly."
-            )
+            ) {
+                // The character's own tile, as on Settings' Personalization.
+                OnboardingHeaderTile(tint: .violet) {
+                    PixelCharacterView(
+                        character: model.islandCharacter,
+                        mode: .idle,
+                        paused: reduceMotion,
+                        tint: SettingsTint.violet.glyph
+                    )
+                    .frame(width: 38, height: 38)
+                    .id(model.islandCharacter)
+                    .transition(.opacity)
+                }
+                .animation(.smooth(duration: 0.3), value: model.islandCharacter)
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 OnboardingSectionHeader(title: "Character", caption: "Shown on the closed notch")
                 // Twenty characters: four rows of five (the step scrolls).
                 LazyVGrid(
-                    columns: Array(repeating: GridItem(.fixed(84), spacing: 8), count: 5),
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 5),
                     alignment: .leading,
-                    spacing: 8
+                    spacing: 10
                 ) {
                     ForEach(IslandCharacter.allCases) { option in
-                        OnboardingChoiceTile(
+                        let isSelected = model.islandCharacter == option
+                        SettingsTile(
                             title: option.title,
-                            isSelected: model.islandCharacter == option,
+                            isSelected: isSelected,
+                            thumbnailHeight: 58,
                             action: { model.islandCharacter = option }
                         ) {
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(Color.black)
-                                .frame(width: 76, height: 50)
-                                .overlay {
-                                    UnifiedBars(mode: .idle, size: 32, character: option)
-                                        .frame(width: 36, height: 36)
-                                }
+                            OnboardingCharacterSprite(character: option, isSelected: isSelected)
                         }
                     }
                 }
@@ -452,7 +433,7 @@ struct OnboardingPersonalizeStep: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 OnboardingSectionHeader(title: "Material")
-                HStack(spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
                     materialTile(
                         title: "Clear Glass",
                         style: .clear,
@@ -481,6 +462,7 @@ struct OnboardingPersonalizeStep: View {
                 OnboardingGroup {
                     HStack(spacing: 12) {
                         Text("Tint Strength")
+                            .font(SettingsMetrics.rowTitleFont)
                         Slider(
                             value: Binding(
                                 get: { model.glassSettings.tintStrength },
@@ -489,13 +471,14 @@ struct OnboardingPersonalizeStep: View {
                             in: 0...0.65
                         )
                         Text("\(Int((model.glassSettings.tintStrength * 100).rounded()))%")
+                            .font(SettingsMetrics.rowSubtitleFont)
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                             .frame(width: 38, alignment: .trailing)
                     }
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 40)
+                    .frame(minHeight: 46)
                     .disabled(!model.glassSettings.isEnabled)
+                    .opacity(model.glassSettings.isEnabled ? 1 : 0.5)
                 }
                 .padding(.top, 6)
             }
@@ -511,15 +494,16 @@ struct OnboardingPersonalizeStep: View {
         isSelected: Bool,
         action: @escaping () -> Void
     ) -> some View {
-        OnboardingChoiceTile(title: title, isSelected: isSelected, action: action) {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(OnboardingTheme.wallpaper)
-                .frame(width: 150, height: 72)
-                .overlay(alignment: .top) {
-                    islandSwatch(style)
-                        .frame(width: 92, height: 30)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        SettingsTile(
+            title: title,
+            isSelected: isSelected,
+            thumbnailHeight: 72,
+            background: .wallpaper,
+            action: action
+        ) {
+            islandSwatch(style)
+                .frame(width: 92, height: 30)
+                .frame(maxHeight: .infinity, alignment: .top)
         }
     }
 
@@ -551,9 +535,8 @@ struct OnboardingKeepRunningStep: View {
     var body: some View {
         VStack(spacing: 24) {
             OnboardingStepHeader(
-                symbol: "power.circle.fill",
-                color: .green,
-                rendering: .monochrome,
+                symbol: "power",
+                tint: .teal,
                 title: "Keep NotchTune Running",
                 detail: "NotchTune is most useful when it's always there, quietly waiting in the notch."
             )
@@ -561,7 +544,7 @@ struct OnboardingKeepRunningStep: View {
             OnboardingGroup {
                 OnboardingRow(
                     icon: "power",
-                    iconColor: .gray,
+                    tint: .graphite,
                     title: "Launch at Login",
                     detail: "Start NotchTune automatically when you log in."
                 ) {
@@ -569,7 +552,6 @@ struct OnboardingKeepRunningStep: View {
                         get: { model.launchAtLoginEnabled },
                         set: { model.launchAtLoginEnabled = $0 }
                     ))
-                    .toggleStyle(.switch)
                     .labelsHidden()
                 }
 
@@ -577,7 +559,7 @@ struct OnboardingKeepRunningStep: View {
 
                 OnboardingRow(
                     icon: "arrow.down.circle.fill",
-                    iconColor: .blue,
+                    tint: .indigo,
                     title: "Automatic Updates",
                     detail: "Signed releases install in place. There's nothing to do."
                 ) {
@@ -603,25 +585,25 @@ struct OnboardingTryLiveStep: View {
             VStack(alignment: .leading, spacing: 14) {
                 OnboardingFeatureRow(
                     symbol: "cursorarrow.motionlines",
-                    color: .blue,
+                    tint: .sky,
                     title: "Open the Island",
                     detail: "Hover over the notch to reveal your sessions."
                 )
                 OnboardingFeatureRow(
                     symbol: "checkmark.bubble.fill",
-                    color: .green,
+                    tint: .grass,
                     title: "Resolve an Approval",
                     detail: "Answer a demo agent's request without leaving your work."
                 )
                 OnboardingFeatureRow(
                     symbol: "music.note",
-                    color: .pink,
+                    tint: .ember,
                     title: "Peek at Music",
                     detail: "Switch to the Music tab for playback controls."
                 )
                 OnboardingFeatureRow(
                     symbol: "arrow.down.doc.fill",
-                    color: .orange,
+                    tint: .violet,
                     title: "Drop a File",
                     detail: "Drag something onto the notch to keep it in Myspace."
                 )
@@ -632,7 +614,7 @@ struct OnboardingTryLiveStep: View {
 
     /// The top of a Mac display: wallpaper, the black notch, a pointer.
     private var notchIllustration: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
             .fill(OnboardingTheme.wallpaper)
             .frame(width: 200, height: 64)
             .overlay(alignment: .top) {
@@ -647,10 +629,11 @@ struct OnboardingTryLiveStep: View {
                     .shadow(color: .black.opacity(0.35), radius: 1.5, y: 1)
                     .offset(x: 30, y: 22)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(.separator, lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(SettingsTheme.paper.opacity(0.14), lineWidth: 0.75)
             }
+            .shadow(color: SettingsTint.rose.bottom.opacity(0.4), radius: 18, y: 7)
     }
 }
