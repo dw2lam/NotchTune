@@ -479,6 +479,11 @@ final class AppModel {
         set { updateAppearancePreferences(for: activeAppearanceProfile) { $0.character = newValue } }
     }
 
+    var islandCharacterMotion: IslandCharacterMotion {
+        get { appearancePreferences(for: activeAppearanceProfile).characterMotion }
+        set { updateAppearancePreferences(for: activeAppearanceProfile) { $0.characterMotion = newValue } }
+    }
+
     /// Closed-island density for the active display profile. The harness can
     /// pin it per run (`NOTCHTUNE_HARNESS_ISLAND_DENSITY`) without touching the
     /// persisted preference.
@@ -663,6 +668,7 @@ final class AppModel {
         defaults.set(preferences.rightSlot.rawValue, forKey: Self.appearanceDefaultsKey(profile, "rightSlot"))
         defaults.set(preferences.centerLabel.rawValue, forKey: Self.appearanceDefaultsKey(profile, "centerLabel"))
         defaults.set(preferences.character.rawValue, forKey: Self.appearanceDefaultsKey(profile, "character"))
+        defaults.set(preferences.characterMotion.rawValue, forKey: Self.appearanceDefaultsKey(profile, "characterMotion"))
         defaults.set(preferences.colorByAgent, forKey: Self.appearanceDefaultsKey(profile, "colorByAgent"))
         defaults.set(preferences.topCurve, forKey: Self.appearanceDefaultsKey(profile, "topCurve"))
         defaults.set(preferences.density.rawValue, forKey: Self.appearanceDefaultsKey(profile, "density"))
@@ -807,6 +813,10 @@ final class AppModel {
                 rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "character"))
                     ?? ""
             ) ?? .dino,
+            characterMotion: IslandCharacterMotion(
+                rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "characterMotion"))
+                    ?? ""
+            ) ?? .calm,
             colorByAgent: defaults.bool(forKey: appearanceDefaultsKey(profile, "colorByAgent")),
             topCurve: defaults.object(forKey: appearanceDefaultsKey(profile, "topCurve")) as? Bool ?? true,
             density: IslandDensity(

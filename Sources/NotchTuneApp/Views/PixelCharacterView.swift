@@ -3,8 +3,8 @@ import SwiftUI
 
 /// The island character, drawn once per (frame, tint, size) into images and
 /// animated with Core Animation keyframes: each mode's frame sequence (walk
-/// cycles, blinks, glances, the "needs you" wave) and its smooth hop / sway
-/// all run in the render server. A SwiftUI `TimelineView` + `Canvas`
+/// cycles, blinks, glances, the "needs you" wave) and, when Lively, its
+/// smooth hop / sway all run in the render server. Still installs nothing. A SwiftUI `TimelineView` + `Canvas`
 /// re-rendered and re-laid-out the whole notch window on every frame — ~9%
 /// CPU while an agent worked.
 struct PixelCharacterView: NSViewRepresentable {
@@ -12,6 +12,9 @@ struct PixelCharacterView: NSViewRepresentable {
     var mode: UnifiedBars.Mode
     var paused: Bool
     var tint: Color
+    /// `nil` follows the environment's `islandCharacterMotion` (the
+    /// user's Character motion setting where the island sets it).
+    var motion: IslandCharacterMotion? = nil
 
     func makeNSView(context: Context) -> PixelCharacterNSView {
         PixelCharacterNSView()
@@ -24,7 +27,8 @@ struct PixelCharacterView: NSViewRepresentable {
                 character: character,
                 mode: mode,
                 paused: paused,
-                rgba: [rgba.redComponent, rgba.greenComponent, rgba.blueComponent, rgba.alphaComponent]
+                rgba: [rgba.redComponent, rgba.greenComponent, rgba.blueComponent, rgba.alphaComponent],
+                motion: motion ?? context.environment.islandCharacterMotion
             )
         )
     }
@@ -36,6 +40,7 @@ final class PixelCharacterNSView: NSView {
         var mode: UnifiedBars.Mode
         var paused: Bool
         var rgba: [CGFloat]
+        var motion: IslandCharacterMotion = .calm
     }
 
     static let framesAnimationKey = "frames"
@@ -108,7 +113,7 @@ final class PixelCharacterNSView: NSView {
             return
         }
 
-        let sequence = character.sequence(for: config.mode)
+        let sequence = character.sequence(for: config.mode, motion: config.motion)
         var images: [Int: CGImage] = [:]
         for step in sequence.steps where images[step.frame] == nil {
             images[step.frame] = render(character.frames[step.frame])
@@ -263,5 +268,17 @@ enum PixelCharacterRenderer {
             context.fillPath()
         }
         return context.makeImage()
+    }
+}
+
+private struct IslandCharacterMotionKey: EnvironmentKey {
+    static let defaultValue: IslandCharacterMotion = .calm
+}
+
+extension EnvironmentValues {
+    /// How much pixel characters below move (the Character motion setting).
+    var islandCharacterMotion: IslandCharacterMotion {
+        get { self[IslandCharacterMotionKey.self] }
+        set { self[IslandCharacterMotionKey.self] = newValue }
     }
 }

@@ -2,11 +2,13 @@
 """Source of truth for the closed-notch pixel characters.
 
 Each character is drawn on a 14x14 grid ('#' = pixel, '+' = dim pixel,
-'.' = empty) and animated as three frame sequences: idle, working and
-waiting, each optionally with a smooth Core Animation motion (hop / wave).
+'.' = empty) and animated per state (idle, working, waiting) twice over:
+Lively loops, optionally with a smooth Core Animation motion (hop / wave),
+and Calm loops (the default) with no whole-sprite motion. Still shows each
+calm loop's first frame.
 
-    python3 scripts/generate-pixel-sprites.py            # writes the Swift data
-    python3 scripts/generate-pixel-sprites.py --sheet D  # also renders contact sheets into D
+    python3 scripts/generate-pixel-sprites.py
+    NOTCHTUNE_SPRITE_SHEET_DIR=/some/dir swift test --filter PixelSpriteContactSheet
 
 Output (generated, do not edit): Sources/NotchTuneApp/Views/PixelSprites.swift and
 the website's copy, website/src/lib/sprites.ts.
@@ -69,14 +71,24 @@ CHARACTERS = {}
 
 
 def character(name, title, frames, idle, working, waiting,
-              idle_motion=None, working_motion=None, waiting_motion=None):
-    for seq in (idle, working, waiting):
+              idle_motion=None, working_motion=None, waiting_motion=None,
+              calm_idle=None, calm_working=None, calm_waiting=None):
+    """Lively loops (idle / working / waiting, each with an optional smooth
+    motion) and Calm ones (no whole-sprite motion: the default, since the
+    pill sits in peripheral vision for hours). Still shows each calm loop's
+    first frame, so calm waiting must open on its "!" frame."""
+    calm = dict(calm_idle=calm_idle, calm_working=calm_working, calm_waiting=calm_waiting)
+    for label, seq in (("idle", idle), ("working", working), ("waiting", waiting), *calm.items()):
+        assert seq, f"{name}: missing {label}"
         for frame_name, duration in seq:
             assert frame_name in frames, f"{name}: missing frame {frame_name}"
             assert duration > 0
+    assert calm_idle[0][0] == idle[0][0], f"{name}: calm idle must rest on the same frame"
     CHARACTERS[name] = dict(title=title, frames=frames,
                             idle=(idle, idle_motion), working=(working, working_motion),
-                            waiting=(waiting, waiting_motion))
+                            waiting=(waiting, waiting_motion),
+                            calm_idle=(calm_idle, None), calm_working=(calm_working, None),
+                            calm_waiting=(calm_waiting, None))
 
 
 # --------------------------------------------------------------------------
@@ -122,6 +134,10 @@ character(
     working=[("w1", 0.1), ("w2", 0.1), ("w3", 0.1), ("w4", 0.1)],
     working_motion=motion("hop", 0.6, 0.2),
     waiting=[("alert", 0.32), ("alertShut", 0.32), ("alert", 0.32), ("rest", 0.5)],
+    calm_idle=[("rest", 6.0), ("blink", 0.14), ("rest", 5.5), ("flick", 0.3), ("rest", 4.0),
+               ("blink", 0.14), ("rest", 2.0)],
+    calm_working=[("w1", 0.45), ("w2", 0.45), ("w3", 0.45), ("w4", 0.45)],
+    calm_waiting=[("alert", 1.4), ("alertShut", 1.0)],
 )
 
 # --------------------------------------------------------------------------
@@ -173,6 +189,10 @@ character(
     working_motion=motion("wave", 0.6, 1.0),
     waiting=[("alert", 0.36), ("alertShut", 0.36), ("alert", 0.36), ("rest", 0.5)],
     waiting_motion=motion("wave", 0.4, 0.8),
+    calm_idle=[("rest", 6.0), ("blink", 0.14), ("rest", 4.0), ("lookL", 1.2), ("rest", 0.3),
+               ("lookR", 1.2), ("rest", 4.0), ("blink", 0.14), ("rest", 2.0)],
+    calm_working=[("h0", 0.5), ("h1", 0.5), ("h2", 0.5)],
+    calm_waiting=[("alert", 1.4), ("alertShut", 1.0)],
 )
 
 # --------------------------------------------------------------------------
@@ -217,6 +237,10 @@ character(
     working_motion=motion("wave", 0.5, 0.4, axis="x"),
     waiting=[("waveL", 0.24), ("waveR", 0.24)],
     waiting_motion=motion("hop", 0.3, 0.48),
+    calm_idle=[("rest", 6.0), ("blink", 0.14), ("rest", 4.5), ("lookL", 1.2), ("rest", 4.0),
+               ("blink", 0.14), ("rest", 2.0)],
+    calm_working=[("w1", 0.45), ("w2", 0.45), ("w1", 0.45), ("w2", 0.45), ("w3", 0.35), ("w4", 0.35)],
+    calm_waiting=[("waveL", 1.0), ("waveR", 1.0)],
 )
 
 # --------------------------------------------------------------------------
@@ -270,230 +294,291 @@ character(
     working_motion=motion("wave", 0.45, 0.52, axis="x"),
     waiting=[("alert", 0.3), ("alertShut", 0.3), ("alert", 0.3), ("rest", 0.5)],
     waiting_motion=motion("hop", 0.35, 0.6),
+    calm_idle=[("rest", 6.0), ("blink", 0.14), ("rest", 5.0), ("ruffle", 0.3), ("rest", 4.0),
+               ("blink", 0.14), ("rest", 2.0)],
+    calm_working=[("w1", 0.5), ("w2", 0.5)],
+    calm_waiting=[("alert", 1.4), ("alertShut", 1.0)],
 )
 
 # --------------------------------------------------------------------------
-# Claude — the chunky, stubby-legged Claude Code critter. Its working
-# sparkle turns like Claude Code's own spinner.
+# Claude — Clawd, Claude Code's own mascot, scaled from the CLI's pixel art
+# (its welcome-screen Clawd and the "Clawd cooking" scene): a wide, squat
+# body with one-pixel-wide eyes set in from each edge, stubby arms at
+# mid-height and four legs in two pairs at the body's edges. The moves are
+# the CLI's own vocabulary: glance left/right (its `look`), blink and wink,
+# tap one pair of feet then the other (`tap` / `waddle`), throw both arms up
+# (`jump` / `celebrate`), and raise one arm (`one-up`).
 
-claude_rest = F(
-    "..............",
-    "..............",
-    "..............",
-    "..............",
-    "..##########..",
-    "..##.####.##..",
-    "..##.####.##..",
-    "##############",
-    "..##########..",
-    "...#.#..#.#...",
-    "...#.#..#.#...",
-    "..............",
-    "..............",
-    "..............",
+CLAWD_EYES = (4, 9)  # columns; 2 tall, rows 5-6
+
+
+def clawd(arms="down", eyes="open", feet="both", crouch=False):
+    g = [list("." * W) for _ in range(H)]
+    for r in range(4, 10):  # body: 10 wide, 6 tall
+        for c in range(2, 12):
+            g[r][c] = "#"
+    arm_rows = {"down": ((7, 8), (7, 8)), "up": ((5, 6), (5, 6)), "one-up": ((7, 8), (5, 6))}[arms]
+    for side, rows_ in zip(((0, 1), (12, 13)), arm_rows):
+        for r in rows_:
+            for c in side:
+                g[r][c] = "#"
+    # The CLI's glance also lifts the eyes a row; at 14px that notches the
+    # head's outline, so ours only slide sideways.
+    dx, top = {"open": (0, 5), "left": (-1, 5), "right": (1, 5)}.get(eyes, (0, 5))
+    for i, c in enumerate(CLAWD_EYES):
+        col = c + dx
+        closed = eyes == "closed" or (eyes == "wink" and i == 1)
+        if closed:
+            g[6][col] = "+"  # a lid line where the eye was
+        else:
+            g[top][col] = "."
+            g[top + 1][col] = "."
+    pairs = {"both": ((2, 4), (9, 11)), "left": ((2, 4),), "right": ((9, 11),)}[feet]
+    lifted = {"both": (), "left": (9, 11), "right": (2, 4)}[feet]
+    for pair in pairs:
+        for c in pair:
+            g[10][c] = "#"
+            g[11][c] = "#"
+    for c in lifted:  # the lifted pair, tucked up to a stub
+        g[10][c] = "#"
+    f = ["".join(r) for r in g]
+    return shift(f, dy=1) if crouch else f
+
+
+claude_rest = clawd()
+claude_frames = dict(
+    rest=claude_rest,
+    blink=clawd(eyes="closed"),
+    wink=clawd(eyes="wink"),
+    lookL=clawd(eyes="left"),
+    lookR=clawd(eyes="right"),
+    up=clawd(arms="up"),
+    oneUp=clawd(arms="one-up"),
+    tapL=clawd(feet="left"),
+    tapR=clawd(feet="right"),
+    tapLookL=clawd(feet="left", eyes="left"),
+    tapLookR=clawd(feet="right", eyes="right"),
+    crouch=clawd(crouch=True),
+    # Needs you: "!" on the left, the right arm up (the CLI's `one-up`).
+    alert=bang(clawd(arms="one-up"), 0, top=0),
+    alertDown=bang(clawd(), 0, top=0),
 )
-claude_blink = rows(claude_rest, {5: "..##########.."})
-claude_look_l = rows(claude_rest, {5: "..#.####.###..", 6: "..#.####.###.."})
-claude_look_r = rows(claude_rest, {5: "..###.####.#..", 6: "..###.####.#.."})
-claude_legs_a = {9: "...#.#..#.#...", 10: "...#....#....."}
-claude_legs_b = {9: "...#.#..#.#...", 10: ".....#....#..."}
-# Arms are stubs on body row 4 of 5; a raised stub moves up a row, still attached.
-claude_arm_l_up = {6: "####.####.##..", 7: "..############"}
-claude_arm_r_up = {6: "..##.####.####", 7: "############.."}
-claude_arms_up = {6: "####.####.####", 7: "..##########.."}
-spark_plus = {(0, 6): ".#.", (1, 6): "###", (2, 6): ".#."}
-spark_x = {(0, 6): "#.#", (1, 6): ".#.", (2, 6): "#.#"}
-spark_dim = {(0, 6): ".+.", (1, 6): "+#+", (2, 6): ".+."}
-
-
-def claude(*edits_rows, spark=None):
-    f = claude_rest
-    for e in edits_rows:
-        f = rows(f, e)
-    if spark:
-        f = over(f, spark)
-    return f
-
-
-claude_w1 = claude(claude_legs_a, claude_arm_l_up, spark=spark_plus)
-claude_w2 = claude(spark=spark_dim)
-claude_w3 = claude(claude_legs_b, claude_arm_r_up, spark=spark_x)
-claude_w4 = claude(spark=spark_dim)
-claude_stretch = claude(claude_arms_up)
-# Waiting: the right arm waves overhead, "!" on the left.
-claude_wave_a = bang(claude({4: "..##########.#", 5: "..##.####.##.#", 6: "..##.####.###.",
-                             7: "############.."}), 0, top=0)
-claude_wave_b = bang(claude(claude_arm_r_up), 0, top=0)
 
 character(
     "claude", "Claude",
-    frames=dict(rest=claude_rest, blink=claude_blink, lookL=claude_look_l, lookR=claude_look_r,
-                stretch=claude_stretch, w1=claude_w1, w2=claude_w2, w3=claude_w3, w4=claude_w4,
-                waveA=claude_wave_a, waveB=claude_wave_b),
-    idle=[("rest", 2.5), ("blink", 0.12), ("rest", 1.9), ("lookL", 0.8), ("rest", 0.25),
-          ("lookR", 0.8), ("rest", 1.6), ("stretch", 0.4), ("rest", 0.4)],
-    working=[("w1", 0.12), ("w2", 0.12), ("w3", 0.12), ("w4", 0.12)],
-    working_motion=motion("hop", 0.5, 0.24),
-    waiting=[("waveA", 0.26), ("waveB", 0.26)],
-    waiting_motion=motion("hop", 0.3, 0.52),
+    frames=claude_frames,
+    # Lively: the CLI's moves at near its own pace.
+    idle=[("rest", 2.4), ("blink", 0.12), ("rest", 1.6), ("lookR", 0.6), ("lookL", 0.6), ("rest", 1.8),
+          ("wink", 0.3), ("rest", 1.0)],
+    working=[("tapL", 0.18), ("tapR", 0.18), ("tapL", 0.18), ("tapR", 0.18), ("crouch", 0.12),
+             ("up", 0.22), ("rest", 0.12)],
+    waiting=[("alert", 0.3), ("alertDown", 0.3)],
+    # Calm: a slow foot-tap with the odd glance; the "!" holds.
+    calm_idle=[("rest", 6.0), ("blink", 0.14), ("rest", 5.0), ("lookR", 1.2), ("rest", 0.3),
+               ("lookL", 1.2), ("rest", 3.5), ("blink", 0.14), ("rest", 1.5)],
+    calm_working=[("tapL", 0.5), ("tapR", 0.5), ("tapL", 0.5), ("tapR", 0.5),
+                  ("tapLookR", 0.5), ("tapR", 0.5), ("tapLookL", 0.5), ("tapR", 0.5)],
+    calm_waiting=[("alert", 1.4), ("alertDown", 1.0)],
 )
 
 # --------------------------------------------------------------------------
-# Cat — sits with its tail curled; kneads while working.
-
-cat_rest = F(
-    "..............",
-    "...#....#.....",
-    "...##..##.....",
-    "...######.....",
-    "...#.##.#.....",
-    "...##++##....#",
-    "....####.....#",
-    "...#######..#.",
-    "..#########.#.",
-    "..##########..",
-    "..#########...",
-    "...##..##.....",
-    "...##..##.....",
-    "..............",
-)
-cat_blink = over(cat_rest, {(4, 4): "+", (4, 7): "+"})
-cat_ear = rows(cat_rest, {1: "....#...#.....", 2: "...##..##....."})
-cat_tail_up = rows(cat_rest, {5: "...##++##...#.", 6: "....####....#.", 7: "...#######..#.", 8: "..#########.#."})
-cat_tail_out = rows(cat_rest, {5: "...##++##.....", 6: "....####......", 7: "...#######...#",
-                               8: "..#########.#."})
-cat_paw_l = {11: "...##..##.....", 12: "........##...."}
-cat_paw_r = {11: "...##..##.....", 12: "...##........."}
-cat_w1 = rows(cat_rest, cat_paw_l)
-cat_w2 = rows(cat_tail_up, cat_paw_r)
-cat_w3 = rows(cat_tail_out, cat_paw_l)
-cat_w4 = rows(cat_tail_up, cat_paw_r)
-cat_meow = rows(cat_tail_up, {6: "....#..#....#."})
-cat_alert = bang(cat_meow, 0)
-cat_alert_shut = bang(cat_tail_up, 0)
-
-character(
-    "cat", "Cat",
-    frames=dict(rest=cat_rest, blink=cat_blink, ear=cat_ear, tailUp=cat_tail_up, tailOut=cat_tail_out,
-                w1=cat_w1, w2=cat_w2, w3=cat_w3, w4=cat_w4, alert=cat_alert, alertShut=cat_alert_shut),
-    idle=[("rest", 2.4), ("blink", 0.14), ("rest", 1.8), ("ear", 0.12), ("rest", 0.1), ("ear", 0.12),
-          ("rest", 1.6), ("tailUp", 0.5), ("rest", 0.4), ("tailOut", 0.5), ("rest", 1.2)],
-    working=[("w1", 0.13), ("w2", 0.13), ("w3", 0.13), ("w4", 0.13)],
-    working_motion=motion("hop", 0.25, 0.26),
-    waiting=[("alert", 0.3), ("alertShut", 0.3), ("alert", 0.3), ("tailUp", 0.5)],
-)
-
-# --------------------------------------------------------------------------
-# Robot — antenna light, visor eyes, a chest panel that chases while busy.
-
-robot_rest = F(
-    "......++......",
-    "......##......",
-    "....######....",
-    "...########...",
-    "...#..##..#...",
-    "...########...",
-    "...##++++##...",
-    "....######....",
-    "..##########..",
-    "#.##########.#",
-    "#.###++++###.#",
-    "..##########..",
-    "...##....##...",
-    "...###...###..",
-)
-robot_lit = over(robot_rest, {(0, 6): "##"})
-robot_blink = rows(robot_rest, {4: "...########..."})
-robot_blink = over(robot_blink, {(4, 4): "++", (4, 8): "++"})
-robot_look = over(robot_rest, {(4, 5): "+", (4, 9): "+"})
+# Cat — sits facing you, tail curled round its side. One clean silhouette:
+# pointed ears, a broad head, a round body; motion is ears, eyes and tail.
 
 
-def robot_panel(f, lit):
-    panel = "".join("#" if i == lit else "+" for i in range(4))
-    return over(f, {(10, 5): panel})
-
-
-def robot_arms(f, up):
-    if up == "l":
-        return rows(f, {8: "#.##########..", 9: "#.##########.#", 10: f[10][:12] + ".#"})
-    if up == "r":
-        return rows(f, {8: "..##########.#", 9: "#.##########.#", 10: "#." + f[10][2:]})
+def cat_frame(eyes="open", ear=None, tail="down", paws="both", mouth=False):
+    f = F(
+        "..............",
+        "..#......#....",
+        "..##....##....",
+        "..########....",
+        ".##########...",
+        ".##.####.##...",
+        ".##.####.##...",
+        "..########....",
+        "...######.....",
+        "..########....",
+        "..########....",
+        "..########....",
+        "..########....",
+        "...##..##.....",
+    )
+    eye_cols = {"open": (3, 8), "left": (2, 7), "right": (4, 9)}.get(eyes, (3, 8))
+    if eyes != "open":
+        f = over(f, {(5, 3): "#", (6, 3): "#", (5, 8): "#", (6, 8): "#"})
+        if eyes == "closed":
+            f = over(f, {(6, 3): "+", (6, 8): "+"})
+        else:
+            for c in eye_cols:
+                f = over(f, {(5, c): "-", (6, c): "-"})
+    if mouth:
+        f = over(f, {(7, 5): "--"})
+    if ear == "flick":  # the right ear folds back for a beat
+        f = over(f, {(1, 9): "-", (2, 8): "-"})
+    tail_cells = {
+        "down": [(12, 10), (12, 11), (11, 12), (10, 12), (9, 12)],
+        "up": [(12, 10), (12, 11), (11, 12), (10, 12), (9, 12), (8, 12), (7, 11)],
+        "out": [(12, 10), (12, 11), (12, 12), (11, 13), (10, 13)],
+    }[tail]
+    for r, c in tail_cells:
+        f = over(f, {(r, c): "#"})
+    if paws == "left":  # one forepaw lifted (kneading)
+        f = over(f, {(13, 3): "--", (12, 3): "+"})
+    elif paws == "right":
+        f = over(f, {(13, 7): "--", (12, 7): "+"})
     return f
 
 
-robot_legs_b = {12: "...##....##...", 13: "..###....###.."}
-robot_w1 = robot_arms(robot_panel(robot_lit, 0), "l")
-robot_w2 = rows(robot_panel(robot_rest, 1), robot_legs_b)
-robot_w3 = robot_arms(robot_panel(robot_lit, 2), "r")
-robot_w4 = rows(robot_panel(robot_rest, 3), robot_legs_b)
-robot_alert = bang(robot_arms(robot_lit, "l"), 13, top=0)
-robot_alert_shut = robot_arms(robot_rest, "l")
+cat_rest = cat_frame()
+cat_frames = dict(
+    rest=cat_rest,
+    blink=cat_frame(eyes="closed"),
+    ear=cat_frame(ear="flick"),
+    lookL=cat_frame(eyes="left"),
+    lookR=cat_frame(eyes="right"),
+    tailUp=cat_frame(tail="up"),
+    tailOut=cat_frame(tail="out"),
+    kneadL=cat_frame(paws="left", tail="up"),
+    kneadR=cat_frame(paws="right", tail="out"),
+    kneadL2=cat_frame(paws="left", tail="out"),
+    meow=bang(cat_frame(mouth=True, tail="up"), 12),
+    meowShut=bang(cat_frame(tail="up"), 12),
+)
 
 character(
-    "robot", "Robot",
-    frames=dict(rest=robot_rest, lit=robot_lit, blink=robot_blink, look=robot_look,
-                w1=robot_w1, w2=robot_w2, w3=robot_w3, w4=robot_w4,
-                alert=robot_alert, alertShut=robot_alert_shut),
-    idle=[("rest", 1.6), ("lit", 0.5), ("rest", 1.4), ("blink", 0.14), ("rest", 1.2), ("lit", 0.5),
-          ("rest", 0.9), ("look", 0.9), ("rest", 0.5)],
-    working=[("w1", 0.12), ("w2", 0.12), ("w3", 0.12), ("w4", 0.12)],
-    working_motion=motion("hop", 0.3, 0.24),
-    waiting=[("alert", 0.25), ("alertShut", 0.25)],
+    "cat", "Cat",
+    frames=cat_frames,
+    idle=[("rest", 2.4), ("blink", 0.14), ("rest", 1.8), ("ear", 0.14), ("rest", 0.1), ("ear", 0.14),
+          ("rest", 1.6), ("tailUp", 0.5), ("rest", 0.4), ("tailOut", 0.5), ("rest", 1.2)],
+    working=[("kneadL", 0.14), ("kneadR", 0.14), ("kneadL2", 0.14), ("kneadR", 0.14)],
+    waiting=[("meow", 0.3), ("meowShut", 0.3), ("meow", 0.3), ("tailUp", 0.5)],
+    calm_idle=[("rest", 6.0), ("blink", 0.14), ("rest", 4.5), ("tailOut", 0.8), ("rest", 3.5),
+               ("lookR", 1.2), ("rest", 0.3), ("ear", 0.16), ("rest", 2.5)],
+    calm_working=[("kneadL", 0.5), ("kneadR", 0.5), ("kneadL2", 0.5), ("kneadR", 0.5)],
+    calm_waiting=[("meow", 1.4), ("meowShut", 1.0)],
 )
 
 # --------------------------------------------------------------------------
-# Octopus — eight-ish tentacles that ripple as it swims.
-
-octo_head = [
-    "..............",
-    ".....####.....",
-    "...########...",
-    "..##########..",
-    "..##########..",
-    "..##..##..##..",
-    "..##..##..##..",
-    "..##########..",
-    "..##########..",
-]
-OCTO_LEGS = [1, 3, 5, 8, 10, 12]
+# Robot — a screen-faced bot: hollow head with two square eyes, antenna
+# light, a compact body. Busy = the antenna blinks and the eyes scan.
 
 
-def octo(t, head=None, raised=False):
-    g = [list(r) for r in (head or octo_head)] + [list("." * W) for _ in range(5)]
-    for i, c in enumerate(OCTO_LEGS):
-        g[9][c] = "#"
-        for depth, row in enumerate((10, 11, 12)):
-            wave = [0, 1, 0, -1][(t + i + depth) % 4] if depth else 0
-            col = c + wave
-            if 0 <= col < W:
-                g[row][col] = "#" if depth < 2 else "+"
+def robot_frame(eyes="open", lit=False, legs="both"):
+    f = F(
+        "......++......",
+        "......##......",
+        "..##########..",
+        "..#........#..",
+        "..#.##..##.#..",
+        "..#.##..##.#..",
+        "..#........#..",
+        "..##########..",
+        "......##......",
+        "..##########..",
+        "..#.######.#..",
+        "..#.######.#..",
+        "....##..##....",
+        "...###..###...",
+    )
+    if lit:
+        f = over(f, {(0, 6): "##"})
+    eye_rows = {
+        "open": "..#.##..##.#..",
+        "closed": "..#........#..",
+        "left": "..#.#...#..#..",
+        "right": "..#..#...#.#..",
+    }
+    f = rows(f, {4: eye_rows[eyes], 5: eye_rows[eyes] if eyes != "closed" else "..#.++..++.#.."})
+    if legs == "left":
+        f = rows(f, {12: "....##..##....", 13: "...###...##..."})
+    elif legs == "right":
+        f = rows(f, {12: "....##..##....", 13: "....##..###..."})
+    return f
+
+
+robot_rest = robot_frame()
+robot_frames = dict(
+    rest=robot_rest,
+    lit=robot_frame(lit=True),
+    blink=robot_frame(eyes="closed"),
+    lookL=robot_frame(eyes="left"),
+    lookR=robot_frame(eyes="right"),
+    w1=robot_frame(eyes="left", lit=True),
+    w2=robot_frame(eyes="open"),
+    w3=robot_frame(eyes="right", lit=True),
+    w4=robot_frame(eyes="open", legs="left"),
+    # Needs you: "!" beside it while the antenna light blinks.
+    alert=bang(robot_frame(lit=True), 13, top=0),
+    alertDim=bang(robot_frame(), 13, top=0),
+)
+
+character(
+    "robot", "Robot",
+    frames=robot_frames,
+    idle=[("rest", 1.6), ("lit", 0.5), ("rest", 1.4), ("blink", 0.14), ("rest", 1.2), ("lit", 0.5),
+          ("rest", 0.9), ("lookL", 0.6), ("lookR", 0.6), ("rest", 0.5)],
+    working=[("w1", 0.15), ("w2", 0.15), ("w3", 0.15), ("w4", 0.15)],
+    waiting=[("alert", 0.25), ("alertDim", 0.25)],
+    calm_idle=[("rest", 6.0), ("blink", 0.14), ("rest", 4.0), ("lit", 0.8), ("rest", 3.5),
+               ("lookR", 1.2), ("rest", 0.3), ("lookL", 1.2), ("rest", 2.0)],
+    calm_working=[("w1", 0.6), ("w2", 0.6), ("w3", 0.6), ("w2", 0.6)],
+    calm_waiting=[("alert", 1.4), ("alertDim", 1.0)],
+)
+
+# --------------------------------------------------------------------------
+# Octopus — a tall bulb of a head over a skirt of tentacles that curl out
+# at the tips (the Ghost is a dome with a hem; this is all arms).
+
+
+def octo_frame(eyes="open", curl=0, raised=False):
+    head = [
+        "..............",
+        ".....####.....",
+        "....######....",
+        "...########...",
+        "...########...",
+        "...#.####.#...",
+        "...#.####.#...",
+        "...########...",
+        "..##########..",
+    ]
+    if eyes == "closed":
+        head[5] = "...########..."
+        head[6] = "...#+####+#..."
+    # tentacles: rows 9-13; curl phases ripple the tips
+    legs = [
+        [".#.##.##.##.#.", "#..#..##..#..#", "##.#..#...#.##", "...##....##...", ".............."],
+        [".#.##.##.##.#.", "#..#..##..#..#", "#..#...#..#..#", "##.##...##.###", ".............."],
+        [".#.##.##.##.#.", ".#.#..##..#.#.", "#..#..#...#..#", "##..#....#..##", ".............."],
+    ][curl % 3]
     if raised:
-        for row in (9, 10, 11, 12):
-            g[row][1] = "."
-            g[row][12] = "."
-        for row, c in ((8, 1), (7, 0), (6, 0), (8, 12), (7, 13), (6, 13)):
-            g[row][c] = "#"
-    return F(*["".join(r) for r in g])
+        legs = [".#.##.##.##.#.", "...#..##..#...", "...#..#...#...", "...##....##...", ".............."]
+        head[7] = "#..########..#"
+        head[8] = "###########.##"
+    return F(*(head + legs))
 
 
-octo_blink_head = list(octo_head)
-octo_blink_head[5] = "..##########.."
-octo_look_head = list(octo_head)
-octo_look_head[6] = "..##+.##+.##.."
-octo_alert_head = list(octo_head)
+octo_rest = octo_frame()
+octo_frames = dict(
+    rest=octo_rest,
+    blink=octo_frame(eyes="closed"),
+    c1=octo_frame(curl=1),
+    c2=octo_frame(curl=2),
+    raised=bang(octo_frame(raised=True), 13, top=0),
+    raisedRest=bang(octo_rest, 13, top=0),
+)
 
 character(
     "octopus", "Octopus",
-    frames=dict(rest=octo(0), blink=octo(0, octo_blink_head), look=octo(0, octo_look_head),
-                c1=octo(1), c2=octo(2), c3=octo(3),
-                raisedA=bang(octo(0, raised=True), 13), raisedB=octo(2, raised=True)),
-    idle=[("rest", 2.6), ("blink", 0.14), ("rest", 1.8), ("look", 0.9), ("rest", 1.4),
-          ("c1", 0.18), ("c2", 0.18), ("rest", 0.8)],
+    frames=octo_frames,
+    idle=[("rest", 2.6), ("blink", 0.14), ("rest", 1.8), ("c1", 0.2), ("c2", 0.2), ("rest", 2.2)],
     idle_motion=motion("wave", 0.3, 3.0),
-    working=[("rest", 0.14), ("c1", 0.14), ("c2", 0.14), ("c3", 0.14)],
-    working_motion=motion("wave", 0.6, 1.12),
-    waiting=[("raisedA", 0.3), ("raisedB", 0.3)],
-    waiting_motion=motion("wave", 0.35, 0.6),
+    working=[("rest", 0.16), ("c1", 0.16), ("c2", 0.16), ("c1", 0.16)],
+    working_motion=motion("wave", 0.5, 1.28),
+    waiting=[("raised", 0.32), ("raisedRest", 0.32)],
+    calm_idle=[("rest", 6.0), ("blink", 0.14), ("rest", 5.0), ("c1", 0.5), ("rest", 4.0), ("blink", 0.14), ("rest", 2.0)],
+    calm_working=[("rest", 0.5), ("c1", 0.5), ("c2", 0.5), ("c1", 0.5)],
+    calm_waiting=[("raised", 1.4), ("raisedRest", 1.0)],
 )
 
 # --------------------------------------------------------------------------
@@ -537,73 +622,80 @@ character(
     working=[("crouch", 0.12), ("leap", 0.13), ("tuck", 0.12), ("leap", 0.13)],
     working_motion=motion("hop", 1.0, 0.5),
     waiting=[("alert", 0.3), ("alertShut", 0.3), ("alert", 0.3), ("rest", 0.5)],
+    calm_idle=[("rest", 6.0), ("blink", 0.14), ("rest", 5.0), ("puff", 0.5), ("rest", 4.0),
+               ("blink", 0.14), ("rest", 2.0)],
+    calm_working=[("puff", 0.5), ("rest", 0.4), ("tuck", 0.5), ("rest", 0.4), ("tongue", 0.25), ("rest", 0.45)],
+    calm_waiting=[("alert", 1.4), ("alertShut", 1.0)],
 )
 
 # --------------------------------------------------------------------------
-# Slime — a blob that squashes and stretches.
+# Slime — a droplet: pointed tip, round body, a glint of highlight and two
+# eyes. Busy = it wobbles (the tip sways, the body squashes a row).
 
-slime_rest = F(
-    "..............",
-    "..............",
-    "..............",
-    "......##......",
-    ".....####.....",
-    "....######....",
-    "...########...",
-    "..##########..",
-    "..##..##..##..",
-    ".###..##..###.",
-    ".############.",
-    "##############",
-    ".############.",
-    "..............",
+
+def slime_frame(eyes="open", lean=0, squash=False, stretch=False):
+    f = F(
+        "..............",
+        "......##......",
+        "......##......",
+        ".....####.....",
+        "....######....",
+        "...##+#####...",
+        "..##+#######..",
+        "..##########..",
+        ".###.####.###.",
+        ".###.####.###.",
+        ".############.",
+        ".############.",
+        "..##########..",
+        "....######....",
+    )
+    if eyes == "closed":
+        f = over(f, {(8, 4): "#", (8, 9): "#", (9, 4): "+", (9, 9): "+"})
+    elif eyes == "left":
+        f = over(f, {(8, 4): "#", (9, 4): "#", (8, 9): "#", (9, 9): "#", (8, 3): "-", (9, 3): "-", (8, 8): "-", (9, 8): "-"})
+    elif eyes == "right":
+        f = over(f, {(8, 4): "#", (9, 4): "#", (8, 9): "#", (9, 9): "#", (8, 5): "-", (9, 5): "-", (8, 10): "-", (9, 10): "-"})
+    if lean:
+        top = shift(F(*(f[:5] + ["." * W] * 9)), dx=lean)
+        f = top[:5] + f[5:]
+    if squash:
+        f = shift(f, dy=1)
+        f = rows(f, {13: "..##########.."})
+        f = over(f, {(12, 0): "#", (12, 13): "#"})
+    if stretch:
+        f = shift(f, dy=-1)
+        f = rows(f, {12: "...########...", 13: "..............", 11: "..##########.."})
+    return f
+
+
+slime_rest = slime_frame()
+slime_frames = dict(
+    rest=slime_rest,
+    blink=slime_frame(eyes="closed"),
+    lookL=slime_frame(eyes="left"),
+    lookR=slime_frame(eyes="right"),
+    leanL=slime_frame(lean=-1),
+    leanR=slime_frame(lean=1),
+    squash=slime_frame(squash=True),
+    stretch=slime_frame(stretch=True),
+    alert=bang(slime_frame(stretch=True), 12, top=0),
+    alertRest=bang(slime_rest, 12, top=0),
 )
-slime_blink = rows(slime_rest, {8: "..##########..", 9: ".###++##++###."})
-slime_squash = F(
-    "..............",
-    "..............",
-    "..............",
-    "..............",
-    "..............",
-    "......##......",
-    "....######....",
-    "..##########..",
-    ".###..##..###.",
-    ".###..##..###.",
-    "##############",
-    "##############",
-    "##############",
-    "..............",
-)
-slime_stretch = F(
-    "..............",
-    "......##......",
-    ".....####.....",
-    ".....####.....",
-    "....######....",
-    "....######....",
-    "...########...",
-    "...#..##..#...",
-    "...#..##..#...",
-    "...########...",
-    "..##########..",
-    "..##########..",
-    "...########...",
-    "..............",
-)
-slime_alert = bang(slime_stretch, 12, top=0)
-slime_alert_shut = slime_rest
 
 character(
     "slime", "Slime",
-    frames=dict(rest=slime_rest, blink=slime_blink, squash=slime_squash, stretch=slime_stretch,
-                alert=slime_alert, alertShut=slime_alert_shut),
+    frames=slime_frames,
     idle=[("rest", 2.4), ("blink", 0.14), ("rest", 2.0), ("squash", 0.16), ("rest", 0.16),
           ("squash", 0.16), ("rest", 1.6)],
     working=[("squash", 0.12), ("stretch", 0.14), ("rest", 0.12), ("stretch", 0.14)],
     working_motion=motion("hop", 0.7, 0.52),
-    waiting=[("alert", 0.3), ("alertShut", 0.3)],
+    waiting=[("alert", 0.3), ("alertRest", 0.3)],
     waiting_motion=motion("hop", 0.5, 0.6),
+    calm_idle=[("rest", 6.0), ("blink", 0.14), ("rest", 4.5), ("lookR", 1.2), ("rest", 0.3),
+               ("lookL", 1.2), ("rest", 3.0), ("blink", 0.14), ("rest", 1.5)],
+    calm_working=[("leanL", 0.6), ("rest", 0.4), ("leanR", 0.6), ("rest", 0.4)],
+    calm_waiting=[("alertRest", 1.4), ("alert", 1.0)],
 )
 
 
@@ -611,6 +703,11 @@ character(
 # Output
 
 ORDER = ["dino", "ghost", "crab", "duck", "claude", "cat", "robot", "octopus", "frog", "slime"]
+
+
+STATES = ("idle", "working", "waiting", "calm_idle", "calm_working", "calm_waiting")
+SWIFT_STATE = {"idle": "idle", "working": "working", "waiting": "waiting",
+               "calm_idle": "calmIdle", "calm_working": "calmWorking", "calm_waiting": "calmWaiting"}
 
 
 def swift_number(x):
@@ -634,7 +731,7 @@ def emit_swift():
         ch = CHARACTERS[name]
         # One entry per distinct picture (frames drawn the same share it).
         used, index, by_content = [], {}, {}
-        for state in ("idle", "working", "waiting"):
+        for state in STATES:
             for frame_name, _ in ch[state][0]:
                 key = tuple(ch["frames"][frame_name])
                 if key not in by_content:
@@ -652,7 +749,7 @@ def emit_swift():
                 out.append(f'                "{r}"{comma}')
             out.append("            ),")
         out.append("        ],")
-        for state in ("idle", "working", "waiting"):
+        for state in STATES:
             seq, mot = ch[state]
             steps = ", ".join(f"({index[n]}, {swift_number(d)})" for n, d in seq)
             if mot:
@@ -660,8 +757,8 @@ def emit_swift():
                      f"amplitude: {swift_number(mot['amplitude'])}, period: {swift_number(mot['period'])})")
             else:
                 m = "nil"
-            comma = "," if state != "waiting" else ""
-            out.append(f"        {state}: PixelSequence(steps: [{steps}], motion: {m}){comma}")
+            comma = "," if state != STATES[-1] else ""
+            out.append(f"        {SWIFT_STATE[state]}: PixelSequence(steps: [{steps}], motion: {m}){comma}")
         out.append("    )")
         out.append("")
     out[-1] = "}"
