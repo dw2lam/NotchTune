@@ -105,26 +105,84 @@ h1, h2, p, figure { margin: 0; }
   background:
     radial-gradient(42% 120% at 50% 0%, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.035) 55%, transparent 78%);
 }
-/* a faint floor under shots that sit rather than hang */
-.reflect { -webkit-box-reflect: below 2px linear-gradient(transparent 90%, rgba(255, 255, 255, 0.07)); }
+/* a dark card resting on a light page */
+.lift { border-radius: 22px; filter: drop-shadow(0 28px 36px rgba(0, 0, 0, 0.16)) drop-shadow(0 6px 12px rgba(0, 0, 0, 0.1)); }
 
 .crop { max-width: 100%; min-width: 0; }
 
 /* ---------- Hero ---------- */
 
-.hero { position: relative; padding-top: var(--nav-h); }
-/* light from the top of the screen, behind the island's glass */
-.hero::before {
-  content: ""; position: absolute; top: var(--nav-h); left: 50%; transform: translateX(-50%);
-  width: min(1200px, 100%); height: 560px; pointer-events: none;
-  background: radial-gradient(44% 70% at 50% 0%, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.03) 55%, transparent 76%);
+.hero { padding-top: calc(var(--nav-h) + clamp(28px, 4.5vh, 56px)); text-align: center; }
+.hero-title { margin-bottom: clamp(28px, 4vh, 48px); }
+.hero-copy { margin-top: clamp(40px, 5vw, 64px); }
+.hero-copy .lede { margin: 0 auto; max-width: 27em; }
+.hero-copy .cta { justify-content: center; }
+
+/* ---------- The MacBook: a 14-inch MacBook Pro, straight on ----------
+   Sized so the whole machine fits under the headline on a laptop screen.
+   The lid is 96.5% of the width, the screen 3024 x 1964 behind a thin
+   black bezel, and --pt is one macOS point (the screen is 1512 pt wide). */
+
+.mbp {
+  position: relative; margin: 0 auto;
+  width: min(1040px, 100%, calc((100svh - var(--nav-h) - 170px) * 1.47));
+  container-type: inline-size;
 }
-.hero-shot { position: relative; display: flex; justify-content: center; }
-.hero-copy {
-  position: relative; display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  column-gap: 48px; align-items: end; margin-top: clamp(56px, 7vw, 104px);
+.mbp-lid {
+  position: relative; width: 96.5cqw; margin: 0 auto;
+  padding: 1.5cqw 1.57cqw 2.9cqw;
+  border-radius: 2.6cqw 2.6cqw 0.9cqw 0.9cqw;
+  background: #050506;
+  /* the aluminium rim around the glass, and a soft shade beneath */
+  box-shadow: 0 0 0 0.18cqw #8e9095, 0 0 0 0.3cqw #2a2b2e, 0 2cqw 6cqw rgba(0, 0, 0, 0.6);
 }
-.hero-side .lede { margin-top: 0; }
+.mbp-screen {
+  --pt: calc(93.36cqw / 1512);
+  position: relative; aspect-ratio: 3024 / 1964; overflow: hidden;
+  border-radius: 1.2cqw 1.2cqw 0 0;
+  background: #0b1418;
+  /* keep the captures crisp while the lid moves */
+  isolation: isolate;
+}
+.mbp-wall { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.mbp-menubar {
+  position: absolute; inset: 0 0 auto 0; height: calc(var(--pt) * 34);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 calc(var(--pt) * 16) 0 calc(var(--pt) * 20);
+  color: rgba(255, 255, 255, 0.92);
+  font: 500 calc(var(--pt) * 13) / 1 var(--font); letter-spacing: 0;
+  text-shadow: 0 0 calc(var(--pt) * 6) rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+.mbp-menu, .mbp-status { display: flex; align-items: center; gap: calc(var(--pt) * 18); }
+.mbp-menu b { font-weight: 700; }
+.mbp-status { gap: calc(var(--pt) * 14); }
+.mbp-battery { width: calc(var(--pt) * 24); height: calc(var(--pt) * 12); }
+.mbp-wifi { width: calc(var(--pt) * 16); height: calc(var(--pt) * 12); }
+.mbp-notch {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: calc(var(--pt) * 188); height: calc(var(--pt) * 32);
+  border-radius: 0 0 calc(var(--pt) * 9) calc(var(--pt) * 9);
+  background: #000;
+}
+.mbp-pill, .mbp-island {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%); height: auto;
+}
+.mbp-pill { width: calc(var(--pt) * 468); }
+.mbp-island { width: calc(var(--pt) * 650); }
+/* the bottom case: a thin slab a little wider than the lid, with the
+   scoop you open it by */
+.mbp-base {
+  position: relative; width: 100cqw; height: 1.9cqw; margin-top: -0.2cqw;
+  border-radius: 0.3cqw 0.3cqw 40% 40% / 0.3cqw 0.3cqw 100% 100%;
+  background: linear-gradient(#d9dadd, #b7b9bd 40%, #8f9196 75%, #55565a);
+  box-shadow: inset 0 0.08cqw 0 rgba(255, 255, 255, 0.85), 0 1.2cqw 2.4cqw rgba(0, 0, 0, 0.55);
+}
+.mbp-base::before {
+  content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 13cqw; height: 0.62cqw; border-radius: 0 0 0.9cqw 0.9cqw;
+  background: linear-gradient(#6d6f73, #a3a5a9);
+}
 
 /* ---------- Features ---------- */
 
@@ -152,6 +210,14 @@ h1, h2, p, figure { margin: 0; }
 /* meetings: the pill, then the banner it opens into */
 .meeting { display: flex; flex-direction: column; gap: 40px; width: min(650px, 100%); }
 .meeting .edge { min-height: 88px; }
+
+/* ---------- Bands: black, and Apple's light grey ---------- */
+
+.band { padding-bottom: var(--sec); }
+.band-light {
+  --text: #1d1d1f; --sub: #6e6e73; --dim: #6e6e73; --link: #0066cc; --rule: rgba(0, 0, 0, 0.12);
+  background: #f5f5f7; color: var(--text); color-scheme: light;
+}
 
 /* ---------- Download ---------- */
 
@@ -181,11 +247,20 @@ h1, h2, p, figure { margin: 0; }
 .js .feature-stage.reveal.in { transform: none; }
 .js .state.reveal:nth-child(2) { transition-delay: 0.08s; }
 .js .state.reveal:nth-child(3) { transition-delay: 0.16s; }
-/* the island opens down out of the notch */
+/* the MacBook arrives, Claude works in the closed notch for a beat, and
+   then the island opens down out of it */
 @media (prefers-reduced-motion: no-preference) {
-  .js .hero-shot .shot { animation: open-down 0.9s var(--ease) 0.1s both; }
+  .js .hero-title { animation: rise 0.9s var(--ease) both; }
+  .js .mbp { animation: rise 1.1s var(--ease) 0.12s both; }
+  .js .hero-copy { animation: rise 1.1s var(--ease) 0.3s both; }
+  .js .mbp-island { animation: open-down 0.85s var(--ease) 1.5s both; }
 }
-@keyframes open-down { from { clip-path: inset(0 8% 100% 8% round 0 0 22px 22px); } to { clip-path: inset(0 0 0 0 round 0); } }
+@keyframes rise { from { opacity: 0; transform: translateY(32px); } to { opacity: 1; transform: none; } }
+@keyframes open-down {
+  from { opacity: 0; clip-path: inset(0 14% 89% 14% round 0 0 calc(var(--pt) * 14) calc(var(--pt) * 14)); }
+  22% { opacity: 1; }
+  to { opacity: 1; clip-path: inset(0 0 0 0 round 0 0 calc(var(--pt) * 20) calc(var(--pt) * 20)); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .js .reveal, .js .feature-stage.reveal { opacity: 1; transform: none; transition: none; }
@@ -198,7 +273,6 @@ h1, h2, p, figure { margin: 0; }
   .feature-in { display: block; }
   .feature-stage, .feature-flip .feature-stage { justify-content: flex-start; margin-top: 56px; }
   .feature-wide .feature-text { padding-top: 0; }
-  .hero-copy { grid-template-columns: minmax(0, 1fr); row-gap: 24px; }
   .state { grid-template-columns: minmax(0, 1fr); }
   .state-name { padding-bottom: 20px; }
   .state .edge { justify-content: flex-start; background: radial-gradient(60% 120% at 30% 0%, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.035) 55%, transparent 78%); }
@@ -232,9 +306,18 @@ h1, h2, p, figure { margin: 0; }
   }
   /* drawn at 0.9 here, so the Sync row fits a phone */
   .feature-wide .shot-settings { width: 812px; }
-  .reflect { -webkit-box-reflect: none; }
-  .hero-shot { justify-content: flex-start; padding-left: var(--pad); }
-  .hero-shot .crop { width: calc(100% + 0px); }
   .meeting { gap: 28px; }
   .cta .btn { flex: 1 1 100%; justify-content: center; }
+  /* on the light page a dark shot fading out reads as a smear, so there the
+     window runs to the edges of the phone instead, and the Settings window
+     runs into the section below */
+  .band-light .crop {
+    flex: none; width: calc(100% + 2 * var(--pad)); max-width: none;
+    margin: -48px calc(-1 * var(--pad)); padding-block: 48px;
+    -webkit-mask-image: none; mask-image: none;
+  }
+  .band-light .crop-cut { height: calc(var(--h) + 48px); margin-bottom: 0; padding-bottom: 0; }
+  .band-light .crop .shot { margin-left: calc(var(--pad) - var(--x, 0px)); }
+  .band-light .crop-to .shot { margin-left: min(var(--pad), calc(100% - var(--to))); }
+  .band-light:has(.crop-cut) { padding-bottom: 0; }
 }

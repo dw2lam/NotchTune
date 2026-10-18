@@ -7,8 +7,8 @@ export const SHOTS = {
   'pill-waiting': { w: 488, h: 38 },
   'pill-finished': { w: 492, h: 38 },
   'pill-meeting': { w: 464, h: 38 },
-  summary: { w: 550, h: 172 },
-  player: { w: 650, h: 203 },
+  summary: { w: 521, h: 171 },
+  player: { w: 621, h: 202 },
   banner: { w: 650, h: 75 },
   settings: { w: 902, h: 1212 },
 } as const;

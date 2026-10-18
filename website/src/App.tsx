@@ -17,12 +17,20 @@ export default function App() {
       <Nav />
       <main id="main">
         <span id="top" />
-        <Hero />
-        <Agents />
-        <Summaries />
-        <Music />
-        <Meetings />
-        <Personalization />
+        <div className="band">
+          <Hero />
+          <Agents />
+        </div>
+        <div className="band band-light">
+          <Summaries />
+          <Music />
+        </div>
+        <div className="band">
+          <Meetings />
+        </div>
+        <div className="band band-light">
+          <Personalization />
+        </div>
         <Download />
       </main>
       <Footer />

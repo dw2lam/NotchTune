@@ -10,7 +10,7 @@ export default function Summaries() {
     >
       <Crop>
         <Shot
-          name="summary" className="reflect"
+          name="summary" className="lift"
           alt="A completion card: Claude Code finished in web. Edited 4 files, tests passed, 3 minutes 12 seconds. The reply says checkout now loads in 1.2 seconds instead of 3.4, with Jump to Ghostty and Reply."
         />
       </Crop>

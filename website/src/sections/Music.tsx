@@ -8,9 +8,9 @@ export default function Music() {
       title="Music without switching apps."
       line="Spotify or Apple Music, right under the notch: the cover, the controls, and a two-finger swipe to skip."
     >
-      <Crop x={205}>
+      <Crop x={206}>
         <Shot
-          name="player" className="reflect"
+          name="player" className="lift"
           alt="The Music tab under the notch, playing Still Water by Juniper Coast at 1:21 of 3:56, with shuffle, previous, pause, next and repeat."
         />
       </Crop>
