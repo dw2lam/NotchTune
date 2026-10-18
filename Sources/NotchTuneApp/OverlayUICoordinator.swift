@@ -334,10 +334,18 @@ final class OverlayUICoordinator {
             return
         }
 
+        let trackChanged = appModel.musicNotificationTrack?.matchesMetadata(track) != true
+        let outcome = MusicTrackNotificationOutcome.resolve(
+            trackChanged: trackChanged,
+            fromSwipe: appModel.isTrackChangeFromSwipe,
+            musicOwnsPill: appModel.shouldShowCompactMusicView,
+            notchClosed: notchStatus == .closed
+        )
+        guard outcome != .ignore else { return }
+
         musicTrackNotificationTask?.cancel()
         ensureOverlayPanel()
 
-        let trackChanged = appModel.musicNotificationTrack?.matchesMetadata(track) != true
         var presentedTrack = track
         let liveTrack = appModel.playerManager.track
         if liveTrack.matchesMetadata(track), liveTrack.nsAlbumArt.size.width > 0 {
@@ -348,7 +356,7 @@ final class OverlayUICoordinator {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             appModel.musicNotificationTrack = presentedTrack
         }
-        if notchStatus == .closed, trackChanged {
+        if outcome == .showAndPop {
             notchPop()
         }
 

@@ -15,6 +15,8 @@ struct IslandDebugSnapshot {
 
 enum IslandDebugScenario: String, CaseIterable, Identifiable {
     case closed
+    /// Closed with no agent sessions, so a playing track owns the pill.
+    case closedMusic
     case closedNeedsApproval
     case sessionList
     case approvalCard
@@ -28,6 +30,8 @@ enum IslandDebugScenario: String, CaseIterable, Identifiable {
         switch self {
         case .closed:
             "Closed Notch"
+        case .closedMusic:
+            "Closed Notch · Music Only"
         case .closedNeedsApproval:
             "Closed Notch · Needs Approval"
         case .sessionList:
@@ -47,6 +51,8 @@ enum IslandDebugScenario: String, CaseIterable, Identifiable {
         switch self {
         case .closed:
             "Collapsed idle/running notch with live count and attention affordance."
+        case .closedMusic:
+            "Collapsed notch with no agents, so the compact music pill shows."
         case .closedNeedsApproval:
             "Collapsed notch widened into the amber needs-approval live activity."
         case .sessionList:
@@ -75,6 +81,18 @@ enum IslandDebugScenario: String, CaseIterable, Identifiable {
                 islandSurface: .sessionList(),
                 sessions: sessions,
                 selectedSessionID: sessions.first?.id
+            )
+
+        case .closedMusic:
+            return IslandDebugSnapshot(
+                title: title,
+                summary: summary,
+                previewHeight: 78,
+                notchStatus: .closed,
+                notchOpenReason: nil,
+                islandSurface: .sessionList(),
+                sessions: [],
+                selectedSessionID: nil
             )
 
         case .closedNeedsApproval:

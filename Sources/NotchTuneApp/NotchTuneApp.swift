@@ -112,6 +112,21 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                     model.showMusicSkipFeedback(skip == "previous" ? .previous : .next)
                 }
             }
+            // `NOTCHTUNE_HARNESS_MUSIC_TOGGLE_AT=<seconds>`: flip the Music tab
+            // between controls and library then (to capture the cross-fade).
+            if let raw = ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_MUSIC_TOGGLE_AT"],
+               let delay = TimeInterval(raw) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    NotificationCenter.default.post(name: .notchTuneHarnessToggleMusicLibrary, object: nil)
+                }
+            }
+            // `NOTCHTUNE_HARNESS_TRACK_NOTIFICATION=1`: present the track-change
+            // notification a skip produces, just after the skip arrows.
+            if ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_TRACK_NOTIFICATION"] == "1" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [model] in
+                    model.presentMusicTrackNotification(track: model.playerManager.track)
+                }
+            }
             if harnessLaunchConfiguration.seedsSampleTrack {
                 model.harnessMusicTintArt = AppModel.harnessSampleAlbumArt()
             }
@@ -153,9 +168,15 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                         HarnessHeadless.parkAppWindows()
                         HarnessArtifactRecorder.recordAppWindows(to: directoryURL)
                     }
-                    if ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_FILMSTRIP"] == "1",
-                       let directoryURL = harnessLaunchConfiguration.artifactDirectoryURL {
-                        HarnessArtifactRecorder.recordFilmstrip(model: model, directoryURL: directoryURL)
+                    if let directoryURL = harnessLaunchConfiguration.artifactDirectoryURL {
+                        switch ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_FILMSTRIP"] {
+                        case "1":
+                            HarnessArtifactRecorder.recordFilmstrip(model: model, directoryURL: directoryURL)
+                        case "music":
+                            HarnessArtifactRecorder.recordMusicFadeFilmstrip(model: model, directoryURL: directoryURL)
+                        default:
+                            break
+                        }
                     }
                 }
             }

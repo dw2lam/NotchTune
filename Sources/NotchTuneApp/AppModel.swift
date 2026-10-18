@@ -14,6 +14,8 @@ extension Notification.Name {
     static let notchTuneSelectSettingsTab = Notification.Name("notchTuneSelectSettingsTab")
     /// Harness: `object` = an onboarding step index to jump to.
     static let notchTuneSelectOnboardingStep = Notification.Name("notchTuneSelectOnboardingStep")
+    /// Harness-only: flips the Music tab between its controls and library.
+    static let notchTuneHarnessToggleMusicLibrary = Notification.Name("notchTuneHarnessToggleMusicLibrary")
 }
 
 @MainActor
@@ -2093,7 +2095,20 @@ final class AppModel {
     /// wing after a swipe.
     private(set) var musicSkipFeedback: MusicSkipFeedback?
 
+    /// When the last swipe-to-skip fired. The track change it causes is the
+    /// user's own doing: the arrows already answered it, so it neither pops
+    /// the notch nor swaps an agent pill over to the music surface.
+    private(set) var musicSwipeSkipAt: Date?
+
+    /// A swipe-to-skip within the last few seconds (players report the new
+    /// track a beat after the command, sometimes twice).
+    var isTrackChangeFromSwipe: Bool {
+        guard let musicSwipeSkipAt else { return false }
+        return Date().timeIntervalSince(musicSwipeSkipAt) < 4
+    }
+
     func showMusicSkipFeedback(_ direction: MusicSkipFeedback.Direction) {
+        musicSwipeSkipAt = Date()
         let feedback = MusicSkipFeedback(direction: direction)
         withAnimation(.easeOut(duration: 0.15)) { musicSkipFeedback = feedback }
         Task { @MainActor [weak self] in

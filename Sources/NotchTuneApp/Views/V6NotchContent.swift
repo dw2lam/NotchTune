@@ -317,6 +317,7 @@ struct V6ClosedPill: View {
                 Spacer(minLength: Self.innerGap)
 
                 LiveActivityTrailingView(activity: activity, metrics: metrics)
+                    .musicSkipSlot(height: height)
             }
             .padding(.horizontal, pad)
         }
@@ -361,6 +362,7 @@ struct V6ClosedPill: View {
                     Spacer(minLength: 0)
                     LiveActivityTrailingView(activity: activity, metrics: metrics)
                         .transition(.opacity)
+                        .musicSkipSlot(height: height)
                 }
                 .padding(.trailing, metrics.notchedClosedHorizontalPadding)
                 .frame(width: rightWing, alignment: .trailing)
@@ -412,10 +414,15 @@ struct V6ClosedPill: View {
 
                 Spacer(minLength: Self.innerGap)
 
-                if let rightSlot {
-                    V6RightSlotView(content: rightSlot)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                Group {
+                    if let rightSlot {
+                        V6RightSlotView(content: rightSlot)
+                            .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    } else {
+                        Color.clear.frame(width: 0, height: height)
+                    }
                 }
+                .musicSkipSlot(height: height)
             }
             .padding(.horizontal, pad)
         }
@@ -459,17 +466,19 @@ struct V6ClosedPill: View {
                 Color.clear
                     .frame(width: physicalNotchWidth)
 
-                if let rightSlot {
-                    HStack {
-                        Spacer(minLength: 0)
-                        V6RightSlotView(content: rightSlot)
+                Group {
+                    if let rightSlot {
+                        HStack {
+                            Spacer(minLength: 0)
+                            V6RightSlotView(content: rightSlot)
+                        }
+                    } else {
+                        Color.clear
                     }
-                    .padding(.trailing, metrics.notchedClosedHorizontalPadding)
-                    .frame(width: wingReserve)
-                } else {
-                    Color.clear
-                        .frame(width: wingReserve)
                 }
+                .musicSkipSlot(height: height)
+                .padding(.trailing, metrics.notchedClosedHorizontalPadding)
+                .frame(width: wingReserve)
             }
         }
         .frame(width: outer, height: height)
@@ -762,6 +771,7 @@ struct V6ClosedMusicSurface: View {
             .opacity(isNotification ? 0 : 1)
         }
         .frame(width: width, height: height, alignment: .leading)
+        .musicSkipSlot(height: height, trailingInset: metrics.notchedMusicTrailingPadding)
     }
 
     @ViewBuilder
@@ -823,6 +833,7 @@ struct V6ClosedMusicSurface: View {
                 MusicWaveformView(isPlaying: isPlaying && !isNotification, color: track.avgAlbumColor)
                     .opacity(isNotification ? 0 : 1)
             }
+            .musicSkipSlot(height: height)
 
             musicTrailingInset
         }
@@ -1166,42 +1177,203 @@ extension EnvironmentValues {
     }
 }
 
+private struct IslandMusicSkipKey: EnvironmentKey {
+    static let defaultValue: MusicSkipFeedback? = nil
+}
+
+extension EnvironmentValues {
+    /// The swipe-to-skip in progress on the closed pill, if any. Trailing
+    /// slots marked `musicSkipSlot` show the skip arrows in its place.
+    var islandMusicSkip: MusicSkipFeedback? {
+        get { self[IslandMusicSkipKey.self] }
+        set { self[IslandMusicSkipKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Marks the pill's trailing slot (timer, right slot, waveform): after a
+    /// swipe-to-skip its content fades out and the skip arrows fade in, in
+    /// the same spot inside the pill.
+    func musicSkipSlot(height: CGFloat, trailingInset: CGFloat = 0) -> some View {
+        modifier(MusicSkipSlotModifier(height: height, trailingInset: trailingInset))
+    }
+}
+
+private struct MusicSkipSlotModifier: ViewModifier {
+    let height: CGFloat
+    let trailingInset: CGFloat
+    @Environment(\.islandMusicSkip) private var skip
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(skip == nil ? 1 : 0)
+            .overlay(alignment: .trailing) {
+                if let skip {
+                    MusicSkipArrows(direction: skip.direction, height: height)
+                        .padding(.trailing, trailingInset)
+                        .id(skip.id)
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                }
+            }
+            .animation(.easeOut(duration: 0.16), value: skip?.id)
+    }
+}
+
 /// The player's skip glyph (⏩ / ⏪) after a swipe-to-skip, its two triangles
 /// lighting up in turn on a smooth eased wave in the direction the track
-/// went. Drawn over the closed pill's right wing (ink backing covers
-/// whatever sits there).
+/// went. Core Animation runs the wave (no per-frame SwiftUI work); it sits
+/// in the pill's trailing slot, so it has no backing of its own.
 struct MusicSkipArrows: View {
     let direction: MusicSkipFeedback.Direction
     let height: CGFloat
-    @Environment(\.islandChromeMetrics) private var metrics
 
     var body: some View {
-        let size = height * 0.34
-        TimelineView(.animation) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
-            HStack(spacing: -size * 0.18) {
-                ForEach(0..<2, id: \.self) { slot in
-                    // sin² is a naturally eased bump: soft in, soft out.
-                    let phase = (t * 1.25 - Double(slot) * 0.32).truncatingRemainder(dividingBy: 1)
-                    let bump = pow(sin(phase * .pi), 2)
-                    Image(systemName: "play.fill")
-                        .font(.system(size: size, weight: .bold))
-                        .foregroundStyle(V6Palette.paper.opacity(0.3 + 0.7 * bump))
-                        .offset(x: 1.5 * bump)
-                }
-            }
-            // ⏪ is ⏩ mirrored, which also runs the wave right → left.
-            .scaleEffect(x: direction == .next ? 1 : -1, y: 1)
-        }
-        .padding(.trailing, metrics.notchedClosedHorizontalPadding)
-        .frame(width: metrics.notchedClosedMinimumWingReserve + 8, height: height, alignment: .trailing)
-        .background(
-            UnevenRoundedRectangle(
-                bottomTrailingRadius: height / 2,
-                style: .continuous
+        let glyph = MusicSkipArrowsLayout(height: height)
+        MusicSkipArrowsLayerView(direction: direction, layout: glyph)
+            .frame(width: glyph.width, height: height)
+            .fixedSize()
+            .accessibilityElement()
+            .accessibilityLabel(direction == .next ? "Next track" : "Previous track")
+    }
+}
+
+struct MusicSkipArrowsLayout: Equatable {
+    let height: CGFloat
+    var glyphSize: CGFloat { height * 0.34 }
+    /// The triangles overlap slightly, like the player's ⏩.
+    var step: CGFloat { glyphSize * 0.82 }
+    var width: CGFloat { glyphSize + step + 2 }
+}
+
+private struct MusicSkipArrowsLayerView: NSViewRepresentable {
+    let direction: MusicSkipFeedback.Direction
+    let layout: MusicSkipArrowsLayout
+
+    func makeNSView(context: Context) -> MusicSkipArrowsNSView { MusicSkipArrowsNSView() }
+
+    func updateNSView(_ view: MusicSkipArrowsNSView, context: Context) {
+        view.configure(direction: direction, layout: layout)
+    }
+}
+
+final class MusicSkipArrowsNSView: NSView {
+    /// One full wave (s); slot 1 trails slot 0 by `lag` of it.
+    static let period: CFTimeInterval = 0.8
+    private static let lag = 0.32
+
+    private var triangles: [CALayer] = []
+    private var configured: (MusicSkipFeedback.Direction, MusicSkipArrowsLayout)?
+
+    override var isFlipped: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// Test seam.
+    var runningAnimationKeys: [Set<String>] { triangles.map { Set($0.animationKeys() ?? []) } }
+
+    func configure(direction: MusicSkipFeedback.Direction, layout: MusicSkipArrowsLayout) {
+        if let configured, configured.0 == direction, configured.1 == layout, !triangles.isEmpty { return }
+        configured = (direction, layout)
+        rebuild()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        if configured != nil { rebuild() }
+    }
+
+    private func rebuild() {
+        guard let (direction, layout) = configured, let host = layer else { return }
+        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+
+        triangles.forEach { $0.removeFromSuperlayer() }
+        triangles = []
+        // ⏪ is ⏩ mirrored, which also runs the wave right → left.
+        host.sublayerTransform = direction == .next
+            ? CATransform3DIdentity
+            : CATransform3DMakeAffineTransform(
+                CGAffineTransform(translationX: layout.width, y: 0).scaledBy(x: -1, y: 1)
             )
-            .fill(V6Palette.ink)
+
+        guard let image = Self.triangleImage(pointSize: layout.glyphSize, scale: scale) else { return }
+        let side = layout.glyphSize
+        let originY = (layout.height - side) / 2
+        let begin = host.convertTime(CACurrentMediaTime(), from: nil)
+        for slot in 0..<2 {
+            let triangle = CALayer()
+            triangle.contents = image
+            triangle.contentsGravity = .resizeAspect
+            triangle.contentsScale = scale
+            triangle.frame = CGRect(x: CGFloat(slot) * layout.step, y: originY, width: side, height: side)
+            triangle.opacity = 0.3
+            host.addSublayer(triangle)
+            triangles.append(triangle)
+
+            // sin² is a naturally eased bump: soft in, soft out.
+            let samples = 16
+            let bumps = (0...samples).map { index -> CGFloat in
+                let phase = Double(index) / Double(samples)
+                return CGFloat(pow(sin(phase * .pi), 2))
+            }
+            let glow = CAKeyframeAnimation(keyPath: "opacity")
+            glow.values = bumps.map { 0.3 + 0.7 * $0 }
+            let nudge = CAKeyframeAnimation(keyPath: "transform.translation.x")
+            nudge.values = bumps.map { 1.5 * $0 }
+            for animation in [glow, nudge] {
+                animation.duration = Self.period
+                animation.repeatCount = .infinity
+                animation.beginTime = begin
+                animation.timeOffset = Self.period * (1 - Double(slot) * Self.lag)
+                animation.isRemovedOnCompletion = false
+            }
+            triangle.add(glow, forKey: "glow")
+            triangle.add(nudge, forKey: "nudge")
+        }
+    }
+
+    @MainActor private static var imageCache: [String: CGImage] = [:]
+
+    @MainActor
+    private static func triangleImage(pointSize: CGFloat, scale: CGFloat) -> CGImage? {
+        let key = "\(pointSize)@\(scale)"
+        if let cached = imageCache[key] { return cached }
+        let configuration = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .bold)
+            .applying(.init(paletteColors: [NSColor(V6Palette.paper)]))
+        guard let symbol = NSImage(systemSymbolName: "play.fill", accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration) else { return nil }
+        let side = Int((pointSize * scale).rounded(.up))
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8,
+            samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
         )
-        .accessibilityLabel(direction == .next ? "Next track" : "Previous track")
+        guard let rep else { return nil }
+        rep.size = NSSize(width: pointSize, height: pointSize)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        // Fit the glyph's own aspect into the square, centred.
+        let glyph = symbol.size
+        let fit = min(pointSize / glyph.width, pointSize / glyph.height)
+        let drawn = NSSize(width: glyph.width * fit, height: glyph.height * fit)
+        symbol.draw(in: NSRect(
+            x: (pointSize - drawn.width) / 2, y: (pointSize - drawn.height) / 2,
+            width: drawn.width, height: drawn.height
+        ))
+        NSGraphicsContext.restoreGraphicsState()
+        let image = rep.cgImage
+        if imageCache.count > 16 { imageCache.removeAll() }
+        imageCache[key] = image
+        return image
     }
 }

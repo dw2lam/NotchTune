@@ -752,15 +752,9 @@ struct IslandPanelView: View {
                 .background(closedSurfaceWidthReader)
             }
         }
-        // Swipe-to-skip feedback: arrows ripple over the right wing.
-        .overlay(alignment: .trailing) {
-            if let feedback = model.musicSkipFeedback, !usesOpenedVisualState {
-                MusicSkipArrows(direction: feedback.direction, height: closedNotchHeight)
-                    .id(feedback.id)
-                    .transition(.opacity)
-                    .allowsHitTesting(false)
-            }
-        }
+        // Swipe-to-skip feedback: the pill's own trailing slot (timer, right
+        // slot, waveform) trades its content for the skip arrows.
+        .environment(\.islandMusicSkip, usesOpenedVisualState ? nil : model.musicSkipFeedback)
         .onPreferenceChange(MusicNotificationClipMetricsKey.self) { metrics in
             guard isShowingMusicNotification, metrics.width > 0 else { return }
             measuredMusicClipMetrics = metrics

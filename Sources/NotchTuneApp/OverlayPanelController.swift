@@ -700,29 +700,31 @@ final class OverlayPanelController {
               let model,
               model.notchStatus == .closed,
               !model.isOverlayDisplayFullscreen,
-              model.playerManager.isMusicEnabled,
-              !model.playerManager.track.isEmpty(),
-              isPointInClosedSurfaceArea(location),
-              model.playerManager.isRunning else {
+              isPointInClosedSurfaceArea(location) else {
             return
         }
 
-        // Any scrolling over a music-capable pill is a swipe, not a hover.
+        // Any scrolling over the pill is a swipe, not a hover: never let the
+        // dwell timer open the notch mid-swipe, music or not.
         cancelHoverOpenImmediately()
         hoverOpenSuppressedUntil = ProcessInfo.processInfo.systemUptime + Self.swipeHoverSuppression
 
-        guard abs(dx) > abs(dy) else { return }
+        guard model.playerManager.isMusicEnabled,
+              !model.playerManager.track.isEmpty(),
+              model.playerManager.isRunning,
+              abs(dx) > abs(dy) else { return }
 
         // Finger direction regardless of the natural-scrolling setting.
         musicSwipeTravel += inverted ? dx : -dx
         guard !musicSwipeFired, abs(musicSwipeTravel) >= Self.musicSwipeThreshold else { return }
         musicSwipeFired = true
+        // Feedback first: it marks the coming track change as the swipe's.
         if musicSwipeTravel < 0 {
-            model.playerManager.nextTrack()
             model.showMusicSkipFeedback(.next)
+            model.playerManager.nextTrack()
         } else {
-            model.playerManager.previousTrack()
             model.showMusicSkipFeedback(.previous)
+            model.playerManager.previousTrack()
         }
         performMusicHaptic(model)
     }

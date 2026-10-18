@@ -57,6 +57,30 @@ enum IslandAppearanceDisplayProfile: String, CaseIterable, Identifiable, Sendabl
 /// How much room the closed island takes. `regular` is the shipped v6 pill;
 /// `compact` trims the chrome (glyph, album art, paddings, wing reserve) so the
 /// pill hugs the physical notch / menu bar instead of standing proud of it.
+/// What a track change does to the closed notch.
+enum MusicTrackNotificationOutcome: Equatable, Sendable {
+    /// Leave the pill as it is.
+    case ignore
+    /// Show the new track on the music pill.
+    case show
+    /// Show it and pop the notch to draw the eye.
+    case showAndPop
+
+    static func resolve(
+        trackChanged: Bool,
+        fromSwipe: Bool,
+        musicOwnsPill: Bool,
+        notchClosed: Bool
+    ) -> MusicTrackNotificationOutcome {
+        if fromSwipe {
+            // The user is looking at the pill and the arrows answered the
+            // swipe: an agent pill stays put, a music pill just updates.
+            return musicOwnsPill ? .show : .ignore
+        }
+        return trackChanged && notchClosed ? .showAndPop : .show
+    }
+}
+
 struct MusicSkipFeedback: Equatable, Sendable {
     enum Direction: Sendable { case next, previous }
 
