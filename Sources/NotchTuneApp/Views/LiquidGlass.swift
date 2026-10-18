@@ -1,15 +1,6 @@
 import SwiftUI
 import AppKit
 
-/// Where the closed / compact pill should adopt Liquid Glass.
-enum GlassClosedScope: String, CaseIterable, Identifiable, Sendable {
-    case off            // never — the closed pill stays solid ink
-    case externalOnly   // only on external (non-notched) displays
-    case always         // every display, including the built-in notch
-
-    var id: String { rawValue }
-}
-
 /// The Liquid Glass material variant. `clear` is the transparent, light-bending
 /// glass (most "liquid"); `regular` is the frosted, more opaque control material.
 enum GlassStyle: String, CaseIterable, Identifiable, Sendable {
@@ -44,8 +35,6 @@ struct LiquidGlassSettings: Equatable, Sendable {
     var tintStrength: Double = 0.22
     /// Apply glass to the expanded / open panel.
     var openView: Bool = true
-    /// Where the closed / compact pill adopts glass.
-    var closedScope: GlassClosedScope = .externalOnly
 
     var tintColor: Color {
         Color(.sRGB, red: tintRed, green: tintGreen, blue: tintBlue, opacity: 1)
@@ -63,14 +52,12 @@ struct LiquidGlassSettings: Equatable, Sendable {
     }
 
     /// Resolved glass for a closed pill on the given layout. `nil` = solid ink.
+    /// Fixed, not a setting: the built-in notch pill stays solid so it
+    /// merges with the hardware notch, and a choice there made no visible
+    /// difference over the dark menu bar.
     func closedGlass(layout: V6ClosedLayout) -> ResolvedGlass? {
-        guard isEnabled else { return nil }
-        let resolved = ResolvedGlass(style: style, tint: effectiveTint)
-        switch closedScope {
-        case .off:          return nil
-        case .externalOnly: return layout == .external ? resolved : nil
-        case .always:       return resolved
-        }
+        guard isEnabled, layout == .external else { return nil }
+        return ResolvedGlass(style: style, tint: effectiveTint)
     }
 }
 

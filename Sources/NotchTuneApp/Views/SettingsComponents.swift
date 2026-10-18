@@ -10,6 +10,17 @@ enum SettingsMetrics {
     /// Widest the pane's column grows before it centers in a wide window.
     static let contentMaxWidth: CGFloat = 680
     static let paneHorizontalPadding: CGFloat = 32
+
+    /// The pane column's width in a pane `paneWidth` wide: the same for
+    /// every pane, scroll bar or not. A legacy (mouse) scroll bar lands on
+    /// the column's own trailing padding, wider than the bar.
+    static func columnWidth(forPaneWidth paneWidth: CGFloat) -> CGFloat {
+        max(0, min(contentMaxWidth + paneHorizontalPadding * 2, paneWidth))
+    }
+
+    static func columnLeadingInset(forPaneWidth paneWidth: CGFloat) -> CGFloat {
+        max(0, (paneWidth - columnWidth(forPaneWidth: paneWidth)) / 2)
+    }
     static let paneTopPadding: CGFloat = 14
     static let paneBottomPadding: CGFloat = 44
     /// Space between the hero and the first card, and between cards.
@@ -121,20 +132,31 @@ struct SettingsPane<Hero: View, Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: SettingsMetrics.sectionSpacing) {
-                    hero()
-                    content()
-                    Color.clear.frame(height: 0).id(Self.bottomAnchor)
+        // The column's place comes from the pane's OUTER width, never from
+        // the scroll view's: with a mouse attached macOS shows legacy
+        // scroll bars that take layout width, only on panes long enough to
+        // scroll, so centring inside the scroll view shifted the column
+        // sideways when switching between short and long panes.
+        GeometryReader { outer in
+            let column = SettingsMetrics.columnWidth(forPaneWidth: outer.size.width)
+            let leading = SettingsMetrics.columnLeadingInset(forPaneWidth: outer.size.width)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: SettingsMetrics.sectionSpacing) {
+                        hero()
+                        content()
+                        Color.clear.frame(height: 0).id(Self.bottomAnchor)
+                    }
+                    .padding(.horizontal, SettingsMetrics.paneHorizontalPadding)
+                    .padding(.top, SettingsMetrics.paneTopPadding)
+                    .padding(.bottom, SettingsMetrics.paneBottomPadding)
+                    // Fixed width, leading-aligned: a row that overflows
+                    // spills right instead of re-centring the whole column.
+                    .frame(width: column, alignment: .leading)
+                    .padding(.leading, leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, SettingsMetrics.paneHorizontalPadding)
-                .padding(.top, SettingsMetrics.paneTopPadding)
-                .padding(.bottom, SettingsMetrics.paneBottomPadding)
-                .frame(maxWidth: SettingsMetrics.contentMaxWidth + SettingsMetrics.paneHorizontalPadding * 2)
-                .frame(maxWidth: .infinity)
-            }
-            .onAppear {
+                .onAppear {
                 // Harness: `NOTCHTUNE_HARNESS_SETTINGS_SCROLL=bottom` captures
                 // the end of a pane.
                 guard ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_SETTINGS_SCROLL"] == "bottom" else { return }
@@ -142,9 +164,13 @@ struct SettingsPane<Hero: View, Content: View>: View {
                     proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
                 }
             }
+            }
         }
+        // Names the window (Window menu, VoiceOver) but never shows in the
+        // title bar: the hero is the pane's title, and a small copy that
+        // appeared there on scroll looked out of place.
         .navigationTitle(title)
-        .modifier(HeroCollapsingToolbarTitle())
+        .modifier(HiddenToolbarTitle())
     }
 
     private static var bottomAnchor: String { "settings-pane-bottom" }
@@ -182,20 +208,10 @@ extension SettingsPane {
     }
 }
 
-/// The toolbar repeats the pane's title only once the hero has scrolled out
-/// of view, like a collapsing large title — at rest the hero says it.
-private struct HeroCollapsingToolbarTitle: ViewModifier {
-    @State private var heroScrolledAway = false
-
+private struct HiddenToolbarTitle: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 15.0, *) {
-            content
-                .onScrollGeometryChange(for: Bool.self) { geometry in
-                    geometry.contentOffset.y + geometry.contentInsets.top > 70
-                } action: { _, scrolledAway in
-                    heroScrolledAway = scrolledAway
-                }
-                .toolbar(removing: heroScrolledAway ? nil : .title)
+            content.toolbar(removing: .title)
         } else {
             content
         }

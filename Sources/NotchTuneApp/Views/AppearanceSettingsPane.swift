@@ -442,35 +442,8 @@ struct AppearanceSettingsPane: View {
                     )
                 )
 
-                SettingsRowDivider()
-
-                SettingsPickerRow(
-                    lang.t("settings.appearance.glass.closedScope"),
-                    subtitle: closedScopeNote,
-                    selection: Binding(
-                        get: { model.glassSettings.closedScope },
-                        set: { model.glassSettings.closedScope = $0 }
-                    ),
-                    segments: GlassClosedScope.allCases.map { SettingsSegment($0, title(for: $0)) }
-                )
             }
             .disabled(glassControlsDisabled)
-        }
-    }
-
-    private var closedScopeNote: String {
-        switch model.glassSettings.closedScope {
-        case .off:          lang.t("settings.appearance.glass.closedScope.off.note")
-        case .externalOnly: lang.t("settings.appearance.glass.closedScope.externalOnly.note")
-        case .always:       lang.t("settings.appearance.glass.closedScope.always.note")
-        }
-    }
-
-    private func title(for scope: GlassClosedScope) -> String {
-        switch scope {
-        case .off:          lang.t("settings.appearance.glass.closedScope.off")
-        case .externalOnly: lang.t("settings.appearance.glass.closedScope.externalOnly")
-        case .always:       lang.t("settings.appearance.glass.closedScope.always")
         }
     }
 

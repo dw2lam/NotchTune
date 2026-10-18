@@ -41,7 +41,8 @@ final class AppModel {
     private static let glassTintBlueKey = "appearance.glass.tint.b"
     private static let glassTintStrengthKey = "appearance.glass.tint.strength"
     private static let glassOpenViewKey = "appearance.glass.openView"
-    private static let glassClosedScopeKey = "appearance.glass.closedScope"
+    /// Retired setting ("Glass on the closed pill"); cleared on load.
+    private static let retiredGlassClosedScopeKey = "appearance.glass.closedScope"
     private static let nudgeEnabledKey = "feature.nudge.enabled"
     private static let nudgeThresholdKey = "feature.nudge.threshold"
 
@@ -853,7 +854,6 @@ final class AppModel {
         d.set(s.tintBlue, forKey: Self.glassTintBlueKey)
         d.set(s.tintStrength, forKey: Self.glassTintStrengthKey)
         d.set(s.openView, forKey: Self.glassOpenViewKey)
-        d.set(s.closedScope.rawValue, forKey: Self.glassClosedScopeKey)
     }
 
     private static func loadGlassSettings() -> LiquidGlassSettings {
@@ -866,9 +866,7 @@ final class AppModel {
         if d.object(forKey: glassTintBlueKey) != nil { s.tintBlue = d.double(forKey: glassTintBlueKey) }
         if d.object(forKey: glassTintStrengthKey) != nil { s.tintStrength = d.double(forKey: glassTintStrengthKey) }
         if d.object(forKey: glassOpenViewKey) != nil { s.openView = d.bool(forKey: glassOpenViewKey) }
-        if let raw = d.string(forKey: glassClosedScopeKey), let scope = GlassClosedScope(rawValue: raw) {
-            s.closedScope = scope
-        }
+        d.removeObject(forKey: retiredGlassClosedScopeKey)
         return s
     }
 

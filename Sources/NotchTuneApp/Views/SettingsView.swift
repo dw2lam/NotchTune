@@ -135,14 +135,22 @@ struct SettingsView: View {
     @ViewBuilder
     private func sidebarGlyph(for tab: SettingsTab) -> some View {
         if tab == .appearance {
-            // Personalization is the character's own pane.
-            PixelCharacterView(
-                character: model.islandCharacter,
-                mode: .idle,
-                paused: true,
-                tint: SettingsTheme.paper
-            )
+            // Personalization is the character's own pane: it shows the one
+            // being picked there (the edited profile's, which may not be
+            // the one on screen right now), swapping as you choose.
+            let character = model.appearancePreferences(for: model.appearanceSettingsProfile).character
+            ZStack {
+                PixelCharacterView(
+                    character: character,
+                    mode: .idle,
+                    paused: true,
+                    tint: SettingsTheme.paper
+                )
+                .id(character)
+                .transition(.opacity.combined(with: .scale(scale: 0.6)))
+            }
             .frame(width: 17, height: 17)
+            .animation(.smooth(duration: 0.3), value: character)
         } else {
             Image(systemName: tab.icon)
                 .font(.system(size: 12.5, weight: .semibold))

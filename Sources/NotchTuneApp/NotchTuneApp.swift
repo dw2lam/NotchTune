@@ -68,9 +68,12 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                 // desktop, so nothing ever appears on the user's screen.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [model] in
                     if let tab = env["NOTCHTUNE_HARNESS_SETTINGS_TAB"] {
+                        // `NOTCHTUNE_HARNESS_SETTINGS_WIDTH=<pt>` sizes the window
+                        // (e.g. 780, its minimum) to catch panes that overflow.
+                        let width = env["NOTCHTUNE_HARNESS_SETTINGS_WIDTH"].flatMap(Double.init) ?? 860
                         HarnessHeadless.openHiddenWindow(
                             id: "harness-settings", title: "NotchTune Settings",
-                            size: NSSize(width: 860, height: 640),
+                            size: NSSize(width: width, height: 640),
                             rootView: SettingsView(model: model)
                         )
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -174,6 +177,11 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                             HarnessArtifactRecorder.recordFilmstrip(model: model, directoryURL: directoryURL)
                         case "music":
                             HarnessArtifactRecorder.recordMusicFadeFilmstrip(model: model, directoryURL: directoryURL)
+                        case let mode? where mode.hasPrefix("settings:"):
+                            HarnessArtifactRecorder.recordSettingsSwitchFilmstrip(
+                                to: String(mode.dropFirst("settings:".count)),
+                                directoryURL: directoryURL
+                            )
                         default:
                             break
                         }

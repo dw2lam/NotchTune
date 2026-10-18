@@ -293,6 +293,19 @@ enum HarnessArtifactRecorder {
         }
     }
 
+    /// `NOTCHTUNE_HARNESS_FILMSTRIP=settings:<tab>`: with Settings open, sample
+    /// the window while it switches to `<tab>`, into
+    /// `<artifacts>/filmstrip/switch-NN.png`.
+    static func recordSettingsSwitchFilmstrip(to tab: String, directoryURL: URL) {
+        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "harness-settings" }) else { return }
+        let dir = directoryURL.appendingPathComponent("filmstrip", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        captureBurst(windowNumber: UInt32(window.windowNumber), bounds: .null, directory: dir, prefix: "switch", frames: 21)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
+            NotificationCenter.default.post(name: .notchTuneSelectSettingsTab, object: tab)
+        }
+    }
+
     nonisolated private static func captureBurst(
         windowNumber: UInt32,
         bounds: CGRect,

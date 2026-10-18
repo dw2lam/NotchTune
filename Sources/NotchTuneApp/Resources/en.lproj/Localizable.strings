@@ -304,13 +304,6 @@
 "settings.appearance.glass.tintColor" = "Tint color";
 "settings.appearance.glass.tintStrength" = "Tint strength";
 "settings.appearance.glass.openView" = "Glass on the expanded panel";
-"settings.appearance.glass.closedScope" = "Glass on the closed pill";
-"settings.appearance.glass.closedScope.off" = "Off";
-"settings.appearance.glass.closedScope.externalOnly" = "External displays only";
-"settings.appearance.glass.closedScope.always" = "Always";
-"settings.appearance.glass.closedScope.off.note" = "The compact pill stays solid on every display.";
-"settings.appearance.glass.closedScope.externalOnly.note" = "The built-in notch pill stays solid so it still merges with the notch.";
-"settings.appearance.glass.closedScope.always.note" = "Glass everywhere — may break the blend with the physical notch.";
 
 /* Settings — pane hero headers */
 "settings.hero.general" = "Startup, everyday behavior, and a guided tour of the island.";
