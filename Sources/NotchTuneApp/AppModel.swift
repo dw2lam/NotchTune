@@ -34,6 +34,7 @@ final class AppModel {
     private static let legacyIslandSessionSortDefaultsKey = "appearance.island.v8.sessionSort"
     private static let legacyCompletedStaleThresholdDefaultsKey = "appearance.island.v8.completedStaleThreshold"
     private static let appearanceProfileSettingsDefaultsKey = "appearance.island.v8.settingsProfile"
+    private static let appearanceSyncDefaultsKey = "appearance.island.v8.sync"
     private static let glassEnabledKey = "appearance.glass.enabled"
     private static let glassStyleKey = "appearance.glass.style"
     private static let glassTintRedKey = "appearance.glass.tint.r"
@@ -441,6 +442,37 @@ final class AppModel {
         }
     }
 
+    /// Sync, as on a car's dual-zone climate control: one set of choices
+    /// for the MacBook notch and the external display. Off by default, so
+    /// two different setups are never merged without asking.
+    private(set) var appearanceSyncEnabled = false {
+        didSet {
+            guard appearanceSyncEnabled != oldValue else { return }
+            UserDefaults.standard.set(appearanceSyncEnabled, forKey: Self.appearanceSyncDefaultsKey)
+        }
+    }
+
+    /// Turning Sync on copies the display being edited onto the other one
+    /// (driver → passenger); every later change then lands on both. Turning
+    /// it off leaves both displays as they are.
+    func setAppearanceSync(_ isOn: Bool) {
+        guard isOn != appearanceSyncEnabled else { return }
+        appearanceSyncEnabled = isOn
+        if isOn { syncAppearancePreferences(from: appearanceSettingsProfile) }
+    }
+
+    /// Picks one display to edit on its own. As in a car, choosing a single
+    /// zone while synced turns Sync off; both displays keep their choices.
+    func editAppearanceProfile(_ profile: IslandAppearanceDisplayProfile) {
+        setAppearanceSync(false)
+        appearanceSettingsProfile = profile
+    }
+
+    private func syncAppearancePreferences(from profile: IslandAppearanceDisplayProfile) {
+        let source = appearancePreferences(for: profile)
+        setAppearancePreferences(appearancePreferences(for: profile.other).syncing(from: source), for: profile.other)
+    }
+
     private var notchAppearancePreferences = IslandAppearancePreferences() {
         didSet {
             guard notchAppearancePreferences != oldValue else { return }
@@ -636,15 +668,25 @@ final class AppModel {
         }
     }
 
+    /// Edits one display's preferences; while Sync is on the shared choices
+    /// land on the other display too.
     func updateAppearancePreferences(
         for profile: IslandAppearanceDisplayProfile,
         _ update: (inout IslandAppearancePreferences) -> Void
     ) {
+        var preferences = appearancePreferences(for: profile)
+        update(&preferences)
+        setAppearancePreferences(preferences, for: profile)
+        if appearanceSyncEnabled { syncAppearancePreferences(from: profile) }
+    }
+
+    private func setAppearancePreferences(
+        _ preferences: IslandAppearancePreferences,
+        for profile: IslandAppearanceDisplayProfile
+    ) {
         switch profile {
-        case .notch:
-            update(&notchAppearancePreferences)
-        case .topBar:
-            update(&topBarAppearancePreferences)
+        case .notch: notchAppearancePreferences = preferences
+        case .topBar: topBarAppearancePreferences = preferences
         }
     }
 
@@ -1088,6 +1130,9 @@ final class AppModel {
         ) ?? (NSScreen.screens.contains(where: \.isNotchedScreen) ? .notch : .topBar)
         notchAppearancePreferences = Self.loadAppearancePreferences(for: .notch)
         topBarAppearancePreferences = Self.loadAppearancePreferences(for: .topBar)
+        appearanceSyncEnabled = UserDefaults.standard.bool(forKey: Self.appearanceSyncDefaultsKey)
+        // A build without Sync may have edited one display meanwhile.
+        if appearanceSyncEnabled { syncAppearancePreferences(from: appearanceSettingsProfile) }
         glassSettings = Self.loadGlassSettings()
         nudgeSettings = Self.loadNudgeSettings()
         selectedNudgeSoundName = NotificationSoundService.selectedSoundName(for: .nudge)

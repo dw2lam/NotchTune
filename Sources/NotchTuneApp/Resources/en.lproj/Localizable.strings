@@ -334,3 +334,9 @@
 "settings.appearance.preview.phase.waiting.detail" = "The character waits for you";
 "settings.appearance.preview.phase.finished.live" = "A quick peek, then it tucks away";
 "settings.appearance.preview.phase.finished.detail" = "Back to rest";
+"settings.appearance.sync.title" = "Sync";
+"settings.appearance.sync.help" = "Personalize the MacBook notch and the external display together. Turning Sync on copies the display you're editing onto the other.";
+"settings.appearance.sync.note" = "Sync is on: every choice applies to the MacBook notch and the external display. Pick one display to set it on its own.";
+"settings.appearance.sync.both" = "Both displays";
+"settings.appearance.sync.zoneHelp" = "Edit only this display (turns Sync off).";
+"settings.appearance.sync.externalOnly" = "External display only.";
