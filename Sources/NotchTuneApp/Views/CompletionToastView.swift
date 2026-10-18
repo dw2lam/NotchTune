@@ -10,9 +10,11 @@ struct CompletionToastQueuePosition: Equatable {
 /// The compact "agent finished" surface that hangs off the notch.
 ///
 /// Budgeted to roughly a fifth of the screen (see `NotificationSurfaceMetrics`):
-/// one header line, the prompt that started the turn, a three-line plain-text
-/// excerpt of the reply, and a single row of actions. Anything longer lives
-/// behind "Jump" or the full session list — never inline.
+/// one header line, what the turn did ("Edited 4 files · Tests passed"), the
+/// prompt that started the turn, a three-line plain-text excerpt of the reply
+/// (two under a summary, so the card keeps its height), and a single row of
+/// actions. Anything longer lives behind "Jump" or the full session list —
+/// never inline.
 struct CompletionToastView: View {
     let session: AgentSession
     let referenceDate: Date
@@ -40,6 +42,10 @@ struct CompletionToastView: View {
         VStack(alignment: .leading, spacing: Self.rowSpacing) {
             header
 
+            if let taskSummary {
+                TaskSummaryLine(parts: taskSummary)
+            }
+
             if let promptLine {
                 Text(promptLine)
                     .font(.system(size: 11, weight: .medium))
@@ -53,7 +59,7 @@ struct CompletionToastView: View {
                     .font(Self.previewFont)
                     .foregroundStyle(V6Palette.paper.opacity(0.88))
                     .lineSpacing(1.5)
-                    .lineLimit(NotificationSurfaceMetrics.previewLineLimit)
+                    .lineLimit(NotificationSurfaceMetrics.previewLineLimit - (taskSummary == nil ? 0 : 1))
                     .truncationMode(.tail)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -286,6 +292,10 @@ struct CompletionToastView: View {
 
     private var previewText: String {
         Self.previewText(for: session)
+    }
+
+    private var taskSummary: TaskSummaryParts? {
+        TaskSummaryParts(summary: session.taskSummary, lang: lang)
     }
 
     private var jumpTitle: String {

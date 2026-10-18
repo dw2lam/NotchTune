@@ -100,7 +100,9 @@ struct IslandLiveActivity: Equatable, Sendable {
                 sessionID: session.id,
                 tool: session.tool,
                 title: "\(session.tool.displayName) finished",
+                // What it did reads at a glance; the reply's first words rarely do.
                 subtitle: firstNonEmpty(
+                    TaskSummaryParts(summary: session.taskSummary)?.compactText,
                     session.completionAssistantMessageText.map(CompletionPreviewText.plain),
                     workspaceName(of: session)
                 ),

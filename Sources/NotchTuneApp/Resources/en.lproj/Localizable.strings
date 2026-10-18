@@ -244,6 +244,14 @@
 "completion.toast.showAll" = "All %lld sessions";
 "completion.toast.next" = "Next completion";
 "completion.toast.previous" = "Previous completion";
+"task.summary.editedFile" = "Edited %@";
+"task.summary.editedFiles" = "Edited %lld files";
+"task.summary.filesAndMore" = "%@ and %lld more";
+"task.summary.testsPassed" = "Tests passed";
+"task.summary.testsFailed" = "Tests failed";
+"task.summary.testsRan" = "Ran tests";
+"task.summary.command" = "Ran 1 command";
+"task.summary.commands" = "Ran %lld commands";
 
 /* Window Titles */
 "window.settings" = "NotchTune Settings";

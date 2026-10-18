@@ -380,6 +380,8 @@ public struct AgentSession: Equatable, Identifiable, Codable, Sendable {
     public var openCodeMetadata: OpenCodeSessionMetadata?
     public var cursorMetadata: CursorSessionMetadata?
     public var antigravityMetadata: AntigravitySessionMetadata?
+    /// What the last finished turn did; cleared when a new turn starts.
+    public var taskSummary: TaskSummary?
 
     /// Whether this session originates from a remote (SSH) connection.
     public var isRemote: Bool = false
@@ -467,6 +469,7 @@ public struct AgentSession: Equatable, Identifiable, Codable, Sendable {
         case openCodeMetadata
         case cursorMetadata
         case antigravityMetadata
+        case taskSummary
     }
 
     public init(from decoder: any Decoder) throws {
@@ -489,6 +492,7 @@ public struct AgentSession: Equatable, Identifiable, Codable, Sendable {
         openCodeMetadata = try container.decodeIfPresent(OpenCodeSessionMetadata.self, forKey: .openCodeMetadata)
         cursorMetadata = try container.decodeIfPresent(CursorSessionMetadata.self, forKey: .cursorMetadata)
         antigravityMetadata = try container.decodeIfPresent(AntigravitySessionMetadata.self, forKey: .antigravityMetadata)
+        taskSummary = try container.decodeIfPresent(TaskSummary.self, forKey: .taskSummary)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -511,6 +515,7 @@ public struct AgentSession: Equatable, Identifiable, Codable, Sendable {
         try container.encodeIfPresent(openCodeMetadata, forKey: .openCodeMetadata)
         try container.encodeIfPresent(cursorMetadata, forKey: .cursorMetadata)
         try container.encodeIfPresent(antigravityMetadata, forKey: .antigravityMetadata)
+        try container.encodeIfPresent(taskSummary, forKey: .taskSummary)
     }
 }
 

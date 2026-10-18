@@ -2494,6 +2494,12 @@ private struct IslandSessionRow: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
+
+        if session.phase == .completed,
+           let taskSummary = TaskSummaryParts(summary: session.taskSummary, lang: lang) {
+            TaskSummaryLine(parts: taskSummary)
+                .opacity(presence == .inactive ? 0.75 : 1)
+        }
     }
 
     /// "You:" in the dim ink, the prompt itself a step brighter.
