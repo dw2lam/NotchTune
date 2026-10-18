@@ -72,89 +72,32 @@ button { font: inherit; }
 }
 .skip-link:focus { top: 16px; }
 
-/* ---------- Backdrop: twilight sky over still water ---------- */
+/* ---------- Backdrop: a moonlit oasis ---------- */
 
 .backdrop {
   position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
+  background: #050b18;
+}
+/* 2752px wide (a 2x upscale of the generated 1376px frame): sharp enough
+   under the glass on Retina, ~140 KB as WebP. */
+.backdrop-scene {
+  position: absolute; inset: -3%;
+  /* anchored left: the moon then clears the hero headline */
+  background: #050b18 url(/assets/oasis-night-2752.webp) 0% 50% / cover no-repeat;
+  animation: scene-drift 70s ease-in-out infinite alternate;
+}
+@keyframes scene-drift {
+  from { transform: scale(1) translate3d(0, 0, 0); }
+  to { transform: scale(1.045) translate3d(-1.2%, -0.6%, 0); }
+}
+/* darker under the nav and toward the bottom, so type and glass read on
+   the sky and on the water alike */
+.backdrop-shade {
+  position: absolute; inset: 0;
   background:
     linear-gradient(180deg,
-      #040817 0%, #081430 22%, #0d2342 40%, #133552 50%,
-      #1a4258 55%, #0d2a40 58%, #081d31 72%, #040d1c 100%);
-}
-.backdrop-stars {
-  position: absolute; inset: 0 0 45% 0;
-  background-image:
-    radial-gradient(1.2px 1.2px at 8% 14%, rgba(255, 255, 255, 0.85), transparent 60%),
-    radial-gradient(1px 1px at 19% 31%, rgba(255, 255, 255, 0.55), transparent 60%),
-    radial-gradient(1.4px 1.4px at 27% 9%, rgba(255, 255, 255, 0.75), transparent 60%),
-    radial-gradient(1px 1px at 38% 22%, rgba(255, 255, 255, 0.45), transparent 60%),
-    radial-gradient(1.2px 1.2px at 47% 6%, rgba(255, 255, 255, 0.7), transparent 60%),
-    radial-gradient(1px 1px at 56% 27%, rgba(255, 255, 255, 0.5), transparent 60%),
-    radial-gradient(1.3px 1.3px at 63% 13%, rgba(255, 255, 255, 0.8), transparent 60%),
-    radial-gradient(1px 1px at 88% 34%, rgba(255, 255, 255, 0.5), transparent 60%),
-    radial-gradient(1.2px 1.2px at 93% 8%, rgba(255, 255, 255, 0.65), transparent 60%),
-    radial-gradient(1px 1px at 4% 42%, rgba(255, 255, 255, 0.4), transparent 60%),
-    radial-gradient(1px 1px at 33% 44%, rgba(255, 255, 255, 0.35), transparent 60%),
-    radial-gradient(1px 1px at 52% 40%, rgba(255, 255, 255, 0.3), transparent 60%);
-  opacity: 0.8;
-}
-.backdrop-moon {
-  position: absolute; top: 13vh; right: 12vw;
-  width: clamp(46px, 5.4vw, 80px); aspect-ratio: 1; border-radius: 50%;
-  background: radial-gradient(circle at 36% 34%, #fbfdff 0%, #e2eaf6 40%, #b5c4dc 80%, #97a9c8 100%);
-  opacity: 0.9;
-  box-shadow:
-    0 0 36px 8px rgba(205, 222, 255, 0.18),
-    0 0 160px 60px rgba(150, 185, 255, 0.1);
-}
-/* a few soft maria, so it reads as a moon rather than a lamp */
-.backdrop-moon::before {
-  content: ""; position: absolute; inset: 0; border-radius: 50%;
-  background:
-    radial-gradient(ellipse 22% 17% at 60% 58%, rgba(120, 138, 170, 0.2), transparent 70%),
-    radial-gradient(ellipse 14% 12% at 40% 70%, rgba(120, 138, 170, 0.14), transparent 70%),
-    radial-gradient(ellipse 16% 12% at 66% 32%, rgba(120, 138, 170, 0.13), transparent 70%),
-    radial-gradient(ellipse 20% 16% at 34% 42%, rgba(120, 138, 170, 0.1), transparent 70%);
-  filter: blur(1.2px);
-}
-.backdrop-horizon {
-  position: absolute; left: -10%; right: -10%; top: 46%; height: 18vh;
-  background: radial-gradient(55% 100% at 62% 60%, rgba(232, 201, 158, 0.2), transparent 72%);
-  filter: blur(16px);
-}
-.backdrop-water {
-  position: absolute; left: 0; right: 0; top: 56%; bottom: 0;
-  background:
-    repeating-linear-gradient(180deg, rgba(170, 225, 255, 0.045) 0 1px, transparent 1px 11px),
-    linear-gradient(180deg, rgba(22, 78, 98, 0.45), rgba(4, 13, 28, 0.2) 60%);
-  -webkit-mask-image: linear-gradient(180deg, #000, rgba(0, 0, 0, 0.35));
-  mask-image: linear-gradient(180deg, #000, rgba(0, 0, 0, 0.35));
-}
-/* the moon's path on the water: broken horizontal glints */
-.backdrop-glint {
-  position: absolute; top: 56.5%; bottom: 8%; right: calc(12vw + clamp(23px, 2.7vw, 40px) - 70px); width: 140px;
-  background: repeating-linear-gradient(180deg, rgba(235, 244, 255, 0.5) 0 1.5px, transparent 1.5px 13px);
-  -webkit-mask-image: radial-gradient(50% 100% at 50% 0%, #000 0%, transparent 100%);
-  mask-image: radial-gradient(50% 100% at 50% 0%, #000 0%, transparent 100%);
-  filter: blur(0.6px);
-  opacity: 0.55;
-  animation: glint 7s ease-in-out infinite alternate;
-}
-@keyframes glint {
-  from { transform: scaleX(0.82); opacity: 0.45; }
-  to { transform: scaleX(1.12); opacity: 0.65; }
-}
-/* soft light pools the glass panes refract */
-.backdrop-pool {
-  position: absolute; border-radius: 50%; filter: blur(70px);
-  animation: drift 38s ease-in-out infinite alternate;
-}
-.backdrop-pool.p1 { width: 46vw; height: 46vw; left: -12vw; top: 18vh; background: rgba(64, 170, 190, 0.22); }
-.backdrop-pool.p2 { width: 38vw; height: 38vw; right: -8vw; top: 46vh; background: rgba(86, 104, 220, 0.2); animation-duration: 46s; }
-.backdrop-pool.p3 { width: 30vw; height: 30vw; left: 34vw; bottom: -12vh; background: rgba(232, 201, 158, 0.1); animation-duration: 52s; }
-@keyframes drift {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(4vw, -3vh, 0); }
+      rgba(4, 8, 23, 0.62) 0%, rgba(4, 8, 23, 0.28) 26%,
+      rgba(4, 8, 23, 0.16) 52%, rgba(4, 10, 24, 0.42) 78%, rgba(3, 7, 18, 0.66) 100%);
 }
 
 /* ---------- Glass ---------- */
@@ -224,7 +167,7 @@ button { font: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .js .reveal { opacity: 1; transform: none; transition: none; }
-  .backdrop-glint, .backdrop-pool { animation: none; }
+  .backdrop-scene { animation: none; }
 }
 
 /* ---------- Nav ---------- */
@@ -687,8 +630,8 @@ button { font: inherit; }
   .works-row { grid-template-columns: 1fr; gap: 10px; }
   .moment { grid-template-columns: 1fr; gap: 10px; }
   .moment-label { justify-self: start; padding: 5px 11px; font-size: 12.5px; }
-  .backdrop-moon { top: 96px; right: 22px; width: 38px; }
-  .backdrop-glint { right: -29px; }
+  /* portrait: keep the moon and its reflection in frame */
+  .backdrop-scene { background-position: 74% 50%; }
 }
 
 @media (max-width: 420px) {
