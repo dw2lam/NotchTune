@@ -200,6 +200,21 @@ export default function Features() {
           <h4>Your library, one tap away</h4>
           <p>While music plays, the library button opens your playlists and albums. Hover the Now Playing cover for a tiny progress bar and play controls, and tap it to go back to the full player.</p>
         </article>
+        <article className="card glass">
+          <div className="card-ico">✓</div>
+          <h4>See what got done</h4>
+          <p>When Claude Code or Codex finishes, its card says what changed: "Edited 4 files · Tests passed · 3m 12s". Worked out on your Mac from the session itself, and a test result only counts when the run's own result is known.</p>
+        </article>
+        <article className="card glass">
+          <div className="card-ico">📅</div>
+          <h4>Meetings in the notch</h4>
+          <p>Opt in and the notch shows your next meeting a few minutes before it starts, with Join for Zoom, Meet, Teams, Webex and FaceTime links. It can keep NotchTune quiet while you're in one. Calendars never leave your Mac.</p>
+        </article>
+        <article className="card glass">
+          <div className="card-ico">☺︎</div>
+          <h4>Settings that greet you</h4>
+          <p>Frosted glass, colourful icons and a native sidebar. General opens on a welcome with your name, your character and what your agents are up to, with the version and updates right there too.</p>
+        </article>
       </div>
     </section>
   );

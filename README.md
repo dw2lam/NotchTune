@@ -13,6 +13,8 @@ Monitor your agents and music all in one place.
 - **Myspace**: Save dictated thoughts, drop in images or files, and keep time-based reminders in a local personal space.
 - **Character personalization**: Choose from twenty pixel characters for the island, from the dino and Claude's Clawd to a goopy blob and Italian-brainrot favourites like Tung Tung Tung Sahur, set how much they move (Calm, Lively or Still), and style the MacBook notch and an external display separately or together with Sync.
 - **Notification sounds**: 32 original bundled sounds, loudness-matched to the macOS alerts, alongside system and custom sounds.
+- **Finished-task summaries**: When Claude Code or Codex finishes, the completion card shows what changed (files edited, tests run and their result, turn time), worked out locally from the session's own events.
+- **Meeting heads-up**: Opt in to see your next calendar meeting in the notch a few minutes ahead, with a Join button for video links and an optional quiet mode during meetings. Calendars are read on your Mac only.
 - **Notch-aware layouts**: Runs as a real notch surface on MacBook displays and falls back to a clean top-center bar on external or non-notch screens.
 - **Local, native, and open source**: Built with SwiftUI and AppKit. No Electron shell, no telemetry, and no remote server dependency.
 - **Automatic updates**: Signed releases update in place through the open-source Sparkle framework.
