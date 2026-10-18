@@ -26,6 +26,9 @@ struct MusicLibraryChooserView: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .bottom) { statusToast }
+                // Loading → list, list → "No matches", and so on fade too,
+                // not only the switches the user makes.
+                .animation(.easeInOut(duration: 0.22), value: contentPhase)
         }
         .animation(.easeInOut(duration: 0.18), value: library.isSearchActive)
         .animation(.easeInOut(duration: 0.18), value: isPinFieldOpen)
@@ -208,11 +211,29 @@ struct MusicLibraryChooserView: View {
 
     // MARK: Content
 
+    /// Which of the list's states shows; a change cross-fades.
+    private enum ContentPhase: Hashable {
+        case items(MusicLibraryBrowser.Section, searching: Bool)
+        case loading, searching, noMatches, empty(MusicLibraryBrowser.Section)
+    }
+
+    private var contentPhase: ContentPhase {
+        if !library.visibleItems.isEmpty {
+            return .items(library.section, searching: library.isSearchActive)
+        }
+        if library.isLoadingLibrary { return .loading }
+        if library.isSearchActive, !library.trimmedQuery.isEmpty {
+            return library.isSearchingLibrary ? .searching : .noMatches
+        }
+        return .empty(library.section)
+    }
+
     @ViewBuilder
     private var content: some View {
         let items = library.visibleItems
         if !items.isEmpty {
             itemGrid(items)
+                .transition(.opacity)
         } else if library.isLoadingLibrary {
             MusicChooserMessage(
                 title: "Reading your library…",
@@ -220,19 +241,24 @@ struct MusicLibraryChooserView: View {
             ) {
                 ProgressView().controlSize(.small).tint(.white)
             }
+            .transition(.opacity)
         } else if library.isSearchActive, !library.trimmedQuery.isEmpty {
             if library.isSearchingLibrary {
                 MusicChooserMessage(title: "Searching…", detail: nil) {
                     ProgressView().controlSize(.small).tint(.white)
                 }
+                .transition(.opacity)
             } else {
                 MusicChooserMessage(
                     title: "No matches",
                     detail: noMatchesDetail
                 )
+                .transition(.opacity)
             }
         } else {
             emptyMessage
+                .id(library.section)
+                .transition(.opacity)
         }
     }
 

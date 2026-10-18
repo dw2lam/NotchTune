@@ -269,6 +269,30 @@ enum HarnessArtifactRecorder {
         }
     }
 
+    /// `NOTCHTUNE_HARNESS_FILMSTRIP=music`: with the Music tab open, sample
+    /// the window while it cross-fades to the library and back, into
+    /// `<artifacts>/filmstrip/{library,controls}-NN.png`.
+    static func recordMusicFadeFilmstrip(model: AppModel, directoryURL: URL) {
+        guard let window = orderedVisibleWindows().first else { return }
+        let windowNumber = UInt32(window.windowNumber)
+        let dir = directoryURL.appendingPathComponent("filmstrip", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let toggle = { NotificationCenter.default.post(name: .notchTuneHarnessToggleMusicLibrary, object: nil) }
+
+        // Open on Music the way a click does (a scenario's own open can
+        // auto-collapse before the burst starts).
+        model.notchOpen(reason: .click)
+        model.islandActiveTab = .music
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            captureBurst(windowNumber: windowNumber, bounds: .null, directory: dir, prefix: "library", frames: 15)
+            toggle()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                captureBurst(windowNumber: windowNumber, bounds: .null, directory: dir, prefix: "controls", frames: 15)
+                toggle()
+            }
+        }
+    }
+
     nonisolated private static func captureBurst(
         windowNumber: UInt32,
         bounds: CGRect,

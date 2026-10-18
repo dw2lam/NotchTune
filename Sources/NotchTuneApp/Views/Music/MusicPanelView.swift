@@ -30,14 +30,16 @@ struct MusicPanelView: View {
 
     var body: some View {
         if playerManager.isMusicEnabled {
-            Group {
+            // A ZStack, not a Group: a Group hands `.animation` to each branch,
+            // so the outgoing view vanished instead of fading out.
+            ZStack(alignment: .top) {
                 switch mode {
                 case .nowPlaying:
                     musicControls
                         .transition(.opacity)
                 case .library(let player):
                     MusicNowPlayingLibraryView(playerManager: playerManager, player: player) {
-                        isBrowsingLibrary = false
+                        setBrowsingLibrary(false)
                     }
                     .padding(.horizontal, horizontalPadding)
                     .padding(.top, 12)
@@ -53,18 +55,30 @@ struct MusicPanelView: View {
                     EmptyView()
                 }
             }
-            .animation(.easeInOut(duration: 0.25), value: mode)
+            .animation(Self.modeFade, value: mode)
             .onChange(of: playerManager.library.deliveredPlayCount) { _, _ in
                 // Picked something: back to the controls, where its cover flips in.
-                isBrowsingLibrary = false
+                setBrowsingLibrary(false)
             }
             .onChange(of: showsNowPlaying) { _, playing in
                 // Player quit → the empty state already shows the library.
-                if !playing { isBrowsingLibrary = false }
+                if !playing { setBrowsingLibrary(false) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .notchTuneHarnessToggleMusicLibrary)) { _ in
+                setBrowsingLibrary(!isBrowsingLibrary)
             }
         } else {
             musicDisabledPlaceholder
         }
+    }
+
+    /// Every switch between the tab's views (controls, library, empty state)
+    /// cross-fades.
+    static let modeFade: Animation = .easeInOut(duration: 0.28)
+
+    private func setBrowsingLibrary(_ browsing: Bool) {
+        guard isBrowsingLibrary != browsing else { return }
+        withAnimation(Self.modeFade) { isBrowsingLibrary = browsing }
     }
 
     private var mode: Mode {
@@ -92,7 +106,7 @@ struct MusicPanelView: View {
                     .padding(.horizontal, playerManager.playerKind == nil ? 0 : MusicLibraryButton.side + 6)
                     .overlay(alignment: .trailing) {
                         if let player = playerManager.playerKind {
-                            MusicLibraryButton(player: player) { isBrowsingLibrary = true }
+                            MusicLibraryButton(player: player) { setBrowsingLibrary(true) }
                         }
                     }
 
