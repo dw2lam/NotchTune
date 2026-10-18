@@ -30,30 +30,18 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// White glyph drawn on the colored tile.
+    /// Mono paper glyph, in the island tab bar's outline style (Setup shares
+    /// the Agents tab's terminal, Music the Music tab's note).
     var icon: String {
         switch self {
-        case .general:    "gearshape.fill"
-        case .setup:      "puzzlepiece.extension.fill"
-        case .appearance: "paintpalette.fill"
+        case .general:    "gearshape"
+        case .setup:      "terminal"
+        case .appearance: "paintbrush.pointed"
         case .display:    "display"
-        case .sound:      "speaker.wave.3.fill"
+        case .sound:      "speaker.wave.2"
         case .music:      "music.note"
-        case .updates:    "arrow.triangle.2.circlepath"
-        case .about:      "info"
-        }
-    }
-
-    var iconColor: Color {
-        switch self {
-        case .general:    .gray
-        case .setup:      .orange
-        case .appearance: .indigo
-        case .display:    .blue
-        case .sound:      .red
-        case .music:      .pink
-        case .updates:    .gray
-        case .about:      .blue
+        case .updates:    "arrow.down.circle"
+        case .about:      "info.circle"
         }
     }
 
@@ -80,17 +68,21 @@ struct SettingsView: View {
     var model: AppModel
     @State private var selectedTab: SettingsTab = .general
     @State private var isWindowOnScreen = true
+    @Namespace private var selectionNamespace
 
     private var lang: LanguageManager { model.lang }
 
     var body: some View {
-        NavigationSplitView {
+        // One ink surface, like the island: a floating sidebar panel beside
+        // the pane, no split-view divider.
+        HStack(spacing: 0) {
             sidebar
-                .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
-        } detail: {
             detailView
                 .environment(\.settingsWindowIsOnScreen, isWindowOnScreen)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .background(SettingsTheme.window.ignoresSafeArea())
+        .settingsTheme()
         .onWindowOnScreenChange { isWindowOnScreen = $0 }
         .frame(minWidth: 780, idealWidth: 860, maxWidth: 1240, minHeight: 540, idealHeight: 640)
         .onReceive(NotificationCenter.default.publisher(for: .notchTuneSelectSetupTab)) { _ in
@@ -105,51 +97,155 @@ struct SettingsView: View {
 
     // MARK: Sidebar
 
-    @ViewBuilder
     private var sidebar: some View {
-        List(selection: $selectedTab) {
+        VStack(alignment: .leading, spacing: 2) {
             // Groups are separated by spacing only — no header text that
             // would repeat the panes' own titles.
-            ForEach(SettingsSection.allCases, id: \.self) { section in
-                Section {
-                    ForEach(section.tabs) { tab in
-                        Label {
-                            Text(tab.label(lang))
-                                .font(.system(size: 13.5))
-                        } icon: {
-                            SettingsIconTile(systemName: tab.icon, color: tab.iconColor)
-                        }
-                        .padding(.vertical, 3)
-                        .tag(tab)
+            ForEach(Array(SettingsSection.allCases.enumerated()), id: \.element) { index, section in
+                if index > 0 {
+                    Spacer().frame(height: 14)
+                }
+                ForEach(section.tabs) { tab in
+                    SettingsSidebarRow(
+                        title: tab.label(lang),
+                        isSelected: selectedTab == tab,
+                        selectionNamespace: selectionNamespace
+                    ) {
+                        withAnimation(.smooth(duration: 0.3, extraBounce: 0.08)) { selectedTab = tab }
+                    } glyph: {
+                        sidebarGlyph(for: tab)
                     }
                 }
             }
+
+            Spacer(minLength: 12)
+
+            SettingsSidebarSignature(model: model)
         }
-        .listStyle(.sidebar)
+        .padding(8)
+        .frame(width: SettingsTheme.sidebarWidth)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(SettingsCardBackground(cornerRadius: SettingsTheme.surfaceRadius))
+        .padding(.leading, 10)
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Settings sections")
+    }
+
+    @ViewBuilder
+    private func sidebarGlyph(for tab: SettingsTab) -> some View {
+        if tab == .appearance {
+            // Personalization is the character's own pane.
+            PixelCharacterView(
+                character: model.islandCharacter,
+                mode: .idle,
+                paused: true,
+                tint: SettingsTheme.paper
+            )
+            .frame(width: 17, height: 17)
+        } else {
+            Image(systemName: tab.icon)
+                .font(.system(size: 12.5, weight: .semibold))
+        }
     }
 
     // MARK: Detail
 
     @ViewBuilder
     private var detailView: some View {
-        switch selectedTab {
-        case .general:
-            GeneralSettingsPane(model: model)
-        case .setup:
-            SetupSettingsPane(model: model)
-        case .appearance:
-            AppearanceSettingsPane(model: model)
-        case .display:
-            DisplaySettingsPane(model: model)
-        case .sound:
-            SoundSettingsPane(model: model)
-        case .music:
-            MusicSettingsPane(model: model)
-        case .updates:
-            UpdateSettingsPane(model: model)
-        case .about:
-            AboutSettingsPane(model: model)
+        ZStack {
+            switch selectedTab {
+            case .general:
+                GeneralSettingsPane(model: model)
+            case .setup:
+                SetupSettingsPane(model: model)
+            case .appearance:
+                AppearanceSettingsPane(model: model)
+            case .display:
+                DisplaySettingsPane(model: model)
+            case .sound:
+                SoundSettingsPane(model: model)
+            case .music:
+                MusicSettingsPane(model: model)
+            case .updates:
+                UpdateSettingsPane(model: model)
+            case .about:
+                AboutSettingsPane(model: model)
+            }
         }
+        .id(selectedTab)
+        .transition(.opacity)
+    }
+}
+
+/// One sidebar entry, styled like the island's tab bar: a mono glyph and a
+/// label, the selected one on a paper pill that slides between rows.
+private struct SettingsSidebarRow<Glyph: View>: View {
+    let title: String
+    let isSelected: Bool
+    let selectionNamespace: Namespace.ID
+    let action: () -> Void
+    @ViewBuilder let glyph: () -> Glyph
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                glyph()
+                    .frame(width: 20, height: 20)
+                Text(title)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(SettingsTheme.paper.opacity(isSelected ? 0.97 : (isHovered ? 0.8 : 0.58)))
+            .padding(.horizontal, 10)
+            .frame(height: 34)
+            .background {
+                let shape = RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
+                if isSelected {
+                    IslandGlassBezel(shape: shape, tint: nil, isEmphasized: true)
+                        .matchedGeometryEffect(id: "settingsSidebarSelection", in: selectionNamespace)
+                } else if isHovered {
+                    shape.fill(SettingsTheme.hoverFill)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+/// The sidebar's foot: the island's character and the running version, a
+/// quiet reminder of whose settings these are.
+private struct SettingsSidebarSignature: View {
+    var model: AppModel
+
+    private var version: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            PixelCharacterView(
+                character: model.islandCharacter,
+                mode: .idle,
+                paused: true,
+                tint: SettingsTheme.paper.opacity(0.5)
+            )
+            .frame(width: 15, height: 15)
+            Text(version.isEmpty ? "NotchTune" : "NotchTune \(version)")
+                .font(.system(size: 11, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(SettingsTheme.paper.opacity(0.36))
+        }
+        .padding(.horizontal, 10)
+        .padding(.bottom, 6)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -164,8 +260,7 @@ struct GeneralSettingsPane: View {
         SettingsPane(
             title: lang.t("settings.tab.general"),
             subtitle: lang.t("settings.hero.general"),
-            systemImage: SettingsTab.general.icon,
-            color: SettingsTab.general.iconColor
+            systemImage: SettingsTab.general.icon
         ) {
             SettingsCard(title: lang.t("settings.general.startup")) {
                 SettingsToggleRow(lang.t("settings.general.launchAtLogin"), isOn: Binding(
@@ -175,15 +270,15 @@ struct GeneralSettingsPane: View {
 
                 SettingsRowDivider()
 
-                SettingsPickerRow(lang.t("settings.general.monitor"), selection: Binding(
-                    get: { model.overlayDisplaySelectionID },
-                    set: { model.overlayDisplaySelectionID = $0 }
-                )) {
-                    Text(lang.t("settings.general.automatic")).tag(OverlayDisplayOption.automaticID)
-                    ForEach(model.overlayDisplayOptions) { option in
-                        Text(option.title).tag(option.id)
-                    }
-                }
+                SettingsPickerRow(
+                    lang.t("settings.general.monitor"),
+                    selection: Binding(
+                        get: { model.overlayDisplaySelectionID },
+                        set: { model.overlayDisplaySelectionID = $0 }
+                    ),
+                    segments: [SettingsSegment(OverlayDisplayOption.automaticID, lang.t("settings.general.automatic"))]
+                        + model.overlayDisplayOptions.map { SettingsSegment($0.id, $0.title) }
+                )
             }
 
             SettingsCard(title: lang.t("settings.general.behavior")) {
@@ -215,12 +310,11 @@ struct GeneralSettingsPane: View {
                         get: { model.hoverOpenMode },
                         set: { model.hoverOpenMode = $0 }
                     ),
-                    style: .segmentedBelow
-                ) {
-                    ForEach(HoverOpenMode.allCases) { mode in
-                        Text(lang.t("settings.general.hoverOpen.\(mode.rawValue)")).tag(mode)
+                    style: .segmentedBelow,
+                    segments: HoverOpenMode.allCases.map {
+                        SettingsSegment($0, lang.t("settings.general.hoverOpen.\($0.rawValue)"))
                     }
-                }
+                )
 
                 SettingsRowDivider()
 
@@ -280,8 +374,7 @@ struct DisplaySettingsPane: View {
         SettingsPane(
             title: lang.t("settings.tab.display"),
             subtitle: lang.t("settings.hero.display"),
-            systemImage: SettingsTab.display.icon,
-            color: SettingsTab.display.iconColor
+            systemImage: SettingsTab.display.icon
         ) {
             SettingsCard(
                 title: lang.t("settings.display.monitor"),
@@ -348,7 +441,7 @@ struct DisplaySettingsPane: View {
             Image(systemName: systemImage)
                 .font(.system(size: 30, weight: .regular))
                 .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                .foregroundStyle(SettingsTheme.paper.opacity(isSelected ? 0.95 : 0.5))
         }
     }
 
@@ -374,8 +467,7 @@ struct SoundSettingsPane: View {
         SettingsPane(
             title: lang.t("settings.tab.sound"),
             subtitle: lang.t("settings.hero.sound"),
-            systemImage: SettingsTab.sound.icon,
-            color: SettingsTab.sound.iconColor
+            systemImage: SettingsTab.sound.icon
         ) {
             SettingsCard(title: lang.t("settings.sound.notifications")) {
                 SettingsToggleRow(lang.t("settings.sound.mute"), isOn: Binding(
@@ -430,7 +522,7 @@ struct SoundSettingsPane: View {
                                 SettingsIconButton(
                                     systemName: "trash",
                                     help: lang.t("settings.sound.delete"),
-                                    tint: .red,
+                                    tint: SettingsTheme.critical,
                                     role: .destructive
                                 ) {
                                     deleteSound(filename)
@@ -459,22 +551,7 @@ struct SoundSettingsPane: View {
     ) -> some View {
         SettingsRow(title) {
             HStack(spacing: 10) {
-                Picker(title, selection: selection) {
-                    Section(lang.t("settings.sound.systemSounds")) {
-                        ForEach(availableSounds, id: \.self) { name in
-                            Text(name).tag(name)
-                        }
-                    }
-                    if !customSounds.isEmpty {
-                        Section(lang.t("settings.sound.customSounds")) {
-                            ForEach(customSounds, id: \.self) { filename in
-                                Text(cleanFilename(filename)).tag(filename)
-                            }
-                        }
-                    }
-                }
-                .labelsHidden()
-                .fixedSize()
+                SettingsMenuPicker(title, selection: selection, sections: soundSections)
 
                 SettingsIconButton(systemName: "play.fill", help: previewHelp, action: preview)
             }
@@ -493,14 +570,14 @@ struct SoundSettingsPane: View {
 
             SettingsRowDivider()
 
-            SettingsPickerRow("Nudge after", selection: Binding(
-                get: { model.nudgeSettings.threshold },
-                set: { model.nudgeSettings.threshold = $0 }
-            )) {
-                ForEach(IdleNudgeThreshold.allCases) { threshold in
-                    Text(threshold.displayName).tag(threshold)
-                }
-            }
+            SettingsPickerRow(
+                "Nudge after",
+                selection: Binding(
+                    get: { model.nudgeSettings.threshold },
+                    set: { model.nudgeSettings.threshold = $0 }
+                ),
+                segments: IdleNudgeThreshold.allCases.map { SettingsSegment($0, $0.displayName) }
+            )
             .disabled(!model.nudgeSettings.isEnabled)
 
             SettingsRowDivider()
@@ -517,6 +594,20 @@ struct SoundSettingsPane: View {
             }
             .disabled(!model.nudgeSettings.isEnabled)
         }
+    }
+
+    /// The system sounds, then any custom ones, for the sound menus.
+    private var soundSections: [(title: String?, segments: [SettingsSegment<String>])] {
+        var sections: [(title: String?, segments: [SettingsSegment<String>])] = [
+            (lang.t("settings.sound.systemSounds"), availableSounds.map { SettingsSegment($0, $0) })
+        ]
+        if !customSounds.isEmpty {
+            sections.append((
+                lang.t("settings.sound.customSounds"),
+                customSounds.map { SettingsSegment($0, cleanFilename($0)) }
+            ))
+        }
+        return sections
     }
 
     private func cleanFilename(_ filename: String) -> String {
@@ -582,8 +673,7 @@ struct UpdateSettingsPane: View {
         SettingsPane(
             title: lang.t("settings.tab.updates"),
             subtitle: lang.t("settings.hero.updates"),
-            systemImage: SettingsTab.updates.icon,
-            color: SettingsTab.updates.iconColor
+            systemImage: SettingsTab.updates.icon
         ) {
             SettingsCard(title: lang.t("settings.updates.softwareUpdate")) {
                 versionRow(lang.t("settings.updates.currentVersion"), value: currentVersion)
@@ -600,7 +690,7 @@ struct UpdateSettingsPane: View {
                         SettingsStatusBadge(
                             text: latestVersion,
                             systemImage: "arrow.down.circle.fill",
-                            color: .blue
+                            color: SettingsTheme.informative
                         )
                     }
                 }
@@ -662,7 +752,6 @@ struct AboutSettingsPane: View {
                     title: "View NotchTune source",
                     subtitle: "Open source on GitHub",
                     systemImage: "chevron.left.forwardslash.chevron.right",
-                    color: .indigo,
                     url: "https://github.com/dw2lam/NotchTune"
                 )
 
@@ -672,7 +761,6 @@ struct AboutSettingsPane: View {
                     title: "Forked from Open Vibe Island",
                     subtitle: "Octane0411/open-vibe-island",
                     systemImage: "arrow.triangle.branch",
-                    color: .teal,
                     url: "https://github.com/Octane0411/open-vibe-island"
                 )
 
@@ -682,7 +770,6 @@ struct AboutSettingsPane: View {
                     title: "Music foundation from Tuneful",
                     subtitle: "martinfekete10/Tuneful",
                     systemImage: "music.note",
-                    color: .pink,
                     url: "https://github.com/martinfekete10/Tuneful"
                 )
 
@@ -692,7 +779,6 @@ struct AboutSettingsPane: View {
                     title: "Created by David",
                     subtitle: "dw2lam",
                     systemImage: "person.fill",
-                    color: .orange,
                     url: "https://github.com/dw2lam"
                 )
             }
@@ -738,7 +824,7 @@ struct AboutSettingsPane: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(Color.primary.opacity(0.06), in: Capsule())
+                    .background(IslandGlassBezel(shape: Capsule(), tint: nil))
                     .padding(.top, 2)
             }
 
@@ -754,7 +840,7 @@ struct AboutSettingsPane: View {
             ZStack {
                 SettingsCardBackground()
                 RadialGradient(
-                    colors: [Color.accentColor.opacity(0.16), Color.accentColor.opacity(0)],
+                    colors: [SettingsTheme.paper.opacity(0.10), SettingsTheme.paper.opacity(0)],
                     center: .top,
                     startRadius: 0,
                     endRadius: 260
@@ -766,20 +852,18 @@ struct AboutSettingsPane: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// A credit row that opens its page in the browser: a small colored
-    /// glyph tile, title + secondary line, a trailing "open externally"
-    /// arrow.
+    /// A credit row that opens its page in the browser: a small notch glyph
+    /// tile, title + secondary line, a trailing "open externally" arrow.
     private func creditLinkRow(
         title: String,
         subtitle: String,
         systemImage: String,
-        color: Color,
         url: String
     ) -> some View {
         Link(destination: URL(string: url)!) {
             SettingsRow {
                 HStack(spacing: 12) {
-                    SettingsIconTile(systemName: systemImage, color: color, size: 30)
+                    SettingsGlyphTile(systemName: systemImage, size: 30)
                     SettingsRowLabel(title: title, subtitle: subtitle)
                 }
             } accessory: {
@@ -817,8 +901,7 @@ struct SetupSettingsPane: View {
         SettingsPane(
             title: lang.t("settings.tab.setup"),
             subtitle: lang.t("settings.hero.setup"),
-            systemImage: SettingsTab.setup.icon,
-            color: SettingsTab.setup.iconColor
+            systemImage: SettingsTab.setup.icon
         ) {
             if !model.hasAnyInstalledAgent {
                 emptyStateBanner
@@ -1211,10 +1294,10 @@ struct SetupSettingsPane: View {
     private var emptyStateBanner: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: "sparkles")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(SettingsTheme.ink)
                 .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.accentColor.gradient))
+                .background(Circle().fill(SettingsTheme.paper))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(lang.t("setup.banner.noHooks.title"))
@@ -1229,11 +1312,11 @@ struct SetupSettingsPane: View {
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: SettingsMetrics.cardCornerRadius, style: .continuous)
-                .fill(Color.accentColor.opacity(0.1))
+                .fill(SettingsTheme.paper.opacity(0.08))
         )
         .overlay(
             RoundedRectangle(cornerRadius: SettingsMetrics.cardCornerRadius, style: .continuous)
-                .strokeBorder(Color.accentColor.opacity(0.22), lineWidth: 1)
+                .strokeBorder(SettingsTheme.paper.opacity(0.18), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
     }
@@ -1303,7 +1386,7 @@ struct SetupSettingsPane: View {
                     diagnosticsStatusLabel(
                         lang.t("setup.diagnostics.allHealthy"),
                         systemImage: "checkmark.circle.fill",
-                        color: .green
+                        color: SettingsTheme.positive
                     )
                 } accessory: {
                     Button(lang.t("setup.diagnostics.recheck")) {
@@ -1315,7 +1398,7 @@ struct SetupSettingsPane: View {
                     diagnosticsStatusLabel(
                         lang.t("setup.diagnostics.issuesFound"),
                         systemImage: "exclamationmark.triangle.fill",
-                        color: .orange
+                        color: SettingsTheme.caution
                     )
                 } accessory: {
                     HStack(spacing: 8) {
@@ -1326,7 +1409,6 @@ struct SetupSettingsPane: View {
                             Button(lang.t("setup.diagnostics.repair")) {
                                 model.repairHooks()
                             }
-                            .buttonStyle(.borderedProminent)
                         }
                     }
                 }
@@ -1383,8 +1465,8 @@ struct SetupSettingsPane: View {
 
     private func issueColor(for issue: HookHealthReport.Issue) -> Color {
         switch issue.severity {
-        case .info: .blue
-        case .error: issue.isAutoRepairable ? .orange : .red
+        case .info: SettingsTheme.informative
+        case .error: issue.isAutoRepairable ? SettingsTheme.caution : SettingsTheme.critical
         }
     }
 
@@ -1411,7 +1493,7 @@ struct SetupSettingsPane: View {
                         .font(SettingsMetrics.rowTitleFont)
                     HStack(spacing: 5) {
                         Circle()
-                            .fill(installed ? Color.green : Color.secondary.opacity(0.45))
+                            .fill(installed ? SettingsTheme.positive : SettingsTheme.paper.opacity(0.3))
                             .frame(width: 6, height: 6)
                         Text(installed ? lang.t("settings.general.activated") : lang.t("setup.hookMissing"))
                             .font(SettingsMetrics.rowSubtitleFont)
@@ -1463,8 +1545,8 @@ struct SetupSettingsPane: View {
     }
 }
 
-/// The agent's installed app icon when there is one, otherwise a monogram
-/// on the agent's brand color.
+/// The agent's installed app icon when there is one, otherwise its initial
+/// in the agent's brand colour on a notch tile.
 private struct AgentLogoTile: View {
     let name: String
     let tool: AgentTool
@@ -1480,14 +1562,12 @@ private struct AgentLogoTile: View {
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
             } else {
-                let color = Color(hex: tool.brandColorHex) ?? .gray
-                RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
-                    .fill(color.gradient)
-                    .overlay(
-                        Text(String(name.prefix(1)))
-                            .font(.system(size: size * 0.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                    )
+                let color = Color(hex: tool.brandColorHex) ?? SettingsTheme.paper
+                SettingsGlyphTile(size: size) {
+                    Text(String(name.prefix(1)))
+                        .font(.system(size: size * 0.48, weight: .bold, design: .rounded))
+                        .foregroundStyle(color)
+                }
             }
         }
         .frame(width: size, height: size)
@@ -1514,8 +1594,7 @@ struct MusicSettingsPane: View {
         SettingsPane(
             title: "Music",
             subtitle: lang.t("settings.hero.music"),
-            systemImage: SettingsTab.music.icon,
-            color: SettingsTab.music.iconColor
+            systemImage: SettingsTab.music.icon
         ) {
             SettingsCard(
                 title: "Music Player",
@@ -1524,10 +1603,9 @@ struct MusicSettingsPane: View {
                 SettingsStackedRow("Player") {
                     HStack(alignment: .top, spacing: 12) {
                         playerTile(tag: "none", title: "None") {
-                            Image(systemName: "speaker.slash.fill")
-                                .font(.system(size: 26, weight: .medium))
-                                .symbolRenderingMode(.hierarchical)
-                                .foregroundStyle(.secondary)
+                            Image(systemName: "speaker.slash")
+                                .font(.system(size: 24, weight: .medium))
+                                .foregroundStyle(SettingsTheme.paper.opacity(0.55))
                         }
                         playerTile(tag: "appleMusic", title: "Apple Music") {
                             appIcon(for: .appleMusic)
@@ -1636,7 +1714,7 @@ struct RemoteConnectionSection: View {
                     SettingsStatusBadge(
                         text: "\(remoteSessionCount) active",
                         systemImage: "circle.fill",
-                        color: .green
+                        color: SettingsTheme.positive
                     )
                 } else {
                     Text("No remote sessions")
@@ -1688,9 +1766,9 @@ struct RemoteConnectionSection: View {
         HStack(alignment: .top, spacing: 12) {
             Text("\(number)")
                 .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
+                .foregroundStyle(SettingsTheme.ink)
                 .frame(width: 22, height: 22)
-                .background(Circle().fill(Color.accentColor.gradient))
+                .background(Circle().fill(SettingsTheme.paper.opacity(0.9)))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -1720,7 +1798,7 @@ struct RemoteConnectionSection: View {
             SettingsIconButton(
                 systemName: isCopied ? "checkmark" : "doc.on.doc",
                 help: "Copy",
-                tint: isCopied ? .green : nil
+                tint: isCopied ? SettingsTheme.positive : nil
             ) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(command, forType: .string)
@@ -1736,12 +1814,12 @@ struct RemoteConnectionSection: View {
         .padding(.trailing, 6)
         .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Color.primary.opacity(0.05))
+            RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
+                .fill(SettingsTheme.ink.opacity(0.55))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+            RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
+                .strokeBorder(SettingsTheme.paper.opacity(0.08), lineWidth: 1)
         )
     }
 }
