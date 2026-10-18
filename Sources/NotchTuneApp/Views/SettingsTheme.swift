@@ -12,9 +12,10 @@ enum SettingsTheme {
     /// The opaque stand-in for the glass, when Reduce Transparency is on: a
     /// warm near-black, a step up from the island's pure ink.
     static let window = Color(red: 0.055, green: 0.051, blue: 0.047)
-    /// Laid over the window's glass: dark enough for paper type on any
-    /// wallpaper, clear enough that the desktop still shows through.
-    static let glassTint = Color(red: 0.03, green: 0.03, blue: 0.035).opacity(0.6)
+    /// Laid over the window's frost: dense enough that a loud wallpaper
+    /// only tints the window, light enough that the desktop still glows
+    /// through.
+    static let glassTint = Color(red: 0.03, green: 0.03, blue: 0.035).opacity(0.72)
     /// The island's own ink, for tiles that stand in for the hardware.
     static let ink = V6Palette.ink
     static let paper = V6Palette.paper
@@ -65,12 +66,7 @@ struct SettingsTint: Equatable, Sendable {
     static let ember = SettingsTint(top: Color(red: 1.0, green: 0.69, blue: 0.36), bottom: Color(red: 0.94, green: 0.40, blue: 0.15))
     static let violet = SettingsTint(top: Color(red: 0.74, green: 0.56, blue: 1.0), bottom: Color(red: 0.45, green: 0.30, blue: 0.93))
     static let indigo = SettingsTint(top: Color(red: 0.52, green: 0.60, blue: 1.0), bottom: Color(red: 0.27, green: 0.34, blue: 0.89))
-    /// The pixel dino's cream, with an ink glyph.
-    static let paper = SettingsTint(
-        top: Color(red: 0.99, green: 0.96, blue: 0.89),
-        bottom: Color(red: 0.87, green: 0.82, blue: 0.71),
-        glyph: V6Palette.ink
-    )
+    static let teal = SettingsTint(top: Color(red: 0.33, green: 0.84, blue: 0.86), bottom: Color(red: 0.07, green: 0.58, blue: 0.66))
 }
 
 private struct SettingsTintKey: EnvironmentKey {
@@ -126,10 +122,9 @@ private struct SettingsThemeModifier: ViewModifier {
 
 // MARK: - Window glass
 
-/// The whole window's backdrop: the desktop through clear Liquid Glass
-/// (macOS 26), or a behind-window blur before that, under a dark tint. It
-/// stays lit when the window isn't key, like the island. Reduce
-/// Transparency gets the opaque window colour.
+/// The whole window's backdrop: the desktop through a frosted behind-window
+/// blur under a dark tint. It stays lit when the window isn't key, like the
+/// island. Reduce Transparency gets the opaque window colour.
 struct SettingsWindowGlass: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
@@ -145,69 +140,52 @@ struct SettingsWindowGlass: View {
     }
 }
 
+/// Not `NSGlassEffectView`: window glass follows the window's key state and
+/// goes flat and opaque as soon as you click into another app. A
+/// visual-effect view pinned `.active` keeps the frost either way.
 private struct SettingsBehindWindowGlass: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        if #available(macOS 26.0, *) {
-            let glass = NSGlassEffectView()
-            glass.style = .clear
-            glass.cornerRadius = 0
-            glass.appearance = NSAppearance(named: .darkAqua)
-            return glass
-        }
+    func makeNSView(context: Context) -> NSVisualEffectView {
         let blur = NSVisualEffectView()
         blur.blendingMode = .behindWindow
-        blur.material = .underWindowBackground
+        blur.material = .hudWindow
         blur.state = .active
         blur.appearance = NSAppearance(named: .darkAqua)
         return blur
     }
 
-    func updateNSView(_ view: NSView, context: Context) {}
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
 
-/// A floating panel on the window's glass (the sidebar): a second layer of
-/// Liquid Glass on macOS 26, a frosted card fill before that.
+/// A floating panel on the window's glass (the sidebar): a frosted layer a
+/// shade lighter than the window. (Liquid Glass here would go flat when the
+/// window loses focus, like the window's own.)
 struct SettingsPanelBackground: View {
     var cornerRadius: CGFloat = SettingsTheme.surfaceRadius
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        if #available(macOS 26.0, *) {
-            GlassEffectContainer {
-                Color.clear.glassEffect(.regular, in: shape)
-            }
-            // Tinted as a plain fill on top (see `IslandSurfaceBackground`).
-            .overlay { shape.fill(Color.black.opacity(0.22)) }
-        } else {
-            SettingsCardBackground(cornerRadius: cornerRadius)
-        }
+        SettingsCardBackground(cornerRadius: cornerRadius)
     }
 }
 
 // MARK: - Glyph tile
 
-/// An icon tile. Tinted, it is a section's coloured squircle (a vivid
-/// gradient with a white glyph, lit from the top); untinted, the notch-style
-/// ink square with a paper glyph and a faint paper rim.
+/// An icon tile. Tinted, it is a section's coloured squircle as System
+/// Settings draws them: a soft gradient, a filled white glyph, no rim; a
+/// small shadow seats it on the glass. Untinted, the notch-style ink square
+/// with a paper glyph and a faint paper rim.
 struct SettingsGlyphTile<Glyph: View>: View {
     var size: CGFloat
     var tint: SettingsTint? = nil
     @ViewBuilder let glyph: () -> Glyph
 
-    private var radius: CGFloat { size * 0.28 }
+    private var radius: CGFloat { size * 0.2237 }
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         ZStack {
             if let tint {
                 shape.fill(tint.gradient)
-                shape.fill(
-                    LinearGradient(
-                        colors: [.white.opacity(0.24), .white.opacity(0)],
-                        startPoint: .top,
-                        endPoint: .center
-                    )
-                )
+                    .shadow(color: .black.opacity(0.28), radius: size > 40 ? 6 : 1.5, y: size > 40 ? 3 : 0.75)
             } else {
                 shape.fill(SettingsTheme.ink)
                 shape.fill(
@@ -220,20 +198,19 @@ struct SettingsGlyphTile<Glyph: View>: View {
             }
             glyph()
                 .environment(\.settingsTileGlyphColor, tint?.glyph)
-                .shadow(color: .black.opacity(tint == nil ? 0 : 0.18), radius: 1, y: 0.5)
         }
         .frame(width: size, height: size)
         .overlay {
-            shape.strokeBorder(
-                LinearGradient(
-                    colors: tint == nil
-                        ? [SettingsTheme.paper.opacity(0.26), SettingsTheme.paper.opacity(0.06)]
-                        : [.white.opacity(0.42), .white.opacity(0.08)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
-                lineWidth: size > 40 ? 1 : 0.75
-            )
+            if tint == nil {
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [SettingsTheme.paper.opacity(0.26), SettingsTheme.paper.opacity(0.06)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: size > 40 ? 1 : 0.75
+                )
+            }
         }
         .accessibilityHidden(true)
     }
@@ -247,8 +224,8 @@ extension SettingsGlyphTile where Glyph == SettingsSymbolGlyph {
     }
 }
 
-/// An SF Symbol sized for a `SettingsGlyphTile`: white on a tinted tile,
-/// paper on an ink one.
+/// A filled SF Symbol sized for a `SettingsGlyphTile`: white on a tinted
+/// tile, paper on an ink one.
 struct SettingsSymbolGlyph: View {
     let systemName: String
     let size: CGFloat
@@ -257,7 +234,8 @@ struct SettingsSymbolGlyph: View {
 
     var body: some View {
         Image(systemName: systemName)
-            .font(.system(size: size * 0.46, weight: .semibold))
+            .symbolVariant(.fill)
+            .font(.system(size: size * 0.56, weight: .medium))
             .foregroundStyle(glyphColor ?? SettingsTheme.paper.opacity(0.92))
     }
 }

@@ -57,7 +57,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .music:      .ember
         case .appearance: .violet
         case .updates:    .indigo
-        case .about:      .paper
+        case .about:      .teal
         }
     }
 
