@@ -1,11 +1,12 @@
 import AppKit
 import SwiftUI
 
-/// The island character, drawn once per (character, frame, tint, size) into
-/// images and animated with Core Animation keyframes: the running frame-swap
-/// and bounce, the idle blink and the waiting pulse all run in the render
-/// server. A SwiftUI `TimelineView` + `Canvas` re-rendered and re-laid-out
-/// the whole notch window on every frame — ~9% CPU while an agent worked.
+/// The island character, drawn once per (frame, tint, size) into images and
+/// animated with Core Animation keyframes: each mode's frame sequence (walk
+/// cycles, blinks, glances, the "needs you" wave) and its smooth hop / sway
+/// all run in the render server. A SwiftUI `TimelineView` + `Canvas`
+/// re-rendered and re-laid-out the whole notch window on every frame — ~9%
+/// CPU while an agent worked.
 struct PixelCharacterView: NSViewRepresentable {
     var character: IslandCharacter
     var mode: UnifiedBars.Mode
@@ -37,10 +38,12 @@ final class PixelCharacterNSView: NSView {
         var rgba: [CGFloat]
     }
 
+    static let framesAnimationKey = "frames"
+    static let motionAnimationKey = "motion"
+
     private let sprite = CALayer()
     private var config: Config?
     private var builtSize: CGSize = .zero
-    private var builtScale: CGFloat = 0
 
     override var isFlipped: Bool { true }
 
@@ -57,6 +60,10 @@ final class PixelCharacterNSView: NSView {
     /// Test seam: the Core Animation keys currently running on the sprite.
     var runningAnimationKeys: Set<String> { Set(sprite.animationKeys() ?? []) }
     var hasSpriteContents: Bool { sprite.contents != nil }
+    /// Test seam: the frame images the running frame animation steps through.
+    var frameAnimationImageCount: Int {
+        (sprite.animation(forKey: Self.framesAnimationKey) as? CAKeyframeAnimation)?.values?.count ?? 0
+    }
 
     func apply(_ newConfig: Config) {
         guard newConfig != config else { return }
@@ -80,7 +87,6 @@ final class PixelCharacterNSView: NSView {
         guard let config, bounds.width > 0, bounds.height > 0 else { return }
         let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         builtSize = bounds.size
-        builtScale = scale
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -89,83 +95,114 @@ final class PixelCharacterNSView: NSView {
         sprite.removeAllAnimations()
         sprite.frame = bounds
         sprite.contentsScale = scale
-        sprite.opacity = 1
 
-        let character = config.character
+        let character = config.character.sprite
         let color = CGColor(srgbRed: config.rgba[0], green: config.rgba[1], blue: config.rgba[2], alpha: config.rgba[3])
         let side = min(bounds.width, bounds.height)
         let render: (PixelFrame) -> CGImage? = { frame in
             PixelCharacterRenderer.image(frame: frame, color: color, side: side, scale: scale)
         }
-        let idle = render(character.idleFrame)
-        sprite.contents = idle
 
-        guard !config.paused, let idle else { return }
-        let unit = side / PixelCharacterRenderer.box
+        guard !config.paused else {
+            sprite.contents = render(character.rest)
+            return
+        }
 
-        switch config.mode {
-        case .running:
-            // 5fps frame swap: idle for 0.2s, running for 0.2s.
-            if let running = render(character.runningFrame) {
-                let swap = CAKeyframeAnimation(keyPath: "contents")
-                swap.values = [idle, running]
-                swap.keyTimes = [0, 0.5]
-                swap.calculationMode = .discrete
-                swap.duration = 0.4
-                swap.repeatCount = .infinity
-                sprite.add(swap, forKey: "frameSwap")
+        let sequence = character.sequence(for: config.mode)
+        var images: [Int: CGImage] = [:]
+        for step in sequence.steps where images[step.frame] == nil {
+            images[step.frame] = render(character.frames[step.frame])
+        }
+        let first = sequence.steps.first.flatMap { images[$0.frame] }
+        sprite.contents = first
+
+        // Frame sequence: discrete contents swaps at each step's start.
+        let values = sequence.steps.compactMap { images[$0.frame] }
+        if values.count == sequence.steps.count, values.count > 1 {
+            let total = sequence.cycleDuration
+            var elapsed: TimeInterval = 0
+            var keyTimes: [NSNumber] = []
+            for step in sequence.steps {
+                keyTimes.append(NSNumber(value: elapsed / total))
+                elapsed += step.duration
             }
-            // The character's bounce curve, sampled over one period.
-            let period = character.runningBouncePeriod
+            keyTimes.append(1)
+            let frames = CAKeyframeAnimation(keyPath: "contents")
+            frames.values = values
+            frames.keyTimes = keyTimes
+            frames.calculationMode = .discrete
+            frames.duration = total
+            frames.repeatCount = .infinity
+            sprite.add(frames, forKey: Self.framesAnimationKey)
+        }
+
+        // Smooth hop / sway, sampled over one period.
+        if let motion = sequence.motion, let reference = sequence.steps.first {
+            let cell = PixelCharacterRenderer.cellPoints(
+                for: character.frames[reference.frame], side: side, scale: scale
+            )
             let samples = 24
-            let bounce = CAKeyframeAnimation(keyPath: "transform.translation.y")
-            bounce.values = (0...samples).map { index in
-                -character.runningBounce(time: period * Double(index) / Double(samples)) * unit
+            let animation = CAKeyframeAnimation(
+                keyPath: motion.axis == .y ? "transform.translation.y" : "transform.translation.x"
+            )
+            animation.values = (0...samples).map { index in
+                let offset = motion.offset(at: motion.period * Double(index) / Double(samples)) * cell
+                // Flipped view: up is negative y.
+                return motion.axis == .y ? -offset : offset
             }
-            bounce.duration = period
-            bounce.repeatCount = .infinity
-            sprite.add(bounce, forKey: "bounce")
-
-        case .idle:
-            // A 0.15s blink at the start of every 3s.
-            if let eye = character.eyeCoordinate {
-                var blinkFrame = character.idleFrame
-                blinkFrame[eye.row][eye.column] = 1
-                if let blink = render(blinkFrame) {
-                    let blinkAnimation = CAKeyframeAnimation(keyPath: "contents")
-                    blinkAnimation.values = [blink, idle]
-                    blinkAnimation.keyTimes = [0, NSNumber(value: 0.15 / 3.0)]
-                    blinkAnimation.calculationMode = .discrete
-                    blinkAnimation.duration = 3
-                    blinkAnimation.repeatCount = .infinity
-                    sprite.add(blinkAnimation, forKey: "blink")
-                }
-            }
-
-        case .waiting:
-            // 0.45 ↔ 1.0 cosine pulse over 1.8s.
-            let pulse = CABasicAnimation(keyPath: "opacity")
-            pulse.fromValue = 0.45
-            pulse.toValue = 1.0
-            pulse.duration = 0.9
-            pulse.autoreverses = true
-            pulse.repeatCount = .infinity
-            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            sprite.add(pulse, forKey: "pulse")
+            animation.duration = motion.period
+            animation.repeatCount = .infinity
+            sprite.add(animation, forKey: Self.motionAnimationKey)
         }
     }
 }
 
-typealias PixelFrame = [[Int]]
-
 enum PixelCharacterRenderer {
-    /// Design box the 9×9 grid is laid out in (matches the old Canvas math).
+    /// Design box the glyph is laid out in.
     static let box: CGFloat = 24
-    private static let pixelSize: CGFloat = 1.6
-    private static let gap: CGFloat = 0.35
+    /// Share of the glyph the character grid spans.
+    static let extentRatio: CGFloat = 21.0 / 24.0
+    /// A pixel's share of its cell (the rest is the dot-matrix gap).
+    static let dotRatio: CGFloat = 0.9
+    /// Opacity of '+' (dim) pixels.
+    static let dimAlpha: CGFloat = 0.38
+    /// Images kept across views; cleared when it overflows.
+    static let cacheLimit = 384
+
+    struct Geometry: Equatable {
+        /// Bitmap side in pixels.
+        let pixels: Int
+        /// One grid cell, in pixels.
+        let cell: CGFloat
+        let originX: CGFloat
+        let originY: CGFloat
+    }
+
+    /// Cells of 3px and up snap to whole pixels so every dot starts on a
+    /// pixel boundary — crisp at the notch's 24pt on Retina.
+    static func geometry(columns: Int, rows: Int, side: CGFloat, scale: CGFloat) -> Geometry {
+        let pixels = max(1, Int((side * scale).rounded(.up)))
+        let span = CGFloat(max(columns, rows, 1))
+        var cell = CGFloat(pixels) * extentRatio / span
+        if cell >= 3 {
+            cell = cell.rounded()
+            if cell * span > CGFloat(pixels) { cell -= 1 }
+        }
+        return Geometry(
+            pixels: pixels,
+            cell: cell,
+            originX: ((CGFloat(pixels) - cell * CGFloat(columns)) / 2).rounded(),
+            originY: ((CGFloat(pixels) - cell * CGFloat(rows)) / 2).rounded()
+        )
+    }
+
+    /// One grid cell in points — the unit motion amplitudes are given in.
+    static func cellPoints(for frame: PixelFrame, side: CGFloat, scale: CGFloat) -> CGFloat {
+        geometry(columns: frame.width, rows: frame.height, side: side, scale: scale).cell / max(scale, 1)
+    }
 
     private struct Key: Hashable {
-        let frame: [[Int]]
+        let frame: PixelFrame
         let rgba: [CGFloat]
         let side: CGFloat
         let scale: CGFloat
@@ -173,44 +210,58 @@ enum PixelCharacterRenderer {
 
     @MainActor private static var cache: [Key: CGImage] = [:]
 
+    @MainActor static var cachedImageCount: Int { cache.count }
+
     @MainActor
     static func image(frame: PixelFrame, color: CGColor, side: CGFloat, scale: CGFloat) -> CGImage? {
         let rgba = color.components ?? [1, 1, 1, 1]
         let key = Key(frame: frame, rgba: rgba, side: side, scale: scale)
         if let cached = cache[key] { return cached }
 
-        let pixels = max(1, Int((side * scale).rounded(.up)))
+        let image = draw(frame: frame, color: color, side: side, scale: scale)
+        if cache.count >= cacheLimit { cache.removeAll(keepingCapacity: true) }
+        cache[key] = image
+        return image
+    }
+
+    /// Uncached drawing (also used by the sprite contact-sheet test).
+    static func draw(frame: PixelFrame, color: CGColor, side: CGFloat, scale: CGFloat) -> CGImage? {
+        let geometry = geometry(columns: frame.width, rows: frame.height, side: side, scale: scale)
         guard let context = CGContext(
-            data: nil, width: pixels, height: pixels, bitsPerComponent: 8, bytesPerRow: 0,
+            data: nil, width: geometry.pixels, height: geometry.pixels, bitsPerComponent: 8, bytesPerRow: 0,
             space: CGColorSpace(name: CGColorSpace.sRGB)!,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
 
-        // y-down, in design-box units.
-        let unitToPixel = CGFloat(pixels) / box
-        context.translateBy(x: 0, y: CGFloat(pixels))
-        context.scaleBy(x: unitToPixel, y: -unitToPixel)
-        context.setFillColor(color)
+        // y-down, in pixels.
+        context.translateBy(x: 0, y: CGFloat(geometry.pixels))
+        context.scaleBy(x: 1, y: -1)
 
-        let grid = frame.count
-        let total = CGFloat(grid) * pixelSize + CGFloat(grid - 1) * gap
-        let start = (box - total) / 2
-        for row in 0..<grid {
-            for column in 0..<frame[row].count where frame[row][column] == 1 {
+        let dot = geometry.cell * dotRatio
+        let corner = dot * 0.12
+        let full = CGMutablePath()
+        let dim = CGMutablePath()
+        for row in 0..<frame.height {
+            for column in 0..<frame.width {
+                let value = frame[row, column]
+                guard value != 0 else { continue }
                 let rect = CGRect(
-                    x: start + CGFloat(column) * (pixelSize + gap),
-                    y: start + CGFloat(row) * (pixelSize + gap),
-                    width: pixelSize,
-                    height: pixelSize
+                    x: geometry.originX + CGFloat(column) * geometry.cell,
+                    y: geometry.originY + CGFloat(row) * geometry.cell,
+                    width: dot,
+                    height: dot
                 )
-                context.addPath(CGPath(roundedRect: rect, cornerWidth: 0.2, cornerHeight: 0.2, transform: nil))
+                (value == 1 ? full : dim).addRoundedRect(in: rect, cornerWidth: corner, cornerHeight: corner)
             }
         }
+        context.setFillColor(color)
+        context.addPath(full)
         context.fillPath()
-
-        let image = context.makeImage()
-        if cache.count > 256 { cache.removeAll() }
-        cache[key] = image
-        return image
+        if !dim.isEmpty {
+            context.setFillColor(color.copy(alpha: color.alpha * dimAlpha) ?? color)
+            context.addPath(dim)
+            context.fillPath()
+        }
+        return context.makeImage()
     }
 }

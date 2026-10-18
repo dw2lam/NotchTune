@@ -114,12 +114,18 @@ struct IslandAppearancePreferences: Equatable, Sendable {
     var completedStaleThreshold: IslandCompletedStaleThreshold = .fiveMinutes
 }
 
+/// Raw values are persisted in the appearance preferences: never rename one.
 enum IslandCharacter: String, CaseIterable, Identifiable, Sendable {
     case dino
     case ghost
     case crab
     case duck
     case claude
+    case cat
+    case robot
+    case octopus
+    case frog
+    case slime
 
     var id: String { rawValue }
 }
