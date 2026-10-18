@@ -105,6 +105,8 @@ public struct SessionState: Equatable, Sendable {
                 if payload.phase == .running {
                     // Back at work: the last turn's summary no longer applies.
                     session.taskSummary = nil
+                } else if payload.phase == .completed, let taskSummary = payload.taskSummary {
+                    session.taskSummary = taskSummary
                 }
                 if payload.phase != .waitingForApproval {
                     session.permissionRequest = nil

@@ -57,17 +57,22 @@ public struct SessionActivityUpdated: Equatable, Codable, Sendable {
     public var summary: String
     public var phase: SessionPhase
     public var timestamp: Date
+    /// What the turn did, when this update settles it to `.completed`
+    /// without a completion notification (Codex's stop-hook continuation).
+    public var taskSummary: TaskSummary?
 
     public init(
         sessionID: String,
         summary: String,
         phase: SessionPhase,
-        timestamp: Date
+        timestamp: Date,
+        taskSummary: TaskSummary? = nil
     ) {
         self.sessionID = sessionID
         self.summary = summary
         self.phase = phase
         self.timestamp = timestamp
+        self.taskSummary = taskSummary
     }
 }
 

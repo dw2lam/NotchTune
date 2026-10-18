@@ -599,7 +599,7 @@ public final class BridgeServer: @unchecked Sendable {
                 toolName: payload.toolName ?? "Bash",
                 input: payload.toolInput?.rawValue ?? payload.commandText.map { .object(["command": .string($0)]) },
                 response: payload.toolResponse,
-                failed: false,
+                outcome: .succeeded,
                 at: .now
             )
 
@@ -650,7 +650,8 @@ public final class BridgeServer: @unchecked Sendable {
                     sessionID: payload.sessionID,
                     summary: summary,
                     phase: .completed,
-                    timestamp: timestamp
+                    timestamp: timestamp,
+                    taskSummary: taskSummary
                 )
             )
         }
@@ -2452,14 +2453,18 @@ public final class BridgeServer: @unchecked Sendable {
         }
 
         let now = Date.now
-        let before = metadata.activeSubagents.count
-        metadata.activeSubagents.removeAll { sub in
+        let isStale: (ClaudeSubagentInfo) -> Bool = { sub in
             guard let lastSeen = sub.lastActivityAt ?? sub.startedAt else { return false }
             return now.timeIntervalSince(lastSeen) > Self.subagentStaleTimeout
         }
-
-        guard metadata.activeSubagents.count != before else { return }
-        defer { completeDeferredClaudeTurnIfIdle(sessionID: sessionID) }
+        let stale = metadata.activeSubagents.filter(isStale)
+        guard !stale.isEmpty else { return }
+        metadata.activeSubagents.removeAll(where: isStale)
+        // The work ended when they were last heard from, not now (up to the
+        // stale timeout later): that's what the turn's duration should say.
+        let workEnded = (stale.compactMap { $0.lastActivityAt ?? $0.startedAt }
+            + [taskActivity.lastActivity(sessionID: sessionID)].compactMap { $0 }).max()
+        defer { completeDeferredClaudeTurnIfIdle(sessionID: sessionID, finishedAt: workEnded ?? now) }
 
         emit(
             .claudeSessionMetadataUpdated(
@@ -2484,11 +2489,11 @@ public final class BridgeServer: @unchecked Sendable {
     /// A finished (or failed) tool call, main agent or subagent, toward the
     /// turn's `TaskSummary`.
     private func recordClaudeToolUse(_ payload: ClaudeHookPayload) {
-        let failed: Bool
+        let outcome: TaskActivityTracker.ToolOutcome
         switch payload.hookEventName {
-        case .postToolUse: failed = false
+        case .postToolUse: outcome = .succeeded
         // An interrupt isn't a failure: the run's result is just unknown.
-        case .postToolUseFailure: failed = payload.isInterrupt != true
+        case .postToolUseFailure: outcome = payload.isInterrupt == true ? .interrupted : .failed
         default: return
         }
         taskActivity.recordToolUse(
@@ -2496,7 +2501,10 @@ public final class BridgeServer: @unchecked Sendable {
             toolName: payload.toolName,
             input: payload.toolInput,
             response: payload.hookEventName == .postToolUse ? payload.toolResponse : nil,
-            failed: failed,
+            outcome: outcome,
+            // Claude Code's install hooks PostToolUseFailure, so a plain
+            // stdout/stderr result passed; other sources may not report failures.
+            infersSuccessFromOutput: payload.resolvedAgentTool == .claudeCode,
             at: .now
         )
     }
@@ -2717,7 +2725,7 @@ public final class BridgeServer: @unchecked Sendable {
     /// Delivers a held completion once no subagents remain. Returns true if
     /// it completed the session.
     @discardableResult
-    private func completeDeferredClaudeTurnIfIdle(sessionID: String) -> Bool {
+    private func completeDeferredClaudeTurnIfIdle(sessionID: String, finishedAt: Date = .now) -> Bool {
         guard let deferred = deferredClaudeCompletions[sessionID] else { return false }
         let active = localState.session(id: sessionID)?.claudeMetadata?.activeSubagents ?? []
         guard active.isEmpty else { return false }
@@ -2747,7 +2755,7 @@ public final class BridgeServer: @unchecked Sendable {
                     timestamp: .now,
                     isInterrupt: deferred.isInterrupt,
                     // Timed to the last background agent: that's when the turn's work ended.
-                    taskSummary: taskActivity.summary(sessionID: sessionID, finishedAt: .now)
+                    taskSummary: taskActivity.summary(sessionID: sessionID, finishedAt: finishedAt)
                 )
             )
         )

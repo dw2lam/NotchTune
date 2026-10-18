@@ -59,6 +59,8 @@ extension AgentSession {
         guard presence != .inactive else { return height }
         if spotlightPromptLineText != nil { height += 17 }
         if spotlightActivityLineText != nil { height += 20 }
+        // A finished turn's summary row (`TaskSummaryLine`, 14pt + spacing 4).
+        if phase == .completed, taskSummary.map({ !$0.isEmpty }) == true { height += 18 }
         if let subagents = claudeMetadata?.activeSubagents, !subagents.isEmpty {
             height += 18
             height += CGFloat(subagents.count) * 18  // each subagent row (spacing 4 + text 14)

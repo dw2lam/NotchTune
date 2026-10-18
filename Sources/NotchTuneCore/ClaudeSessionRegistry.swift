@@ -11,6 +11,8 @@ public struct ClaudeTrackedSessionRecord: Equatable, Codable, Sendable {
     public var firstSeenAt: Date?
     public var jumpTarget: JumpTarget?
     public var claudeMetadata: ClaudeSessionMetadata?
+    /// The last finished turn's summary, so a relaunch still shows it.
+    public var taskSummary: TaskSummary?
 
     public init(
         sessionID: String,
@@ -22,7 +24,8 @@ public struct ClaudeTrackedSessionRecord: Equatable, Codable, Sendable {
         updatedAt: Date,
         firstSeenAt: Date? = nil,
         jumpTarget: JumpTarget? = nil,
-        claudeMetadata: ClaudeSessionMetadata? = nil
+        claudeMetadata: ClaudeSessionMetadata? = nil,
+        taskSummary: TaskSummary? = nil
     ) {
         self.sessionID = sessionID
         self.title = title
@@ -34,6 +37,7 @@ public struct ClaudeTrackedSessionRecord: Equatable, Codable, Sendable {
         self.firstSeenAt = firstSeenAt
         self.jumpTarget = jumpTarget
         self.claudeMetadata = claudeMetadata
+        self.taskSummary = taskSummary
     }
 
     public init(session: AgentSession) {
@@ -47,12 +51,13 @@ public struct ClaudeTrackedSessionRecord: Equatable, Codable, Sendable {
             updatedAt: session.updatedAt,
             firstSeenAt: session.firstSeenAt,
             jumpTarget: session.jumpTarget,
-            claudeMetadata: session.claudeMetadata
+            claudeMetadata: session.claudeMetadata,
+            taskSummary: session.taskSummary
         )
     }
 
     public var session: AgentSession {
-        AgentSession(
+        var session = AgentSession(
             id: sessionID,
             title: title,
             tool: .claudeCode,
@@ -65,6 +70,8 @@ public struct ClaudeTrackedSessionRecord: Equatable, Codable, Sendable {
             jumpTarget: jumpTarget,
             claudeMetadata: claudeMetadata
         )
+        session.taskSummary = taskSummary
+        return session
     }
 
     public var restorableSession: AgentSession {
@@ -84,6 +91,7 @@ public struct ClaudeTrackedSessionRecord: Equatable, Codable, Sendable {
         case firstSeenAt
         case jumpTarget
         case claudeMetadata
+        case taskSummary
     }
 
     public init(from decoder: any Decoder) throws {
@@ -98,6 +106,7 @@ public struct ClaudeTrackedSessionRecord: Equatable, Codable, Sendable {
         firstSeenAt = try container.decodeIfPresent(Date.self, forKey: .firstSeenAt)
         jumpTarget = try container.decodeIfPresent(JumpTarget.self, forKey: .jumpTarget)
         claudeMetadata = try container.decodeIfPresent(ClaudeSessionMetadata.self, forKey: .claudeMetadata)
+        taskSummary = try container.decodeIfPresent(TaskSummary.self, forKey: .taskSummary)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -112,6 +121,7 @@ public struct ClaudeTrackedSessionRecord: Equatable, Codable, Sendable {
         try container.encodeIfPresent(firstSeenAt, forKey: .firstSeenAt)
         try container.encodeIfPresent(jumpTarget, forKey: .jumpTarget)
         try container.encodeIfPresent(claudeMetadata, forKey: .claudeMetadata)
+        try container.encodeIfPresent(taskSummary, forKey: .taskSummary)
     }
 }
 

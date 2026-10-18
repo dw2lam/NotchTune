@@ -81,4 +81,46 @@ struct TaskSummaryPartsTests {
         session.taskSummary = TaskSummary(fileCount: 2, fileNames: ["a", "b"], tests: .passed, duration: 75)
         #expect(resolve()?.subtitle == "Edited 2 files · Tests passed · 1m 15s")
     }
+
+    // MARK: Height estimates (the panel opens at its final size)
+
+    private func finished(reply: String, summary: TaskSummary?) -> AgentSession {
+        var session = AgentSession(
+            id: "done",
+            title: "Codex · repo",
+            tool: .codex,
+            origin: .live,
+            attachmentState: .attached,
+            phase: .completed,
+            summary: reply,
+            updatedAt: Date(timeIntervalSince1970: 10_000)
+        )
+        session.taskSummary = summary
+        return session
+    }
+
+    private let summary = TaskSummary(fileCount: 2, fileNames: ["a.swift", "b.swift"], tests: .passed, duration: 75)
+
+    @Test
+    func theToastEstimateMakesRoomForTheSummaryRow() {
+        let bare = CompletionToastView.estimatedHeight(for: finished(reply: "Done, one line.", summary: nil), contentWidth: 560, hasPrompt: true)
+        let withSummary = CompletionToastView.estimatedHeight(for: finished(reply: "Done, one line.", summary: summary), contentWidth: 560, hasPrompt: true)
+        // TaskSummaryLine (14pt) + the card's 6pt row spacing.
+        #expect(withSummary - bare == 20)
+
+        // A long reply gives up its last line to the summary, as the view does.
+        let long = String(repeating: "A long reply that wraps across many lines of the card. ", count: 12)
+        let longBare = CompletionToastView.estimatedHeight(for: finished(reply: long, summary: nil), contentWidth: 560, hasPrompt: true)
+        let longWithSummary = CompletionToastView.estimatedHeight(for: finished(reply: long, summary: summary), contentWidth: 560, hasPrompt: true)
+        #expect(longWithSummary - longBare < 20)
+        #expect(CompletionToastView.previewLineLimit(hasSummary: true) == NotificationSurfaceMetrics.previewLineLimit - 1)
+    }
+
+    @Test
+    func aDoneRowEstimateCountsItsSummaryLine() {
+        let date = Date(timeIntervalSince1970: 10_005)
+        let bare = finished(reply: "Done.", summary: nil).estimatedIslandRowHeight(at: date)
+        let withSummary = finished(reply: "Done.", summary: summary).estimatedIslandRowHeight(at: date)
+        #expect(withSummary - bare == 18)
+    }
 }
