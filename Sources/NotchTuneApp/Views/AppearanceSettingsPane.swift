@@ -31,13 +31,13 @@ struct AppearanceSettingsPane: View {
             title: lang.t("settings.tab.appearance"),
             subtitle: lang.t("settings.hero.appearance")
         ) {
-            // The hero is the character itself, in the island's paper ink,
+            // The hero is the character itself, white on the pane's tile,
             // following the choice below and following the preview's state.
             PixelCharacterView(
                 character: editingPreferences.character,
                 mode: heroCharacterMode,
                 paused: !isOnScreen || reduceMotion,
-                tint: SettingsTheme.paper
+                tint: SettingsTab.appearance.tint.glyph
             )
             .frame(width: 34, height: 34)
             .id(editingPreferences.character)

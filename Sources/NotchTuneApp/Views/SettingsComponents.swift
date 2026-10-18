@@ -218,14 +218,16 @@ private struct HiddenToolbarTitle: ViewModifier {
     }
 }
 
-/// The hero's large notch tile, with a faint paper glow beneath it.
+/// The hero's large tile in the pane's colour, glowing beneath it.
 struct SettingsHeroIcon<Glyph: View>: View {
     @ViewBuilder let glyph: () -> Glyph
 
+    @Environment(\.settingsTint) private var tint
+
     var body: some View {
-        SettingsGlyphTile(size: SettingsMetrics.heroIconSize, glyph: glyph)
-            .shadow(color: SettingsTheme.paper.opacity(0.10), radius: 14, y: 6)
-            .shadow(color: .black.opacity(0.5), radius: 4, y: 2)
+        SettingsGlyphTile(size: SettingsMetrics.heroIconSize, tint: tint, glyph: glyph)
+            .shadow(color: tint.map { $0.bottom.opacity(0.5) } ?? SettingsTheme.paper.opacity(0.10), radius: 16, y: 6)
+            .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
     }
 }
 
@@ -258,8 +260,8 @@ struct SettingsHeroHeader<Icon: View>: View {
 
 // MARK: - Cards
 
-/// The card fill: a whisper of paper over the ink window, with a hairline
-/// rim that catches a little more light along the top — the island's rows,
+/// The card fill: frosted a shade lighter than the window's glass, with a
+/// hairline rim that catches more light along the top — the island's rows,
 /// scaled up.
 struct SettingsCardBackground: View {
     var cornerRadius: CGFloat = SettingsMetrics.cardCornerRadius
@@ -271,7 +273,7 @@ struct SettingsCardBackground: View {
             .overlay {
                 shape.strokeBorder(
                     LinearGradient(
-                        colors: [SettingsTheme.paper.opacity(0.12), SettingsTheme.surfaceStroke],
+                        colors: [SettingsTheme.paper.opacity(0.17), SettingsTheme.surfaceStroke],
                         startPoint: .top,
                         endPoint: .bottom
                     ),
@@ -676,10 +678,10 @@ struct SettingsTile<Thumbnail: View>: View {
                     if isSelected {
                         Image(systemName: "checkmark")
                             .font(.system(size: 8.5, weight: .heavy))
-                            .foregroundStyle(SettingsTheme.ink)
+                            .foregroundStyle(SettingsTheme.onAccent)
                             .frame(width: 17, height: 17)
                             .background(Circle().fill(SettingsTheme.accent))
-                            .overlay(Circle().strokeBorder(SettingsTheme.ink.opacity(0.6), lineWidth: 1.5))
+                            .overlay(Circle().strokeBorder(SettingsTheme.ink.opacity(0.5), lineWidth: 1.5))
                             .padding(6)
                             .transition(.scale(scale: 0.4).combined(with: .opacity))
                     }
@@ -718,7 +720,7 @@ struct SettingsTile<Thumbnail: View>: View {
     }
 
     private var ringColor: Color {
-        if isSelected { return SettingsTheme.accent.opacity(0.9) }
+        if isSelected { return SettingsTheme.accent }
         return isHovered ? SettingsTheme.paper.opacity(0.2) : .clear
     }
 

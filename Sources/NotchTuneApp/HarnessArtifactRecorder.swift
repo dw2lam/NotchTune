@@ -239,7 +239,36 @@ enum HarnessArtifactRecorder {
             }
             guard let data = compositedPNGData(for: window) else { continue }
             try? data.write(to: directoryURL.appendingPathComponent("\(name).png"))
+            // Over the harness wallpaper too (`<name>-desktop.png`), when one
+            // was opened behind it. Re-stacked first (parking moved the
+            // window), captured once the glass has re-sampled it.
+            if let backdrop = NSApp.windows.first(where: { $0.identifier?.rawValue == HarnessHeadless.backdropWindowID }) {
+                HarnessHeadless.orderBackdrop(backdrop, behind: window)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    guard let data = compositedPNGData(for: window, over: backdrop) else { return }
+                    try? data.write(to: directoryURL.appendingPathComponent("\(name)-desktop.png"))
+                }
+            }
         }
+    }
+
+    /// `window` composited over `backdrop` and nothing else — no other
+    /// window (the real desktop included) can reach the image.
+    private static func compositedPNGData(for window: NSWindow, over backdrop: NSWindow) -> Data? {
+        typealias Fn = @convention(c) (CGRect, CFArray, UInt32) -> Unmanaged<CGImage>?
+        guard let handle = dlopen(nil, RTLD_NOW),
+              let sym = dlsym(handle, "CGWindowListCreateImageFromArray"),
+              let primary = NSScreen.screens.first else { return nil }
+        let fn = unsafeBitCast(sym, to: Fn.self)
+        // Global display space has a top-left origin on the primary display.
+        let frame = window.frame.insetBy(dx: -30, dy: -30)
+        let rect = CGRect(x: frame.minX, y: primary.frame.maxY - frame.maxY, width: frame.width, height: frame.height)
+        // Front to back; the array holds raw CGWindowIDs.
+        var ids = [window.windowNumber, backdrop.windowNumber].map { UnsafeRawPointer(bitPattern: UInt($0)) }
+        guard let array = CFArrayCreate(nil, &ids, ids.count, nil),
+              // bestResolution = 1 << 3 image option.
+              let image = fn(rect, array, 1 << 3)?.takeRetainedValue() else { return nil }
+        return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
     }
 
     /// `NOTCHTUNE_HARNESS_FILMSTRIP=1`: close the notch, then sample the
