@@ -71,11 +71,14 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                         // `NOTCHTUNE_HARNESS_SETTINGS_WIDTH=<pt>` sizes the window
                         // (e.g. 780, its minimum) to catch panes that overflow.
                         let width = env["NOTCHTUNE_HARNESS_SETTINGS_WIDTH"].flatMap(Double.init) ?? 860
-                        HarnessHeadless.openHiddenWindow(
+                        let window = HarnessHeadless.openHiddenWindow(
                             id: "harness-settings", title: "NotchTune Settings",
                             size: NSSize(width: width, height: 640),
                             rootView: SettingsView(model: model)
                         )
+                        if let backdrop = env["NOTCHTUNE_HARNESS_SETTINGS_BACKDROP"] {
+                            HarnessHeadless.openBackdrop(behind: window, imagePath: backdrop)
+                        }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             NotificationCenter.default.post(name: .notchTuneSelectSettingsTab, object: tab)
                         }

@@ -185,6 +185,40 @@ enum HarnessHeadless {
         }
     }
 
+    /// `NOTCHTUNE_HARNESS_SETTINGS_BACKDROP=<image path>`: a wallpaper panel
+    /// directly behind a hidden window, so a capture of the two shows the
+    /// window's glass as it sits on a desktop (captured alone, a translucent
+    /// window has nothing behind it). A panel, so `parkAppWindows` leaves it.
+    @MainActor
+    static func openBackdrop(behind window: NSWindow, imagePath: String) {
+        guard let image = NSImage(contentsOfFile: imagePath) else { return }
+        let margin: CGFloat = 60
+        let panel = NSPanel(
+            contentRect: window.frame.insetBy(dx: -margin, dy: -margin),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        let imageView = NSImageView(image: image)
+        imageView.imageScaling = .scaleAxesIndependently
+        panel.contentView = imageView
+        panel.ignoresMouseEvents = true
+        panel.isReleasedWhenClosed = false
+        panel.identifier = NSUserInterfaceItemIdentifier(backdropWindowID)
+        orderBackdrop(panel, behind: window)
+    }
+
+    /// Keeps the backdrop directly under `window`, at its level: the real
+    /// wallpaper sits on the level below and would otherwise be what the
+    /// glass blurs. (`parkAppWindows` sends `window` to its level's back.)
+    @MainActor
+    static func orderBackdrop(_ panel: NSWindow, behind window: NSWindow) {
+        panel.level = window.level
+        panel.order(.below, relativeTo: window.windowNumber)
+    }
+
+    static let backdropWindowID = "harness-backdrop"
+
     /// Identifiers of the windows `openHiddenWindow` creates.
     /// Distinct from SwiftUI's own `Window(id: "settings")` scene windows,
     /// which must be closed, not mistaken for (and captured instead of) these.
