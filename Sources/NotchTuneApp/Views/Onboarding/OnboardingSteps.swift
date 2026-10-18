@@ -426,10 +426,15 @@ struct OnboardingPersonalizeStep: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 OnboardingSectionHeader(title: "Character", caption: "Shown on the closed notch")
-                HStack(spacing: 8) {
+                // Ten characters: two rows of five.
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.fixed(84), spacing: 8), count: 5),
+                    alignment: .leading,
+                    spacing: 8
+                ) {
                     ForEach(IslandCharacter.allCases) { option in
                         OnboardingChoiceTile(
-                            title: option.rawValue.capitalized,
+                            title: option.title,
                             isSelected: model.islandCharacter == option,
                             action: { model.islandCharacter = option }
                         ) {

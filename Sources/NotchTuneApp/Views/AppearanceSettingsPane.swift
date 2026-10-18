@@ -200,7 +200,8 @@ struct AppearanceSettingsPane: View {
         SettingsCard(title: lang.t("settings.appearance.character.title")) {
             SettingsTileRow(
                 title: lang.t("settings.appearance.character.row"),
-                detail: lang.t("settings.appearance.character.note")
+                detail: lang.t("settings.appearance.character.note"),
+                columns: 5
             ) {
                 ForEach(IslandCharacter.allCases) { option in
                     let isSelected = editingPreferences.character == option

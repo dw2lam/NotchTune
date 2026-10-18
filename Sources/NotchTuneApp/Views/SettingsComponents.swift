@@ -734,12 +734,25 @@ struct SettingsTileRow<Tiles: View>: View {
     let title: String
     var detail: String? = nil
     var spacing: CGFloat = 12
+    /// Wraps the tiles into rows of this many (e.g. the ten characters);
+    /// `nil` keeps them on one line.
+    var columns: Int? = nil
     @ViewBuilder let tiles: () -> Tiles
 
     var body: some View {
         SettingsStackedRow(title, subtitle: detail) {
-            HStack(alignment: .top, spacing: spacing) {
-                tiles()
+            if let columns {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: spacing, alignment: .top), count: columns),
+                    alignment: .leading,
+                    spacing: spacing
+                ) {
+                    tiles()
+                }
+            } else {
+                HStack(alignment: .top, spacing: spacing) {
+                    tiles()
+                }
             }
         }
     }
