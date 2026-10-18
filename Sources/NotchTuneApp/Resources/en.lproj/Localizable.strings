@@ -9,8 +9,6 @@
 "settings.tab.sound" = "Sound";
 "settings.tab.shortcuts" = "Shortcuts";
 "settings.tab.lab" = "Lab";
-"settings.tab.about" = "About";
-"settings.tab.updates" = "Updates";
 
 /* Settings - Section Headers */
 "settings.section.system" = "System";
@@ -180,15 +178,9 @@
 
 /* Settings - About */
 "settings.about.version" = "Version %@";
-"settings.about.checkForUpdates" = "Check for Updates…";
 "settings.about.quitApp" = "Quit NotchTune";
-"settings.updates.softwareUpdate" = "Software Update";
-"settings.updates.currentVersion" = "Current version";
-"settings.updates.build" = "Build";
-"settings.updates.availableVersion" = "Available version";
 "settings.updates.checkForUpdates" = "Check for Updates…";
-"settings.updates.releaseNotes" = "View Releases";
-"settings.updates.automaticDetail" = "NotchTune checks for updates automatically. Updates are downloaded only when you choose to install them.";
+"settings.updates.releaseNotes" = "Release Notes";
 "island.quit.confirmTitle" = "Quit NotchTune?";
 "island.quit.confirmAction" = "Quit";
 "island.quit.confirmMessage" = "Are you sure you want to quit?";
@@ -281,9 +273,6 @@
 "settings.sound.preview" = "Play sound";
 "settings.sound.delete" = "Delete sound";
 "settings.sound.customSounds.footer" = "Custom sounds can be used for notifications and for the idle nudge.";
-"settings.updates.checkRow" = "Check for updates";
-"settings.updates.checkNow" = "Check Now";
-"settings.updates.releaseNotesRow" = "Release notes";
 "settings.about.quit" = "Quit";
 "settings.about.quitApp.note" = "The island and session monitoring stop until you open NotchTune again.";
 "setup.section.hooks.footer" = "Hooks let NotchTune see your agent sessions. Uninstalling removes them from the agent's configuration.";
@@ -322,8 +311,6 @@
 "settings.welcome.agents.working.one" = "An agent is working";
 "settings.welcome.agents.working.other" = "%d agents are working";
 "settings.welcome.agents.quiet" = "All quiet. Your island is resting.";
-"settings.welcome.shortcuts" = "Shortcuts";
-"settings.welcome.shortcut.appearance" = "Personalize";
 
 /* Settings — pane hero headers */
 "settings.hero.setup" = "Connect your coding agents and keep their hooks healthy.";
@@ -331,7 +318,6 @@
 "settings.hero.sound" = "Alerts for agents that need you, and nudges for ones you forgot.";
 "settings.hero.music" = "Pick the player NotchTune controls from the notch.";
 "settings.hero.appearance" = "Make the notch yours. Every change shows up live in the preview.";
-"settings.hero.updates" = "Stay on the latest NotchTune.";
 "settings.general.startup" = "Startup";
 "settings.display.chooseScreen" = "Island screen";
 
@@ -356,3 +342,13 @@
 "settings.appearance.sync.both" = "Both displays";
 "settings.appearance.sync.zoneHelp" = "Edit only this display (turns Sync off).";
 "settings.appearance.sync.externalOnly" = "External display only.";
+
+/* General: the app, its updates and credits (About and Updates, merged in) */
+"settings.about.origin" = "Originally Open Island";
+"settings.about.credits" = "Made by [David](https://github.com/dw2lam) · forked from [Open Vibe Island](https://github.com/Octane0411/open-vibe-island) · music foundation from [Tuneful](https://github.com/martinfekete10/Tuneful)";
+"settings.about.source" = "Source on GitHub";
+"settings.updates.install" = "Update to %@";
+"settings.updates.checking" = "Checking for updates…";
+"settings.updates.available" = "Version %@ is available";
+"settings.updates.upToDate" = "Up to date · checked %@";
+"settings.updates.automatic" = "Checks for updates automatically";

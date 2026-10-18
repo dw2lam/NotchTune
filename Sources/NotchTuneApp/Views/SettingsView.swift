@@ -5,17 +5,24 @@ import UniformTypeIdentifiers
 
 // MARK: - Settings tabs
 
+/// The sidebar's sections, in sidebar order. About and Updates live at the
+/// top of General now; `resolving(_:)` still lands their old names there.
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general
     case setup
+    case appearance
     case display
     case sound
     case music
-    case appearance
-    case updates
-    case about
 
     var id: String { rawValue }
+
+    /// The tab a raw name selects, retired names included ("about" and
+    /// "updates" → General).
+    static func resolving(_ raw: String) -> SettingsTab? {
+        if let tab = SettingsTab(rawValue: raw) { return tab }
+        return ["about", "updates"].contains(raw) ? .general : nil
+    }
 
     func label(_ lang: LanguageManager) -> String {
         switch self {
@@ -25,8 +32,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .display:    lang.t("settings.tab.display")
         case .sound:      lang.t("settings.tab.sound")
         case .music:      "Music"
-        case .updates:    lang.t("settings.tab.updates")
-        case .about:      lang.t("settings.tab.about")
         }
     }
 
@@ -40,14 +45,11 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .display:    "display"
         case .sound:      "speaker.wave.2"
         case .music:      "music.note"
-        case .updates:    "arrow.down.circle"
-        case .about:      "info.circle"
         }
     }
 
     /// The section's colour, from its sidebar tile to the glow behind its
-    /// hero. Setup and Display take the app icon's grass and sky; About the
-    /// pixel dino's cream.
+    /// hero. Setup and Display take the app icon's grass and sky.
     var tint: SettingsTint {
         switch self {
         case .general:    .graphite
@@ -56,22 +58,24 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .sound:      .rose
         case .music:      .ember
         case .appearance: .violet
-        case .updates:    .indigo
-        case .about:      .teal
         }
     }
 
     var section: SettingsSection {
         switch self {
-        case .general, .setup, .display, .sound, .music, .appearance: .system
-        case .updates, .about:                                                 .app
+        case .general:                       .app
+        case .setup, .appearance, .display: .island
+        case .sound, .music:                 .media
         }
     }
 }
 
+/// The sidebar's groups, as System Settings groups its own: the app, the
+/// island and what it shows, then what it plays.
 enum SettingsSection: String, CaseIterable {
-    case system
     case app
+    case island
+    case media
 
     var tabs: [SettingsTab] {
         SettingsTab.allCases.filter { $0.section == self }
@@ -89,8 +93,8 @@ struct SettingsView: View {
     private var lang: LanguageManager { model.lang }
 
     var body: some View {
-        // One glass surface: a floating sidebar panel beside the pane, no
-        // split-view divider.
+        // One glass surface: a full-height sidebar under the traffic lights,
+        // a hairline, then the pane.
         HStack(spacing: 0) {
             sidebar
             detailView
@@ -111,7 +115,7 @@ struct SettingsView: View {
             selectedTab = .setup
         }
         .onReceive(NotificationCenter.default.publisher(for: .notchTuneSelectSettingsTab)) { note in
-            if let raw = note.object as? String, let tab = SettingsTab(rawValue: raw) {
+            if let raw = note.object as? String, let tab = SettingsTab.resolving(raw) {
                 selectedTab = tab
             }
         }
@@ -130,7 +134,7 @@ struct SettingsView: View {
             // would repeat the panes' own titles.
             ForEach(Array(SettingsSection.allCases.enumerated()), id: \.element) { index, section in
                 if index > 0 {
-                    Spacer().frame(height: 14)
+                    Spacer().frame(height: 16)
                 }
                 ForEach(section.tabs) { tab in
                     SettingsSidebarRow(
@@ -144,17 +148,17 @@ struct SettingsView: View {
                     }
                 }
             }
-
-            Spacer(minLength: 12)
-
-            SettingsSidebarSignature(model: model)
         }
-        .padding(8)
+        // The rows start under the traffic lights; the sidebar's own
+        // surface runs up behind them to the window's top edge.
+        .padding(.horizontal, 10)
+        .padding(.top, 8)
         .frame(width: SettingsTheme.sidebarWidth)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(SettingsPanelBackground())
-        .padding(.leading, 10)
-        .padding(.vertical, 10)
+        .background {
+            SettingsSidebarBackground()
+                .ignoresSafeArea()
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Settings sections")
     }
@@ -185,7 +189,7 @@ struct SettingsView: View {
         }
     }
 
-    private static let sidebarTileSize: CGFloat = 22
+    private static let sidebarTileSize: CGFloat = 20
 
     // MARK: Detail
 
@@ -205,10 +209,6 @@ struct SettingsView: View {
                 SoundSettingsPane(model: model)
             case .music:
                 MusicSettingsPane(model: model)
-            case .updates:
-                UpdateSettingsPane(model: model)
-            case .about:
-                AboutSettingsPane(model: model)
             }
         }
         .environment(\.settingsTint, selectedTab.tint)
@@ -227,7 +227,7 @@ private struct SettingsPaneGlow: View {
         let size = window.size
         // Where the hero tile sits: past the sidebar, in the pane's column,
         // under the title bar.
-        let sidebar = SettingsTheme.sidebarWidth + 10
+        let sidebar = SettingsTheme.sidebarWidth
         let paneWidth = max(size.width - sidebar, 0)
         let hero = CGPoint(
             x: sidebar + SettingsMetrics.columnLeadingInset(forPaneWidth: paneWidth)
@@ -246,8 +246,9 @@ private struct SettingsPaneGlow: View {
     }
 }
 
-/// One sidebar entry: the section's coloured tile and a label, the
-/// selected one on a sky pill that slides between rows.
+/// One sidebar entry, sized like System Settings' own: the section's
+/// coloured tile and a label, the selected one on a sky pill that slides
+/// between rows.
 private struct SettingsSidebarRow<Glyph: View>: View {
     let title: String
     let isSelected: Bool
@@ -259,18 +260,19 @@ private struct SettingsSidebarRow<Glyph: View>: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
+            HStack(spacing: 9) {
                 glyph()
-                    .frame(width: 22, height: 22)
+                    .frame(width: 20, height: 20)
                 Text(title)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .lineLimit(1)
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(isSelected ? SettingsTheme.onAccent : SettingsTheme.paper.opacity(isHovered ? 0.92 : 0.78))
-            .padding(.horizontal, 8)
-            .frame(height: 34)
+            .foregroundStyle(isSelected ? SettingsTheme.onAccent : SettingsTheme.paper.opacity(isHovered ? 0.95 : 0.86))
+            .padding(.horizontal, 7)
+            .frame(height: 30)
             .background {
-                let shape = RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
+                let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
                 if isSelected {
                     SettingsAccentThumb(shape: shape)
                         .matchedGeometryEffect(id: "settingsSidebarSelection", in: selectionNamespace)
@@ -288,43 +290,6 @@ private struct SettingsSidebarRow<Glyph: View>: View {
     }
 }
 
-/// The sidebar's foot: the user's character and name over the running
-/// version, a quiet reminder of whose settings these are.
-private struct SettingsSidebarSignature: View {
-    var model: AppModel
-
-    private var version: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-    }
-
-    var body: some View {
-        HStack(spacing: 9) {
-            PixelCharacterView(
-                character: model.islandCharacter,
-                mode: .idle,
-                paused: true,
-                tint: SettingsTheme.paper.opacity(0.62)
-            )
-            .frame(width: 18, height: 18)
-            VStack(alignment: .leading, spacing: 1) {
-                if let name = SettingsWelcome.userFirstName {
-                    Text(name)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(SettingsTheme.paper.opacity(0.62))
-                        .lineLimit(1)
-                }
-                Text(version.isEmpty ? "NotchTune" : "NotchTune \(version)")
-                    .font(.system(size: 11, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(SettingsTheme.paper.opacity(0.36))
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.bottom, 6)
-        .accessibilityElement(children: .combine)
-    }
-}
-
 // MARK: - General
 
 struct GeneralSettingsPane: View {
@@ -333,7 +298,8 @@ struct GeneralSettingsPane: View {
     private var lang: LanguageManager { model.lang }
 
     var body: some View {
-        // Settings opens here, so its hero is a welcome rather than a title.
+        // Settings opens here, so its hero is a welcome rather than a title,
+        // and it carries the app itself (version, updates, credits).
         SettingsPane(title: lang.t("settings.tab.general")) {
             SettingsWelcomeHero(model: model)
         } content: {
@@ -432,6 +398,18 @@ struct GeneralSettingsPane: View {
                         }
                         .disabled(model.isOverlayDisplayFullscreen)
                     }
+                }
+            }
+
+            SettingsCard {
+                SettingsRow(
+                    lang.t("settings.about.quitApp"),
+                    subtitle: lang.t("settings.about.quitApp.note")
+                ) {
+                    Button(lang.t("settings.about.quit"), role: .destructive) {
+                        model.quitApplication()
+                    }
+                    .accessibilityIdentifier("settings.about.quitApp")
                 }
             }
         }
@@ -730,234 +708,6 @@ struct SoundSettingsPane: View {
         } catch {
             print("Failed to delete custom sound: \(error)")
         }
-    }
-}
-
-// MARK: - Updates
-
-struct UpdateSettingsPane: View {
-    var model: AppModel
-
-    private var lang: LanguageManager { model.lang }
-
-    private var currentVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
-    }
-
-    private var currentBuild: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
-    }
-
-    var body: some View {
-        SettingsPane(
-            title: lang.t("settings.tab.updates"),
-            subtitle: lang.t("settings.hero.updates"),
-            systemImage: SettingsTab.updates.icon
-        ) {
-            SettingsCard(title: lang.t("settings.updates.softwareUpdate")) {
-                versionRow(lang.t("settings.updates.currentVersion"), value: currentVersion)
-
-                SettingsRowDivider()
-
-                versionRow(lang.t("settings.updates.build"), value: currentBuild)
-
-                if model.updateChecker.hasUpdate,
-                   let latestVersion = model.updateChecker.latestVersion {
-                    SettingsRowDivider()
-
-                    SettingsRow(lang.t("settings.updates.availableVersion")) {
-                        SettingsStatusBadge(
-                            text: latestVersion,
-                            systemImage: "arrow.down.circle.fill",
-                            color: SettingsTheme.informative
-                        )
-                    }
-                }
-            }
-
-            SettingsCard {
-                SettingsRow(
-                    lang.t("settings.updates.checkRow"),
-                    subtitle: lang.t("settings.updates.automaticDetail")
-                ) {
-                    Button(lang.t("settings.updates.checkNow")) {
-                        model.updateChecker.checkForUpdates()
-                    }
-                    .disabled(!model.updateChecker.canCheckForUpdates)
-                }
-
-                SettingsRowDivider()
-
-                SettingsRow(lang.t("settings.updates.releaseNotesRow")) {
-                    Button(lang.t("settings.updates.releaseNotes")) {
-                        NSWorkspace.shared.open(UpdateChecker.releasesURL)
-                    }
-                }
-            }
-        }
-    }
-
-    private func versionRow(_ title: String, value: String) -> some View {
-        SettingsRow(title) {
-            Text(value)
-                .font(SettingsMetrics.rowTitleFont)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-        }
-    }
-}
-
-// MARK: - About & Credits
-
-struct AboutSettingsPane: View {
-    var model: AppModel
-
-    private var lang: LanguageManager { model.lang }
-
-    private var versionLine: String? {
-        guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String else {
-            return nil
-        }
-        return lang.t("settings.about.version", version)
-    }
-
-    var body: some View {
-        SettingsPane(title: lang.t("settings.tab.about")) {
-            aboutHero
-        } content: {
-            SettingsCard(title: "Credits") {
-                creditLinkRow(
-                    title: "View NotchTune source",
-                    subtitle: "Open source on GitHub",
-                    systemImage: "chevron.left.forwardslash.chevron.right",
-                    tint: .graphite,
-                    url: "https://github.com/dw2lam/NotchTune"
-                )
-
-                SettingsRowDivider()
-
-                creditLinkRow(
-                    title: "Forked from Open Vibe Island",
-                    subtitle: "Octane0411/open-vibe-island",
-                    systemImage: "arrow.triangle.branch",
-                    tint: .grass,
-                    url: "https://github.com/Octane0411/open-vibe-island"
-                )
-
-                SettingsRowDivider()
-
-                creditLinkRow(
-                    title: "Music foundation from Tuneful",
-                    subtitle: "martinfekete10/Tuneful",
-                    systemImage: "music.note",
-                    tint: .ember,
-                    url: "https://github.com/martinfekete10/Tuneful"
-                )
-
-                SettingsRowDivider()
-
-                creditLinkRow(
-                    title: "Created by David",
-                    subtitle: "dw2lam",
-                    systemImage: "person.fill",
-                    tint: .sky,
-                    url: "https://github.com/dw2lam"
-                )
-            }
-
-            SettingsCard {
-                SettingsRow(
-                    lang.t("settings.about.quitApp"),
-                    subtitle: lang.t("settings.about.quitApp.note")
-                ) {
-                    Button(lang.t("settings.about.quit"), role: .destructive) {
-                        model.quitApplication()
-                    }
-                    .accessibilityIdentifier("settings.about.quitApp")
-                }
-            }
-        }
-    }
-
-    /// The app's identity in place of a pane icon: the real app icon,
-    /// name, one-line description and version, on a softly lit card.
-    private var aboutHero: some View {
-        VStack(spacing: 8) {
-            Image(nsImage: NSApplication.shared.applicationIconImage)
-                .resizable()
-                .interpolation(.high)
-                .frame(width: 104, height: 104)
-                .shadow(color: .black.opacity(0.22), radius: 14, y: 8)
-                .padding(.bottom, 4)
-
-            Text(lang.t("app.name"))
-                .font(.title.weight(.bold))
-
-            Text(lang.t("app.description"))
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let versionLine {
-                Text(versionLine)
-                    .font(.system(size: 12, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(IslandGlassBezel(shape: Capsule(), tint: nil))
-                    .padding(.top, 2)
-            }
-
-            Text("Originally Open Island")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .padding(.top, 2)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
-        .padding(.horizontal, 24)
-        .background {
-            ZStack {
-                SettingsCardBackground()
-                RadialGradient(
-                    colors: [SettingsTheme.paper.opacity(0.10), SettingsTheme.paper.opacity(0)],
-                    center: .top,
-                    startRadius: 0,
-                    endRadius: 260
-                )
-                .clipShape(RoundedRectangle(cornerRadius: SettingsMetrics.cardCornerRadius, style: .continuous))
-            }
-        }
-        .padding(.top, 6)
-        .accessibilityElement(children: .combine)
-    }
-
-    /// A credit row that opens its page in the browser: a small coloured
-    /// glyph tile, title + secondary line, a trailing "open externally" arrow.
-    private func creditLinkRow(
-        title: String,
-        subtitle: String,
-        systemImage: String,
-        tint: SettingsTint,
-        url: String
-    ) -> some View {
-        Link(destination: URL(string: url)!) {
-            SettingsRow {
-                HStack(spacing: 12) {
-                    SettingsGlyphTile(systemName: systemImage, size: 30, tint: tint)
-                    SettingsRowLabel(title: title, subtitle: subtitle)
-                }
-            } accessory: {
-                Image(systemName: "arrow.up.forward")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 

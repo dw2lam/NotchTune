@@ -40,7 +40,7 @@ enum SettingsTheme {
     static let caution = IslandDesignPalette.Status.waitingAggregate
     static let critical = IslandDesignPalette.Status.waitingForApproval
 
-    static let sidebarWidth: CGFloat = 214
+    static let sidebarWidth: CGFloat = 220
     static let surfaceRadius: CGFloat = IslandRadius.card + 2
 }
 
@@ -156,14 +156,22 @@ private struct SettingsBehindWindowGlass: NSViewRepresentable {
     func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
 
-/// A floating panel on the window's glass (the sidebar): a frosted layer a
-/// shade lighter than the window. (Liquid Glass here would go flat when the
-/// window loses focus, like the window's own.)
-struct SettingsPanelBackground: View {
-    var cornerRadius: CGFloat = SettingsTheme.surfaceRadius
-
+/// The sidebar's surface, edge to edge from the window's top (behind the
+/// traffic lights) to its bottom: a frosted layer a shade lighter than the
+/// window, closed off from the pane by a hairline. (Liquid Glass here would
+/// go flat when the window loses focus, like the window's own.)
+struct SettingsSidebarBackground: View {
     var body: some View {
-        SettingsCardBackground(cornerRadius: cornerRadius)
+        SettingsTheme.paper.opacity(0.045)
+            .overlay(alignment: .trailing) {
+                // A dark line under a light one reads as an edge on any
+                // wallpaper.
+                HStack(spacing: 0) {
+                    Color.black.opacity(0.28).frame(width: 0.5)
+                    SettingsTheme.paper.opacity(0.10).frame(width: 0.5)
+                }
+            }
+            .accessibilityHidden(true)
     }
 }
 
@@ -291,6 +299,23 @@ private struct SettingsCapsuleButton: View {
         guard isEnabled else { return tint.opacity(0.04) }
         if configuration.isPressed { return tint.opacity(0.16) }
         return tint.opacity(isHovered ? 0.12 : 0.075)
+    }
+}
+
+/// The one button that matters on a surface (an update waiting to be
+/// installed): the capsule on the sky accent, white type.
+struct SettingsAccentButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12.5, weight: .semibold))
+            .lineLimit(1)
+            .foregroundStyle(SettingsTheme.onAccent)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 27)
+            .background(SettingsAccentThumb(shape: Capsule(), opacity: configuration.isPressed ? 0.8 : 1))
+            .contentShape(Capsule())
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 

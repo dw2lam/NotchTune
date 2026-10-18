@@ -85,6 +85,32 @@ enum SettingsWelcome {
 
     /// The account's first name, read once (it never leaves the Mac).
     static let userFirstName: String? = firstName(fromFullName: NSFullUserName())
+
+    /// "2.1.5 (1180)": the version with its build, the build left off when
+    /// the bundle has none; nil for a bundle with no version (a dev build).
+    static func versionLine(version: String?, build: String?) -> String? {
+        guard let version = version?.trimmingCharacters(in: .whitespaces), !version.isEmpty else { return nil }
+        guard let build = build?.trimmingCharacters(in: .whitespaces), !build.isEmpty, build != version else {
+            return version
+        }
+        return "\(version) (\(build))"
+    }
+
+    /// What the update line says, most pressing first.
+    enum UpdateStatus: Equatable {
+        case checking
+        case available(String)
+        case upToDate(checkedAt: Date)
+        /// No check on record yet: Sparkle checks on its own schedule.
+        case automatic
+    }
+
+    static func updateStatus(isChecking: Bool, availableVersion: String?, lastCheck: Date?) -> UpdateStatus {
+        if isChecking { return .checking }
+        if let availableVersion { return .available(availableVersion) }
+        if let lastCheck { return .upToDate(checkedAt: lastCheck) }
+        return .automatic
+    }
 }
 
 // MARK: - Welcome hero
@@ -92,7 +118,8 @@ enum SettingsWelcome {
 /// The top of General, the pane Settings opens on: a greeting for the time
 /// of day and the user's name, their character on a little ink notch
 /// (posed like the island: busy while agents work, waving when one needs
-/// them), what's going on right now, and a few shortcuts.
+/// them) and what's going on right now; under it the app itself — icon,
+/// version, updates — and its credits. It's About and Updates, at home.
 struct SettingsWelcomeHero: View {
     var model: AppModel
 
@@ -102,22 +129,22 @@ struct SettingsWelcomeHero: View {
     private var lang: LanguageManager { model.lang }
 
     var body: some View {
-        // Minute ticks keep the greeting and colour true to the hour.
+        // Minute ticks keep the greeting, colour and "checked … ago" true.
         TimelineView(.everyMinute) { context in
             let dayPart = SettingsWelcome.dayPart(at: context.date)
             let agents = SettingsWelcome.agents(
                 attentionCount: model.liveAttentionCount,
                 runningCount: model.liveRunningCount
             )
-            content(dayPart: dayPart, agents: agents)
+            content(dayPart: dayPart, agents: agents, now: context.date)
         }
     }
 
-    private func content(dayPart: SettingsWelcome.DayPart, agents: SettingsWelcome.Agents) -> some View {
+    private func content(dayPart: SettingsWelcome.DayPart, agents: SettingsWelcome.Agents, now: Date) -> some View {
         let tint = dayPart.tint
         let shape = RoundedRectangle(cornerRadius: SettingsMetrics.cardCornerRadius + 4, style: .continuous)
-        return VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .center, spacing: 22) {
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 24) {
                 WelcomeStage(
                     character: model.islandCharacter,
                     mode: agents.mode,
@@ -126,9 +153,9 @@ struct SettingsWelcomeHero: View {
                     tint: tint
                 )
 
-                VStack(alignment: .leading, spacing: 9) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text(greeting(for: dayPart))
-                        .font(.system(size: 26, weight: .bold))
+                        .font(.system(size: 28, weight: .bold))
                         .foregroundStyle(SettingsTheme.paper)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -138,10 +165,23 @@ struct SettingsWelcomeHero: View {
 
                 Spacer(minLength: 0)
             }
+            .padding(.horizontal, 24)
+            .padding(.top, 28)
+            .padding(.bottom, 26)
 
-            shortcuts
+            heroDivider
+
+            appRow(now: now)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 18)
+
+            heroDivider
+
+            credits
+                .padding(.horizontal, 24)
+                .padding(.top, 13)
+                .padding(.bottom, 15)
         }
-        .padding(20)
         .background {
             ZStack {
                 SettingsCardBackground(cornerRadius: SettingsMetrics.cardCornerRadius + 4)
@@ -156,6 +196,12 @@ struct SettingsWelcomeHero: View {
             .animation(.smooth(duration: 0.6), value: tint)
         }
         .padding(.top, 6)
+    }
+
+    private var heroDivider: some View {
+        SettingsTheme.hairline
+            .frame(height: 1)
+            .padding(.horizontal, 24)
     }
 
     private func greeting(for dayPart: SettingsWelcome.DayPart) -> String {
@@ -221,47 +267,195 @@ struct SettingsWelcomeHero: View {
         }
     }
 
-    // MARK: Shortcuts
+    // MARK: App and updates
 
-    private var shortcuts: some View {
-        // Four fit the narrowest window; the row drops Music before it would
-        // wrap or clip.
-        ViewThatFits(in: .horizontal) {
-            shortcutRow([.appearance, .setup, .sound, .music])
-            shortcutRow([.appearance, .setup, .sound])
+    private var versionLine: String? {
+        #if DEBUG
+        // Harness: the debug binary has no Info.plist to read a version from.
+        if let version = ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_APP_VERSION"] {
+            return version
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(lang.t("settings.welcome.shortcuts"))
+        #endif
+        let info = Bundle.main.infoDictionary
+        return SettingsWelcome.versionLine(
+            version: info?["CFBundleShortVersionString"] as? String,
+            build: info?["CFBundleVersion"] as? String
+        )
     }
 
-    private func shortcutRow(_ tabs: [SettingsTab]) -> some View {
-        HStack(spacing: 8) {
-            ForEach(tabs) { tab in
-                WelcomeShortcut(title: shortcutTitle(tab), tint: tab.tint) {
-                    withAnimation(.smooth(duration: 0.3, extraBounce: 0.08)) {
-                        NotificationCenter.default.post(name: .notchTuneSelectSettingsTab, object: tab.rawValue)
-                    }
-                } glyph: {
-                    if tab == .appearance {
-                        // Personalize wears the user's own character.
-                        PixelCharacterView(
-                            character: model.islandCharacter,
-                            mode: .idle,
-                            paused: true,
-                            tint: tab.tint.glyph
-                        )
-                        .frame(width: 12, height: 12)
-                    } else {
-                        SettingsSymbolGlyph(systemName: tab.icon, size: 20)
+    /// The app's icon, name, version and one-liner over its update line:
+    /// what Sparkle last found, and the button to check (or install).
+    private func appRow(now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            appIdentity
+            updateRow(now: now)
+        }
+    }
+
+    private var appIdentity: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 50, height: 50)
+                .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(lang.t("app.name"))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(SettingsTheme.paper)
+                    if let versionLine {
+                        Text(lang.t("settings.about.version", versionLine))
+                            .font(.system(size: 12, weight: .medium))
+                            .monospacedDigit()
+                            .foregroundStyle(SettingsTheme.paper.opacity(0.62))
+                            .textSelection(.enabled)
                     }
                 }
+                Text(lang.t("app.description"))
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(SettingsTheme.paper.opacity(0.6))
+                Text(lang.t("settings.about.origin"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(SettingsTheme.paper.opacity(0.38))
             }
+            .fixedSize(horizontal: true, vertical: false)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func updateRow(now: Date) -> some View {
+        let checker = model.updateChecker
+        let status = SettingsWelcome.updateStatus(
+            isChecking: checker.isChecking,
+            availableVersion: checker.hasUpdate ? checker.latestVersion : nil,
+            lastCheck: checker.lastCheckDate
+        )
+        return HStack(spacing: 12) {
+            updateStatusLine(status, now: now)
+            Spacer(minLength: 0)
+            if case .available(let version) = status {
+                Button(lang.t("settings.updates.install", version)) {
+                    checker.checkForUpdates()
+                }
+                .buttonStyle(SettingsAccentButtonStyle())
+            } else {
+                Button(lang.t("settings.updates.checkForUpdates")) {
+                    checker.checkForUpdates()
+                }
+                .disabled(!checker.canCheckForUpdates || status == .checking)
+            }
+        }
+        // A quiet well under the identity, so the line reads as one control.
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(SettingsTheme.ink.opacity(0.28))
+        )
+    }
+
+    private func updateStatusLine(_ status: SettingsWelcome.UpdateStatus, now: Date) -> some View {
+        HStack(spacing: 6) {
+            switch status {
+            case .checking:
+                ProgressView()
+                    .controlSize(.mini)
+                Text(lang.t("settings.updates.checking"))
+            case .available(let version):
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundStyle(SettingsTheme.informative)
+                Text(lang.t("settings.updates.available", version))
+            case .upToDate(let checkedAt):
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(SettingsTheme.positive)
+                Text(lang.t("settings.updates.upToDate", Self.relative(checkedAt, now: now)))
+            case .automatic:
+                Image(systemName: "clock.arrow.circlepath")
+                    .foregroundStyle(SettingsTheme.paper.opacity(0.5))
+                Text(lang.t("settings.updates.automatic"))
+            }
+        }
+        .font(.system(size: 12.5, weight: .medium))
+        .monospacedDigit()
+        .foregroundStyle(SettingsTheme.paper.opacity(0.66))
+        .lineLimit(1)
+    }
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter
+    }()
+
+    private static func relative(_ date: Date, now: Date) -> String {
+        // "now" rather than "in 0 sec." for a check that just finished.
+        guard now.timeIntervalSince(date) >= 60 else { return relativeFormatter.localizedString(fromTimeInterval: 0) }
+        return relativeFormatter.localizedString(for: date, relativeTo: now)
+    }
+
+    // MARK: Credits
+
+    /// Where NotchTune comes from, as a line of links, with its release
+    /// notes and source beside it (under it when the window is narrow).
+    private var credits: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                creditsText.fixedSize()
+                Spacer(minLength: 0)
+                projectLinks
+            }
+            VStack(alignment: .leading, spacing: 9) {
+                creditsText
+                projectLinks
+            }
+        }
+    }
+
+    private var creditsText: some View {
+        let markdown = lang.t("settings.about.credits")
+        let text = (try? AttributedString(markdown: markdown)) ?? AttributedString(markdown)
+        return Text(text)
+            .font(.system(size: 12))
+            .foregroundStyle(SettingsTheme.paper.opacity(0.5))
+            .tint(SettingsTheme.accent)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var projectLinks: some View {
+        HStack(spacing: 14) {
+            WelcomeLink(title: lang.t("settings.updates.releaseNotes"), url: UpdateChecker.releasesURL)
+            WelcomeLink(title: lang.t("settings.about.source"), url: Self.sourceURL)
         }
         .fixedSize()
     }
 
-    private func shortcutTitle(_ tab: SettingsTab) -> String {
-        tab == .appearance ? lang.t("settings.welcome.shortcut.appearance") : tab.label(lang)
+    private static let sourceURL = URL(string: "https://github.com/dw2lam/NotchTune")!
+}
+
+/// A quiet outbound link: accent type and a "leaves the app" arrow.
+private struct WelcomeLink: View {
+    let title: String
+    let url: URL
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Link(destination: url) {
+            HStack(spacing: 3) {
+                Text(title)
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(SettingsTheme.accent.opacity(isHovered ? 1 : 0.88))
+            .underline(isHovered)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -289,7 +483,7 @@ private struct WelcomeStage: View {
                     colors: [tint.top.opacity(0.42), tint.bottom.opacity(0.12), .clear],
                     center: .bottom,
                     startRadius: 0,
-                    endRadius: 78
+                    endRadius: 92
                 )
             )
             PixelCharacterView(
@@ -299,11 +493,11 @@ private struct WelcomeStage: View {
                 tint: SettingsTheme.paper,
                 motion: motion
             )
-            // 4pt a pixel: crisp at any scale.
-            .frame(width: 56, height: 56)
-            .offset(y: 2)
+            // 5pt a pixel: crisp at any scale.
+            .frame(width: 70, height: 70)
+            .offset(y: 3)
         }
-        .frame(width: 128, height: 92)
+        .frame(width: 156, height: 112)
         .overlay {
             shape.strokeBorder(
                 LinearGradient(
@@ -317,37 +511,5 @@ private struct WelcomeStage: View {
         .shadow(color: tint.bottom.opacity(0.4), radius: 16, y: 6)
         .animation(.smooth(duration: 0.6), value: tint)
         .accessibilityHidden(true)
-    }
-}
-
-/// A shortcut to another pane: its coloured tile and name on a soft capsule.
-private struct WelcomeShortcut<Glyph: View>: View {
-    let title: String
-    let tint: SettingsTint
-    let action: () -> Void
-    @ViewBuilder let glyph: () -> Glyph
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 7) {
-                SettingsGlyphTile(size: 20, tint: tint, glyph: glyph)
-                Text(title)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(SettingsTheme.paper.opacity(isHovered ? 0.97 : 0.84))
-            .padding(.leading, 5)
-            .padding(.trailing, 13)
-            .frame(height: 30)
-            .background(Capsule().fill(SettingsTheme.paper.opacity(isHovered ? 0.12 : 0.065)))
-            .overlay(Capsule().strokeBorder(SettingsTheme.paper.opacity(0.1), lineWidth: 0.75))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.12), value: isHovered)
-        .accessibilityLabel(title)
     }
 }

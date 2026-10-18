@@ -15,6 +15,12 @@ final class UpdateChecker: NSObject {
     private(set) var canCheckForUpdates = false
     private(set) var hasUpdate = false
     private(set) var latestVersion: String?
+    /// A check the user asked for is running (Sparkle shows its own window
+    /// too); scheduled background checks don't set it.
+    private(set) var isChecking = false
+    /// When Sparkle last checked; nil before the first check and in
+    /// development builds.
+    private(set) var lastCheckDate: Date?
 
     @ObservationIgnored
     private var updaterController: SPUStandardUpdaterController!
@@ -35,6 +41,7 @@ final class UpdateChecker: NSObject {
         #if DEBUG
         // Never let a locally-built app replace itself with a published build.
         canCheckForUpdates = false
+        applyHarnessState()
         return
         #else
         let updater = updaterController.updater
@@ -47,6 +54,7 @@ final class UpdateChecker: NSObject {
         } catch {
             print("[UpdateChecker] Failed to start Sparkle: \(error)")
         }
+        lastCheckDate = updater.lastUpdateCheckDate
 
         cancellable = updater.publisher(for: \.canCheckForUpdates)
             .receive(on: RunLoop.main)
@@ -57,8 +65,27 @@ final class UpdateChecker: NSObject {
     }
 
     func checkForUpdates() {
+        if canCheckForUpdates { isChecking = true }
         updaterController.checkForUpdates(nil)
     }
+
+    #if DEBUG
+    /// Harness: `NOTCHTUNE_HARNESS_UPDATE_STATE=checking|available|current`
+    /// shows that state in Settings without Sparkle (debug builds only).
+    private func applyHarnessState() {
+        guard let state = ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_UPDATE_STATE"] else { return }
+        canCheckForUpdates = true
+        switch state {
+        case "checking":
+            isChecking = true
+        case "available":
+            hasUpdate = true
+            latestVersion = "2.2.0"
+        default:
+            lastCheckDate = Date().addingTimeInterval(-5 * 60)
+        }
+    }
+    #endif
 }
 
 extension UpdateChecker: SPUUpdaterDelegate {
@@ -77,6 +104,14 @@ extension UpdateChecker: SPUUpdaterDelegate {
         Task { @MainActor in
             self.hasUpdate = false
             self.latestVersion = nil
+        }
+    }
+
+    nonisolated func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
+        Task { @MainActor in
+            self.isChecking = false
+            // Sparkle wants this read on the main thread.
+            self.lastCheckDate = self.updaterController.updater.lastUpdateCheckDate
         }
     }
 }

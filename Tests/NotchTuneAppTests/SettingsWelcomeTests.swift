@@ -48,3 +48,25 @@ struct SettingsWelcomeTests {
         #expect(SettingsWelcome.nowPlaying(title: "", artist: "Massive Attack", isPlaying: true) == nil)
     }
 }
+
+/// The app line and update status that moved onto General from About and
+/// Updates.
+struct SettingsWelcomeAppTests {
+    @Test
+    func theVersionCarriesItsBuildWhenItHasOne() {
+        #expect(SettingsWelcome.versionLine(version: "2.1.5", build: "1180") == "2.1.5 (1180)")
+        #expect(SettingsWelcome.versionLine(version: "2.1.5", build: nil) == "2.1.5")
+        #expect(SettingsWelcome.versionLine(version: "2.1.5", build: "2.1.5") == "2.1.5")
+        #expect(SettingsWelcome.versionLine(version: nil, build: "1180") == nil)
+        #expect(SettingsWelcome.versionLine(version: " ", build: "1180") == nil)
+    }
+
+    @Test
+    func theUpdateLineSaysTheMostPressingThing() {
+        let checked = Date(timeIntervalSince1970: 1_000)
+        #expect(SettingsWelcome.updateStatus(isChecking: true, availableVersion: "2.2.0", lastCheck: checked) == .checking)
+        #expect(SettingsWelcome.updateStatus(isChecking: false, availableVersion: "2.2.0", lastCheck: checked) == .available("2.2.0"))
+        #expect(SettingsWelcome.updateStatus(isChecking: false, availableVersion: nil, lastCheck: checked) == .upToDate(checkedAt: checked))
+        #expect(SettingsWelcome.updateStatus(isChecking: false, availableVersion: nil, lastCheck: nil) == .automatic)
+    }
+}
