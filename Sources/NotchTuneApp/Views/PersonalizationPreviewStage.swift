@@ -698,17 +698,6 @@ struct PersonalizationWallpaper: View {
     var paused: Bool = false
 
     var body: some View {
-        if animated {
-            // The pools drift over tens of seconds; 20 fps is plenty.
-            TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: paused)) { context in
-                layers(time: context.date.timeIntervalSinceReferenceDate)
-            }
-        } else {
-            layers(time: 0)
-        }
-    }
-
-    private func layers(time t: TimeInterval) -> some View {
         ZStack {
             LinearGradient(
                 colors: [
@@ -720,27 +709,22 @@ struct PersonalizationWallpaper: View {
                 endPoint: .bottomTrailing
             )
 
-            pool(
-                Color(red: 1.0, green: 0.40, blue: 0.62),
-                opacity: 0.55,
-                x: 0.82 + 0.10 * sin(t * 0.21),
-                y: 0.95 + 0.08 * cos(t * 0.17),
-                radius: 0.75
-            )
-            pool(
-                Color(red: 0.33, green: 0.58, blue: 1.0),
-                opacity: 0.45,
-                x: 0.12 + 0.10 * cos(t * 0.19),
-                y: 0.85 + 0.10 * sin(t * 0.23),
-                radius: 0.7
-            )
-            pool(
-                Color(red: 1.0, green: 0.68, blue: 0.36),
-                opacity: 0.30,
-                x: 0.50 + 0.18 * sin(t * 0.13 + 1.3),
-                y: 1.15 + 0.06 * cos(t * 0.29),
-                radius: 0.6
-            )
+            if animated {
+                // Core Animation slides the pools on the GPU; redrawing them
+                // from a TimelineView cost ~10% CPU per preview while
+                // Personalization was open (two previews while synced).
+                DriftingWallpaperPools(pools: WallpaperPool.all, paused: paused)
+            } else {
+                ForEach(WallpaperPool.all.indices, id: \.self) { index in
+                    let pool = WallpaperPool.all[index]
+                    EllipticalGradient(
+                        colors: [pool.color.opacity(pool.opacity), pool.color.opacity(0)],
+                        center: pool.center(at: 0),
+                        startRadiusFraction: 0,
+                        endRadiusFraction: pool.radius
+                    )
+                }
+            }
 
             // Darker toward the top so the menu bar and notch read clearly.
             LinearGradient(
@@ -750,13 +734,127 @@ struct PersonalizationWallpaper: View {
             )
         }
     }
+}
 
-    private func pool(_ color: Color, opacity: Double, x: Double, y: Double, radius: CGFloat) -> some View {
-        EllipticalGradient(
-            colors: [color.opacity(opacity), color.opacity(0)],
-            center: UnitPoint(x: x, y: y),
-            startRadiusFraction: 0,
-            endRadiusFraction: radius
-        )
+/// One of the wallpaper's colour pools: a soft radial wash whose centre
+/// wanders on slow sine waves (in unit coordinates, y down).
+struct WallpaperPool: Sendable {
+    let red: Double
+    let green: Double
+    let blue: Double
+    let opacity: Double
+    /// End radius as a fraction of the wallpaper's size, as in `EllipticalGradient`.
+    let radius: CGFloat
+    let x: @Sendable (Double) -> Double
+    let y: @Sendable (Double) -> Double
+
+    var color: Color { Color(red: red, green: green, blue: blue) }
+
+    func center(at t: Double) -> UnitPoint { UnitPoint(x: x(t), y: y(t)) }
+
+    static let all: [WallpaperPool] = [
+        WallpaperPool(red: 1.0, green: 0.40, blue: 0.62, opacity: 0.55, radius: 0.75,
+                      x: { 0.82 + 0.10 * sin($0 * 0.21) }, y: { 0.95 + 0.08 * cos($0 * 0.17) }),
+        WallpaperPool(red: 0.33, green: 0.58, blue: 1.0, opacity: 0.45, radius: 0.7,
+                      x: { 0.12 + 0.10 * cos($0 * 0.19) }, y: { 0.85 + 0.10 * sin($0 * 0.23) }),
+        WallpaperPool(red: 1.0, green: 0.68, blue: 0.36, opacity: 0.30, radius: 0.6,
+                      x: { 0.50 + 0.18 * sin($0 * 0.13 + 1.3) }, y: { 1.15 + 0.06 * cos($0 * 0.29) }),
+    ]
+}
+
+/// The pools as radial gradient layers, drawn once and moved by keyframe
+/// animations sampled from the same waves; the drift plays forward then
+/// back so the loop never jumps.
+private struct DriftingWallpaperPools: NSViewRepresentable {
+    let pools: [WallpaperPool]
+    let paused: Bool
+
+    func makeNSView(context: Context) -> DriftingWallpaperPoolsView {
+        DriftingWallpaperPoolsView(pools: pools)
+    }
+
+    func updateNSView(_ view: DriftingWallpaperPoolsView, context: Context) {
+        view.setPaused(paused)
+    }
+}
+
+final class DriftingWallpaperPoolsView: NSView {
+    private static let driftDuration: Double = 120
+    private static let sampleInterval: Double = 2
+
+    private let pools: [WallpaperPool]
+    private let container = CALayer()
+    private var poolLayers: [CAGradientLayer] = []
+    private var animatedSize: CGSize = .zero
+    private var isPaused = false
+
+    init(pools: [WallpaperPool]) {
+        self.pools = pools
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.addSublayer(container)
+        poolLayers = pools.map { pool in
+            let gradient = CAGradientLayer()
+            gradient.type = .radial
+            let color = CGColor(srgbRed: pool.red, green: pool.green, blue: pool.blue, alpha: pool.opacity)
+            gradient.colors = [color, color.copy(alpha: 0) ?? color]
+            gradient.startPoint = CGPoint(x: 0.5, y: 0.5)
+            gradient.endPoint = CGPoint(x: 1, y: 1)
+            container.addSublayer(gradient)
+            return gradient
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func layout() {
+        super.layout()
+        let size = bounds.size
+        guard size.width > 0, size.height > 0, size != animatedSize else { return }
+        animatedSize = size
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        container.frame = bounds
+        for (pool, gradient) in zip(pools, poolLayers) {
+            // The gradient ends on the ellipse inscribed in the layer, so a
+            // layer of 2r x size reaches `radius` of the wallpaper's size.
+            gradient.bounds = CGRect(x: 0, y: 0, width: 2 * pool.radius * size.width, height: 2 * pool.radius * size.height)
+            gradient.position = position(of: pool, at: 0, in: size)
+            let drift = CAKeyframeAnimation(keyPath: "position")
+            drift.values = stride(from: 0, through: Self.driftDuration, by: Self.sampleInterval).map {
+                NSValue(point: position(of: pool, at: $0, in: size))
+            }
+            drift.calculationMode = .cubic
+            drift.duration = Self.driftDuration
+            drift.autoreverses = true
+            drift.repeatCount = .infinity
+            drift.isRemovedOnCompletion = false
+            gradient.add(drift, forKey: "drift")
+        }
+        CATransaction.commit()
+    }
+
+    /// Layer coordinates are y-up; the pools' waves are y-down.
+    private func position(of pool: WallpaperPool, at t: Double, in size: CGSize) -> CGPoint {
+        CGPoint(x: pool.x(t) * size.width, y: (1 - pool.y(t)) * size.height)
+    }
+
+    func setPaused(_ paused: Bool) {
+        guard paused != isPaused else { return }
+        isPaused = paused
+        if paused {
+            let now = container.convertTime(CACurrentMediaTime(), from: nil)
+            container.speed = 0
+            container.timeOffset = now
+        } else {
+            let pausedAt = container.timeOffset
+            container.speed = 1
+            container.timeOffset = 0
+            container.beginTime = 0
+            container.beginTime = container.convertTime(CACurrentMediaTime(), from: nil) - pausedAt
+        }
     }
 }
