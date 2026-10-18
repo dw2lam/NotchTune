@@ -426,7 +426,7 @@ struct OnboardingPersonalizeStep: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 OnboardingSectionHeader(title: "Character", caption: "Shown on the closed notch")
-                // Ten characters: two rows of five.
+                // Twenty characters: four rows of five (the step scrolls).
                 LazyVGrid(
                     columns: Array(repeating: GridItem(.fixed(84), spacing: 8), count: 5),
                     alignment: .leading,

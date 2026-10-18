@@ -158,10 +158,15 @@ struct SettingsPane<Hero: View, Content: View>: View {
                 }
                 .onAppear {
                 // Harness: `NOTCHTUNE_HARNESS_SETTINGS_SCROLL=bottom` captures
-                // the end of a pane.
-                guard ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_SETTINGS_SCROLL"] == "bottom" else { return }
+                // the end of a pane; any other value scrolls to the section
+                // with that `.id` (e.g. `character`).
+                guard let target = ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_SETTINGS_SCROLL"] else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+                    if target == "bottom" {
+                        proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+                    } else {
+                        proxy.scrollTo(target, anchor: .top)
+                    }
                 }
             }
             }

@@ -45,6 +45,7 @@ struct AppearanceSettingsPane: View {
         } content: {
             previewCard
             characterCard
+                .id("character")
             notchCard
             liquidGlassCard
             sessionListCard
