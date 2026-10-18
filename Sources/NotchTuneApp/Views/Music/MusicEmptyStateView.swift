@@ -92,42 +92,81 @@ struct MusicNowPlayingLibraryView: View {
 }
 
 /// The playing track's cover with its title; click returns to the controls.
+/// Hovering it brings up tiny controls — a progress bar, previous,
+/// play/pause and next — without leaving the library, plus an expand
+/// button back to the full player.
 struct MusicNowPlayingTile: View {
     var playerManager: MusicPlayerManager
     var size: CGFloat
     var action: () -> Void
 
-    @State private var isHovering = false
+    @State private var isHovering = MusicHarnessOverride.current?.hoversNowPlayingTile ?? false
+    /// Whether this tile currently holds the position timer (only while
+    /// hovered: the progress bar is the only thing that needs it).
+    @State private var holdsPositionUpdates = false
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-        Button(action: action) {
-            cover
-                .frame(width: size, height: size)
-                .overlay {
-                    // Keeps the caption legible on a bright cover.
-                    LinearGradient(
-                        stops: [
-                            .init(color: .black.opacity(0), location: 0.45),
-                            .init(color: .black.opacity(isHovering ? 0.78 : 0.68), location: 1),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+        cover
+            .frame(width: size, height: size)
+            .overlay {
+                // Keeps the caption / controls legible on a bright cover.
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(isHovering ? 0.12 : 0), location: 0),
+                        .init(color: .black.opacity(0), location: isHovering ? 0.32 : 0.45),
+                        .init(color: .black.opacity(isHovering ? 0.82 : 0.68), location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+            .overlay(alignment: .topLeading) { badge }
+            .overlay(alignment: .topTrailing) {
+                if isHovering {
+                    expandButton
+                        .transition(.opacity)
                 }
-                .overlay(alignment: .topLeading) { badge }
-                .overlay(alignment: .bottomLeading) { caption }
-                .clipShape(shape)
-                .overlay { shape.stroke(.white.opacity(0.08), lineWidth: 0.5) }
-                .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-                .contentShape(shape)
+            }
+            .overlay(alignment: .bottom) {
+                ZStack(alignment: .bottom) {
+                    if isHovering {
+                        MusicTileMiniControls(playerManager: playerManager)
+                            .transition(.opacity)
+                    } else {
+                        caption
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .transition(.opacity)
+                    }
+                }
+            }
+            .clipShape(shape)
+            .overlay { shape.stroke(.white.opacity(0.08), lineWidth: 0.5) }
+            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+            .contentShape(shape)
+            // The cover itself (outside the tiny controls) returns to the
+            // full player, as before.
+            .onTapGesture(perform: action)
+            .onHover { hovering in
+                withAnimation(.easeOut(duration: 0.18)) { isHovering = hovering }
+                setHoldsPositionUpdates(hovering)
+            }
+            .onAppear { if isHovering { setHoldsPositionUpdates(true) } }
+            .onDisappear { setHoldsPositionUpdates(false) }
+            .help("Show the full player")
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Now playing: \(playerManager.track.title)")
+            .accessibilityAction(named: "Show the full player", action)
+    }
+
+    private func setHoldsPositionUpdates(_ holds: Bool) {
+        guard holds != holdsPositionUpdates else { return }
+        holdsPositionUpdates = holds
+        if holds {
+            playerManager.beginPositionUpdates()
+        } else {
+            playerManager.endPositionUpdates()
         }
-        .buttonStyle(MusicPressButtonStyle())
-        .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) { isHovering = hovering }
-        }
-        .help("Show playback controls")
-        .accessibilityLabel("Now playing: \(playerManager.track.title). Show playback controls")
     }
 
     @ViewBuilder
@@ -163,25 +202,111 @@ struct MusicNowPlayingTile: View {
         .padding(8)
     }
 
+    /// Back to the full-size player.
+    private var expandButton: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 8.5, weight: .bold))
+                .foregroundStyle(.white.opacity(0.9))
+                .frame(width: 22, height: 22)
+                .background(.black.opacity(0.42), in: Circle())
+                .overlay { Circle().stroke(.white.opacity(0.14), lineWidth: 0.5) }
+                .contentShape(Circle())
+        }
+        .buttonStyle(MusicPressButtonStyle())
+        .padding(6)
+        .help("Show the full player")
+        .accessibilityLabel("Show the full player")
+    }
+
     private var caption: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(playerManager.track.title)
                 .font(.system(size: 12.5, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.94))
-            HStack(spacing: 3) {
-                if isHovering {
-                    Image(systemName: "chevron.backward")
-                        .font(.system(size: 8.5, weight: .bold))
-                }
-                Text(isHovering ? "Show controls" : playerManager.track.artist)
-            }
-            .font(.system(size: 10.5, weight: .medium))
-            .foregroundStyle(.white.opacity(isHovering ? 0.78 : 0.6))
-            .contentTransition(.opacity)
+            Text(playerManager.track.artist)
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
         }
         .lineLimit(1)
         .padding(.horizontal, 10)
         .padding(.bottom, 10)
+    }
+}
+
+/// The tile's hover controls: title, a hairline progress bar, and small
+/// previous / play-pause / next — the full player in miniature.
+struct MusicTileMiniControls: View {
+    var playerManager: MusicPlayerManager
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(playerManager.track.title)
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.94))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            progressBar
+
+            HStack(spacing: 20) {
+                button(
+                    playerManager.track.isPodcast ? "15.arrow.trianglehead.counterclockwise" : "backward.fill",
+                    size: 11,
+                    label: "Previous track",
+                    action: playerManager.previousTrack
+                )
+                button(
+                    playerManager.isPlaying ? "pause.fill" : "play.fill",
+                    size: 15,
+                    label: playerManager.isPlaying ? "Pause" : "Play",
+                    action: playerManager.togglePlayPause
+                )
+                button(
+                    playerManager.track.isPodcast ? "15.arrow.trianglehead.clockwise" : "forward.fill",
+                    size: 11,
+                    label: "Next track",
+                    action: playerManager.nextTrack
+                )
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
+    }
+
+    private var fraction: CGFloat {
+        let duration = playerManager.track.duration
+        guard duration > 0 else { return 0 }
+        return min(1, max(0, playerManager.seekerPosition / duration))
+    }
+
+    private var progressBar: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.white.opacity(0.22))
+                Capsule()
+                    .fill(.white.opacity(0.9))
+                    .frame(width: max(3, proxy.size.width * fraction))
+            }
+        }
+        .frame(height: 3)
+        .accessibilityElement()
+        .accessibilityLabel("Playback position")
+        .accessibilityValue("\(playerManager.formattedPlaybackPosition) of \(playerManager.formattedDuration)")
+    }
+
+    private func button(_ symbol: String, size: CGFloat, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: size, weight: .bold))
+                .contentTransition(.symbolEffect(.replace))
+                .foregroundStyle(.white.opacity(0.92))
+                .frame(width: 24, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(MusicPressButtonStyle())
+        .help(label)
+        .accessibilityLabel(label)
     }
 }
 

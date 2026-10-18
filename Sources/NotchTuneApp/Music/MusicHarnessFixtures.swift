@@ -36,6 +36,9 @@ struct MusicHarnessOverride: Equatable, Sendable {
     var query: String?
     var opensPinField: Bool
     var opensLibrary: Bool
+    /// `NOTCHTUNE_HARNESS_MUSIC_TILE_HOVER=1`: the library's Now Playing tile
+    /// starts hovered, showing its mini controls.
+    var hoversNowPlayingTile: Bool
     var scrollAnchor: String?
 
     /// Harness runs, and unit tests (which build real AppModels), use the
@@ -65,6 +68,7 @@ struct MusicHarnessOverride: Equatable, Sendable {
         query = environment["NOTCHTUNE_HARNESS_MUSIC_QUERY"]
         opensPinField = environment["NOTCHTUNE_HARNESS_MUSIC_PIN"] == "1"
         opensLibrary = environment["NOTCHTUNE_HARNESS_MUSIC_BROWSE"] == "1"
+        hoversNowPlayingTile = environment["NOTCHTUNE_HARNESS_MUSIC_TILE_HOVER"] == "1"
         scrollAnchor = environment["NOTCHTUNE_HARNESS_MUSIC_SCROLL_TO"]
     }
 

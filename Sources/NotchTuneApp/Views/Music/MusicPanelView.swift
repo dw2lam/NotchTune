@@ -123,10 +123,10 @@ struct MusicPanelView: View {
         .padding(.top, 12)
         .padding(.bottom, 8)
         .onAppear {
-            playerManager.startTimer()
+            playerManager.beginPositionUpdates()
         }
         .onDisappear {
-            playerManager.stopTimer()
+            playerManager.endPositionUpdates()
         }
     }
 

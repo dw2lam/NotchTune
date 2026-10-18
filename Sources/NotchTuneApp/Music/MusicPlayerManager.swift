@@ -289,7 +289,25 @@ final class MusicPlayerManager {
 
     // MARK: - Timer
 
-    func startTimer() {
+    /// Views that show the playback position (the full controls, the
+    /// library's mini controls). Counted, not on/off: during a cross-fade
+    /// the outgoing view's end lands after the incoming view's begin.
+    private var positionUpdateClients = 0
+
+    func beginPositionUpdates() {
+        positionUpdateClients += 1
+        guard positionUpdateClients == 1 else { return }
+        getCurrentSeekerPosition()
+        startTimer()
+    }
+
+    func endPositionUpdates() {
+        guard positionUpdateClients > 0 else { return }
+        positionUpdateClients -= 1
+        if positionUpdateClients == 0 { stopTimer() }
+    }
+
+    private func startTimer() {
         guard musicApp.isRunning() else { return }
         timerCancellable?.cancel()
         timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
@@ -306,7 +324,7 @@ final class MusicPlayerManager {
             }
     }
 
-    func stopTimer() {
+    private func stopTimer() {
         timerCancellable?.cancel()
         timerCancellable = nil
     }
