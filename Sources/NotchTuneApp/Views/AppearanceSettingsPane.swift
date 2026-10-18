@@ -560,13 +560,7 @@ struct AppearanceSettingsPane: View {
     // MARK: - Titles
 
     private func title(for character: IslandCharacter) -> String {
-        switch character {
-        case .dino: return "Dino"
-        case .ghost: return "Ghost"
-        case .crab: return "Crab"
-        case .duck: return "Duck"
-        case .claude: return "Claude"
-        }
+        character.title
     }
 
     private func title(for option: IslandSessionStateIndicator) -> String {
