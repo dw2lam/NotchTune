@@ -97,9 +97,12 @@ struct FakeSpotifyResolver: SpotifyLinkMetadataResolving {
     }
 }
 
+/// Polls until `condition` holds. The ceiling is generous because it only
+/// matters when a test fails: under a loaded machine (parallel builds) the
+/// debounced search task can take well over two seconds to be scheduled.
 @MainActor
 private func waitUntil(
-    timeout: Duration = .seconds(2),
+    timeout: Duration = .seconds(15),
     _ condition: @MainActor () -> Bool
 ) async {
     let clock = ContinuousClock()
