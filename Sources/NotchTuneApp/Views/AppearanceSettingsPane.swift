@@ -29,10 +29,20 @@ struct AppearanceSettingsPane: View {
     var body: some View {
         SettingsPane(
             title: lang.t("settings.tab.appearance"),
-            subtitle: lang.t("settings.hero.appearance"),
-            systemImage: SettingsTab.appearance.icon,
-            color: SettingsTab.appearance.iconColor
+            subtitle: lang.t("settings.hero.appearance")
         ) {
+            // The hero is the character itself, in the island's paper ink,
+            // following the choice below and following the preview's state.
+            PixelCharacterView(
+                character: editingPreferences.character,
+                mode: heroCharacterMode,
+                paused: !isOnScreen || reduceMotion,
+                tint: SettingsTheme.paper
+            )
+            .frame(width: 34, height: 34)
+            .id(editingPreferences.character)
+            .transition(.opacity)
+        } content: {
             previewCard
             characterCard
             notchCard
@@ -43,6 +53,16 @@ struct AppearanceSettingsPane: View {
         // nobody needs the cycle while the window can't be seen.
         .task(id: PreviewDriver(pin: previewPin, isOnScreen: isOnScreen)) {
             await runPreview()
+        }
+    }
+
+    /// The hero character mirrors the live preview: running while it shows
+    /// Working, pulsing while it waits on you, blinking at rest.
+    private var heroCharacterMode: UnifiedBars.Mode {
+        switch previewPhase {
+        case .working: .running
+        case .needsApproval: .waiting
+        case .idle, .finished: .idle
         }
     }
 
@@ -76,36 +96,59 @@ struct AppearanceSettingsPane: View {
                 lang: lang
             )
 
-            HStack(spacing: 12) {
-                Picker(lang.t("settings.appearance.profile.title"), selection: Binding(
-                    get: { model.appearanceSettingsProfile },
-                    set: { model.appearanceSettingsProfile = $0 }
-                )) {
-                    Label(lang.t("settings.appearance.profile.macbook.title"), systemImage: "laptopcomputer")
-                        .tag(IslandAppearanceDisplayProfile.notch)
-                    Label(lang.t("settings.appearance.profile.external.title"), systemImage: "display")
-                        .tag(IslandAppearanceDisplayProfile.topBar)
+            // Side by side when the card is wide enough, stacked when not —
+            // never wider than the card (a fixed-size row overflowing here
+            // pushed the whole window's layout sideways).
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    profilePicker
+                    Spacer(minLength: 8)
+                    previewStatePicker
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                .help(lang.t("settings.appearance.profile.note"))
-
-                Spacer(minLength: 8)
-
-                Picker(lang.t("settings.appearance.state.title"), selection: $previewPin) {
-                    Text(lang.t("settings.appearance.state.auto")).tag(PersonalizationPreviewPin.auto)
-                    Text(lang.t("settings.appearance.state.idle")).tag(PersonalizationPreviewPin.idle)
-                    Text(lang.t("settings.appearance.state.working")).tag(PersonalizationPreviewPin.working)
-                    Text(lang.t("settings.appearance.state.waiting")).tag(PersonalizationPreviewPin.waiting)
+                VStack(alignment: .leading, spacing: 10) {
+                    profilePicker
+                    previewStatePicker
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
             }
             .padding(.top, 14)
             .padding(.horizontal, 6)
         }
+    }
+
+    private var profilePicker: some View {
+        SettingsSegmentedControl(
+            title: lang.t("settings.appearance.profile.title"),
+            selection: Binding(
+                get: { model.appearanceSettingsProfile },
+                set: { model.appearanceSettingsProfile = $0 }
+            ),
+            segments: [
+                SettingsSegment(
+                    IslandAppearanceDisplayProfile.notch,
+                    lang.t("settings.appearance.profile.macbook.title"),
+                    systemImage: "laptopcomputer"
+                ),
+                SettingsSegment(
+                    IslandAppearanceDisplayProfile.topBar,
+                    lang.t("settings.appearance.profile.external.title"),
+                    systemImage: "display"
+                ),
+            ]
+        )
+        .help(lang.t("settings.appearance.profile.note"))
+    }
+
+    private var previewStatePicker: some View {
+        SettingsSegmentedControl(
+            title: lang.t("settings.appearance.state.title"),
+            selection: $previewPin,
+            segments: [
+                SettingsSegment(PersonalizationPreviewPin.auto, lang.t("settings.appearance.state.auto")),
+                SettingsSegment(PersonalizationPreviewPin.idle, lang.t("settings.appearance.state.idle")),
+                SettingsSegment(PersonalizationPreviewPin.working, lang.t("settings.appearance.state.working")),
+                SettingsSegment(PersonalizationPreviewPin.waiting, lang.t("settings.appearance.state.waiting")),
+            ]
+        )
     }
 
     /// "Editing <profile>: <what it is>. NotchTune applies …".
@@ -233,14 +276,13 @@ struct AppearanceSettingsPane: View {
                 lang.t("settings.appearance.liveActivity.title"),
                 subtitle: lang.t("settings.appearance.liveActivity.note")
             ) {
-                Picker(lang.t("settings.appearance.liveActivity.title"), selection: binding(\.liveActivity)) {
-                    ForEach(IslandLiveActivityMode.allCases) { mode in
-                        Text(lang.t("settings.appearance.liveActivity.\(mode.rawValue)")).tag(mode)
+                SettingsSegmentedControl(
+                    title: lang.t("settings.appearance.liveActivity.title"),
+                    selection: binding(\.liveActivity),
+                    segments: IslandLiveActivityMode.allCases.map {
+                        SettingsSegment($0, lang.t("settings.appearance.liveActivity.\($0.rawValue)"))
                     }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
+                )
             }
 
             SettingsRowDivider()
@@ -344,12 +386,9 @@ struct AppearanceSettingsPane: View {
                         get: { model.glassSettings.style },
                         set: { model.glassSettings.style = $0 }
                     ),
-                    style: .segmented
-                ) {
-                    ForEach(GlassStyle.allCases) { style in
-                        Text(title(for: style)).tag(style)
-                    }
-                }
+                    style: .segmented,
+                    segments: GlassStyle.allCases.map { SettingsSegment($0, title(for: $0)) }
+                )
 
                 SettingsRowDivider()
 
@@ -410,12 +449,9 @@ struct AppearanceSettingsPane: View {
                     selection: Binding(
                         get: { model.glassSettings.closedScope },
                         set: { model.glassSettings.closedScope = $0 }
-                    )
-                ) {
-                    ForEach(GlassClosedScope.allCases) { scope in
-                        Text(title(for: scope)).tag(scope)
-                    }
-                }
+                    ),
+                    segments: GlassClosedScope.allCases.map { SettingsSegment($0, title(for: $0)) }
+                )
             }
             .disabled(glassControlsDisabled)
         }
@@ -486,12 +522,9 @@ struct AppearanceSettingsPane: View {
                 lang.t("settings.appearance.usageDisplay.title"),
                 subtitle: lang.t("settings.appearance.usageDisplay.note"),
                 selection: binding(\.usageDisplay),
-                style: .segmented
-            ) {
-                ForEach(IslandUsageDisplay.allCases) { option in
-                    Text(title(for: option)).tag(option)
-                }
-            }
+                style: .segmented,
+                segments: IslandUsageDisplay.allCases.map { SettingsSegment($0, title(for: $0)) }
+            )
 
             SettingsRowDivider()
 
@@ -499,12 +532,9 @@ struct AppearanceSettingsPane: View {
                 lang.t("settings.appearance.sessionGroup.title"),
                 subtitle: lang.t("settings.appearance.sessionGroup.note"),
                 selection: binding(\.sessionGroup),
-                style: .segmented
-            ) {
-                ForEach(IslandSessionGroup.allCases) { option in
-                    Text(title(for: option)).tag(option)
-                }
-            }
+                style: .segmented,
+                segments: IslandSessionGroup.allCases.map { SettingsSegment($0, title(for: $0)) }
+            )
 
             SettingsRowDivider()
 
@@ -512,24 +542,18 @@ struct AppearanceSettingsPane: View {
                 lang.t("settings.appearance.sessionSort.title"),
                 subtitle: lang.t("settings.appearance.sessionSort.note"),
                 selection: binding(\.sessionSort),
-                style: .segmented
-            ) {
-                ForEach(IslandSessionSort.allCases) { option in
-                    Text(title(for: option)).tag(option)
-                }
-            }
+                style: .segmented,
+                segments: IslandSessionSort.allCases.map { SettingsSegment($0, title(for: $0)) }
+            )
 
             SettingsRowDivider()
 
             SettingsPickerRow(
                 lang.t("settings.appearance.staleThreshold.title"),
                 subtitle: lang.t("settings.appearance.staleThreshold.note"),
-                selection: binding(\.completedStaleThreshold)
-            ) {
-                ForEach(IslandCompletedStaleThreshold.allCases) { option in
-                    Text(title(for: option)).tag(option)
-                }
-            }
+                selection: binding(\.completedStaleThreshold),
+                segments: IslandCompletedStaleThreshold.allCases.map { SettingsSegment($0, title(for: $0)) }
+            )
         }
     }
 

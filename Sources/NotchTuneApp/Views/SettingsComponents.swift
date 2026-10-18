@@ -16,9 +16,8 @@ enum SettingsMetrics {
     static let sectionSpacing: CGFloat = 30
 
     static let heroIconSize: CGFloat = 58
-    static let sidebarIconSize: CGFloat = 24
 
-    static let cardCornerRadius: CGFloat = 16
+    static let cardCornerRadius: CGFloat = SettingsTheme.surfaceRadius
     static let cardHorizontalPadding: CGFloat = 20
     static let cardVerticalPadding: CGFloat = 4
     static let rowVerticalPadding: CGFloat = 14
@@ -112,82 +111,74 @@ private struct WindowOnScreenReader: NSViewRepresentable {
     }
 }
 
-// MARK: - Icon tile
-
-/// The colored rounded-square icon: 24pt in the sidebar, ~58pt in each
-/// pane's hero header. A soft top highlight and hairline edge keep it from
-/// reading as a flat sticker at the larger size.
-struct SettingsIconTile: View {
-    let systemName: String
-    let color: Color
-    var size: CGFloat = SettingsMetrics.sidebarIconSize
-
-    private var radius: CGFloat { size * 0.27 }
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        ZStack {
-            shape.fill(color.gradient)
-            shape.fill(
-                LinearGradient(
-                    colors: [.white.opacity(0.24), .white.opacity(0)],
-                    startPoint: .top,
-                    endPoint: .center
-                )
-            )
-            Image(systemName: systemName)
-                .font(.system(size: size * 0.48, weight: .semibold))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.18), radius: size > 30 ? 1.5 : 0.5, y: size > 30 ? 1 : 0.5)
-        }
-        .frame(width: size, height: size)
-        .overlay(shape.strokeBorder(.white.opacity(0.16), lineWidth: 0.5))
-        .accessibilityHidden(true)
-    }
-}
-
 // MARK: - Pane scaffold
 
-/// A pane: hero header (big icon tile, title, one-line description) over a
-/// scrolling column of cards.
+/// A pane: hero header (notch glyph tile, title, one-line description) over
+/// a scrolling column of cards.
 struct SettingsPane<Hero: View, Content: View>: View {
     let title: String
     @ViewBuilder let hero: () -> Hero
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SettingsMetrics.sectionSpacing) {
-                hero()
-                content()
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: SettingsMetrics.sectionSpacing) {
+                    hero()
+                    content()
+                    Color.clear.frame(height: 0).id(Self.bottomAnchor)
+                }
+                .padding(.horizontal, SettingsMetrics.paneHorizontalPadding)
+                .padding(.top, SettingsMetrics.paneTopPadding)
+                .padding(.bottom, SettingsMetrics.paneBottomPadding)
+                .frame(maxWidth: SettingsMetrics.contentMaxWidth + SettingsMetrics.paneHorizontalPadding * 2)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, SettingsMetrics.paneHorizontalPadding)
-            .padding(.top, SettingsMetrics.paneTopPadding)
-            .padding(.bottom, SettingsMetrics.paneBottomPadding)
-            .frame(maxWidth: SettingsMetrics.contentMaxWidth + SettingsMetrics.paneHorizontalPadding * 2)
-            .frame(maxWidth: .infinity)
+            .onAppear {
+                // Harness: `NOTCHTUNE_HARNESS_SETTINGS_SCROLL=bottom` captures
+                // the end of a pane.
+                guard ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_SETTINGS_SCROLL"] == "bottom" else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    proxy.scrollTo(Self.bottomAnchor, anchor: .bottom)
+                }
+            }
         }
         .navigationTitle(title)
         .modifier(HeroCollapsingToolbarTitle())
     }
+
+    private static var bottomAnchor: String { "settings-pane-bottom" }
 }
 
-extension SettingsPane where Hero == SettingsHeroHeader<SettingsHeroIcon> {
-    /// The standard pane: the tab's own icon and color in the hero.
+extension SettingsPane {
+    /// A pane whose hero tile holds custom art (Personalization's character).
+    init<Glyph: View>(
+        title: String,
+        subtitle: String,
+        @ViewBuilder glyph: @escaping () -> Glyph,
+        @ViewBuilder content: @escaping () -> Content
+    ) where Hero == SettingsHeroHeader<SettingsHeroIcon<Glyph>> {
+        self.title = title
+        self.hero = {
+            SettingsHeroHeader(title: title, subtitle: subtitle) {
+                SettingsHeroIcon(glyph: glyph)
+            }
+        }
+        self.content = content
+    }
+
+    /// The standard pane: the tab's own glyph in the hero.
     init(
         title: String,
         subtitle: String,
         systemImage: String,
-        color: Color,
         @ViewBuilder content: @escaping () -> Content
-    ) {
-        self.title = title
-        self.hero = {
-            SettingsHeroHeader(title: title, subtitle: subtitle) {
-                SettingsHeroIcon(systemName: systemImage, color: color)
-            }
+    ) where Hero == SettingsHeroHeader<SettingsHeroIcon<SettingsSymbolGlyph>> {
+        self.init(title: title, subtitle: subtitle) {
+            SettingsSymbolGlyph(systemName: systemImage, size: SettingsMetrics.heroIconSize)
+        } content: {
+            content()
         }
-        self.content = content
     }
 }
 
@@ -211,14 +202,14 @@ private struct HeroCollapsingToolbarTitle: ViewModifier {
     }
 }
 
-/// The hero's large icon tile, with a soft colored glow beneath it.
-struct SettingsHeroIcon: View {
-    let systemName: String
-    let color: Color
+/// The hero's large notch tile, with a faint paper glow beneath it.
+struct SettingsHeroIcon<Glyph: View>: View {
+    @ViewBuilder let glyph: () -> Glyph
 
     var body: some View {
-        SettingsIconTile(systemName: systemName, color: color, size: SettingsMetrics.heroIconSize)
-            .shadow(color: color.opacity(0.35), radius: 12, y: 6)
+        SettingsGlyphTile(size: SettingsMetrics.heroIconSize, glyph: glyph)
+            .shadow(color: SettingsTheme.paper.opacity(0.10), radius: 14, y: 6)
+            .shadow(color: .black.opacity(0.5), radius: 4, y: 2)
     }
 }
 
@@ -233,10 +224,10 @@ struct SettingsHeroHeader<Icon: View>: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(title)
-                    .font(.title.weight(.bold))
+                    .font(.system(size: 26, weight: .bold))
                     .foregroundStyle(.primary)
                 Text(subtitle)
-                    .font(.system(size: 14))
+                    .font(.system(size: 13.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -251,19 +242,26 @@ struct SettingsHeroHeader<Icon: View>: View {
 
 // MARK: - Cards
 
-/// The soft card fill: a whisper of white over the dark window, a white
-/// card with a faint shadow in light mode.
+/// The card fill: a whisper of paper over the ink window, with a hairline
+/// rim that catches a little more light along the top — the island's rows,
+/// scaled up.
 struct SettingsCardBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
     var cornerRadius: CGFloat = SettingsMetrics.cardCornerRadius
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        let isDark = colorScheme == .dark
         shape
-            .fill(isDark ? Color.white.opacity(0.055) : Color.white)
-            .overlay(shape.strokeBorder(Color.primary.opacity(isDark ? 0.07 : 0.06), lineWidth: 1))
-            .shadow(color: .black.opacity(isDark ? 0 : 0.05), radius: 3, y: 1)
+            .fill(SettingsTheme.surfaceFill)
+            .overlay {
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [SettingsTheme.paper.opacity(0.12), SettingsTheme.surfaceStroke],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+            }
     }
 }
 
@@ -291,6 +289,7 @@ struct SettingsCard<Accessory: View, Content: View>: View {
                         if let title {
                             Text(title)
                                 .font(SettingsMetrics.sectionTitleFont)
+                                .foregroundStyle(SettingsTheme.paper.opacity(0.88))
                                 .accessibilityAddTraits(.isHeader)
                         }
                         if let subtitle {
@@ -370,13 +369,16 @@ struct SettingsFooterText: View {
     }
 }
 
-/// Hairline between rows, inset to the card's content edge.
+/// Paper hairline between rows, inset to the card's content edge.
 struct SettingsRowDivider: View {
     var leadingInset: CGFloat = 0
 
     var body: some View {
-        Divider()
+        Rectangle()
+            .fill(SettingsTheme.hairline)
+            .frame(height: 1)
             .padding(.leading, leadingInset)
+            .accessibilityHidden(true)
     }
 }
 
@@ -453,7 +455,7 @@ struct SettingsToggleRow: View {
         } accessory: {
             Toggle(title, isOn: $isOn)
                 .labelsHidden()
-                .toggleStyle(.switch)
+                .toggleStyle(SettingsSwitchToggleStyle())
                 .accessibilityHint(subtitle ?? "")
         }
     }
@@ -468,26 +470,27 @@ enum SettingsPickerStyle {
     case segmentedBelow
 }
 
-/// A row with a trailing menu or segmented picker.
-struct SettingsPickerRow<Value: Hashable, Options: View>: View {
+/// A row with a trailing menu or segmented picker, both in the island's
+/// capsule style.
+struct SettingsPickerRow<Value: Hashable>: View {
     let title: String
     var subtitle: String? = nil
     @Binding var selection: Value
     var style: SettingsPickerStyle = .menu
-    @ViewBuilder let options: () -> Options
+    let segments: [SettingsSegment<Value>]
 
     init(
         _ title: String,
         subtitle: String? = nil,
         selection: Binding<Value>,
         style: SettingsPickerStyle = .menu,
-        @ViewBuilder options: @escaping () -> Options
+        segments: [SettingsSegment<Value>]
     ) {
         self.title = title
         self.subtitle = subtitle
         self._selection = selection
         self.style = style
-        self.options = options
+        self.segments = segments
     }
 
     var body: some View {
@@ -496,7 +499,6 @@ struct SettingsPickerRow<Value: Hashable, Options: View>: View {
                 SettingsRowLabel(title: title, subtitle: subtitle)
                     .accessibilityHidden(true)
                 picker
-                    .fixedSize()
                     .accessibilityHint(subtitle ?? "")
             }
             .padding(.vertical, 16)
@@ -513,13 +515,11 @@ struct SettingsPickerRow<Value: Hashable, Options: View>: View {
 
     @ViewBuilder
     private var picker: some View {
-        let base = Picker(title, selection: $selection) { options() }
-            .labelsHidden()
         switch style {
         case .menu:
-            base.pickerStyle(.menu)
+            SettingsMenuPicker(title, selection: $selection, segments: segments)
         case .segmented, .segmentedBelow:
-            base.pickerStyle(.segmented)
+            SettingsSegmentedControl(title: title, selection: $selection, segments: segments)
         }
     }
 }
@@ -545,24 +545,25 @@ struct SettingsStackedRow<Content: View>: View {
     }
 }
 
-/// A small status capsule: a colored glyph and a short word.
+/// A small status capsule in the island's bezel: a status-coloured glyph and
+/// a short word.
 struct SettingsStatusBadge: View {
     let text: String
     var systemImage: String = "checkmark.circle.fill"
-    var color: Color = .green
+    var color: Color = SettingsTheme.positive
 
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: systemImage)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 10.5, weight: .semibold))
                 .foregroundStyle(color)
             Text(text)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(SettingsTheme.paper.opacity(0.78))
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 4)
-        .background(color.opacity(0.12), in: Capsule())
+        .background(IslandGlassBezel(shape: Capsule(), tint: color))
         .accessibilityElement(children: .combine)
     }
 }
@@ -582,9 +583,10 @@ struct SettingsIconButton: View {
         Button(role: role, action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 11.5, weight: .semibold))
-                .foregroundStyle(tint ?? Color.secondary)
+                .foregroundStyle(tint ?? SettingsTheme.paper.opacity(0.72))
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(Color.primary.opacity(isHovered ? 0.12 : 0.06)))
+                .background(Circle().fill(SettingsTheme.paper.opacity(isHovered ? 0.13 : 0.07)))
+                .overlay(Circle().strokeBorder(SettingsTheme.paper.opacity(0.1), lineWidth: 0.75))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -604,10 +606,10 @@ enum SettingsTileBackground {
     case island
     /// The preview wallpaper, for miniature pills that sit on a desktop.
     case wallpaper
-    /// A neutral fill that follows the system appearance.
+    /// A soft paper wash on the window, for app icons and display symbols.
     case neutral
 
-    static let islandInk = Color(white: 0.09)
+    static let islandInk = Color(white: 0.04)
 }
 
 private struct SettingsTileHoveredKey: EnvironmentKey {
@@ -652,16 +654,16 @@ struct SettingsTile<Thumbnail: View>: View {
                 .clipShape(RoundedRectangle(cornerRadius: thumbnailRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: thumbnailRadius, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+                        .strokeBorder(SettingsTheme.paper.opacity(0.1), lineWidth: 0.75)
                 )
                 .overlay(alignment: .topTrailing) {
                     if isSelected {
                         Image(systemName: "checkmark")
                             .font(.system(size: 8.5, weight: .heavy))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(SettingsTheme.ink)
                             .frame(width: 17, height: 17)
-                            .background(Circle().fill(Color.accentColor))
-                            .overlay(Circle().strokeBorder(.white.opacity(0.85), lineWidth: 1.5))
+                            .background(Circle().fill(SettingsTheme.accent))
+                            .overlay(Circle().strokeBorder(SettingsTheme.ink.opacity(0.6), lineWidth: 1.5))
                             .padding(6)
                             .transition(.scale(scale: 0.4).combined(with: .opacity))
                     }
@@ -700,8 +702,8 @@ struct SettingsTile<Thumbnail: View>: View {
     }
 
     private var ringColor: Color {
-        if isSelected { return .accentColor }
-        return isHovered ? Color.primary.opacity(0.18) : .clear
+        if isSelected { return SettingsTheme.accent.opacity(0.9) }
+        return isHovered ? SettingsTheme.paper.opacity(0.2) : .clear
     }
 
     @ViewBuilder
@@ -712,7 +714,7 @@ struct SettingsTile<Thumbnail: View>: View {
         case .wallpaper:
             PersonalizationWallpaper()
         case .neutral:
-            Rectangle().fill(.quaternary)
+            Rectangle().fill(SettingsTheme.paper.opacity(0.05))
         }
     }
 }
