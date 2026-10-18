@@ -28,3 +28,5 @@ output/
 .worktrees/
 .air/
 .gstack/
+
+__pycache__/
