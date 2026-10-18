@@ -106,6 +106,32 @@ struct IslandDensityTests {
     }
 
     @Test @MainActor
+    func characterMotionRoundTripsPerProfileAndDefaultsToCalm() {
+        let defaults = UserDefaults.standard
+        let notchKey = "appearance.island.v8.notch.characterMotion"
+        let topBarKey = "appearance.island.v8.topBar.characterMotion"
+        let previousNotch = defaults.string(forKey: notchKey)
+        let previousTopBar = defaults.string(forKey: topBarKey)
+        defer {
+            restore(defaults, key: notchKey, value: previousNotch)
+            restore(defaults, key: topBarKey, value: previousTopBar)
+        }
+        defaults.removeObject(forKey: notchKey)
+        defaults.removeObject(forKey: topBarKey)
+        #expect(AppModel().appearancePreferences(for: .notch).characterMotion == .calm)
+
+        let writer = AppModel()
+        writer.updateAppearancePreferences(for: .notch) { $0.characterMotion = .still }
+        writer.updateAppearancePreferences(for: .topBar) { $0.characterMotion = .lively }
+        #expect(defaults.string(forKey: notchKey) == "still")
+        #expect(defaults.string(forKey: topBarKey) == "lively")
+
+        let reader = AppModel()
+        #expect(reader.appearancePreferences(for: .notch).characterMotion == .still)
+        #expect(reader.appearancePreferences(for: .topBar).characterMotion == .lively)
+    }
+
+    @Test @MainActor
     func harnessOverrideWinsWithoutTouchingThePersistedPreference() {
         let defaults = UserDefaults.standard
         let topBarKey = "appearance.island.v8.topBar.density"

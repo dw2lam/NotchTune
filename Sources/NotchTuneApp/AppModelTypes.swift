@@ -122,6 +122,9 @@ struct IslandAppearancePreferences: Equatable, Sendable {
     var rightSlot: IslandRightSlot = .count
     var centerLabel: IslandCenterLabel = .agentAction
     var character: IslandCharacter = .dino
+    /// How much the character moves; Calm by default (the pill sits in
+    /// peripheral vision for hours).
+    var characterMotion: IslandCharacterMotion = .calm
     /// Tint the character with the active agent's brand color (Codex blue,
     /// Claude orange, …) instead of the paper ink.
     var colorByAgent: Bool = false
@@ -136,6 +139,27 @@ struct IslandAppearancePreferences: Equatable, Sendable {
     var sessionGroup: IslandSessionGroup = .none
     var sessionSort: IslandSessionSort = .attention
     var completedStaleThreshold: IslandCompletedStaleThreshold = .fiveMinutes
+}
+
+/// How much the closed-pill character moves. Raw values are persisted in the
+/// appearance preferences: never rename one.
+enum IslandCharacterMotion: String, CaseIterable, Identifiable, Sendable {
+    /// Slow, in-place changes; long rests between blinks and glances.
+    case calm
+    /// Walk cycles, hops and sways.
+    case lively
+    /// One frame per state.
+    case still
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .calm: "Calm"
+        case .lively: "Lively"
+        case .still: "Still"
+        }
+    }
 }
 
 /// Raw values are persisted in the appearance preferences: never rename one.

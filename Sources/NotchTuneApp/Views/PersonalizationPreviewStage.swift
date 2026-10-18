@@ -234,6 +234,8 @@ struct PersonalizationPreviewStage: View {
             .frame(width: stageWidth, height: proxy.size.height)
         }
         .frame(height: Self.height)
+        // The preview's character moves the way the edited profile will.
+        .environment(\.islandCharacterMotion, preferences.characterMotion)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)

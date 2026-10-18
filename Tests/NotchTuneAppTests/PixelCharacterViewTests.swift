@@ -8,9 +8,14 @@ import Testing
 /// each mode installs its frame loop and motion, and a paused glyph runs none.
 @MainActor
 struct PixelCharacterViewTests {
-    private func view(_ mode: UnifiedBars.Mode, paused: Bool = false, character: IslandCharacter = .dino) -> PixelCharacterNSView {
+    private func view(
+        _ mode: UnifiedBars.Mode,
+        paused: Bool = false,
+        character: IslandCharacter = .dino,
+        motion: IslandCharacterMotion = .lively
+    ) -> PixelCharacterNSView {
         let view = PixelCharacterNSView(frame: NSRect(x: 0, y: 0, width: 24, height: 24))
-        view.apply(.init(character: character, mode: mode, paused: paused, rgba: [1, 1, 1, 1]))
+        view.apply(.init(character: character, mode: mode, paused: paused, rgba: [1, 1, 1, 1], motion: motion))
         return view
     }
 
@@ -19,14 +24,43 @@ struct PixelCharacterViewTests {
         #expect(view(.running).runningAnimationKeys == ["frames", "motion"])
         #expect(view(.idle).runningAnimationKeys == ["frames"])
         #expect(view(.waiting).runningAnimationKeys == ["frames"])
-        // The ghost floats even at rest.
+        // Lively, the ghost floats even at rest.
         #expect(view(.idle, character: .ghost).runningAnimationKeys == ["frames", "motion"])
+    }
+
+    @Test
+    func calmNeverMovesTheWholeSprite() {
+        for character in IslandCharacter.allCases {
+            for mode in [UnifiedBars.Mode.idle, .running, .waiting] {
+                let glyph = view(mode, character: character, motion: .calm)
+                #expect(glyph.runningAnimationKeys == ["frames"], "\(character) \(mode) moves the whole sprite when Calm")
+            }
+        }
+    }
+
+    @Test
+    func stillShowsOneFramePerStateAndRunsNothing() {
+        for character in IslandCharacter.allCases {
+            for mode in [UnifiedBars.Mode.idle, .running, .waiting] {
+                let glyph = view(mode, character: character, motion: .still)
+                #expect(glyph.runningAnimationKeys.isEmpty, "\(character) \(mode)")
+                #expect(glyph.hasSpriteContents, "\(character) \(mode)")
+            }
+        }
+    }
+
+    @Test
+    func calmIsTheDefault() {
+        #expect(IslandAppearancePreferences().characterMotion == .calm)
+        #expect(PixelCharacterNSView.Config(character: .dino, mode: .idle, paused: false, rgba: [1, 1, 1, 1]).motion == .calm)
     }
 
     @Test
     func theFrameLoopStepsThroughEveryStep() {
         let running = view(.running, character: .claude)
         #expect(running.frameAnimationImageCount == IslandCharacter.claude.sprite.working.steps.count)
+        let calm = view(.running, character: .claude, motion: .calm)
+        #expect(calm.frameAnimationImageCount == IslandCharacter.claude.sprite.calmWorking.steps.count)
     }
 
     @Test
@@ -89,7 +123,8 @@ struct PixelCharacterSpriteTests {
                 #expect(frame.width == 14 && frame.height == 14, "\(character)")
                 #expect(frame.cells.contains(1), "\(character) has a blank frame")
             }
-            for sequence in [sprite.idle, sprite.working, sprite.waiting] {
+            for sequence in [sprite.idle, sprite.working, sprite.waiting,
+                             sprite.calmIdle, sprite.calmWorking, sprite.calmWaiting] {
                 #expect(!sequence.steps.isEmpty)
                 for step in sequence.steps {
                     #expect(sprite.frames.indices.contains(step.frame), "\(character)")
@@ -135,6 +170,82 @@ struct PixelCharacterSpriteTests {
     }
 
     @Test
+    func calmIdleIsNearlyStill() {
+        for character in IslandCharacter.allCases {
+            let idle = character.sprite.calmIdle
+            let rest = idle.steps[0].frame
+            let restTime = idle.steps.filter { $0.frame == rest }.reduce(0) { $0 + $1.duration }
+            #expect(idle.steps[0].frame == character.sprite.idle.steps[0].frame, "\(character) rests on another pose when Calm")
+            #expect(idle.cycleDuration >= 12, "\(character) idles too busily when Calm")
+            #expect(restTime / idle.cycleDuration >= 0.8, "\(character) is rarely still when Calm")
+            #expect(idle.motion == nil)
+            // Moments of life stay rare: a few seconds of rest between them.
+            let restSpells = idle.steps.filter { $0.frame == rest }.map(\.duration)
+            #expect(restSpells.max() ?? 0 >= 4, "\(character)")
+        }
+    }
+
+    @Test
+    func calmWorkIsSlowAndInPlace() {
+        for character in IslandCharacter.allCases {
+            let sprite = character.sprite
+            let working = sprite.calmWorking
+            #expect(working.motion == nil, "\(character)")
+            #expect(Set(working.steps.map(\.frame)).count >= 2, "\(character) must still show it's busy")
+            for step in working.steps {
+                #expect(step.duration >= 0.25, "\(character) flickers when Calm")
+            }
+            // Calm work is calmer than Lively work.
+            let lively = sprite.working.cycleDuration / Double(sprite.working.steps.count)
+            let calm = working.cycleDuration / Double(working.steps.count)
+            #expect(calm >= lively * 2, "\(character) works as fast when Calm")
+        }
+    }
+
+    @Test
+    func calmWaitingHoldsANeedsYouCue() {
+        for character in IslandCharacter.allCases {
+            let sprite = character.sprite
+            let waiting = sprite.calmWaiting
+            #expect(waiting.motion == nil, "\(character)")
+            // Still shows this first frame: it must read as "needs you".
+            #expect(sprite.frames[waiting.steps[0].frame] != sprite.rest, "\(character)")
+            for step in waiting.steps {
+                #expect(sprite.frames[step.frame] != sprite.rest, "\(character) drops its cue while waiting")
+                #expect(step.duration >= 0.8, "\(character) flashes when Calm")
+            }
+        }
+    }
+
+    @Test
+    func stillPicksEachStatesCalmPose() {
+        for character in IslandCharacter.allCases {
+            let sprite = character.sprite
+            for mode in [UnifiedBars.Mode.idle, .running, .waiting] {
+                let still = sprite.sequence(for: mode, motion: .still)
+                #expect(still.steps.count == 1 && still.motion == nil, "\(character) \(mode)")
+                #expect(still.steps[0].frame == sprite.sequence(for: mode, motion: .calm).steps[0].frame)
+            }
+            #expect(sprite.sequence(for: .idle, motion: .still).steps[0].frame == sprite.idle.steps[0].frame)
+        }
+    }
+
+    @Test
+    func claudeDancesLikeClawd() {
+        // The CLI's moves: feet tap one pair then the other, arms go up.
+        let sprite = IslandCharacter.claude.sprite
+        let rest = sprite.rest
+        let working = Set(sprite.working.steps.map(\.frame)).map { sprite.frames[$0] }
+        func legCells(_ frame: PixelFrame) -> Int {
+            (10...11).reduce(0) { total, row in total + (0..<frame.width).filter { frame[row, $0] == 1 }.count }
+        }
+        #expect(working.contains { legCells($0) < legCells(rest) }, "Claude never lifts a foot")
+        #expect(working.contains { frame in
+            (0..<frame.width).contains { frame[5, $0] == 1 && $0 < 2 }
+        }, "Claude never throws its arms up")
+    }
+
+    @Test
     func motionCurvesRepeatEveryPeriod() {
         for character in IslandCharacter.allCases {
             for motion in [character.sprite.idle.motion, character.sprite.working.motion, character.sprite.waiting.motion] {
@@ -150,6 +261,11 @@ struct PixelCharacterSpriteTests {
 /// writes every frame of every character and state, drawn by the real
 /// renderer, into a contact sheet: big frames plus real notch sizes.
 struct PixelSpriteContactSheet {
+    /// Rows per character: Lively idle / working / waiting, then Calm.
+    static func sequences(_ sprite: PixelCharacterSprite) -> [PixelSequence] {
+        [sprite.idle, sprite.working, sprite.waiting, sprite.calmIdle, sprite.calmWorking, sprite.calmWaiting]
+    }
+
     @Test
     func writeContactSheet() throws {
         guard let directory = ProcessInfo.processInfo.environment["NOTCHTUNE_SPRITE_SHEET_DIR"] else { return }
@@ -160,11 +276,11 @@ struct PixelSpriteContactSheet {
         let gap: CGFloat = 10
         let characters = IslandCharacter.allCases
         let columns = characters.map { c in
-            [c.sprite.idle, c.sprite.working, c.sprite.waiting].map { Set($0.steps.map(\.frame)).count }.max() ?? 1
+            Self.sequences(c.sprite).map { Set($0.steps.map(\.frame)).count }.max() ?? 1
         }.max() ?? 1
         let realWidth = realSides.reduce(0) { $0 + $1.side * $1.scale + gap }
         let width = Int(gap + CGFloat(columns) * (big + gap) + realWidth + gap)
-        let height = Int(gap + CGFloat(characters.count * 3) * (big + gap))
+        let height = Int(gap + CGFloat(characters.count * 6) * (big + gap))
         let context = try #require(CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
             space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
@@ -174,7 +290,7 @@ struct PixelSpriteContactSheet {
         var row = 0
         for character in characters {
             let sprite = character.sprite
-            for sequence in [sprite.idle, sprite.working, sprite.waiting] {
+            for sequence in Self.sequences(sprite) {
                 var seen: [Int] = []
                 for step in sequence.steps where !seen.contains(step.frame) { seen.append(step.frame) }
                 let y = CGFloat(height) - gap - CGFloat(row + 1) * (big + gap) + gap

@@ -54,6 +54,9 @@ struct AppearanceSettingsPane: View {
         .task(id: PreviewDriver(pin: previewPin, isOnScreen: isOnScreen)) {
             await runPreview()
         }
+        // Every character on the pane (hero, tiles, preview) moves the way
+        // the profile being edited will.
+        .environment(\.islandCharacterMotion, editingPreferences.characterMotion)
     }
 
     /// The hero character mirrors the live preview: running while it shows
@@ -216,6 +219,16 @@ struct AppearanceSettingsPane: View {
                     }
                 }
             }
+
+            SettingsRowDivider()
+
+            SettingsPickerRow(
+                lang.t("settings.appearance.characterMotion.title"),
+                subtitle: lang.t("settings.appearance.characterMotion.note"),
+                selection: binding(\.characterMotion),
+                style: .segmented,
+                segments: IslandCharacterMotion.allCases.map { SettingsSegment($0, $0.title) }
+            )
 
             SettingsRowDivider()
 

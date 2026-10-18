@@ -292,6 +292,8 @@
 "settings.appearance.character.title" = "Character";
 "settings.appearance.character.row" = "Pixel character";
 "settings.appearance.character.note" = "Shown in the closed island.";
+"settings.appearance.characterMotion.title" = "Character motion";
+"settings.appearance.characterMotion.note" = "Calm keeps it gentle in the corner of your eye. Lively adds hops and walk cycles; Still holds one pose per state.";
 "settings.appearance.colorByAgent.legend" = "Agent colors";
 "settings.appearance.glass.enabled" = "Use Liquid Glass";
 "settings.appearance.glass.enabled.note" = "Render the island with Apple's Liquid Glass material instead of solid black.";
