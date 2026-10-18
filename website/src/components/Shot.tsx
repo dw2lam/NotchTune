@@ -1,16 +1,34 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+/* A real capture of NotchTune (website/public/assets/shots, made with the
+   app's headless harness at 2x). Drawn at the app's own size; on a phone a
+   wide shot is cropped to a window rather than shrunk. */
+export const SHOTS = {
+  island: { w: 650, h: 354 },
+  'pill-working': { w: 468, h: 38 },
+  'pill-waiting': { w: 488, h: 38 },
+  'pill-finished': { w: 492, h: 38 },
+  'pill-meeting': { w: 464, h: 38 },
+  summary: { w: 550, h: 172 },
+  player: { w: 650, h: 203 },
+  banner: { w: 650, h: 75 },
+  settings: { w: 902, h: 1212 },
+} as const;
 
-/* A product shot is a picture, not a control: the mock kit inside it keeps
-   its real buttons for fidelity, so the whole subtree is made inert (no
-   focus, no clicks) and described once for assistive tech. */
-export function Shot({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
-  const inner = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    inner.current?.setAttribute('inert', '');
-  }, []);
+export function Shot({ name, alt, eager = false, className = '' }: {
+  name: keyof typeof SHOTS; alt: string; eager?: boolean; className?: string;
+}) {
+  const { w, h } = SHOTS[name];
+  const src = `/assets/shots/${name}.webp`;
   return (
-    <figure className={`shot ${className}`.trim()} role="img" aria-label={label}>
-      <div ref={inner} className="shot-inner" aria-hidden="true">{children}</div>
-    </figure>
+    <img
+      className={`shot shot-${name} ${className}`.trim()}
+      src={src}
+      srcSet={`${src} 2x`}
+      width={w}
+      height={h}
+      alt={alt}
+      decoding="async"
+      loading={eager ? 'eager' : 'lazy'}
+      {...(eager ? { fetchpriority: 'high' } : {})}
+    />
   );
 }

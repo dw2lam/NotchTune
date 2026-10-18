@@ -1,43 +1,40 @@
-import { ClosedPill, type PillMode } from '../mock';
-import { usePhone } from '../hooks/useMedia';
 import { Shot } from '../components/Shot';
-import { Section } from '../components/Section';
+import { Crop } from '../components/Feature';
 
-const MOMENTS: { label: string; tone: string; mode: PillMode; said: string }[] = [
+const STATES = [
   {
-    label: 'Working', tone: 'work', said: 'Claude in api, running swift test, 1 minute 47 seconds in',
-    mode: { kind: 'live', char: 'dino', activity: { kind: 'working', title: 'Claude · api', subtitle: 'Running swift test', timer: '1:47' } },
+    name: 'Working', shot: 'pill-working',
+    alt: 'The closed notch while Claude Code works in api: running swift test, 41 seconds in.',
   },
   {
-    label: 'Needs you', tone: 'wait', said: 'Codex needs approval for git push origin main',
-    mode: { kind: 'live', char: 'dino', activity: { kind: 'approval', title: 'Codex needs approval', subtitle: 'git push origin main', timer: '0:21' } },
+    name: 'Needs you', shot: 'pill-waiting',
+    alt: 'The closed notch turned amber: Codex needs approval to run git push origin main, waiting 13 seconds.',
   },
   {
-    label: 'Finished', tone: 'done', said: 'Claude finished: the build passes, after 2 minutes 40 seconds',
-    mode: { kind: 'live', char: 'dino', activity: { kind: 'finished', title: 'Claude finished', subtitle: 'Build passes · 2m 40s' } },
+    name: 'Done', shot: 'pill-finished',
+    alt: 'The closed notch after Claude Code finished: edited 2 files in 48 seconds, with one more agent still working.',
   },
-];
+] as const;
 
 export default function Agents() {
-  const phone = usePhone();
   return (
-    <Section
-      id="agents" index="02" label="In the notch"
-      title="See it work without looking away."
-      line="The closed notch widens with what an agent is doing, turns amber when it needs you, and checks off when it’s done."
-    >
-      <div className="slab slab-cascade reveal">
-        {MOMENTS.map((m) => (
-          <div className={`card moment m-${m.tone}`} key={m.label}>
-            <div className="hang">
-              <Shot label={`The closed notch, ${m.label.toLowerCase()}: ${m.said}.`}>
-                <ClosedPill layout={phone ? 'pill' : 'notch'} alignNotch={false} mode={m.mode} />
-              </Shot>
+    <section id="agents" className="feature feature-states" aria-labelledby="agents-title">
+      <div className="frame">
+        <div className="feature-text reveal">
+          <h2 id="agents-title" className="h2">Watch your agents work.</h2>
+          <p className="lede">While Claude Code or Codex runs, the closed notch says what it’s doing and for how long. It turns amber when one needs you, and checks off when it’s done.</p>
+        </div>
+        <div className="states">
+          {STATES.map((s) => (
+            <div className="state reveal" key={s.name}>
+              <p className="state-name">{s.name}</p>
+              <div className="edge">
+                <Crop><Shot name={s.shot} alt={s.alt} /></Crop>
+              </div>
             </div>
-            <p className="tag">{m.label}</p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-    </Section>
+    </section>
   );
 }

@@ -1,27 +1,19 @@
-import { MusicTab } from '../mock';
 import { Shot } from '../components/Shot';
-import { Section, Bare } from '../components/Section';
-
-const ART = '/assets/submarine.jpg';
+import { Feature, Crop } from '../components/Feature';
 
 export default function Music() {
   return (
-    <Section
-      id="music" index="04" label="Music"
+    <Feature
+      id="music" layout="flip"
       title="Music without switching apps."
-      line="Spotify or Apple Music, with the cover, the controls and a two-finger swipe to skip."
+      line="Spotify or Apple Music, right under the notch: the cover, the controls, and a two-finger swipe to skip."
     >
-      <div className="slab reveal">
-        <div className="card">
-          <div className="hang">
-            <Shot label="The player in the island: Sienna by The Marías, playing, with shuffle, previous, pause, next, repeat and a progress bar.">
-              <Bare art={ART}>
-                <MusicTab track={{ title: 'Sienna', artist: 'The Marías', art: `url(${ART})`, duration: 218 }} playing position={64} />
-              </Bare>
-            </Shot>
-          </div>
-        </div>
-      </div>
-    </Section>
+      <Crop x={205}>
+        <Shot
+          name="player" className="reflect"
+          alt="The Music tab under the notch, playing Still Water by Juniper Coast at 1:21 of 3:56, with shuffle, previous, pause, next and repeat."
+        />
+      </Crop>
+    </Feature>
   );
 }

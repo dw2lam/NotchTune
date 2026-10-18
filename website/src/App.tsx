@@ -12,7 +12,7 @@ import Download from './sections/Download';
 export default function App() {
   useReveal();
   return (
-    <div className="page">
+    <>
       <a className="skip-link" href="#main">Skip to content</a>
       <Nav />
       <main id="main">
@@ -26,6 +26,6 @@ export default function App() {
         <Download />
       </main>
       <Footer />
-    </div>
+    </>
   );
 }
