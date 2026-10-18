@@ -16,6 +16,9 @@ struct SettingsWindowSizeTests {
             contentRect: NSRect(x: -20000, y: -20000, width: 860, height: 640),
             styleMask: [.titled, .resizable], backing: .buffered, defer: false
         )
+        // Code-created windows release themselves on close by default; with
+        // ARC that's a double release that crashes a later test.
+        window.isReleasedWhenClosed = false
         window.contentViewController = controller
         var results: [(SettingsTab, min: CGSize, ideal: CGSize)] = []
         for tab in SettingsTab.allCases {
