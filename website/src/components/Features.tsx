@@ -185,6 +185,21 @@ export default function Features() {
           <h4>Follows your focus</h4>
           <p>The island moves to whichever display you're working on. It's a real notch surface on MacBooks and a clean top-center bar on other screens. Compact density slims the pill to fit a 24pt menu bar.</p>
         </article>
+        <article className="card glass">
+          <div className="card-ico">🔔</div>
+          <h4>32 original sounds</h4>
+          <p>A bundled pack synthesized from scratch and loudness-matched to macOS's own alerts: chimes and bells, retro blips, a desk bell for needs-you moments, tiny ticks for minimalists. System and custom sounds work too, with separate picks for notifications and the idle nudge.</p>
+        </article>
+        <article className="card glass">
+          <div className="card-ico">⇄</div>
+          <h4>Sync both displays</h4>
+          <p>Your MacBook notch and an external display each keep their own look. Press Sync and the display you're editing is copied to the other, and every change from then on lands on both.</p>
+        </article>
+        <article className="card glass">
+          <div className="card-ico">♫</div>
+          <h4>Your library, one tap away</h4>
+          <p>While music plays, the library button opens your playlists and albums. Hover the Now Playing cover for a tiny progress bar and play controls, and tap it to go back to the full player.</p>
+        </article>
       </div>
     </section>
   );
