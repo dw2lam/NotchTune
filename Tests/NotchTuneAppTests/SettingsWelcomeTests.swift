@@ -1,4 +1,5 @@
 import Foundation
+import Sparkle
 import Testing
 @testable import NotchTuneApp
 
@@ -64,9 +65,32 @@ struct SettingsWelcomeAppTests {
     @Test
     func theUpdateLineSaysTheMostPressingThing() {
         let checked = Date(timeIntervalSince1970: 1_000)
-        #expect(SettingsWelcome.updateStatus(isChecking: true, availableVersion: "2.2.0", lastCheck: checked) == .checking)
+        // A found update wins even while Sparkle's cycle (its window) is open.
+        #expect(SettingsWelcome.updateStatus(isChecking: true, availableVersion: "2.2.0", lastCheck: checked) == .available("2.2.0"))
+        #expect(SettingsWelcome.updateStatus(isChecking: true, availableVersion: nil, lastCheck: checked) == .checking)
         #expect(SettingsWelcome.updateStatus(isChecking: false, availableVersion: "2.2.0", lastCheck: checked) == .available("2.2.0"))
         #expect(SettingsWelcome.updateStatus(isChecking: false, availableVersion: nil, lastCheck: checked) == .upToDate(checkedAt: checked))
         #expect(SettingsWelcome.updateStatus(isChecking: false, availableVersion: nil, lastCheck: nil) == .automatic)
+    }
+
+    @Test
+    func aFailedCheckIsNeverUpToDate() {
+        let checked = Date(timeIntervalSince1970: 1_000)
+        #expect(SettingsWelcome.updateStatus(
+            isChecking: false, availableVersion: nil, lastCheck: checked, lastCheckFailed: true
+        ) == .couldNotCheck)
+        #expect(SettingsWelcome.updateStatus(
+            isChecking: true, availableVersion: nil, lastCheck: checked, lastCheckFailed: true
+        ) == .checking)
+    }
+
+    @Test
+    func onlyRealErrorsCountAsAFailedCheck() {
+        #expect(!UpdateChecker.isFailedCheck(nil))
+        // Sparkle reports "no update" and "install cancelled" as errors too.
+        #expect(!UpdateChecker.isFailedCheck(NSError(domain: SUSparkleErrorDomain, code: 1001)))
+        #expect(!UpdateChecker.isFailedCheck(NSError(domain: SUSparkleErrorDomain, code: 4007)))
+        #expect(UpdateChecker.isFailedCheck(NSError(domain: SUSparkleErrorDomain, code: 2001)))
+        #expect(UpdateChecker.isFailedCheck(NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet)))
     }
 }

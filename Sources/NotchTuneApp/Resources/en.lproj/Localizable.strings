@@ -381,4 +381,5 @@
 "settings.updates.checking" = "Checking for updates…";
 "settings.updates.available" = "Version %@ is available";
 "settings.updates.upToDate" = "Up to date · checked %@";
+"settings.updates.failed" = "Couldn't check for updates";
 "settings.updates.automatic" = "Checks for updates automatically";

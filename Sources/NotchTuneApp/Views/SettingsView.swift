@@ -103,7 +103,7 @@ struct SettingsView: View {
         }
         .background {
             GeometryReader { proxy in
-                SettingsPaneGlow(tint: glowTint, window: proxy)
+                SettingsPaneGlowClock(selectedTab: selectedTab, isLive: isWindowOnScreen, window: proxy)
             }
             .ignoresSafeArea()
         }
@@ -119,11 +119,6 @@ struct SettingsView: View {
                 selectedTab = tab
             }
         }
-    }
-
-    /// General's glow follows the welcome's colour for the hour.
-    private var glowTint: SettingsTint {
-        selectedTab == .general ? SettingsWelcome.dayPart(at: Date()).tint : selectedTab.tint
     }
 
     // MARK: Sidebar
@@ -1659,5 +1654,28 @@ struct RemoteConnectionSection: View {
             RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
                 .strokeBorder(SettingsTheme.paper.opacity(0.08), lineWidth: 1)
         )
+    }
+}
+
+/// The window's glow, on the welcome's minute clock: General's follows the
+/// colour for the hour (and changes with it), every other pane wears its
+/// own. The clock runs only while the window can be seen.
+private struct SettingsPaneGlowClock: View {
+    let selectedTab: SettingsTab
+    let isLive: Bool
+    let window: GeometryProxy
+
+    var body: some View {
+        if isLive {
+            TimelineView(.everyMinute) { context in
+                SettingsPaneGlow(tint: tint(at: context.date), window: window)
+            }
+        } else {
+            SettingsPaneGlow(tint: tint(at: Date()), window: window)
+        }
+    }
+
+    private func tint(at date: Date) -> SettingsTint {
+        selectedTab == .general ? SettingsWelcome.dayPart(at: date).tint : selectedTab.tint
     }
 }

@@ -98,16 +98,27 @@ enum SettingsWelcome {
 
     /// What the update line says, most pressing first.
     enum UpdateStatus: Equatable {
-        case checking
         case available(String)
+        case checking
+        /// The last check didn't get an answer (offline, feed unreachable).
+        case couldNotCheck
         case upToDate(checkedAt: Date)
         /// No check on record yet: Sparkle checks on its own schedule.
         case automatic
     }
 
-    static func updateStatus(isChecking: Bool, availableVersion: String?, lastCheck: Date?) -> UpdateStatus {
-        if isChecking { return .checking }
+    /// A found update outranks a check in progress: Sparkle keeps its cycle
+    /// open while its own update window shows. "Up to date" only follows a
+    /// check that got an answer.
+    static func updateStatus(
+        isChecking: Bool,
+        availableVersion: String?,
+        lastCheck: Date?,
+        lastCheckFailed: Bool = false
+    ) -> UpdateStatus {
         if let availableVersion { return .available(availableVersion) }
+        if isChecking { return .checking }
+        if lastCheckFailed { return .couldNotCheck }
         if let lastCheck { return .upToDate(checkedAt: lastCheck) }
         return .automatic
     }
@@ -120,64 +131,57 @@ enum SettingsWelcome {
 /// (posed like the island: busy while agents work, waving when one needs
 /// them) and what's going on right now; under it the app itself — icon,
 /// version, updates — and its credits. It's About and Updates, at home.
+///
+/// Live parts read the model in their own small views, so an agent event
+/// redraws the status, not the card. Hidden — SwiftUI opens the Settings
+/// window at launch and NotchTune orders it out, so for a menu-bar user it
+/// lives all day unseen — there is no clock and nothing live is read.
 struct SettingsWelcomeHero: View {
     var model: AppModel
 
     @Environment(\.settingsWindowIsOnScreen) private var isOnScreen
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if isOnScreen {
+            // Minute ticks keep the greeting, colour and "checked … ago" true.
+            TimelineView(.everyMinute) { context in
+                WelcomeCard(model: model, now: context.date, isLive: true)
+            }
+        } else {
+            WelcomeCard(model: model, now: Date(), isLive: false)
+        }
+    }
+}
+
+private struct WelcomeCard: View {
+    var model: AppModel
+    let now: Date
+    let isLive: Bool
 
     private var lang: LanguageManager { model.lang }
 
     var body: some View {
-        // Minute ticks keep the greeting, colour and "checked … ago" true.
-        TimelineView(.everyMinute) { context in
-            let dayPart = SettingsWelcome.dayPart(at: context.date)
-            let agents = SettingsWelcome.agents(
-                attentionCount: model.liveAttentionCount,
-                runningCount: model.liveRunningCount
-            )
-            content(dayPart: dayPart, agents: agents, now: context.date)
-        }
-    }
-
-    private func content(dayPart: SettingsWelcome.DayPart, agents: SettingsWelcome.Agents, now: Date) -> some View {
+        let dayPart = SettingsWelcome.dayPart(at: now)
         let tint = dayPart.tint
         let shape = RoundedRectangle(cornerRadius: SettingsMetrics.cardCornerRadius + 4, style: .continuous)
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 24) {
-                WelcomeStage(
-                    character: model.islandCharacter,
-                    mode: agents.mode,
-                    motion: model.islandCharacterMotion,
-                    paused: !isOnScreen || reduceMotion,
-                    tint: tint
-                )
+        VStack(alignment: .leading, spacing: 0) {
+            WelcomePresence(model: model, dayPart: dayPart, isLive: isLive)
+                .padding(.horizontal, 24)
+                .padding(.top, 28)
+                .padding(.bottom, 26)
 
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(greeting(for: dayPart))
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundStyle(SettingsTheme.paper)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityAddTraits(.isHeader)
-                    statusLine(agents: agents)
-                }
+            heroDivider
 
-                Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 16) {
+                WelcomeAppIdentity(lang: lang)
+                WelcomeUpdateRow(model: model, now: now, isLive: isLive)
             }
             .padding(.horizontal, 24)
-            .padding(.top, 28)
-            .padding(.bottom, 26)
+            .padding(.vertical, 18)
 
             heroDivider
 
-            appRow(now: now)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 18)
-
-            heroDivider
-
-            credits
+            WelcomeCredits(lang: lang)
                 .padding(.horizontal, 24)
                 .padding(.top, 13)
                 .padding(.bottom, 15)
@@ -203,23 +207,61 @@ struct SettingsWelcomeHero: View {
             .frame(height: 1)
             .padding(.horizontal, 24)
     }
+}
 
-    private func greeting(for dayPart: SettingsWelcome.DayPart) -> String {
+// MARK: Presence
+
+/// The stage, the greeting and what the island's agents (and music) are
+/// up to: the only part of the card that follows live state.
+private struct WelcomePresence: View {
+    var model: AppModel
+    let dayPart: SettingsWelcome.DayPart
+    let isLive: Bool
+
+    private var lang: LanguageManager { model.lang }
+
+    var body: some View {
+        let agents = isLive
+            ? SettingsWelcome.agents(attentionCount: model.liveAttentionCount, runningCount: model.liveRunningCount)
+            : .quiet
+        HStack(alignment: .center, spacing: 24) {
+            WelcomeStage(
+                character: model.islandCharacter,
+                mode: agents.mode,
+                motion: model.islandCharacterMotion,
+                paused: !isLive,
+                tint: dayPart.tint
+            )
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text(greeting)
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(SettingsTheme.paper)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                statusLine(agents: agents)
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var greeting: String {
         if let name = SettingsWelcome.userFirstName {
             return lang.t(dayPart.greetingKey + ".named", name)
         }
         return lang.t(dayPart.greetingKey)
     }
 
-    // MARK: Status
-
     private func statusLine(agents: SettingsWelcome.Agents) -> some View {
-        let track = model.playerManager.track
-        let nowPlaying = SettingsWelcome.nowPlaying(
-            title: track.title,
-            artist: track.artist,
-            isPlaying: model.isMusicPlaybackActive
-        )
+        let nowPlaying: String? = isLive
+            ? SettingsWelcome.nowPlaying(
+                title: model.playerManager.track.title,
+                artist: model.playerManager.track.artist,
+                isPlaying: model.isMusicPlaybackActive
+            )
+            : nil
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 7) {
                 Circle()
@@ -266,8 +308,13 @@ struct SettingsWelcomeHero: View {
         case .quiet:   SettingsTheme.positive
         }
     }
+}
 
-    // MARK: App and updates
+// MARK: App and updates
+
+/// The app's icon, name, version and one-liner.
+private struct WelcomeAppIdentity: View {
+    let lang: LanguageManager
 
     private var versionLine: String? {
         #if DEBUG
@@ -283,16 +330,7 @@ struct SettingsWelcomeHero: View {
         )
     }
 
-    /// The app's icon, name, version and one-liner over its update line:
-    /// what Sparkle last found, and the button to check (or install).
-    private func appRow(now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            appIdentity
-            updateRow(now: now)
-        }
-    }
-
-    private var appIdentity: some View {
+    var body: some View {
         HStack(alignment: .center, spacing: 14) {
             Image(nsImage: NSApplication.shared.applicationIconImage)
                 .resizable()
@@ -325,16 +363,28 @@ struct SettingsWelcomeHero: View {
         }
         .accessibilityElement(children: .combine)
     }
+}
 
-    private func updateRow(now: Date) -> some View {
+/// What Sparkle last found, and the button to check (or install).
+private struct WelcomeUpdateRow: View {
+    var model: AppModel
+    let now: Date
+    let isLive: Bool
+
+    private var lang: LanguageManager { model.lang }
+
+    var body: some View {
         let checker = model.updateChecker
-        let status = SettingsWelcome.updateStatus(
-            isChecking: checker.isChecking,
-            availableVersion: checker.hasUpdate ? checker.latestVersion : nil,
-            lastCheck: checker.lastCheckDate
-        )
-        return HStack(spacing: 12) {
-            updateStatusLine(status, now: now)
+        let status: SettingsWelcome.UpdateStatus = isLive
+            ? SettingsWelcome.updateStatus(
+                isChecking: checker.isChecking,
+                availableVersion: checker.hasUpdate ? checker.latestVersion : nil,
+                lastCheck: checker.lastCheckDate,
+                lastCheckFailed: checker.lastCheckFailed
+            )
+            : .automatic
+        HStack(spacing: 12) {
+            statusLine(status)
             Spacer(minLength: 0)
             if case .available(let version) = status {
                 Button(lang.t("settings.updates.install", version)) {
@@ -345,7 +395,7 @@ struct SettingsWelcomeHero: View {
                 Button(lang.t("settings.updates.checkForUpdates")) {
                     checker.checkForUpdates()
                 }
-                .disabled(!checker.canCheckForUpdates || status == .checking)
+                .disabled(!isLive || !checker.canCheckForUpdates || status == .checking)
             }
         }
         // A quiet well under the identity, so the line reads as one control.
@@ -358,7 +408,7 @@ struct SettingsWelcomeHero: View {
         )
     }
 
-    private func updateStatusLine(_ status: SettingsWelcome.UpdateStatus, now: Date) -> some View {
+    private func statusLine(_ status: SettingsWelcome.UpdateStatus) -> some View {
         HStack(spacing: 6) {
             switch status {
             case .checking:
@@ -369,6 +419,10 @@ struct SettingsWelcomeHero: View {
                 Image(systemName: "arrow.down.circle.fill")
                     .foregroundStyle(SettingsTheme.informative)
                 Text(lang.t("settings.updates.available", version))
+            case .couldNotCheck:
+                Image(systemName: "exclamationmark.circle")
+                    .foregroundStyle(SettingsTheme.paper.opacity(0.5))
+                Text(lang.t("settings.updates.failed"))
             case .upToDate(let checkedAt):
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(SettingsTheme.positive)
@@ -396,12 +450,16 @@ struct SettingsWelcomeHero: View {
         guard now.timeIntervalSince(date) >= 60 else { return relativeFormatter.localizedString(fromTimeInterval: 0) }
         return relativeFormatter.localizedString(for: date, relativeTo: now)
     }
+}
 
-    // MARK: Credits
+// MARK: Credits
 
-    /// Where NotchTune comes from, as a line of links, with its release
-    /// notes and source beside it (under it when the window is narrow).
-    private var credits: some View {
+/// Where NotchTune comes from, as a line of links, with its release notes
+/// and source beside it (under it when the window is narrow).
+private struct WelcomeCredits: View {
+    let lang: LanguageManager
+
+    var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .firstTextBaseline, spacing: 16) {
                 creditsText.fixedSize()
@@ -416,13 +474,21 @@ struct SettingsWelcomeHero: View {
     }
 
     private var creditsText: some View {
-        let markdown = lang.t("settings.about.credits")
-        let text = (try? AttributedString(markdown: markdown)) ?? AttributedString(markdown)
-        return Text(text)
+        Text(Self.parsed(lang.t("settings.about.credits")))
             .font(.system(size: 12))
             .foregroundStyle(SettingsTheme.paper.opacity(0.5))
             .tint(SettingsTheme.accent)
             .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// The credits' Markdown, parsed once rather than on every redraw.
+    @MainActor private static var parsedCredits: (source: String, text: AttributedString)?
+
+    @MainActor private static func parsed(_ markdown: String) -> AttributedString {
+        if let parsedCredits, parsedCredits.source == markdown { return parsedCredits.text }
+        let text = (try? AttributedString(markdown: markdown)) ?? AttributedString(markdown)
+        parsedCredits = (markdown, text)
+        return text
     }
 
     private var projectLinks: some View {

@@ -19,8 +19,12 @@ final class UpdateChecker: NSObject {
     /// too); scheduled background checks don't set it.
     private(set) var isChecking = false
     /// When Sparkle last checked; nil before the first check and in
-    /// development builds.
+    /// development builds. Sparkle stamps it whether or not the check
+    /// worked — see `lastCheckFailed`.
     private(set) var lastCheckDate: Date?
+    /// The last check couldn't complete (offline, the feed unreachable or
+    /// malformed), so `lastCheckDate` doesn't mean "up to date".
+    private(set) var lastCheckFailed = false
 
     @ObservationIgnored
     private var updaterController: SPUStandardUpdaterController!
@@ -70,7 +74,7 @@ final class UpdateChecker: NSObject {
     }
 
     #if DEBUG
-    /// Harness: `NOTCHTUNE_HARNESS_UPDATE_STATE=checking|available|current`
+    /// Harness: `NOTCHTUNE_HARNESS_UPDATE_STATE=checking|available|failed|current`
     /// shows that state in Settings without Sparkle (debug builds only).
     private func applyHarnessState() {
         guard let state = ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_UPDATE_STATE"] else { return }
@@ -81,11 +85,24 @@ final class UpdateChecker: NSObject {
         case "available":
             hasUpdate = true
             latestVersion = "2.2.0"
+        case "failed":
+            lastCheckFailed = true
+            lastCheckDate = Date().addingTimeInterval(-5 * 60)
         default:
             lastCheckDate = Date().addingTimeInterval(-5 * 60)
         }
     }
     #endif
+
+    /// Whether a finished update cycle's error means the check itself
+    /// failed. Sparkle reports "no update found" and "the user cancelled
+    /// the install" as errors too; neither is a failed check.
+    nonisolated static func isFailedCheck(_ error: (any Error)?) -> Bool {
+        guard let error else { return false }
+        let nsError = error as NSError
+        guard nsError.domain == SUSparkleErrorDomain else { return true }
+        return ![Int(SUError.noUpdateError.rawValue), Int(SUError.installationCanceledError.rawValue)].contains(nsError.code)
+    }
 }
 
 extension UpdateChecker: SPUUpdaterDelegate {
@@ -93,10 +110,14 @@ extension UpdateChecker: SPUUpdaterDelegate {
         Set()
     }
 
+    // The check is over once Sparkle knows the answer, even while its own
+    // update window stays open (the cycle only finishes when that closes).
     nonisolated func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
         Task { @MainActor in
             self.hasUpdate = true
             self.latestVersion = item.displayVersionString
+            self.isChecking = false
+            self.lastCheckFailed = false
         }
     }
 
@@ -104,12 +125,24 @@ extension UpdateChecker: SPUUpdaterDelegate {
         Task { @MainActor in
             self.hasUpdate = false
             self.latestVersion = nil
+            self.isChecking = false
+            self.lastCheckFailed = false
+        }
+    }
+
+    nonisolated func updater(_ updater: SPUUpdater, didAbortWithError error: any Error) {
+        let failed = Self.isFailedCheck(error)
+        Task { @MainActor in
+            self.isChecking = false
+            if failed { self.lastCheckFailed = true }
         }
     }
 
     nonisolated func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
+        let failed = Self.isFailedCheck(error)
         Task { @MainActor in
             self.isChecking = false
+            self.lastCheckFailed = failed
             // Sparkle wants this read on the main thread.
             self.lastCheckDate = self.updaterController.updater.lastUpdateCheckDate
         }
