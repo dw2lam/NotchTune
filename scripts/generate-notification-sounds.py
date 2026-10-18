@@ -393,6 +393,244 @@ def steel_drum():
     return out
 
 
+
+# MARK: - The second set
+
+def fm_piano(freq, seconds, index=2.0, index_decay=0.18, decay=0.4, attack=0.003):
+    """A soft electric piano: one sine phase-modulated by itself (ratio 1),
+    the brightness falling away faster than the note."""
+    n = int(round(seconds * SR))
+    w = 2 * math.pi * freq / SR
+    out = []
+    for i in range(n):
+        depth = index * math.exp(-i / SR / index_decay)
+        out.append(math.sin(w * i + depth * math.sin(w * i)))
+    return shaped(out, envelope(n, attack, decay))
+
+
+def detuned_saws(freq, seconds, cents=(-7, 0, 7)):
+    voices = [saw(constant(freq * 2 ** (c / 1200), seconds)) for c in cents]
+    return [sum(v) / len(voices) for v in zip(*voices)]
+
+
+def swell():
+    # A warm Cadd9 pad that blooms in and fades: no strike at all.
+    length = 1.15
+    out = silence(length)
+    for name in ["C4", "G4", "D5", "E5"]:
+        mix_into(out, detuned_saws(note(name), length), 0.0, 0.25)
+    tone = svf_lowpass(out, [700 + 900 * min(1.0, i / SR / 0.45) for i in range(len(out))], q=0.8)
+    env = []
+    for i in range(len(tone)):
+        t = i / SR
+        rise = math.sin(math.pi * 0.5 * min(1.0, t / 0.38)) ** 2
+        env.append(rise * (1.0 if t < 0.62 else math.exp(-(t - 0.62) / 0.16)))
+    return shaped(tone, env)
+
+
+HARP_PARTIALS = [(1.0, 1.0, 0.42), (2.0, 0.42, 0.24), (3.0, 0.18, 0.15), (4.0, 0.08, 0.09), (5.0, 0.04, 0.06)]
+
+
+def harp():
+    # A quick pentatonic run up the strings, the top note left ringing.
+    out = silence(1.05)
+    run = ["D5", "E5", "G5", "A5", "B5", "D6", "E6"]
+    for i, name in enumerate(run):
+        last = i == len(run) - 1
+        mix_into(out, modal(note(name), 0.8 if last else 0.5, HARP_PARTIALS, attack=0.0025), i * 0.045, 1.0 if last else 0.55)
+    return one_pole_lowpass(out, 7000)
+
+
+MUSIC_BOX_PARTIALS = [(1.0, 1.0, 0.5), (1.0016, 0.6, 0.45), (3.01, 0.06, 0.12), (6.4, 0.12, 0.05)]
+
+
+def music_box():
+    # Four tiny comb tines in the top octave; each tine is doubled a hair
+    # sharp, which gives the box its shimmer.
+    out = silence(1.15)
+    for at, name, gain in [(0.0, "E6", 0.8), (0.16, "B6", 0.75), (0.32, "G6", 0.7), (0.48, "D7", 1.0)]:
+        mix_into(out, modal(note(name), 0.66, MUSIC_BOX_PARTIALS, attack=0.0012), at, gain)
+    return out
+
+
+VIBES_PARTIALS = [(1.0, 1.0, 0.7), (4.0, 0.2, 0.18), (10.0, 0.04, 0.05)]
+
+
+def vibraphone():
+    # A soft-mallet dyad, then a third bar, under the motor's tremolo.
+    out = silence(1.15)
+    for at, name, gain in [(0.0, "F5", 0.7), (0.0, "A5", 0.6), (0.14, "C6", 0.8)]:
+        mix_into(out, modal(note(name), 1.0, VIBES_PARTIALS, attack=0.004), at, gain)
+    return [v * (1 - 0.3 * (0.5 - 0.5 * math.cos(2 * math.pi * 5.6 * i / SR))) for i, v in enumerate(out)]
+
+
+def flute():
+    # Two breathy notes slurred together, the second with a little vibrato.
+    rng = random.Random(23)
+    first, slide, second = 0.24, 0.035, 0.5
+    pitch = (constant(note("E5"), first) + glide(note("E5"), note("B5"), slide)
+             + constant(note("B5"), second))
+    vibrato_from, release_at = first + 0.12, first + slide + second - 0.22
+    pitch = [f * (1 + 0.006 * min(1.0, max(0.0, (i / SR - vibrato_from) / 0.2))
+                  * math.sin(2 * math.pi * 5.2 * i / SR))
+             for i, f in enumerate(pitch)]
+    tone = [a + 0.12 * b for a, b in zip(sine(pitch), sine([2 * f for f in pitch]))]
+    breath = one_pole_lowpass(bandpass(noise(len(pitch) / SR, rng), note("B5"), 1.2), 5000)
+    env = []
+    for i in range(len(tone)):
+        t = i / SR
+        env.append(min(1.0, t / 0.06) * (1.0 if t < release_at else math.exp(-(t - release_at) / 0.07)))
+    return shaped([v + 0.22 * b for v, b in zip(tone, breath)], env)
+
+
+DESK_BELL_PARTIALS = [(1.0, 1.0, 0.55), (2.32, 0.42, 0.3), (4.25, 0.24, 0.14), (6.63, 0.1, 0.07)]
+
+
+def desk_bell():
+    # A hotel-desk bell, tapped twice: "service, please".
+    rng = random.Random(29)
+    out = silence(1.15)
+    for at, gain in [(0.0, 0.85), (0.17, 1.0)]:
+        mix_into(out, modal(1320, 0.95, DESK_BELL_PARTIALS, attack=0.0008), at, gain)
+        clack = shaped(bandpass(noise(0.004, rng), 3500, 2.0), envelope(int(0.004 * SR), 0.0003, 0.001))
+        mix_into(out, clack, at, gain * 0.2)
+    return out
+
+
+GONG_PARTIALS = [(1.0, 1.0, 0.7), (1.47, 0.55, 0.55), (2.09, 0.5, 0.42), (2.56, 0.32, 0.3), (3.27, 0.25, 0.22), (4.18, 0.14, 0.15)]
+
+
+def gong():
+    # A small gong: the upper partials bloom a beat after the strike while
+    # the pitch sags a touch; centred high enough for laptop speakers.
+    rng = random.Random(31)
+    length = 1.2
+    n = int(length * SR)
+    base = 233.0
+    out = [0.0] * n
+    for k, (ratio, amp, decay) in enumerate(GONG_PARTIALS):
+        bloom = 0.002 if k == 0 else 0.03 + 0.03 * k
+        phase = 0.0
+        for i in range(n):
+            t = i / SR
+            f = base * ratio * (1 - 0.008 * (1 - math.exp(-t / 0.25)))
+            phase += 2 * math.pi * f / SR
+            out[i] += amp * math.sin(phase) * (1 - math.exp(-t / bloom)) * math.exp(-t / decay)
+    mallet = shaped(one_pole_lowpass(noise(0.02, rng), 900), envelope(int(0.02 * SR), 0.001, 0.006))
+    mix_into(out, mallet, 0.0, 0.5)
+    return fade_tail(out, 0.05)
+
+
+def question():
+    # A rising minor triad on electric piano whose last note lifts up a
+    # semitone: an unresolved "hm?".
+    out = silence(0.86)
+    for at, name in [(0.0, "D5"), (0.11, "F5")]:
+        mix_into(out, fm_piano(note(name), 0.4, decay=0.22), at, 0.75)
+    lift = constant(note("A5"), 0.08) + glide(note("A5"), note("A#5"), 0.12, curve=0.6) + constant(note("A#5"), 0.4)
+    n = len(lift)
+    w = [2 * math.pi * f / SR for f in lift]
+    phase, tone = 0.0, []
+    for i in range(n):
+        phase += w[i]
+        tone.append(math.sin(phase + 1.6 * math.exp(-i / SR / 0.18) * math.sin(phase)))
+    mix_into(out, shaped(tone, envelope(n, 0.003, 0.3)), 0.22)
+    return out
+
+
+def resolve():
+    # A dominant chord settling home on electric piano: done, and well.
+    out = silence(1.15)
+    for name in ["G4", "B4", "D5", "F5"]:
+        mix_into(out, fm_piano(note(name), 0.3, index=1.6, decay=0.14), 0.0, 0.32)
+    for name in ["C5", "E5", "G5", "C6"]:
+        mix_into(out, fm_piano(note(name), 0.95, index=1.8, decay=0.36), 0.2, 0.34)
+    return out
+
+
+def ta_da():
+    # Two brassy hits, short then long, the filter opening on each.
+    out = silence(1.15)
+    for at, chord, length, gain in [(0.0, ["G4", "D5", "G5"], 0.12, 0.6), (0.15, ["C5", "G5", "C6", "E6"], 0.95, 0.5)]:
+        hit = silence(length)
+        for name in chord:
+            mix_into(hit, detuned_saws(note(name), length, cents=(-5, 5)), 0.0, gain)
+        cut = [500 + 3800 * (1 - math.exp(-(i / SR) / 0.03)) * math.exp(-(i / SR) / 0.5) for i in range(len(hit))]
+        tone = svf_lowpass(hit, cut, q=1.1)
+        env = [min(1.0, (i / SR) / 0.012) * math.exp(-(i / SR) / (0.06 if length < 0.2 else 0.32)) for i in range(len(tone))]
+        mix_into(out, shaped(tone, env), at)
+    return out
+
+
+def modem():
+    # A dial-up-ish handshake: two-tone warble, a sweep, an answering tone,
+    # all squeezed through a phone line's band.
+    out = silence(0.52)
+    warble = [1270 if (i // int(0.012 * SR)) % 2 == 0 else 1070 for i in range(int(0.16 * SR))]
+    mix_into(out, shaped(sine(warble), envelope(len(warble), 0.004, 0.5, hold=0.12)), 0.0, 0.6)
+    sweep = glide(600, 2400, 0.1, curve=1.0)
+    mix_into(out, shaped(triangle(sweep), envelope(len(sweep), 0.004, 0.2, hold=0.06)), 0.17, 0.5)
+    answer = constant(2100, 0.17)
+    mix_into(out, shaped(sine(answer), envelope(len(answer), 0.004, 0.05, hold=0.08)), 0.3, 0.55)
+    return bandpass(out, 1500, 0.55)
+
+
+def power_on():
+    # A pulse wave revving up, landing on a bright open fifth.
+    out = silence(0.62)
+    rev = glide(180, 1400, 0.12, curve=1.4)
+    mix_into(out, shaped(pulse(rev, duty=0.25), envelope(len(rev), 0.002, 0.5, hold=0.09)), 0.0, 0.45)
+    for name, gain in [("E6", 0.7), ("B6", 0.5)]:
+        tone = triangle(constant(note(name), 0.46))
+        mix_into(out, shaped(tone, envelope(len(tone), 0.003, 0.13)), 0.13, gain)
+    return one_pole_lowpass(out, 7000)
+
+
+def water_drop():
+    # One drip into still water, echoing off the walls of a cave.
+    rng = random.Random(37)
+    out = silence(0.62)
+    drop = silence(0.07)
+    plink = glide(1100, 2600, 0.035, curve=0.5) + constant(2600, 0.02)
+    mix_into(drop, shaped(sine(plink), envelope(len(plink), 0.0015, 0.018)), 0.004)
+    tap = shaped(highpass(noise(0.002, rng), 4000), envelope(int(0.002 * SR), 0.0002, 0.0006))
+    mix_into(drop, tap, 0.0, 0.3)
+    for at, gain, cutoff in [(0.0, 1.0, 12000), (0.12, 0.3, 3500), (0.24, 0.14, 2500), (0.36, 0.06, 1800)]:
+        mix_into(out, one_pole_lowpass(drop, cutoff), at, gain)
+    return out
+
+
+def chirp():
+    # Three little bird calls, quick falling whistles with a flutter; the
+    # last one longer.
+    out = silence(0.5)
+    for at, top, low, length, gain in [(0.0, 4200, 2700, 0.05, 0.75), (0.1, 4400, 2800, 0.05, 0.8), (0.2, 4600, 2600, 0.11, 1.0)]:
+        sweep = glide(top, low, length, curve=0.7)
+        sweep = [f * (1 + 0.02 * math.sin(2 * math.pi * 55 * i / SR)) for i, f in enumerate(sweep)]
+        n = len(sweep)
+        env = [math.sin(math.pi * i / n) ** 1.5 for i in range(n)]
+        mix_into(out, shaped(sine(sweep), env), at, gain)
+    return out
+
+
+def tick():
+    # The quietest cue in the pack: a single small watch-like tick.
+    rng = random.Random(41)
+    out = silence(0.16)
+    click = shaped(bandpass(noise(0.006, rng), 2400, 3.0), envelope(int(0.006 * SR), 0.0004, 0.0018))
+    ping = modal(2900, 0.05, [(1.0, 1.0, 0.008), (2.3, 0.3, 0.004)], attack=0.0004, release=0.01)
+    mix_into(out, click, 0.004)
+    mix_into(out, ping, 0.004, 0.5)
+    return out
+
+
+def pip():
+    # A single soft sine pip, for people who want the least sound possible.
+    out = silence(0.16)
+    tone = [a + 0.15 * b for a, b in zip(sine(constant(note("G6"), 0.09)), sine(constant(2 * note("G6"), 0.09)))]
+    mix_into(out, shaped(tone, envelope(len(tone), 0.004, 0.022)), 0.004)
+    return out
+
 # slug → (title, synth, character). The app lists them by title.
 PACK = [
     ("pixel-ping", "Pixel Ping", pixel_ping, "two-note 8-bit blip"),
@@ -411,6 +649,24 @@ PACK = [
     ("arcade-alert", "Arcade Alert", arcade_alert, "alternating 8-bit alert"),
     ("wood-block", "Wood Block", wood_block, "two woody tonks"),
     ("steel-drum", "Steel Drum", steel_drum, "bright island steel pan"),
+    # The second set, appended so the first sixteen keep their dither seeds
+    # and stay byte-identical.
+    ("swell", "Swell", swell, "warm pad that blooms in and fades"),
+    ("harp", "Harp", harp, "quick pentatonic run up the strings"),
+    ("music-box", "Music Box", music_box, "four tiny shimmering comb tines"),
+    ("vibraphone", "Vibraphone", vibraphone, "soft mallets under a slow tremolo"),
+    ("flute", "Flute", flute, "two breathy slurred notes"),
+    ("desk-bell", "Desk Bell", desk_bell, "hotel desk bell, tapped twice, for needs-you moments"),
+    ("gong", "Gong", gong, "small blooming gong, for needs-you moments"),
+    ("question", "Question", question, "rising triad that lifts at the end: hm?"),
+    ("resolve", "Resolve", resolve, "electric-piano chord settling home"),
+    ("ta-da", "Ta Da", ta_da, "two brassy hits, short then long"),
+    ("modem", "Modem", modem, "dial-up handshake in miniature"),
+    ("power-on", "Power On", power_on, "pulse rev landing on an open fifth"),
+    ("water-drop", "Water Drop", water_drop, "one drip echoing in a cave"),
+    ("chirp", "Chirp", chirp, "three little bird calls"),
+    ("tick", "Tick", tick, "a single small tick, the quietest cue"),
+    ("pip", "Pip", pip, "one soft sine pip"),
 ]
 
 

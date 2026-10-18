@@ -44,9 +44,10 @@ struct NotificationSoundPackTests {
     }
 
     @Test
-    func thePackShipsADozenOrMoreUniquelyNamedSounds() {
+    func thePackShipsAllThirtyTwoUniquelyNamedSounds() {
         let pack = NotificationSoundService.bundledSounds
-        #expect(pack.count >= 12)
+        // Pinned: a file dropped from (or left over in) the bundle shows here.
+        #expect(pack.count == 32)
         #expect(Set(pack.map(\.id)).count == pack.count)
         #expect(Set(pack.map(\.title)).count == pack.count)
         #expect(pack.allSatisfy { $0.id.hasPrefix(NotificationSoundService.bundledSoundPrefix) })
