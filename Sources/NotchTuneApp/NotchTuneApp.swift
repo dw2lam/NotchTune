@@ -84,11 +84,19 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                         }
                     }
                     if let raw = env["NOTCHTUNE_HARNESS_ONBOARDING_STEP"], let index = Int(raw) {
-                        HarnessHeadless.openHiddenWindow(
+                        // `NOTCHTUNE_HARNESS_ONBOARDING_HEIGHT=<pt>` shows a long
+                        // step whole (the wizard's own window scrolls).
+                        let height = env["NOTCHTUNE_HARNESS_ONBOARDING_HEIGHT"].flatMap(Double.init) ?? 610
+                        let window = HarnessHeadless.openHiddenWindow(
                             id: "harness-onboarding", title: "Welcome to NotchTune",
-                            size: NSSize(width: 760, height: 610),
+                            size: NSSize(width: 760, height: height),
                             rootView: OnboardingView(model: model)
                         )
+                        // `NOTCHTUNE_HARNESS_ONBOARDING_BACKDROP=<image>`: the
+                        // wizard over a test wallpaper (`onboarding-desktop.png`).
+                        if let backdrop = env["NOTCHTUNE_HARNESS_ONBOARDING_BACKDROP"] {
+                            HarnessHeadless.openBackdrop(behind: window, imagePath: backdrop)
+                        }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             NotificationCenter.default.post(name: .notchTuneSelectOnboardingStep, object: index)
                         }
