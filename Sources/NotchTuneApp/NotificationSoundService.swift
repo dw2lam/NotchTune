@@ -1,6 +1,7 @@
 import AppKit
 
-/// Manages notification sound playback using macOS system sounds.
+/// Manages notification sound playback: NotchTune's bundled sound pack, the
+/// macOS system sounds, and sounds the user imports.
 @MainActor
 struct NotificationSoundService {
     /// A selectable sound slot. Both slots draw from the same system + custom
@@ -29,6 +30,49 @@ struct NotificationSoundService {
         case .nudge: return nudgeDefaultsKey
         }
     }
+
+    // MARK: Bundled pack
+
+    /// One sound of the bundled NotchTune pack: `Resources/Sounds/notchtune-<slug>.wav`,
+    /// synthesized by `scripts/generate-notification-sounds.py`.
+    struct BundledSound: Identifiable, Hashable, Sendable {
+        /// The persisted selection, `notchtune.<slug>`. It can't collide with
+        /// a system sound name or a custom sound (those carry an extension).
+        let id: String
+        let title: String
+        let url: URL
+    }
+
+    nonisolated static let bundledSoundPrefix = "notchtune."
+    nonisolated private static let bundledFilePrefix = "notchtune-"
+
+    /// The pack, listed once from the app's resource bundle, by title.
+    static let bundledSounds: [BundledSound] = bundledSounds(in: .appResources)
+
+    nonisolated static func bundledSounds(in bundle: Bundle) -> [BundledSound] {
+        // SwiftPM's `.process` flattens Resources/Sounds into the bundle root;
+        // look in both places so either layout resolves.
+        let urls = (bundle.urls(forResourcesWithExtension: "wav", subdirectory: nil) ?? [])
+            + (bundle.urls(forResourcesWithExtension: "wav", subdirectory: "Sounds") ?? [])
+        var seen = Set<String>()
+        return urls.compactMap { url -> BundledSound? in
+            let stem = url.deletingPathExtension().lastPathComponent
+            guard stem.hasPrefix(bundledFilePrefix) else { return nil }
+            let slug = String(stem.dropFirst(bundledFilePrefix.count))
+            guard !slug.isEmpty, seen.insert(slug).inserted else { return nil }
+            return BundledSound(id: bundledSoundPrefix + slug, title: title(forSlug: slug), url: url)
+        }
+        .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    /// "ding-dong" → "Ding Dong".
+    nonisolated static func title(forSlug slug: String) -> String {
+        slug.split(separator: "-")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
+
+    // MARK: Custom sounds
 
     static var customSoundsDirectory: URL {
         let fm = FileManager.default
@@ -78,23 +122,57 @@ struct NotificationSoundService {
         set { setSelectedSoundName(newValue, for: .notification) }
     }
 
-    /// Plays a system sound or custom sound by name.
-    static func play(_ name: String) {
-        // 1. Try playing as a custom sound (name will be a filename with extension, e.g. "sound.mp3")
+    /// Where a stored sound name plays from.
+    enum SoundSource: Equatable {
+        case bundled(URL)
+        case custom(URL)
+        case system(String)
+    }
+
+    /// Resolves a stored name: a bundled `notchtune.<slug>`, then a custom
+    /// file name (with extension), else a system sound name. A bundled id
+    /// that no longer ships falls back to the default sound.
+    static func source(for name: String) -> SoundSource {
+        if name.hasPrefix(bundledSoundPrefix) {
+            if let sound = bundledSounds.first(where: { $0.id == name }) {
+                return .bundled(sound.url)
+            }
+            return .system(defaultSoundName)
+        }
         let customURL = customSoundsDirectory.appendingPathComponent(name)
         if FileManager.default.fileExists(atPath: customURL.path) {
-            if let sound = NSSound(contentsOf: customURL, byReference: true) {
-                sound.stop()
-                sound.play()
-                return
-            }
+            return .custom(customURL)
         }
+        return .system(name)
+    }
 
-        // 2. Fall back to system sound named `name`
-        if let sound = NSSound(named: NSSound.Name(name)) {
-            sound.stop()
-            sound.play()
+    /// Bundled sounds, decoded once and reused (they never change on disk).
+    private static var loadedBundledSounds: [URL: NSSound] = [:]
+    /// Keeps the sound that's playing alive until it finishes.
+    private static var playingSound: NSSound?
+
+    /// Plays a bundled, custom or system sound by its stored name.
+    static func play(_ name: String) {
+        let sound: NSSound?
+        switch source(for: name) {
+        case .bundled(let url):
+            if let cached = loadedBundledSounds[url] {
+                sound = cached
+            } else {
+                sound = NSSound(contentsOf: url, byReference: true)
+                loadedBundledSounds[url] = sound
+            }
+        case .custom(let url):
+            // Re-read: an import can replace a file of the same name.
+            sound = NSSound(contentsOf: url, byReference: true)
+        case .system(let systemName):
+            sound = NSSound(named: NSSound.Name(systemName))
         }
+        guard let sound else { return }
+        playingSound?.stop()
+        sound.stop()
+        sound.play()
+        playingSound = sound
     }
 
     /// Plays the user-selected notification sound, respecting the mute setting.

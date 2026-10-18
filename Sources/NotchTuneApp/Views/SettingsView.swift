@@ -596,11 +596,15 @@ struct SoundSettingsPane: View {
         }
     }
 
-    /// The system sounds, then any custom ones, for the sound menus.
+    /// NotchTune's own pack, the system sounds, then any custom ones, for
+    /// the sound menus.
     private var soundSections: [(title: String?, segments: [SettingsSegment<String>])] {
-        var sections: [(title: String?, segments: [SettingsSegment<String>])] = [
-            (lang.t("settings.sound.systemSounds"), availableSounds.map { SettingsSegment($0, $0) })
-        ]
+        var sections: [(title: String?, segments: [SettingsSegment<String>])] = []
+        let pack = NotificationSoundService.bundledSounds
+        if !pack.isEmpty {
+            sections.append((lang.t("settings.sound.notchTuneSounds"), pack.map { SettingsSegment($0.id, $0.title) }))
+        }
+        sections.append((lang.t("settings.sound.systemSounds"), availableSounds.map { SettingsSegment($0, $0) }))
         if !customSounds.isEmpty {
             sections.append((
                 lang.t("settings.sound.customSounds"),
