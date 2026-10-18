@@ -359,7 +359,7 @@ struct AppearanceSettingsPane: View {
             model.updateAppearancePreferences(for: editingProfile) { $0.centerLabel = option }
         } thumbnail: {
             Text(sample)
-                .font(.system(size: 11.5, weight: .medium))
+                .font(.system(size: 11.5, weight: .medium, design: .monospaced))
                 .foregroundStyle(V6Palette.paper.opacity(option == .off ? 0.4 : 0.9))
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -937,7 +937,7 @@ private struct SessionListPanelPreview: View {
                 .frame(width: 24, height: 24)
 
             Text(lang.t("island.sessionList.title").uppercased())
-                .font(.system(size: 10.5, weight: .semibold))
+                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
                 .tracking(1.4)
                 .foregroundStyle(V6Palette.paper.opacity(0.55))
 
@@ -1037,8 +1037,7 @@ private struct SessionListPanelPreview: View {
                 : "\(count) \(compact ? compactTitle : title)"
 
             Text(label)
-                .font(.system(size: 10.5, weight: .semibold))
-                .monospacedDigit()
+                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
                 .foregroundStyle(tint == nil ? V6Palette.paper.opacity(0.34) : V6Palette.paper.opacity(0.48))
         }
     }
@@ -1066,12 +1065,11 @@ private struct SessionListPanelPreview: View {
         HStack(spacing: 8) {
             sectionDot(for: section)
             Text(section.title.uppercased())
-                .font(.system(size: 10.5, weight: .semibold))
+                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
                 .tracking(0.4)
                 .foregroundStyle(V6Palette.paper.opacity(0.7))
             Text("\(section.items.count)")
-                .font(.system(size: 10.5, weight: .medium))
-                .monospacedDigit()
+                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
                 .foregroundStyle(V6Palette.paper.opacity(0.4))
             Spacer(minLength: 0)
         }
@@ -1136,8 +1134,7 @@ private struct SessionListLivePreviewRow: View {
                     agentChip
                     sideBadge(item.terminal)
                     Text(item.age)
-                        .font(.system(size: 10.5, weight: .medium))
-                        .monospacedDigit()
+                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
                         .foregroundStyle(V6Palette.paper.opacity(item.phase == .idle ? 0.32 : 0.45))
                         .frame(minWidth: 30, alignment: .trailing)
 
@@ -1196,7 +1193,7 @@ private struct SessionListLivePreviewRow: View {
 
     private var agentChip: some View {
         Text(item.agentShort)
-            .font(.system(size: 10.5, weight: .semibold))
+            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
             .foregroundStyle(item.agentColor)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -1206,7 +1203,7 @@ private struct SessionListLivePreviewRow: View {
 
     private func sideBadge(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 10.5, weight: .medium))
+            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
             .foregroundStyle(V6Palette.paper.opacity(0.7))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -1221,7 +1218,7 @@ private struct SessionListLivePreviewRow: View {
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(V6Palette.paper.opacity(0.86))
                 Text(lang.t("settings.appearance.preview.permissionBody"))
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                     .foregroundStyle(V6Palette.paper.opacity(0.78))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -1232,7 +1229,7 @@ private struct SessionListLivePreviewRow: View {
                     .foregroundStyle(V6Palette.paper.opacity(0.82))
             case .running:
                 Text(item.detail)
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                     .foregroundStyle(V6Palette.paper.opacity(0.78))
             case .done:
                 Text(lang.t("settings.appearance.preview.replyAvailable"))
