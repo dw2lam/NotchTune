@@ -1249,6 +1249,9 @@ final class AppModel {
             }
         }
         refreshOverlayDisplayConfiguration()
+        // The opened island's empty list grows and shrinks with the meeting
+        // banner; the panel is placed for a height, so place it again.
+        calendar.onHeadsUpChange = { [weak self] in self?.refreshOverlayPlacementIfVisible() }
         calendar.start()
         hasFinishedInit = true
         reconcileCompactMusicView()

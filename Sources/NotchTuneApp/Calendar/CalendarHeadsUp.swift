@@ -129,7 +129,7 @@ enum MeetingLinkExtractor {
     private static let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 
     static func joinURL(url: URL?, location: String?, notes: String?) -> URL? {
-        if let url, isMeetingLink(url) { return url }
+        if let url, let link = meetingLink(url) { return link }
         for text in [location, notes].compactMap({ $0 }) where !text.isEmpty {
             if let link = firstMeetingLink(in: text) { return link }
         }
@@ -137,22 +137,33 @@ enum MeetingLinkExtractor {
     }
 
     static func isMeetingLink(_ url: URL) -> Bool {
+        meetingLink(url) != nil
+    }
+
+    /// The link to open for a call, always over https: a plain-http link to
+    /// a known call host is upgraded (every one of them serves https), any
+    /// other scheme is no meeting.
+    static func meetingLink(_ url: URL) -> URL? {
         guard let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",
               let host = url.host?.lowercased() else {
-            return false
+            return nil
         }
         guard hostSuffixes.contains(where: { host == $0 || host.hasSuffix("." + $0) }) else {
-            return false
+            return nil
         }
         // A bare marketing page ("zoom.us") is not a meeting.
-        return url.path.count > 1
+        guard url.path.count > 1 else { return nil }
+        guard scheme == "http" else { return url }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.scheme = "https"
+        return components?.url
     }
 
     private static func firstMeetingLink(in text: String) -> URL? {
         guard let detector else { return nil }
         let range = NSRange(text.startIndex..., in: text)
         for match in detector.matches(in: text, options: [], range: range) {
-            if let url = match.url, isMeetingLink(url) { return url }
+            if let url = match.url, let link = meetingLink(url) { return link }
         }
         return nil
     }

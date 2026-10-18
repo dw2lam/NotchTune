@@ -23,8 +23,23 @@ protocol CalendarEventSource: AnyObject {
     func calendars() -> [CalendarSourceInfo]
     /// Events overlapping `start..<end`, from `calendarIDs` (nil: all).
     func events(from start: Date, to end: Date, calendarIDs: Set<String>?) -> [CalendarEventSnapshot]
+    /// The calendars and events for one refresh. EventKit reads them off the
+    /// main thread; the default asks the two calls above.
+    func fetch(from start: Date, to end: Date, calendarIDs: Set<String>?) async -> CalendarFetch
     /// Called when the calendar database changes.
     var onChange: (() -> Void)? { get set }
+}
+
+extension CalendarEventSource {
+    func fetch(from start: Date, to end: Date, calendarIDs: Set<String>?) async -> CalendarFetch {
+        CalendarFetch(calendars: calendars(), events: events(from: start, to: end, calendarIDs: calendarIDs))
+    }
+}
+
+/// One refresh's read of the calendar database.
+struct CalendarFetch: Sendable {
+    var calendars: [CalendarSourceInfo]
+    var events: [CalendarEventSnapshot]
 }
 
 /// Gives a heads-up before the next meeting and knows when one is under way.
@@ -33,8 +48,8 @@ protocol CalendarEventSource: AnyObject {
 /// feature on, and then only to read events. There is no polling loop: the
 /// service sleeps until the next moment its answer can change (a warning
 /// window opening, a meeting starting or ending), refetches when the
-/// calendar database changes, after a wake from sleep, and at most every
-/// half hour as a safety net.
+/// calendar database changes (once per burst), after a wake from sleep, and
+/// at most every half hour as a safety net. Fetches run off the main thread.
 @MainActor
 @Observable
 final class CalendarHeadsUpService {
@@ -86,7 +101,12 @@ final class CalendarHeadsUpService {
     private(set) var authorization: CalendarAuthorization
     private(set) var calendars: [CalendarSourceInfo] = []
     /// The meeting the notch is warning about right now.
-    private(set) var headsUp: CalendarEventSnapshot?
+    private(set) var headsUp: CalendarEventSnapshot? {
+        didSet { if headsUp != oldValue { onHeadsUpChange?() } }
+    }
+    /// Told when the heads-up appears, changes or goes: the opened island
+    /// re-sizes for its banner.
+    @ObservationIgnored var onHeadsUpChange: (() -> Void)?
     /// The next eligible meeting, near or not (Settings shows it).
     private(set) var nextEvent: CalendarEventSnapshot?
     /// A busy meeting is in progress.
@@ -106,24 +126,34 @@ final class CalendarHeadsUpService {
     @ObservationIgnored private var lastFetch: Date?
     @ObservationIgnored private var wakeTask: Task<Void, Never>?
     @ObservationIgnored private var systemWakeObserver: NSObjectProtocol?
+    @ObservationIgnored private var activationObserver: NSObjectProtocol?
+    @ObservationIgnored private let changeDebounce: Duration
+    /// The refresh, burst of changes and access request in flight (latest
+    /// wins: each refresh carries a generation and stale ones are dropped).
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private var changeTask: Task<Void, Never>?
+    @ObservationIgnored private var accessTask: Task<Void, Never>?
+    @ObservationIgnored private var refreshGeneration = 0
 
     init(
         source: CalendarEventSource,
         defaults: UserDefaults = .standard,
         persists: Bool = true,
         forceEnabled: Bool = false,
+        changeDebounce: Duration = .seconds(1),
         clock: @escaping () -> Date = Date.init
     ) {
         self.source = source
         self.defaults = defaults
         self.persists = persists
+        self.changeDebounce = changeDebounce
         self.clock = clock
         isEnabled = forceEnabled || defaults.bool(forKey: Self.enabledDefaultsKey)
         leadTime = CalendarLeadTime(rawValue: defaults.integer(forKey: Self.leadTimeDefaultsKey)) ?? .five
         quietDuringMeetings = defaults.bool(forKey: Self.quietDefaultsKey)
         selectedCalendarIDs = (defaults.array(forKey: Self.calendarIDsDefaultsKey) as? [String]).map(Set.init)
         authorization = source.authorization
-        source.onChange = { [weak self] in self?.refresh() }
+        source.onChange = { [weak self] in self?.calendarDidChange() }
     }
 
     /// The app's service: EventKit, or the harness fixture when
@@ -135,12 +165,22 @@ final class CalendarHeadsUpService {
         return CalendarHeadsUpService(source: EventKitCalendarSource())
     }
 
-    /// Picks up where the last launch left off. Never asks for access: that
-    /// only happens when the user turns the feature on.
+    /// Picks up where the last launch left off. Asks for access only when
+    /// the user turned the feature on and the answer is undecided again — an
+    /// update of this ad-hoc signed app can reset it, and staying silently
+    /// off would break the heads-up they opted into.
     func start() {
         guard isEnabled else { return }
-        observeSystemWake()
-        refresh()
+        observeSystemEvents()
+        guard source.authorization == .notDetermined else {
+            refresh()
+            return
+        }
+        accessTask = Task { [weak self] in
+            guard let self else { return }
+            self.setAuthorization(await self.source.requestAccess())
+            await self.refreshNow()
+        }
     }
 
     // MARK: User actions
@@ -155,16 +195,25 @@ final class CalendarHeadsUpService {
             stop()
             return
         }
-        observeSystemWake()
+        observeSystemEvents()
         if source.authorization == .notDetermined {
-            authorization = await source.requestAccess()
+            setAuthorization(await source.requestAccess())
         }
-        refresh()
+        await refreshNow()
     }
 
     /// Asks again (from Settings) when access is still undecided.
     func requestAccess() async {
-        authorization = await source.requestAccess()
+        setAuthorization(await source.requestAccess())
+        await refreshNow()
+    }
+
+    /// Access granted (or taken away) in System Settings: the database can't
+    /// say so while access is off, so look again whenever NotchTune comes
+    /// forward or the Meetings card appears.
+    func accessMayHaveChanged() {
+        guard isEnabled else { return }
+        guard source.authorization != authorization || authorization != .granted else { return }
         refresh()
     }
 
@@ -193,22 +242,57 @@ final class CalendarHeadsUpService {
 
     // MARK: Refresh
 
-    /// Refetches the bounded event window and recomputes.
+    /// Refetches the bounded event window and recomputes, in the background.
     func refresh() {
-        authorization = source.authorization
+        refreshTask = Task { [weak self] in await self?.refreshNow() }
+    }
+
+    /// Refetches the bounded event window and recomputes. A newer refresh,
+    /// or the feature turning off, supersedes this one's result.
+    func refreshNow() async {
+        setAuthorization(source.authorization)
         guard isEnabled, authorization == .granted else {
             clearState()
             return
         }
+        refreshGeneration &+= 1
+        let generation = refreshGeneration
         let now = clock()
-        calendars = source.calendars()
-        events = source.events(
+        let fetched = await source.fetch(
             from: now.addingTimeInterval(-Self.fetchLookBehind),
             to: now.addingTimeInterval(Self.fetchLookAhead),
             calendarIDs: selectedCalendarIDs
         )
+        guard generation == refreshGeneration, isEnabled, authorization == .granted else { return }
+        if fetched.calendars != calendars { calendars = fetched.calendars }
+        events = fetched.events
         lastFetch = now
         recompute()
+    }
+
+    /// Waits for whatever refresh, change burst or access request is in
+    /// flight (tests, and callers that need the settled answer).
+    func settle() async {
+        await accessTask?.value
+        await changeTask?.value
+        await refreshTask?.value
+    }
+
+    /// EventKit posts changes in bursts while an account syncs: refetch once
+    /// the burst is over.
+    private func calendarDidChange() {
+        guard isEnabled else { return }
+        changeTask?.cancel()
+        let delay = changeDebounce
+        changeTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            await self?.refreshNow()
+        }
+    }
+
+    private func setAuthorization(_ value: CalendarAuthorization) {
+        if value != authorization { authorization = value }
     }
 
     /// Re-derives the heads-up and meeting state from the cached events and
@@ -254,9 +338,15 @@ final class CalendarHeadsUpService {
     private func stop() {
         wakeTask?.cancel()
         wakeTask = nil
+        changeTask?.cancel()
+        changeTask = nil
         if let systemWakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(systemWakeObserver)
             self.systemWakeObserver = nil
+        }
+        if let activationObserver {
+            NotificationCenter.default.removeObserver(activationObserver)
+            self.activationObserver = nil
         }
         clearState()
     }
@@ -264,6 +354,8 @@ final class CalendarHeadsUpService {
     private func clearState() {
         wakeTask?.cancel()
         wakeTask = nil
+        // Drops the result of any fetch still in flight.
+        refreshGeneration &+= 1
         events = []
         lastFetch = nil
         if headsUp != nil { headsUp = nil }
@@ -271,15 +363,26 @@ final class CalendarHeadsUpService {
         if isInMeeting { isInMeeting = false }
     }
 
-    /// The clock jumps across sleep: refetch on wake.
-    private func observeSystemWake() {
-        guard systemWakeObserver == nil else { return }
-        systemWakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refresh() }
+    /// The clock jumps across sleep: refetch on wake. Coming forward, look
+    /// for access granted in System Settings meanwhile.
+    private func observeSystemEvents() {
+        if systemWakeObserver == nil {
+            systemWakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didWakeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refresh() }
+            }
+        }
+        if activationObserver == nil {
+            activationObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didBecomeActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.accessMayHaveChanged() }
+            }
         }
     }
 }
@@ -294,6 +397,7 @@ final class EventKitCalendarSource: CalendarEventSource {
 
     private var store: EKEventStore?
     private var changeObserver: NSObjectProtocol?
+    private let joinLinks = JoinLinkCache()
 
     private static var hasUsageDescription: Bool {
         Bundle.main.object(forInfoDictionaryKey: "NSCalendarsFullAccessUsageDescription") != nil
@@ -320,21 +424,54 @@ final class EventKitCalendarSource: CalendarEventSource {
 
     func calendars() -> [CalendarSourceInfo] {
         guard authorization == .granted else { return [] }
-        return eventStore().calendars(for: .event)
-            .map { CalendarSourceInfo(id: $0.calendarIdentifier, title: $0.title, color: Self.color(of: $0)) }
-            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        return Self.readCalendars(eventStore())
     }
 
     func events(from start: Date, to end: Date, calendarIDs: Set<String>?) -> [CalendarEventSnapshot] {
         guard authorization == .granted else { return [] }
-        let store = eventStore()
+        return Self.readEvents(eventStore(), from: start, to: end, calendarIDs: calendarIDs, links: joinLinks)
+    }
+
+    /// Reads off the main thread: EventKit's fetches are synchronous (Apple
+    /// suggests a background thread for them), and the link scan over a
+    /// long invite's notes isn't free.
+    func fetch(from start: Date, to end: Date, calendarIDs: Set<String>?) async -> CalendarFetch {
+        guard authorization == .granted else { return CalendarFetch(calendars: [], events: []) }
+        let store = StoreBox(store: eventStore())
+        let links = joinLinks
+        return await Task.detached(priority: .utility) {
+            CalendarFetch(
+                calendars: Self.readCalendars(store.store),
+                events: Self.readEvents(store.store, from: start, to: end, calendarIDs: calendarIDs, links: links)
+            )
+        }.value
+    }
+
+    /// EventKit documents an event store as safe to read from any thread.
+    private struct StoreBox: @unchecked Sendable {
+        let store: EKEventStore
+    }
+
+    nonisolated private static func readCalendars(_ store: EKEventStore) -> [CalendarSourceInfo] {
+        store.calendars(for: .event)
+            .map { CalendarSourceInfo(id: $0.calendarIdentifier, title: $0.title, color: color(of: $0)) }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    nonisolated private static func readEvents(
+        _ store: EKEventStore,
+        from start: Date,
+        to end: Date,
+        calendarIDs: Set<String>?,
+        links: JoinLinkCache
+    ) -> [CalendarEventSnapshot] {
         var calendars: [EKCalendar]?
         if let calendarIDs {
             calendars = store.calendars(for: .event).filter { calendarIDs.contains($0.calendarIdentifier) }
             if calendars?.isEmpty == true { return [] }
         }
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: calendars)
-        return store.events(matching: predicate).map(Self.snapshot)
+        return store.events(matching: predicate).map { snapshot($0, links: links) }
     }
 
     private func eventStore() -> EKEventStore {
@@ -351,7 +488,7 @@ final class EventKitCalendarSource: CalendarEventSource {
         return store
     }
 
-    private static func snapshot(_ event: EKEvent) -> CalendarEventSnapshot {
+    nonisolated private static func snapshot(_ event: EKEvent, links: JoinLinkCache) -> CalendarEventSnapshot {
         let start = event.startDate ?? .distantPast
         let declined = event.status == .canceled
             || event.attendees?.first(where: \.isCurrentUser)?.participantStatus == .declined
@@ -366,13 +503,38 @@ final class EventKitCalendarSource: CalendarEventSource {
             calendarID: event.calendar?.calendarIdentifier ?? "",
             calendarTitle: event.calendar?.title ?? "",
             calendarColor: event.calendar.flatMap(color(of:)),
-            joinURL: MeetingLinkExtractor.joinURL(url: event.url, location: event.location, notes: event.notes)
+            joinURL: links.joinURL(for: event)
         )
     }
 
-    private static func color(of calendar: EKCalendar) -> CalendarColor? {
+    nonisolated private static func color(of calendar: EKCalendar) -> CalendarColor? {
         guard let rgb = calendar.color?.usingColorSpace(.sRGB) else { return nil }
         return CalendarColor(red: rgb.redComponent, green: rgb.greenComponent, blue: rgb.blueComponent)
+    }
+}
+
+/// Each event's join link, found once per revision of the event: scanning
+/// a Teams or Zoom invite's notes on every refetch adds up while an account
+/// syncs. Keyed by the item and its last change, bounded.
+final class JoinLinkCache: @unchecked Sendable {
+    private struct Key: Hashable {
+        let item: String
+        let modified: Date?
+    }
+
+    private static let limit = 512
+    private let lock = NSLock()
+    private var links: [Key: URL?] = [:]
+
+    func joinURL(for event: EKEvent) -> URL? {
+        let key = Key(item: event.calendarItemIdentifier, modified: event.lastModifiedDate)
+        if let cached = lock.withLock({ links[key] }) { return cached }
+        let url = MeetingLinkExtractor.joinURL(url: event.url, location: event.location, notes: event.notes)
+        lock.withLock {
+            if links.count >= Self.limit { links.removeAll(keepingCapacity: true) }
+            links[key] = .some(url)
+        }
+        return url
     }
 }
 
@@ -410,7 +572,7 @@ final class CalendarFixtureSource: CalendarEventSource {
             calendarID: Self.fixtureCalendar.id,
             calendarTitle: Self.fixtureCalendar.title,
             calendarColor: Self.fixtureCalendar.color,
-            joinURL: url.flatMap { MeetingLinkExtractor.isMeetingLink($0) ? $0 : nil }
+            joinURL: url.flatMap(MeetingLinkExtractor.meetingLink)
         )
     }
 

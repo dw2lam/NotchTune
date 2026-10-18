@@ -147,6 +147,7 @@ private final class StubCalendarSource: CalendarEventSource {
         CalendarSourceInfo(id: "home", title: "Home", color: nil),
     ]
     private(set) var requestCount = 0
+    private(set) var fetchCount = 0
     private(set) var lastCalendarIDs: Set<String>??
 
     init(authorization: CalendarAuthorization, grantOnRequest: Bool = true, events: [CalendarEventSnapshot] = []) {
@@ -164,6 +165,7 @@ private final class StubCalendarSource: CalendarEventSource {
     func calendars() -> [CalendarSourceInfo] { stubCalendars }
 
     func events(from start: Date, to end: Date, calendarIDs: Set<String>?) -> [CalendarEventSnapshot] {
+        fetchCount += 1
         lastCalendarIDs = .some(calendarIDs)
         return stubEvents.filter { calendarIDs?.contains($0.calendarID) ?? true }
     }
@@ -215,7 +217,7 @@ struct CalendarHeadsUpServiceTests {
         #expect(service.isQuietingNow)
 
         source.stubEvents = [event("call", startsIn: -10, busy: false)]
-        service.refresh()
+        await service.refreshNow()
         #expect(!service.isQuietingNow)
 
         await service.setEnabled(false)
@@ -242,6 +244,7 @@ struct CalendarHeadsUpServiceTests {
         service.leadTime = .ten
         service.quietDuringMeetings = true
         service.setCalendar("home", selected: false)
+        await service.settle()
         #expect(service.selectedCalendarIDs == ["work"])
         #expect(source.lastCalendarIDs == .some(["work"]))
 
@@ -253,6 +256,71 @@ struct CalendarHeadsUpServiceTests {
         #expect(reloaded.isEnabled)
         #expect(reloaded.leadTime == .ten)
         #expect(reloaded.quietDuringMeetings)
+    }
+
+    @Test
+    func anOptedInLaunchAsksAgainWhenAccessWasReset() async {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: CalendarHeadsUpService.enabledDefaultsKey)
+        let source = StubCalendarSource(authorization: .notDetermined, events: [event("a", startsIn: 2)])
+        let service = CalendarHeadsUpService(source: source, defaults: defaults, clock: { now })
+        service.start()
+        await service.settle()
+        #expect(source.requestCount == 1)
+        #expect(service.authorization == .granted)
+        #expect(service.headsUp?.id == "a")
+    }
+
+    @Test
+    func aDeniedLaunchNeverAsks() async {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: CalendarHeadsUpService.enabledDefaultsKey)
+        let source = StubCalendarSource(authorization: .denied, events: [event("a", startsIn: 2)])
+        let service = CalendarHeadsUpService(source: source, defaults: defaults, clock: { now })
+        service.start()
+        await service.settle()
+        #expect(source.requestCount == 0)
+        #expect(service.headsUp == nil)
+    }
+
+    @Test
+    func accessGrantedInSystemSettingsIsNoticed() async {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: CalendarHeadsUpService.enabledDefaultsKey)
+        let source = StubCalendarSource(authorization: .denied, events: [event("a", startsIn: 2)])
+        let service = CalendarHeadsUpService(source: source, defaults: defaults, clock: { now })
+        service.start()
+        await service.settle()
+        #expect(service.authorization == .denied)
+
+        // The user flips the switch in Privacy & Security, then comes back.
+        source.authorization = .granted
+        service.accessMayHaveChanged()
+        await service.settle()
+        #expect(service.authorization == .granted)
+        #expect(service.headsUp?.id == "a")
+    }
+
+    @Test
+    func aBurstOfCalendarChangesRefetchesOnce() async {
+        let source = StubCalendarSource(authorization: .granted, events: [event("a", startsIn: 2)])
+        let service = CalendarHeadsUpService(
+            source: source, defaults: makeDefaults(), changeDebounce: .milliseconds(30), clock: { now }
+        )
+        await service.setEnabled(true)
+        let fetchesBefore = source.fetchCount
+        for _ in 0..<5 { source.onChange?() }
+        await service.settle()
+        #expect(source.fetchCount == fetchesBefore + 1)
+    }
+
+    @Test
+    func plainHTTPCallLinksOpenOverHTTPS() {
+        let url = MeetingLinkExtractor.joinURL(url: URL(string: "http://acme.zoom.us/j/123?pwd=x"), location: nil, notes: nil)
+        #expect(url?.absoluteString == "https://acme.zoom.us/j/123?pwd=x")
+        let fromNotes = MeetingLinkExtractor.joinURL(url: nil, location: nil, notes: "Join: http://meet.google.com/abc-defg-hij")
+        #expect(fromNotes?.scheme == "https")
+        #expect(MeetingLinkExtractor.joinURL(url: URL(string: "ftp://zoom.us/j/123"), location: nil, notes: nil) == nil)
     }
 
     @Test

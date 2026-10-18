@@ -1378,8 +1378,9 @@ final class OverlayPanelController {
         let visibleSessions = model.islandListSessions
 
         if visibleSessions.isEmpty {
-            // The meeting banner sits above the empty state (8pt above it).
-            let banner = model.calendar.headsUp == nil ? 0 : MeetingHeadsUpBanner.height + 8
+            // The meeting banner sits above the empty state: 8pt of padding
+            // over it and the stack's 8pt spacing under it.
+            let banner = model.calendar.headsUp == nil ? 0 : MeetingHeadsUpBanner.height + 16
             return Self.openedEmptyStateHeight + banner
         }
 

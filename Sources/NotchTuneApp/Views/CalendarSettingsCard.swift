@@ -55,6 +55,8 @@ struct CalendarSettingsCard: View {
                 }
             }
         }
+        // Coming back from System Settings → Privacy, show the new answer.
+        .onAppear { calendar.accessMayHaveChanged() }
     }
 
     @ViewBuilder
