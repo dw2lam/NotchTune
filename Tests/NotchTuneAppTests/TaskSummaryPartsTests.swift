@@ -5,6 +5,9 @@ import NotchTuneCore
 
 /// How a finished turn's summary reads on the completion card, in a done
 /// session row and on the closed pill's finished peek.
+// The height estimates measure text with AppKit, which must start up on the
+// main thread: off it, the first measurement deadlocks the test run.
+@MainActor
 struct TaskSummaryPartsTests {
     private func texts(_ summary: TaskSummary?) -> [String]? {
         TaskSummaryParts(summary: summary)?.parts.map(\.text)
