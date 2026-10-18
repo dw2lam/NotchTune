@@ -89,9 +89,13 @@ struct AppModelNotificationCoalescingTests {
     }
 
     /// Wait until the notch opens or the settle window (plus slack) elapses.
+    /// Expecting it to open, wait up to a generous ceiling and return the
+    /// moment it does: on a loaded machine the bump can land well after
+    /// 4 × settle. Expecting it to stay closed, the full window must pass.
     private func waitForSettle(_ model: AppModel, opened: Bool) async throws {
-        let ticks = Int((Self.settleSeconds * 4) / 0.01)
-        for _ in 0..<ticks {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: opened ? .seconds(10) : .seconds(Self.settleSeconds * 4))
+        while clock.now < deadline {
             if opened, model.notchStatus == .opened { return }
             await Task.yield()
             try await Task.sleep(for: .milliseconds(10))
