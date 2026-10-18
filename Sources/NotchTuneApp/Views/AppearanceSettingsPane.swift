@@ -88,16 +88,18 @@ struct AppearanceSettingsPane: View {
             footer: profileFooter,
             insets: EdgeInsets(top: 10, leading: 10, bottom: 14, trailing: 10)
         ) {
-            PersonalizationPreviewStage(
-                preferences: editingPreferences,
-                profile: editingProfile,
-                glassSettings: model.glassSettings,
-                phase: previewPhase,
-                phaseStartedAt: phaseStartedAt,
-                finishHop: finishHop,
-                isAutoCycling: previewPin == .auto,
-                lang: lang
-            )
+            // Synced: both displays side by side, each labelled, so every
+            // choice visibly lands on the two of them.
+            if model.appearanceSyncEnabled {
+                HStack(spacing: 8) {
+                    previewStage(for: .notch, labelled: true)
+                    previewStage(for: .topBar, labelled: true)
+                }
+                .transition(.opacity)
+            } else {
+                previewStage(for: editingProfile, labelled: false)
+                    .transition(.opacity)
+            }
 
             // Side by side when the card is wide enough, stacked when not —
             // never wider than the card (a fixed-size row overflowing here
@@ -119,26 +121,27 @@ struct AppearanceSettingsPane: View {
     }
 
     private var profilePicker: some View {
-        SettingsSegmentedControl(
-            title: lang.t("settings.appearance.profile.title"),
-            selection: Binding(
-                get: { model.appearanceSettingsProfile },
-                set: { model.appearanceSettingsProfile = $0 }
-            ),
-            segments: [
-                SettingsSegment(
-                    IslandAppearanceDisplayProfile.notch,
-                    lang.t("settings.appearance.profile.macbook.title"),
-                    systemImage: "laptopcomputer"
-                ),
-                SettingsSegment(
-                    IslandAppearanceDisplayProfile.topBar,
-                    lang.t("settings.appearance.profile.external.title"),
-                    systemImage: "display"
-                ),
-            ]
+        AppearanceSyncControl(model: model)
+    }
+
+    private func previewStage(for profile: IslandAppearanceDisplayProfile, labelled: Bool) -> some View {
+        PersonalizationPreviewStage(
+            preferences: model.appearancePreferences(for: profile),
+            profile: profile,
+            glassSettings: model.glassSettings,
+            phase: previewPhase,
+            phaseStartedAt: phaseStartedAt,
+            finishHop: finishHop,
+            isAutoCycling: previewPin == .auto,
+            lang: lang,
+            zoneLabel: labelled ? zoneLabel(for: profile) : nil
         )
-        .help(lang.t("settings.appearance.profile.note"))
+    }
+
+    private func zoneLabel(for profile: IslandAppearanceDisplayProfile) -> PersonalizationPreviewZoneLabel {
+        profile == .notch
+            ? .init(title: lang.t("settings.appearance.profile.macbook.title"), systemImage: "laptopcomputer")
+            : .init(title: lang.t("settings.appearance.profile.external.title"), systemImage: "display")
     }
 
     private var previewStatePicker: some View {
@@ -156,6 +159,7 @@ struct AppearanceSettingsPane: View {
 
     /// "Editing <profile>: <what it is>. NotchTune applies …".
     private var profileFooter: String {
+        if model.appearanceSyncEnabled { return lang.t("settings.appearance.sync.note") }
         let note = editingProfile == .notch
             ? lang.t("settings.appearance.profile.macbook.note")
             : lang.t("settings.appearance.profile.external.note")
@@ -321,13 +325,20 @@ struct AppearanceSettingsPane: View {
                 centerLabelTile(.off, sample: "—")
             }
 
-            if editingProfile == .topBar {
+            // External display only: Sync never copies it onto the notch, so
+            // while synced it says which display it belongs to.
+            if editingProfile == .topBar || model.appearanceSyncEnabled {
                 SettingsRowDivider()
 
                 SettingsToggleRow(
                     lang.t("settings.appearance.autoHide.title"),
-                    subtitle: lang.t("settings.appearance.autoHide.note"),
-                    isOn: binding(\.autoHideWhenInactive)
+                    subtitle: model.appearanceSyncEnabled
+                        ? "\(lang.t("settings.appearance.sync.externalOnly")) \(lang.t("settings.appearance.autoHide.note"))"
+                        : lang.t("settings.appearance.autoHide.note"),
+                    isOn: Binding(
+                        get: { model.appearancePreferences(for: .topBar).autoHideWhenInactive },
+                        set: { value in model.updateAppearancePreferences(for: .topBar) { $0.autoHideWhenInactive = value } }
+                    )
                 )
             }
         }

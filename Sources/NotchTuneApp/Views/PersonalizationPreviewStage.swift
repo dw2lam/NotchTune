@@ -124,6 +124,12 @@ struct PersonalizationPreviewScreen: Equatable {
     }
 }
 
+/// Names the display a stage shows when Sync puts both side by side.
+struct PersonalizationPreviewZoneLabel: Equatable {
+    let title: String
+    let systemImage: String
+}
+
 // MARK: - Stage
 
 /// The Personalization hero: the top of a Mac display — wallpaper, menu bar,
@@ -141,6 +147,8 @@ struct PersonalizationPreviewStage: View {
     let finishHop: UUID?
     let isAutoCycling: Bool
     let lang: LanguageManager
+    /// Set while synced: the caption names the display instead of the moment.
+    let zoneLabel: PersonalizationPreviewZoneLabel?
     /// Resolved once per stage value: it walks `NSScreen.screens` (~0.2 ms a
     /// call) and the layout reads it ~30 times per pass — on every phase,
     /// every setting and every frame of a window resize.
@@ -156,7 +164,8 @@ struct PersonalizationPreviewStage: View {
         phaseStartedAt: Date,
         finishHop: UUID?,
         isAutoCycling: Bool,
-        lang: LanguageManager
+        lang: LanguageManager,
+        zoneLabel: PersonalizationPreviewZoneLabel? = nil
     ) {
         self.preferences = preferences
         self.profile = profile
@@ -166,6 +175,7 @@ struct PersonalizationPreviewStage: View {
         self.finishHop = finishHop
         self.isAutoCycling = isAutoCycling
         self.lang = lang
+        self.zoneLabel = zoneLabel
         self.screen = .resolve(profile: profile, density: preferences.density)
     }
 
@@ -509,20 +519,27 @@ struct PersonalizationPreviewStage: View {
                 .frame(width: 7, height: 7)
                 .shadow(color: phase.statusColor.opacity(0.8), radius: 4)
 
-            HStack(spacing: 6) {
-                Text(phaseTitle)
-                    .font(.system(size: 12.5, weight: .semibold))
+            if let zoneLabel {
+                Label(zoneLabel.title, systemImage: zoneLabel.systemImage)
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white)
-                Text(phaseDetail)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.66))
-            }
-            .lineLimit(1)
-            .id(phase)
-            .transition(reduceMotion ? AnyTransition.opacity : AnyTransition(.blurReplace))
+                    .lineLimit(1)
+            } else {
+                HStack(spacing: 6) {
+                    Text(phaseTitle)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text(phaseDetail)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.66))
+                }
+                .lineLimit(1)
+                .id(phase)
+                .transition(reduceMotion ? AnyTransition.opacity : AnyTransition(.blurReplace))
 
-            PreviewPhaseDots(current: phase, isAutoCycling: isAutoCycling)
-                .padding(.leading, 2)
+                PreviewPhaseDots(current: phase, isAutoCycling: isAutoCycling)
+                    .padding(.leading, 2)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

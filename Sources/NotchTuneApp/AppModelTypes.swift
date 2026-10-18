@@ -52,6 +52,14 @@ enum IslandAppearanceDisplayProfile: String, CaseIterable, Identifiable, Sendabl
     case topBar
 
     var id: String { rawValue }
+
+    /// The other display's profile (the passenger zone when this one drives).
+    var other: IslandAppearanceDisplayProfile {
+        switch self {
+        case .notch: .topBar
+        case .topBar: .notch
+        }
+    }
 }
 
 /// How much room the closed island takes. `regular` is the shipped v6 pill;
@@ -139,6 +147,16 @@ struct IslandAppearancePreferences: Equatable, Sendable {
     var sessionGroup: IslandSessionGroup = .none
     var sessionSort: IslandSessionSort = .attention
     var completedStaleThreshold: IslandCompletedStaleThreshold = .fiveMinutes
+
+    /// These preferences with every shared choice taken from `source`, as
+    /// Sync writes them. Only the external display's auto-hide stays put:
+    /// it is the one choice Settings offers for a single display, so it
+    /// never lands on the MacBook notch unseen. New fields sync by default.
+    func syncing(from source: IslandAppearancePreferences) -> IslandAppearancePreferences {
+        var synced = source
+        synced.autoHideWhenInactive = autoHideWhenInactive
+        return synced
+    }
 }
 
 /// How much the closed-pill character moves. Raw values are persisted in the
