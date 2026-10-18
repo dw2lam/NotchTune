@@ -1,5 +1,4 @@
 import { useReveal } from './hooks/useReveal';
-import Backdrop from './components/Backdrop';
 import Nav from './components/Nav';
 import Footer from './components/Footer';
 import Hero from './sections/Hero';
@@ -9,6 +8,7 @@ import Summaries from './sections/Summaries';
 import WorksWith from './sections/WorksWith';
 import Music from './sections/Music';
 import Meetings from './sections/Meetings';
+import Band from './sections/Band';
 import Characters from './sections/Characters';
 import Personalization from './sections/Personalization';
 import Myspace from './sections/Myspace';
@@ -20,7 +20,6 @@ export default function App() {
   return (
     <>
       <a className="skip-link" href="#main">Skip to content</a>
-      <Backdrop />
       <Nav />
       <main id="main">
         <span id="top" />
@@ -31,6 +30,7 @@ export default function App() {
         <WorksWith />
         <Music />
         <Meetings />
+        <Band />
         <Characters />
         <Personalization />
         <Myspace />

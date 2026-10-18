@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
 import { PixelArt } from '../components/PixelArt';
-import { Fit } from '../components/Fit';
 import { Shot } from '../components/Shot';
+import { PlateImage } from '../components/Plate';
+import { SecHead } from '../components/SecHead';
 
 type Tint = 'graphite' | 'grass' | 'violet' | 'sky' | 'rose' | 'ember';
 
 /* A still of the 2.1.5 Settings window (SettingsView / AppearanceSettingsPane):
-   frosted glass, System Settings-style tiles, Personalization's preview card
-   with both displays linked by Sync. */
+   frosted glass over the desktop, System Settings-style tiles, Personalization's
+   preview card with both displays linked by Sync. */
 const SIDEBAR: { label: string; tint: Tint; glyph?: ReactNode; on?: boolean; gapAfter?: boolean }[] = [
   { label: 'General', tint: 'graphite', glyph: <G d="M8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8Zm5.6 3.3-1.3-.3a4.4 4.4 0 0 1-.4 1l.7 1.1-1.3 1.3-1.1-.7a4.4 4.4 0 0 1-1 .4l-.3 1.3H7.1l-.3-1.3a4.4 4.4 0 0 1-1-.4l-1.1.7-1.3-1.3.7-1.1a4.4 4.4 0 0 1-.4-1L2.4 8.9V7.1l1.3-.3a4.4 4.4 0 0 1 .4-1l-.7-1.1 1.3-1.3 1.1.7a4.4 4.4 0 0 1 1-.4l.3-1.3h1.8l.3 1.3a4.4 4.4 0 0 1 1 .4l1.1-.7 1.3 1.3-.7 1.1c.2.3.3.6.4 1l1.3.3Z" />, gapAfter: true },
   { label: 'Setup', tint: 'grass', glyph: <G d="M2.3 3h11.4c.4 0 .8.4.8.8v8.4c0 .4-.4.8-.8.8H2.3a.8.8 0 0 1-.8-.8V3.8c0-.4.4-.8.8-.8Zm1.6 3.1L5.7 8 3.9 9.9l.8.7L7.2 8 4.7 5.4Zm3.4 3.7v1.1h4V9.8Z" /> },
@@ -54,7 +55,7 @@ function SettingsShot() {
               <span className={`ss-tile tint-${row.tint}`}>{row.glyph ?? <PixelArt char="claude" />}</span>
               {row.label}
             </span>
-            {row.gapAfter && <span className="ss-gap" style={{ display: 'block' }} />}
+            {row.gapAfter && <span className="ss-gap" />}
           </span>
         ))}
       </div>
@@ -67,10 +68,7 @@ function SettingsShot() {
           </div>
         </div>
         <div className="ss-card">
-          <div className="ss-walls">
-            <Wall kind="notch" />
-            <Wall kind="ext" />
-          </div>
+          <div className="ss-walls"><Wall kind="notch" /><Wall kind="ext" /></div>
           <div className="ss-zone-row">
             <span className="ss-zones">
               <span><LaptopIcon /> MacBook notch</span>
@@ -89,26 +87,23 @@ function SettingsShot() {
 
 export default function Personalization() {
   return (
-    <section id="personalize" className="section" aria-labelledby="personalize-title">
-      <div className="wrap">
-        <header className="head">
-          <p className="eyebrow reveal">Personalization</p>
-          <h2 id="personalize-title" className="h2 reveal d1">Make it yours, on every&nbsp;display.</h2>
-          <p className="lede reveal d2">
-            Settings come in frosted glass, with a welcome that greets you by name. Style your MacBook notch and an
-            external display separately, or press Sync and change both at once.
-          </p>
-        </header>
-
-        <div className="layered reveal">
-          <div className="stage glass">
+    <section id="personalize" aria-labelledby="personalize-title">
+      <div className="sec sec-ink" style={{ paddingBottom: 'clamp(40px, 5vw, 72px)' }}>
+        <div className="frame">
+          <SecHead
+            num="09" label="Personalization" note="Sync both displays" id="personalize-title" flip
+            title={<>Make it yours, on every display.</>}
+            lede="Settings come in frosted glass, with a welcome that greets you by name. Style your MacBook notch and an external display separately, or press Sync and change both at once."
+          />
+        </div>
+      </div>
+      <div className="plate plate-settings">
+        <PlateImage />
+        <div className="frame">
+          <div className="settings-row reveal">
             <Shot label="The NotchTune Settings window on Personalization: previews of the MacBook notch and an external display side by side, linked, with SYNC lit.">
-              <Fit width={900}>
-                <SettingsShot />
-              </Fit>
+              <SettingsShot />
             </Shot>
-          </div>
-          <div className="float-card" style={{ left: -24, bottom: -54, padding: 0, ['--w' as string]: '400px' }}>
             <Shot label="The General welcome card: Good evening, with the character on a little notch stage and An agent is working.">
               <div className="welcome">
                 <span className="welcome-stage"><PixelArt char="claude" /></span>
@@ -121,6 +116,7 @@ export default function Personalization() {
             </Shot>
           </div>
         </div>
+        <p className="plate-cap"><b>Fig. 09</b>Settings in frosted glass, over the same night.</p>
       </div>
     </section>
   );

@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { PixelPair } from '../components/PixelArt';
+import { SecHead } from '../components/SecHead';
 
 /* The app's twenty characters, in its picker order. */
 const CHARACTERS: [string, string][] = [
@@ -17,35 +18,25 @@ const MOTIONS = [
 
 export default function Characters() {
   return (
-    <section id="characters" className="section" aria-labelledby="characters-title">
-      <div className="wrap">
-        <header className="head">
-          <p className="eyebrow reveal">Characters</p>
-          <h2 id="characters-title" className="h2 reveal d1">Twenty little companions.</h2>
-          <p className="lede reveal d2">
-            A pixel friend lives in the notch. It rests while things are quiet, gets busy while your agents work,
-            and raises a “!” when one needs you. Pick from twenty, from the dino and Claude’s Clawd to a goopy
-            blob and a few Italian-brainrot favourites.
-          </p>
-        </header>
-
-        <div className="chars glass reveal">
-          <div className="char-grid">
-            {CHARACTERS.map(([id, name], i) => (
-              <figure className="char" key={id}>
-                <div className="char-tile" style={{ '--i': i } as CSSProperties}>
-                  <PixelPair char={id} />
-                </div>
-                <figcaption>{name}</figcaption>
-              </figure>
-            ))}
-          </div>
+    <section id="characters" className="sec sec-paper" aria-labelledby="characters-title">
+      <div className="frame">
+        <SecHead
+          num="08" label="Characters" note="20 to pick from" id="characters-title"
+          title={<>Twenty little companions.</>}
+          lede="A pixel friend lives in the notch. It rests while things are quiet, gets busy while your agents work, and raises a “!” when one needs you. From the dino and Claude’s Clawd to a goopy blob and a few Italian-brainrot favourites."
+        />
+        <div className="stage cast reveal">
+          {CHARACTERS.map(([id, name], i) => (
+            <figure className="cast-cell" key={id}>
+              <div className="cast-tile" style={{ '--i': i } as CSSProperties}><PixelPair char={id} /></div>
+              <figcaption>{name}<span>{String(i + 1).padStart(2, '0')}</span></figcaption>
+            </figure>
+          ))}
         </div>
-
-        <div className="motions">
+        <div className="motions reveal">
           {MOTIONS.map((m) => (
-            <div className={`motion glass-soft reveal m-${m.id}`} key={m.id}>
-              <div className="motion-tile"><PixelPair char="claude" /></div>
+            <div className={`motion m-${m.id}`} key={m.id}>
+              <div className="motion-tile" aria-hidden="true"><PixelPair char="claude" /></div>
               <div>
                 <h3>{m.title}</h3>
                 <p>{m.text}</p>

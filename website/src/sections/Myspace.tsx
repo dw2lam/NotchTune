@@ -1,7 +1,7 @@
 import { IslandPanel, MyspaceTab, MyspaceDropTarget, type MockThought } from '../mock';
-import { Fit } from '../components/Fit';
+import { usePhone } from '../hooks/useMedia';
 import { Shot } from '../components/Shot';
-import { Screen } from '../components/Screen';
+import { SecHead } from '../components/SecHead';
 
 const THOUGHTS: MockThought[] = [
   {
@@ -14,39 +14,34 @@ const THOUGHTS: MockThought[] = [
 ];
 
 export default function Myspace() {
+  const phone = usePhone();
   return (
-    <section id="myspace" className="section" aria-labelledby="myspace-title">
-      <div className="wrap">
-        <header className="head">
-          <p className="eyebrow reveal">Myspace</p>
-          <h2 id="myspace-title" className="h2 reveal d1">A little space of your&nbsp;own.</h2>
-          <p className="lede reveal d2">
-            Jot a thought, drop a file on the notch to keep it close, and set reminders that nudge you from the top
-            of the screen. It all stays on your Mac.
-          </p>
-        </header>
-
-        <div className="layered reveal">
-          <div className="stage glass">
-            <Shot label="The Myspace tab: a composer, filters, today's thoughts with an image attachment and a reminder for 9:00 AM.">
-              <Fit width={1000}>
-                <Screen height={470} app="Finder">
-                  <IslandPanel tab="myspace" glass="off">
+    <section id="myspace" className="sec sec-paper" aria-labelledby="myspace-title">
+      <div className="frame">
+        <SecHead
+          num="10" label="Myspace" note="Thoughts · Files · Reminders" id="myspace-title"
+          title={<>A little space of your own.</>}
+          lede="Jot a thought, drop a file on the notch to keep it close, and set reminders that nudge you from the top of the screen. It all stays on your Mac."
+        />
+        <div className="stage duo">
+          <div className="edge reveal">
+            <div className="hang at-start">
+              <Shot label="The Myspace tab: a composer, filters, today's thoughts with an image attachment and a reminder for 9:00 AM.">
+                <div className="zoom-shot">
+                  <IslandPanel tab="myspace" glass="off" showNotchGap={!phone}>
                     <MyspaceTab thoughts={THOUGHTS} />
                   </IslandPanel>
-                </Screen>
-              </Fit>
-            </Shot>
-          </div>
-          <div className="float-card glass-soft" style={{ right: -18, bottom: -48, ['--w' as string]: '334px' }}>
-            <span className="fc-label">Drag a file to the notch</span>
-            <Shot label="The notch's drop target: Throw anything in. Release to hold a copy in Myspace.">
-              <Fit width={300}>
-                <div className="nt" style={{ width: 300, borderRadius: 16, overflow: 'hidden', background: '#000' }}>
-                  <MyspaceDropTarget />
                 </div>
-              </Fit>
-            </Shot>
+              </Shot>
+            </div>
+          </div>
+          <div className="aside-stack reveal">
+            <div className="edge">
+              <span className="label">Drag a file to the notch</span>
+              <Shot label="The notch's drop target: Throw anything in. Release to hold a copy in Myspace.">
+                <div className="nt drop-card"><MyspaceDropTarget /></div>
+              </Shot>
+            </div>
           </div>
         </div>
       </div>

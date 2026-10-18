@@ -1,9 +1,9 @@
 import { IslandPanel, UsageCycler, KeyHint } from '../mock';
 import { JumpIcon, ReplyIcon, ChevronLeftIcon, ChevronRightIcon } from '../mock/icons';
 import { USAGE_PROVIDERS, MODEL_WEEKLY } from '../lib/demoData';
-import { Fit } from '../components/Fit';
+import { usePhone } from '../hooks/useMedia';
 import { Shot } from '../components/Shot';
-import { Screen } from '../components/Screen';
+import { SecHead } from '../components/SecHead';
 
 /* The completion card as 2.1.5 draws it (CompletionToastView with
    TaskSummaryLine under the header). */
@@ -36,8 +36,8 @@ function CompletionCard() {
         covered the old path pass on the new one.
       </p>
       <div className="nt-toast-actions">
-        <button type="button" className="nt-gbtn nt-gbtn-sm nt-gbtn-primary"><JumpIcon /> Jump to Ghostty <KeyHint keys="⏎" /></button>
-        <button type="button" className="nt-gbtn nt-gbtn-sm nt-gbtn-secondary"><ReplyIcon /> Reply</button>
+        <span className="nt-gbtn nt-gbtn-sm nt-gbtn-primary"><JumpIcon /> Jump to Ghostty <KeyHint keys="⏎" /></span>
+        <span className="nt-gbtn nt-gbtn-sm nt-gbtn-secondary"><ReplyIcon /> Reply</span>
         <span className="nt-toast-spacer" />
         <span className="nt-toast-queue">
           <span className="nt-gdisc nt-gdisc-sm"><ChevronLeftIcon /></span>
@@ -51,29 +51,26 @@ function CompletionCard() {
 }
 
 export default function Summaries() {
+  const phone = usePhone();
   return (
-    <section id="summaries" className="section" aria-labelledby="summaries-title">
-      <div className="wrap">
-        <header className="head">
-          <p className="eyebrow reveal">Finished tasks</p>
-          <h2 id="summaries-title" className="h2 reveal d1">Know what got done.</h2>
-          <p className="lede reveal d2">
-            When an agent finishes, a small card says what changed: files edited, tests run and whether
-            they passed, and how long it took. It’s worked out on your Mac from the session itself, and one
-            press of return jumps back to the right terminal window.
-          </p>
-        </header>
-        <div className="stage glass reveal">
-          <Shot label="A completion card: Codex finished in api. Edited 4 files, tests passed, 3 minutes 12 seconds, with Jump to Ghostty and Reply buttons and Claude and Codex usage in the header.">
-            <Fit width={1000}>
-              <Screen height={290}>
-                <IslandPanel usage={<UsageCycler providers={USAGE_PROVIDERS} initial={1} />} modelWeekly={MODEL_WEEKLY} glass="off">
+    <section id="summaries" className="sec sec-paper" aria-labelledby="summaries-title">
+      <div className="frame">
+        <SecHead
+          num="04" label="Finished tasks" note="New in 2.1.5" id="summaries-title"
+          title={<>Know what got done.</>}
+          lede="When an agent finishes, a small card says what changed: files edited, tests run and whether they passed, and how long it took. It’s worked out on your Mac from the session itself."
+        />
+        <div className="stage edge reveal">
+          <div className="hang at-end">
+            <Shot label="A completion card: Codex finished in api. Edited 4 files, tests passed, 3 minutes 12 seconds, with Jump to Ghostty and Reply.">
+              <div className="zoom-shot">
+                <IslandPanel usage={<UsageCycler providers={USAGE_PROVIDERS} initial={1} />} modelWeekly={MODEL_WEEKLY} glass="off" showNotchGap={!phone}>
                   <CompletionCard />
                 </IslandPanel>
-              </Screen>
-            </Fit>
-          </Shot>
-          <p className="stage-caption">Usage limits for Claude and Codex sit in the header, with the time until they reset.</p>
+              </div>
+            </Shot>
+          </div>
+          <p className="fig"><b>Fig. 04</b>Return jumps back to the right terminal. Usage limits and their resets sit in the header.</p>
         </div>
       </div>
     </section>
