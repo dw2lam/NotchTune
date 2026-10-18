@@ -22,11 +22,15 @@ struct IslandLiveActivity: Equatable, Sendable {
         case needsApproval
         case needsAnswer
         case finished
+        /// A calendar heads-up: the next meeting is minutes away.
+        case meeting
     }
 
     var kind: Kind
+    /// The session it describes ("calendar:<event>" for a meeting).
     var sessionID: String
-    var tool: AgentTool
+    /// The agent behind it; nil for a meeting.
+    var tool: AgentTool?
     /// First line: "Codex · open-island".
     var title: String
     /// Second line: what the agent is doing / needs / said.
@@ -37,6 +41,8 @@ struct IslandLiveActivity: Equatable, Sendable {
     var otherCount: Int
     /// Album-art chip on the right wing (music playing while an agent works).
     var showsMusicChip: Bool = false
+    /// The meeting a `.meeting` activity warns about.
+    var meeting: CalendarEventSnapshot? = nil
 
     /// Width the music chip adds to the right wing (art + gap).
     nonisolated static let musicChipWidth: CGFloat = 21
@@ -47,25 +53,36 @@ struct IslandLiveActivity: Equatable, Sendable {
     // MARK: Resolve
 
     /// Picks what the pill should say. Priority: a session that needs you,
-    /// then a fresh finish peek, then (in `.active` mode) the working session.
+    /// then a fresh finish peek, then a meeting heads-up, then (in `.active`
+    /// mode) the working session. The heads-up has its own switch in
+    /// Settings, so it shows even when live activities are off — but never
+    /// over a session that needs you.
     static func resolve(
         mode: IslandLiveActivityMode,
         sessions: [AgentSession],
         finishedPeekSessionID: String?,
         runningSince: [String: Date],
-        attentionSince: [String: Date]
+        attentionSince: [String: Date],
+        meeting: CalendarEventSnapshot? = nil
     ) -> IslandLiveActivity? {
-        guard mode != .off else { return nil }
-
         let waiting = sessions.first { $0.phase.requiresAttention }
+        let liveCount = sessions.filter { $0.phase == .running || $0.phase.requiresAttention }.count
+
+        guard mode != .off else {
+            guard waiting == nil, let meeting else { return nil }
+            return meetingActivity(meeting, otherCount: liveCount)
+        }
+
         let finished = finishedPeekSessionID.flatMap { id in
             sessions.first { $0.id == id && $0.phase == .completed }
+        }
+        if waiting == nil, finished == nil, let meeting {
+            return meetingActivity(meeting, otherCount: liveCount)
         }
         let working = mode == .active ? sessions.first { $0.phase == .running } : nil
 
         guard let session = waiting ?? finished ?? working else { return nil }
 
-        let liveCount = sessions.filter { $0.phase == .running || $0.phase.requiresAttention }.count
         let others = max(0, liveCount - (session.phase == .completed ? 0 : 1))
 
         switch session.phase {
@@ -122,6 +139,38 @@ struct IslandLiveActivity: Equatable, Sendable {
                 otherCount: others
             )
         }
+    }
+
+    /// "Standup" over "10:00 – 10:30"; the countdown and the join mark sit
+    /// on the right wing.
+    static func meetingActivity(_ meeting: CalendarEventSnapshot, otherCount: Int) -> IslandLiveActivity {
+        IslandLiveActivity(
+            kind: .meeting,
+            sessionID: "calendar:\(meeting.id)",
+            tool: nil,
+            title: meeting.title,
+            subtitle: meetingTimeRange(meeting),
+            since: nil,
+            otherCount: otherCount,
+            meeting: meeting
+        )
+    }
+
+    static func meetingTimeRange(_ meeting: CalendarEventSnapshot) -> String {
+        "\(meetingTimeFormatter.string(from: meeting.start)) – \(meetingTimeFormatter.string(from: meeting.end))"
+    }
+
+    private static let meetingTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    /// The right wing's countdown: "5 min", then "now" once it starts.
+    static func meetingCountdownText(start: Date, now: Date) -> String {
+        let minutes = CalendarHeadsUpResolver.minutesUntil(start, now: now)
+        return minutes == 0 ? "now" : "\(minutes) min"
     }
 
     private static func workspaceName(of session: AgentSession) -> String {
@@ -266,6 +315,10 @@ struct IslandLiveActivity: Equatable, Sendable {
             return (otherCount > 0 ? 64 : 40) + chip
         case .finished:
             return (otherCount > 0 ? 44 : 20) + chip
+        case .meeting:
+            // Calendar dot + "12 min", the video mark when it can be joined.
+            let join: CGFloat = meeting?.joinURL == nil ? 0 : 17
+            return (otherCount > 0 ? 70 : 46) + join
         }
     }
 

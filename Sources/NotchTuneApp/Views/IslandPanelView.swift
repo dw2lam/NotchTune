@@ -1277,6 +1277,10 @@ struct IslandPanelView: View {
 
     private var agentsContent: some View {
         VStack(spacing: 8) {
+            if !showsSessionRows {
+                meetingBanner(top: 8, bottom: 0)
+            }
+
             if showsInstallHooksHint, !showsSessionRows {
                 installHooksHint
                     .padding(.horizontal, sessionListSideInset)
@@ -1297,6 +1301,23 @@ struct IslandPanelView: View {
         }
         .padding(.bottom, 0)
         .transition(Self.tabContentTransition)
+    }
+
+    /// The next meeting, while its calendar heads-up is on (nothing, padding
+    /// included, otherwise).
+    @ViewBuilder
+    private func meetingBanner(top: CGFloat, bottom: CGFloat) -> some View {
+        if let meeting = model.calendar.headsUp, !isNotificationMode {
+            MeetingHeadsUpBanner(
+                meeting: meeting,
+                onJoin: meeting.joinURL == nil ? nil : { model.calendar.joinHeadsUp() },
+                onDismiss: { model.calendar.dismissHeadsUp() }
+            )
+            .padding(.horizontal, sessionListSideInset)
+            .padding(.top, top)
+            .padding(.bottom, bottom)
+            .transition(.opacity)
+        }
     }
 
     /// Tab swaps fade while gently scaling up from the top edge, so a tab reads
@@ -1455,6 +1476,8 @@ struct IslandPanelView: View {
                VStack(spacing: 0) {
                    // Inside the measured stack: outside it, the window was
                    // sized without the hint and the last rows were clipped.
+                   meetingBanner(top: 8, bottom: 4)
+
                    if showsInstallHooksHint {
                        installHooksHint
                            .padding(.horizontal, sessionListSideInset)

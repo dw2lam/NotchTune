@@ -96,6 +96,10 @@ cat > "$plist_path" <<EOF
     <string>14.0</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>NotchTune needs automation access to focus Terminal and iTerm sessions for jump-back.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>NotchTune reads your calendars on this Mac to give you a heads-up before meetings. Nothing is sent anywhere.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>NotchTune reads your calendars on this Mac to give you a heads-up before meetings. Nothing is sent anywhere.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSPrincipalClass</key>

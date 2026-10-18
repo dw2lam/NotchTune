@@ -1103,12 +1103,19 @@ enum LiveActivityPalette {
         case .needsApproval: return IslandDesignPalette.Status.waitingForApproval
         case .needsAnswer:   return IslandDesignPalette.Status.waitingForAnswer
         case .finished:      return IslandDesignPalette.Status.completed
+        case .meeting:       return V6Palette.paper.opacity(0.92)
         }
+    }
+
+    /// A calendar's own colour, or the island's running blue without one.
+    static func meetingColor(_ meeting: CalendarEventSnapshot?) -> Color {
+        guard let color = meeting?.calendarColor else { return IslandDesignPalette.Status.running }
+        return Color(red: color.red, green: color.green, blue: color.blue)
     }
 }
 
-/// Right wing: a live timer (working / waiting) or a check mark (finished),
-/// plus "+N" when other sessions are live.
+/// Right wing: a live timer (working / waiting), a check mark (finished) or
+/// a meeting countdown, plus "+N" when other sessions are live.
 private struct LiveActivityTrailingView: View {
     let activity: IslandLiveActivity
     let metrics: IslandChromeMetrics
@@ -1141,6 +1148,26 @@ private struct LiveActivityTrailingView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(IslandDesignPalette.Status.completed)
                     .symbolEffect(.bounce, value: activity.sessionID)
+            case .meeting:
+                if activity.meeting?.joinURL != nil {
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(V6Palette.paper.opacity(0.55))
+                        .accessibilityLabel("Has a call link")
+                }
+                Circle()
+                    .fill(LiveActivityPalette.meetingColor(activity.meeting))
+                    .frame(width: 6, height: 6)
+                if let start = activity.meeting?.start {
+                    // Minutes only: one redraw a minute, never per frame.
+                    TimelineView(MeetingHeadsUpBanner.countdownSchedule(for: start)) { context in
+                        Text(IslandLiveActivity.meetingCountdownText(start: start, now: context.date))
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(V6Palette.paper.opacity(0.78))
+                            .contentTransition(.numericText())
+                    }
+                }
             case .working, .needsApproval, .needsAnswer:
                 if let since = activity.since {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
