@@ -28,6 +28,20 @@ struct OnboardingView: View {
             case .tryLive: "Tour"
             }
         }
+
+        /// The step's colour: its header tile and the glow behind it, the
+        /// same colours as the matching Settings panes.
+        var tint: SettingsTint {
+            switch self {
+            case .welcome: .sky
+            case .agents: .grass
+            case .permissions: .indigo
+            case .music: .ember
+            case .personalize: .violet
+            case .keepRunning: .teal
+            case .tryLive: .rose
+            }
+        }
     }
 
     var model: AppModel
@@ -36,6 +50,7 @@ struct OnboardingView: View {
     @State private var step: Step = .welcome
     @State private var axTrusted = AXIsProcessTrusted()
     @State private var notificationAuthorization = "Checking…"
+    @State private var isWindowOnScreen = true
 
     var body: some View {
         OnboardingScrollWithFooter {
@@ -50,6 +65,13 @@ struct OnboardingView: View {
         } footer: {
             footer
         }
+        .environment(\.settingsWindowIsOnScreen, isWindowOnScreen)
+        .background(OnboardingStepGlow(tint: step.tint))
+        .background(SettingsWindowGlass().ignoresSafeArea())
+        // Settings' look: dark glass, paper type, the sky accent, capsule
+        // buttons and switches.
+        .settingsTheme()
+        .onWindowOnScreenChange { isWindowOnScreen = $0 }
         .frame(minWidth: 700, idealWidth: 760, minHeight: 600, idealHeight: 660)
         .modifier(OnboardingWindowChrome())
         .task {
@@ -122,7 +144,7 @@ struct OnboardingView: View {
     // MARK: - Footer
 
     /// Setup Assistant footer: a quiet skip on the leading edge, page dots in
-    /// the middle, Back + the primary action on the trailing edge.
+    /// the middle, Back + the sky primary action on the trailing edge.
     private var footer: some View {
         ZStack {
             OnboardingPageDots(count: Step.allCases.count, current: step.rawValue)
@@ -135,7 +157,7 @@ struct OnboardingView: View {
                     }
                     finish()
                 }
-                .buttonStyle(.link)
+                .buttonStyle(OnboardingQuietButtonStyle())
                 .help(step == .tryLive ? "Finish setup without the guided tour" : "Finish setup now — everything stays editable in Settings")
 
                 Spacer()
@@ -144,9 +166,9 @@ struct OnboardingView: View {
                     Button {
                         move(by: -1)
                     } label: {
-                        Text("Back").frame(minWidth: 64)
+                        Text("Back").frame(minWidth: 52)
                     }
-                    .controlSize(.large)
+                    .buttonStyle(OnboardingSecondaryButtonStyle())
                 }
 
                 Button {
@@ -157,10 +179,9 @@ struct OnboardingView: View {
                         move(by: 1)
                     }
                 } label: {
-                    Text(step == .tryLive ? "Start Tour" : "Continue").frame(minWidth: 84)
+                    Text(step == .tryLive ? "Start Tour" : "Continue").frame(minWidth: 76)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(OnboardingPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
         }
@@ -209,8 +230,8 @@ struct OnboardingView: View {
     }
 }
 
-/// Hide the redundant window title (the step header carries it) and let the
-/// title bar blend into the content, like Apple's welcome windows.
+/// Hide the redundant window title (the step header carries it); the title
+/// bar is already clear over the glass (`settingsTheme()`).
 private struct OnboardingWindowChrome: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 15.0, *) {
@@ -223,30 +244,32 @@ private struct OnboardingWindowChrome: ViewModifier {
     }
 }
 
-/// The step content scrolls; the footer stays pinned. On macOS 26 the footer
-/// is a safe-area bar, so content scrolling beneath it gets the system's soft
-/// scroll-edge effect instead of a hard divider.
+/// The step content scrolls; the footer stays pinned below it on the glass,
+/// under a hairline. The content fades out over its last few points instead
+/// of running under the footer (a safe-area bar has nothing to blur against
+/// on a clear window, so content showed straight through the buttons).
 private struct OnboardingScrollWithFooter<Content: View, Footer: View>: View {
     @ViewBuilder var content: Content
     @ViewBuilder var footer: Footer
 
+    private let fadeHeight: CGFloat = 22
+
     var body: some View {
-        if #available(macOS 26.0, *) {
+        VStack(spacing: 0) {
             ScrollView {
                 content
+                    .padding(.bottom, fadeHeight)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .safeAreaBar(edge: .bottom) {
-                footer
-            }
-        } else {
-            VStack(spacing: 0) {
-                ScrollView {
-                    content
+            .mask {
+                VStack(spacing: 0) {
+                    Color.black
+                    LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom)
+                        .frame(height: fadeHeight)
                 }
-                .scrollBounceBehavior(.basedOnSize)
-                footer
             }
+            SettingsRowDivider()
+            footer
         }
     }
 }
