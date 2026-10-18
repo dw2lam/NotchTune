@@ -1,83 +1,29 @@
-import { useEffect, useState } from 'react';
-import { Github } from 'lucide-react';
-import GlassSurface from './GlassSurface';
+import { Download } from 'lucide-react';
+import { useLatestRelease } from '../hooks/useLatestRelease';
 
 const LINKS = [
-  { label: 'FEATURES', href: '#features' },
-  { label: 'MYSPACE', href: '#myspace' },
-  { label: 'CUSTOMIZE', href: '#glass-lab' },
-  { label: 'COMPARE', href: '#compare' },
-  { label: 'DOWNLOAD', href: '#download' },
+  { label: 'Agents', href: '#agents' },
+  { label: 'Music', href: '#music' },
+  { label: 'Meetings', href: '#meetings' },
+  { label: 'Characters', href: '#characters' },
+  { label: 'Personalize', href: '#personalize' },
 ];
 
 export default function Nav() {
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
+  const { downloadUrl } = useLatestRelease();
   return (
-    <header className={`nt-nav${scrolled ? ' scrolled' : ''}`}>
-      <a className="nt-wordmark" href="#top">
-        <img src="/assets/icon.png" alt="" />
+    <header className="nav">
+      <a className="wordmark" href="#top" aria-label="NotchTune home">
+        <img src="/assets/icon.png" alt="" width={26} height={26} />
         NotchTune
       </a>
-
-      <GlassSurface
-        width="auto"
-        height="auto"
-        borderRadius={999}
-        className="nt-nav-glass"
-        mixBlendMode="normal"
-        brightness={58}
-        opacity={0.92}
-        blur={4}
-        displace={0.4}
-        distortionScale={-42}
-        redOffset={0}
-        greenOffset={4}
-        blueOffset={8}
-        backgroundOpacity={0.05}
-        saturation={1.5}
-      >
-        <nav className="nt-navlinks">
-          {LINKS.map((l) => (
-            <a key={l.href} className="nt-navlink" href={l.href}>{l.label}</a>
-          ))}
-        </nav>
-      </GlassSurface>
-
-      <GlassSurface
-        width="auto"
-        height="auto"
-        borderRadius={999}
-        className="nt-nav-glass"
-        mixBlendMode="normal"
-        brightness={58}
-        opacity={0.92}
-        blur={4}
-        displace={0.4}
-        distortionScale={-42}
-        redOffset={0}
-        greenOffset={4}
-        blueOffset={8}
-        backgroundOpacity={0.05}
-        saturation={1.5}
-      >
-        <a
-          className="nt-navcta"
-          href="https://github.com/dw2lam/NotchTune"
-          target="_blank"
-          rel="noopener"
-        >
-          <Github size={13} strokeWidth={1.8} />
-          GITHUB
-        </a>
-      </GlassSurface>
+      <nav className="nav-links" aria-label="Sections">
+        {LINKS.map((l) => <a key={l.href} href={l.href}>{l.label}</a>)}
+      </nav>
+      <a className="btn btn-primary btn-sm" href={downloadUrl}>
+        <Download aria-hidden="true" strokeWidth={2.2} />
+        Download
+      </a>
     </header>
   );
 }

@@ -1,54 +1,42 @@
 import { useReveal } from './hooks/useReveal';
-import LightRays from './components/LightRays';
+import Backdrop from './components/Backdrop';
 import Nav from './components/Nav';
-import Hero from './components/Hero';
-import Demo from './components/Demo';
-import Features from './components/Features';
-import Myspace from './components/Myspace';
-import Characters from './components/Characters';
-import Personalize from './components/Personalize';
-import Compare from './components/Compare';
-import Download from './components/Download';
 import Footer from './components/Footer';
+import Hero from './sections/Hero';
+import Agents from './sections/Agents';
+import Approvals from './sections/Approvals';
+import Summaries from './sections/Summaries';
+import WorksWith from './sections/WorksWith';
+import Music from './sections/Music';
+import Meetings from './sections/Meetings';
+import Characters from './sections/Characters';
+import Personalization from './sections/Personalization';
+import Myspace from './sections/Myspace';
+import Details from './sections/Details';
+import Download from './sections/Download';
 
 export default function App() {
   useReveal();
-
   return (
     <>
-      {/* black backdrop */}
-      <div className="ambient" aria-hidden="true">
-        <div className="grain" />
-      </div>
-
-      {/* WebGL light rays (above the black, behind content) */}
-      <LightRays
-        raysOrigin="top-center"
-        raysColor="#9db8ff"
-        raysSpeed={1.0}
-        lightSpread={0.55}
-        rayLength={2.4}
-        followMouse
-        mouseInfluence={0.1}
-        noiseAmount={0.06}
-        distortion={0.03}
-        fadeDistance={1.6}
-        saturation={1.0}
-      />
-
+      <a className="skip-link" href="#main">Skip to content</a>
+      <Backdrop />
       <Nav />
-
-      <main id="top">
+      <main id="main">
+        <span id="top" />
         <Hero />
-        <Demo />
-        <Features />
-        <Myspace />
+        <Agents />
+        <Approvals />
+        <Summaries />
+        <WorksWith />
+        <Music />
+        <Meetings />
         <Characters />
-        <Personalize />
-        <Compare />
+        <Personalization />
+        <Myspace />
+        <Details />
         <Download />
       </main>
-
       <Footer />
     </>
   );
