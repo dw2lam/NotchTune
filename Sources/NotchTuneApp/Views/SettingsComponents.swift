@@ -112,7 +112,13 @@ private struct WindowOnScreenReader: NSViewRepresentable {
         }
 
         private func report() {
-            let isOnScreen = window?.occlusionState.contains(.visible) ?? false
+            // Harness: `NOTCHTUNE_HARNESS_SETTINGS_VISIBLE=1` treats the
+            // parked window as seen, so live previews run and their cost
+            // can be measured; parked below the desktop, its occlusion
+            // otherwise depends on whatever is on the real screen.
+            let forcedVisible = HarnessHeadless.isActive
+                && ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_SETTINGS_VISIBLE"] == "1"
+            let isOnScreen = forcedVisible || (window?.occlusionState.contains(.visible) ?? false)
             guard isOnScreen != lastReported else { return }
             lastReported = isOnScreen
             // Never write SwiftUI state in the middle of a view update.
