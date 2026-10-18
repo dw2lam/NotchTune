@@ -13,9 +13,11 @@ struct AppearanceSettingsPane: View {
     var model: AppModel
 
     @State private var previewPin: PersonalizationPreviewPin = .auto
-    @State private var previewPhase: PersonalizationPreviewPhase = .idle
-    @State private var phaseStartedAt = Date()
-    @State private var finishHop: UUID?
+    /// The preview's moment lives in its own observable so each step of the
+    /// cycle redraws only the hero and the stages: as pane state it rebuilt
+    /// and re-laid out every card (20 character tiles included) through each
+    /// transition, ~10-20% CPU while the pane was open.
+    @State private var clock = PersonalizationPreviewClock()
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.settingsWindowIsOnScreen) private var isOnScreen
@@ -33,11 +35,10 @@ struct AppearanceSettingsPane: View {
         ) {
             // The hero is the character itself, white on the pane's tile,
             // following the choice below and following the preview's state.
-            PixelCharacterView(
+            PersonalizationHeroCharacter(
+                clock: clock,
                 character: editingPreferences.character,
-                mode: heroCharacterMode,
-                paused: !isOnScreen || reduceMotion,
-                tint: SettingsTab.appearance.tint.glyph
+                paused: !isOnScreen || reduceMotion
             )
             .frame(width: 34, height: 34)
             .id(editingPreferences.character)
@@ -58,16 +59,6 @@ struct AppearanceSettingsPane: View {
         // Every character on the pane (hero, tiles, preview) moves the way
         // the profile being edited will.
         .environment(\.islandCharacterMotion, editingPreferences.characterMotion)
-    }
-
-    /// The hero character mirrors the live preview: running while it shows
-    /// Working, pulsing while it waits on you, blinking at rest.
-    private var heroCharacterMode: UnifiedBars.Mode {
-        switch previewPhase {
-        case .working: .running
-        case .needsApproval: .waiting
-        case .idle, .finished: .idle
-        }
     }
 
     /// Writes one field of the profile being edited.
@@ -126,13 +117,11 @@ struct AppearanceSettingsPane: View {
     }
 
     private func previewStage(for profile: IslandAppearanceDisplayProfile, labelled: Bool) -> some View {
-        PersonalizationPreviewStage(
+        PersonalizationPreviewStageHost(
+            clock: clock,
             preferences: model.appearancePreferences(for: profile),
             profile: profile,
             glassSettings: model.glassSettings,
-            phase: previewPhase,
-            phaseStartedAt: phaseStartedAt,
-            finishHop: finishHop,
             isAutoCycling: previewPin == .auto,
             lang: lang,
             zoneLabel: labelled ? zoneLabel(for: profile) : nil
@@ -176,23 +165,23 @@ struct AppearanceSettingsPane: View {
         }
         guard isOnScreen else { return }
         while !Task.isCancelled {
-            try? await Task.sleep(for: previewPhase.dwell)
+            try? await Task.sleep(for: clock.phase.dwell)
             guard !Task.isCancelled else { return }
-            showPreviewPhase(previewPhase.next)
+            showPreviewPhase(clock.phase.next)
         }
     }
 
     private func showPreviewPhase(_ phase: PersonalizationPreviewPhase) {
-        guard phase != previewPhase else { return }
+        guard phase != clock.phase else { return }
         withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .smooth(duration: 0.45)) {
-            previewPhase = phase
-            phaseStartedAt = Date()
+            clock.phase = phase
+            clock.startedAt = Date()
         }
         // The real island hops the character when a finish peek lands.
         if phase == .finished, !reduceMotion {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(300))
-                finishHop = UUID()
+                clock.finishHop = UUID()
             }
         }
     }
@@ -1440,5 +1429,68 @@ private struct DensityPreview: View {
         )
         .environment(\.islandChromeMetrics, metrics)
         .frame(height: height)
+    }
+}
+
+// MARK: - Preview clock
+
+/// The live preview's current moment, observed only by the views that show
+/// it (the hero character and the stages), so stepping the cycle leaves the
+/// rest of the pane alone.
+@MainActor
+@Observable
+final class PersonalizationPreviewClock {
+    var phase: PersonalizationPreviewPhase = .idle
+    var startedAt = Date()
+    var finishHop: UUID?
+}
+
+/// The pane's hero: the character mirrors the live preview, running while
+/// it shows Working, pulsing while it waits on you, blinking at rest.
+private struct PersonalizationHeroCharacter: View {
+    let clock: PersonalizationPreviewClock
+    let character: IslandCharacter
+    let paused: Bool
+
+    var body: some View {
+        PixelCharacterView(
+            character: character,
+            mode: mode,
+            paused: paused,
+            tint: SettingsTab.appearance.tint.glyph
+        )
+    }
+
+    private var mode: UnifiedBars.Mode {
+        switch clock.phase {
+        case .working: .running
+        case .needsApproval: .waiting
+        case .idle, .finished: .idle
+        }
+    }
+}
+
+/// Reads the clock for one preview stage.
+private struct PersonalizationPreviewStageHost: View {
+    let clock: PersonalizationPreviewClock
+    let preferences: IslandAppearancePreferences
+    let profile: IslandAppearanceDisplayProfile
+    let glassSettings: LiquidGlassSettings
+    let isAutoCycling: Bool
+    let lang: LanguageManager
+    let zoneLabel: PersonalizationPreviewZoneLabel?
+
+    var body: some View {
+        PersonalizationPreviewStage(
+            preferences: preferences,
+            profile: profile,
+            glassSettings: glassSettings,
+            phase: clock.phase,
+            phaseStartedAt: clock.startedAt,
+            finishHop: clock.finishHop,
+            isAutoCycling: isAutoCycling,
+            lang: lang,
+            zoneLabel: zoneLabel
+        )
     }
 }
