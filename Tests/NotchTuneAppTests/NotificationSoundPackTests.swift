@@ -121,31 +121,27 @@ struct NotificationSoundPackTests {
         #expect(NotificationSoundService.title(forSlug: "coin") == "Coin")
     }
 
-    /// The sound menu as AppKit builds it (nothing is shown or played). One
-    /// flat list of 32 + 14 sounds ran 1228 pt tall, taller than a laptop
-    /// screen, so macOS hid part of it behind scroll arrows and the pack
-    /// looked missing. The pack now sits in place and the rest in submenus.
+    /// The sound menu (built, never shown or played). One flat list of 32 +
+    /// 14 sounds ran 1228 pt tall, taller than a laptop screen, so macOS hid
+    /// part of it behind scroll arrows. The pack now sits in place and the
+    /// rest in submenus.
     @Test
     func theSoundMenuFitsOnALaptopScreenWithEverySoundReachable() throws {
-        guard #available(macOS 14.4, *) else { return }
-        _ = NSApplication.shared // SwiftUI delivers menu actions through the app
         let pack = NotificationSoundService.bundledSounds
         let system = NotificationSoundService.availableSounds()
         let sections = SoundSettingsPane.soundSections(pack: pack, system: system, custom: ["chime.aiff"], title: { $0 })
 
         for selected in [try #require(pack.first).id, "Bottle"] {
-            var value = selected
-            let menu = NSHostingMenu(rootView: SettingsMenuPickerItems(
-                selection: Binding(get: { value }, set: { value = $0 }),
-                sections: sections,
-                inlineSections: SoundSettingsPane.inlineSoundSections
-            ))
-            menu.update()
-
+            let menu = SettingsPopUpMenu<String>.menu(
+                title: "", selection: selected, sections: sections,
+                inlineSections: SoundSettingsPane.inlineSoundSections,
+                target: SettingsPopUpMenu<String>.Coordinator()
+            )
             // a 13-inch MacBook Air's screen, less the menu bar, is about 919 pt
             #expect(menu.size.height <= 900, "the menu is \(menu.size.height) pt tall")
 
-            let rows = menu.items.filter { !$0.isSeparatorItem && !$0.isSectionHeader }
+            // (item 0 is the pull-down's own title, never listed)
+            let rows = menu.items.dropFirst().filter { !$0.isSeparatorItem && !$0.isSectionHeader }
             #expect(rows.filter { $0.submenu == nil }.map(\.title) == pack.map(\.title))
             let submenus = rows.compactMap(\.submenu)
             #expect(submenus.map { $0.items.map(\.title) } == [system, ["chime"]])
@@ -153,22 +149,94 @@ struct NotificationSoundPackTests {
             let checked = (rows + submenus.flatMap(\.items)).filter { $0.state == .on }.map(\.title)
             let expected = pack.first { $0.id == selected }?.title ?? selected
             #expect(checked == [expected])
-
-            // choosing works from the list and from a submenu (the test's own
-            // binding, so nothing plays); SwiftUI delivers the pick on the
-            // next turn of the run loop
-            let settle = { (target: String) in
-                let deadline = Date().addingTimeInterval(1)
-                while value != target, Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
-            }
-            let last = try #require(pack.last)
-            menu.performActionForItem(at: try #require(menu.items.firstIndex { $0.title == last.title }))
-            settle(last.id)
-            #expect(value == last.id)
-            let systemMenu = try #require(submenus.first)
-            systemMenu.performActionForItem(at: try #require(systemMenu.items.firstIndex { $0.title == "Glass" }))
-            settle("Glass")
-            #expect(value == "Glass")
         }
+    }
+
+    /// The real control, in the real (themed) Sound pane: the click on the
+    /// capsule lands on an AppKit pull-down whose menu holds every sound. Before, the click opened a SwiftUI menu that the
+    /// window's custom toggle style emptied (headers, nothing to pick).
+    @Test
+    func theSoundPaneCapsuleOpensAMenuWithEverySound() async throws {
+        // the real pane under the window's theme (hosted alone: a whole
+        // SettingsView would follow other tests' tab switches)
+        let model = AppModel()
+        let controller = NSHostingController(rootView: SoundSettingsPane(model: model).settingsTheme())
+        let window = NSWindow(
+            contentRect: NSRect(x: -20000, y: -20000, width: 640, height: 900),
+            styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        window.setContentSize(NSSize(width: 640, height: 900))
+        // on the window list (far off every screen), so the pane lays out
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil); window.close() }
+        try? await Task.sleep(for: .milliseconds(400))
+        controller.view.layoutSubtreeIfNeeded()
+
+        func popUps(_ view: NSView) -> [NSPopUpButton] {
+            ((view as? NSPopUpButton).map { [$0] } ?? []) + view.subviews.flatMap(popUps)
+        }
+        let all = popUps(controller.view)
+        // the notification sound comes first; the nudge sound is the last
+        let button = try #require(all.first)
+        #expect(button.pullsDown)
+        // a click on the capsule's centre goes to the pop-up button
+        let root = try #require(controller.view.superview)
+        let centre = root.convert(NSPoint(x: button.bounds.midX, y: button.bounds.midY), from: button)
+        #expect(controller.view.hitTest(centre) === button)
+        // and so for every menu capsule on the pane (the nudge timing too):
+        // each opens a menu with something to pick
+        for popUp in all {
+            let choices = (popUp.menu?.items ?? []).flatMap { [$0] + ($0.submenu?.items ?? []) }
+            #expect(choices.contains { $0.action != nil && $0.target != nil && $0.isEnabled }, "\(popUp.title)")
+        }
+
+        let menu = try #require(button.menu)
+        let rows = menu.items.dropFirst().filter { !$0.isSeparatorItem && !$0.isSectionHeader }
+        let pack = NotificationSoundService.bundledSounds
+        #expect(rows.filter { $0.submenu == nil }.map(\.title) == pack.map(\.title))
+        #expect(rows.allSatisfy { $0.isEnabled && ($0.submenu != nil || $0.action != nil) })
+        let systemMenu = try #require(rows.compactMap(\.submenu).first)
+        #expect(systemMenu.items.map(\.title) == NotificationSoundService.availableSounds())
+        let checked = (rows + systemMenu.items).filter { $0.state == .on }.map(\.title)
+        #expect(checked == [SettingsMenuPicker<String>.title(
+            for: model.selectedSoundName,
+            in: SoundSettingsPane.soundSections(pack: pack, system: NotificationSoundService.availableSounds(), custom: [], title: { $0 })
+        )])
+    }
+
+    /// Picking from the menu (the item's own target and action, as AppKit
+    /// fires them) changes the choice, from the list and from a submenu,
+    /// under the Settings theme. The test's own binding: nothing plays.
+    @Test
+    func pickingASoundFromTheMenuSelectsIt() throws {
+        let pack = NotificationSoundService.bundledSounds
+        let sections = SoundSettingsPane.soundSections(
+            pack: pack, system: NotificationSoundService.availableSounds(), custom: [], title: { $0 }
+        )
+        var value = "Bottle"
+        let view = NSHostingView(rootView: SettingsMenuPicker(
+            "Notification sound",
+            selection: Binding(get: { value }, set: { value = $0 }),
+            sections: sections,
+            inlineSections: SoundSettingsPane.inlineSoundSections
+        ).settingsTheme())
+        view.frame = NSRect(x: 0, y: 0, width: 300, height: 80)
+        view.layoutSubtreeIfNeeded()
+
+        func popUp(_ view: NSView) -> NSPopUpButton? {
+            (view as? NSPopUpButton) ?? view.subviews.lazy.compactMap(popUp).first
+        }
+        let button = try #require(popUp(view))
+        let menu = try #require(button.menu)
+        #expect(menu.items.first?.title == "Bottle")
+
+        let last = try #require(pack.last)
+        menu.performActionForItem(at: try #require(menu.items.firstIndex { $0.title == last.title }))
+        #expect(value == last.id)
+        let systemMenu = try #require(menu.items.compactMap(\.submenu).first)
+        systemMenu.performActionForItem(at: try #require(systemMenu.items.firstIndex { $0.title == "Glass" }))
+        #expect(value == "Glass")
     }
 }

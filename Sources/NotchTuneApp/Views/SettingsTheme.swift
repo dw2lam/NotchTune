@@ -266,17 +266,39 @@ private struct SettingsCapsuleButton: View {
     @State private var isHovered = false
 
     var body: some View {
-        let isDestructive = configuration.role == .destructive
-        let ink = isDestructive ? SettingsTheme.critical : SettingsTheme.paper
         configuration.label
+            .modifier(SettingsCapsuleChrome(
+                isDestructive: configuration.role == .destructive,
+                isHovered: isHovered,
+                isPressed: configuration.isPressed
+            ))
+            .contentShape(Capsule())
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .onHover { isHovered = $0 && isEnabled }
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+/// The capsule's type, fill and rim, for `SettingsCapsuleButtonStyle` and
+/// the `SettingsMenuPicker` capsule (which AppKit clicks, so it can't be a
+/// SwiftUI button).
+private struct SettingsCapsuleChrome: ViewModifier {
+    var isDestructive = false
+    var isHovered: Bool
+    var isPressed = false
+
+    @Environment(\.isEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        let tint = isDestructive ? SettingsTheme.critical : SettingsTheme.paper
+        content
             .font(.system(size: 12.5, weight: .medium))
             .lineLimit(1)
-            .foregroundStyle(ink.opacity(isEnabled ? 0.94 : 0.4))
+            .foregroundStyle(tint.opacity(isEnabled ? 0.94 : 0.4))
             .padding(.horizontal, 13)
             .frame(minHeight: 27)
             .background {
-                Capsule()
-                    .fill(fill(tint: isDestructive ? SettingsTheme.critical : SettingsTheme.paper))
+                Capsule().fill(fill(tint: tint))
             }
             .overlay {
                 Capsule().strokeBorder(
@@ -288,16 +310,12 @@ private struct SettingsCapsuleButton: View {
                     lineWidth: 0.75
                 )
             }
-            .contentShape(Capsule())
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .onHover { isHovered = $0 && isEnabled }
             .animation(.easeOut(duration: 0.12), value: isHovered)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }
 
     private func fill(tint: Color) -> Color {
         guard isEnabled else { return tint.opacity(0.04) }
-        if configuration.isPressed { return tint.opacity(0.16) }
+        if isPressed { return tint.opacity(0.16) }
         return tint.opacity(isHovered ? 0.12 : 0.075)
     }
 }
@@ -483,8 +501,12 @@ struct SettingsAccentThumb<S: InsettableShape>: View {
 
 // MARK: - Menu picker
 
-/// A pop-up choice as an island capsule: the current value and a chevron;
-/// the menu itself is the system's (sections, checkmark and all).
+/// A pop-up choice as an island capsule: the current value and a chevron.
+/// The menu behind it is AppKit's own: an invisible pull-down
+/// `NSPopUpButton` laid over the capsule takes the click and shows an
+/// `NSMenu` built from `sections`. (A SwiftUI `Menu` inherits the window's
+/// custom toggle style, and its rows, which are toggles underneath, then
+/// drop out of the menu: it opened with headers and nothing to pick.)
 struct SettingsMenuPicker<Value: Hashable>: View {
     let title: String
     @Binding var selection: Value
@@ -524,56 +546,146 @@ struct SettingsMenuPicker<Value: Hashable>: View {
         sections.lazy.flatMap(\.segments).first { $0.value == value }?.title ?? ""
     }
 
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovered = false
+
     var body: some View {
-        Menu {
-            SettingsMenuPickerItems(selection: $selection, sections: sections, inlineSections: inlineSections)
-        } label: {
-            HStack(spacing: 7) {
-                Text(currentTitle)
-                    .lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(SettingsTheme.paper.opacity(0.55))
-            }
+        // SwiftUI draws the capsule; the pop-up button over it is the only
+        // thing that takes the click (and tells the capsule about hover).
+        HStack(spacing: 7) {
+            Text(currentTitle)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(SettingsTheme.paper.opacity(0.55))
         }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
-        .buttonStyle(SettingsCapsuleButtonStyle())
+        .modifier(SettingsCapsuleChrome(isHovered: isHovered))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
         .fixedSize()
-        .accessibilityLabel(title)
-        .accessibilityValue(currentTitle)
+        .overlay {
+            SettingsPopUpMenu(
+                title: title,
+                currentTitle: currentTitle,
+                selection: $selection,
+                sections: sections,
+                inlineSections: inlineSections,
+                onHover: { isHovered = $0 && isEnabled }
+            )
+        }
     }
 }
 
-/// A `SettingsMenuPicker`'s rows: one checkmark row per choice, the first
-/// `inlineSections` sections listed in place under their headers and the
-/// rest as submenus. Rows are toggles, not one `Picker`, because a choice
-/// can sit in a submenu: picking a row (even the checked one) selects it.
-struct SettingsMenuPickerItems<Value: Hashable>: View {
+/// The click target and menu of a `SettingsMenuPicker`: a transparent
+/// pull-down `NSPopUpButton` (it draws nothing, but takes the click, opens
+/// its menu below the capsule, and speaks as a pop-up button to VoiceOver).
+struct SettingsPopUpMenu<Value: Hashable>: NSViewRepresentable {
+    let title: String
+    let currentTitle: String
     @Binding var selection: Value
     let sections: [(title: String?, segments: [SettingsSegment<Value>])]
-    var inlineSections: Int = .max
+    let inlineSections: Int
+    var onHover: (Bool) -> Void = { _ in }
 
-    var body: some View {
-        ForEach(Array(sections.prefix(inlineSections).enumerated()), id: \.offset) { _, section in
-            if let sectionTitle = section.title {
-                Section(sectionTitle) { rows(section.segments) }
-            } else {
-                rows(section.segments)
-            }
-        }
-        // (a titled section already closes with a separator)
-        ForEach(Array(sections.dropFirst(inlineSections).enumerated()), id: \.offset) { _, section in
-            Menu(section.title ?? "") { rows(section.segments) }
-        }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> HoverPopUpButton {
+        let button = HoverPopUpButton(frame: .zero, pullsDown: true)
+        button.isTransparent = true
+        button.isBordered = false
+        // the capsule draws its own chevron
+        (button.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
+        return button
     }
 
-    private func rows(_ segments: [SettingsSegment<Value>]) -> some View {
-        ForEach(segments) { segment in
-            Toggle(segment.title, isOn: Binding(
-                get: { selection == segment.value },
-                set: { _ in selection = segment.value }
-            ))
+    func updateNSView(_ button: HoverPopUpButton, context: Context) {
+        button.onHover = onHover
+        let binding = $selection
+        context.coordinator.onChoose = { binding.wrappedValue = $0 }
+        context.coordinator.values = sections.flatMap { $0.segments.map(\.value) }
+        button.menu = Self.menu(
+            title: currentTitle,
+            selection: selection,
+            sections: sections,
+            inlineSections: inlineSections,
+            target: context.coordinator
+        )
+        button.isEnabled = context.environment.isEnabled
+        button.setAccessibilityLabel(title)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: HoverPopUpButton, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    /// The pull-down's menu. Its first item is the button's own title (a
+    /// pull-down never lists it); then the first `inlineSections` sections
+    /// under their headers, then the rest as submenus. The choice is
+    /// checked; every choice item's tag indexes the flattened `sections`.
+    static func menu(
+        title: String,
+        selection: Value,
+        sections: [(title: String?, segments: [SettingsSegment<Value>])],
+        inlineSections: Int,
+        target: Coordinator
+    ) -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.addItem(withTitle: title, action: nil, keyEquivalent: "")
+        var tag = 0
+        func items(_ segments: [SettingsSegment<Value>]) -> [NSMenuItem] {
+            segments.map { segment in
+                let item = NSMenuItem(title: segment.title, action: #selector(Coordinator.pick(_:)), keyEquivalent: "")
+                item.target = target
+                item.tag = tag
+                item.state = segment.value == selection ? .on : .off
+                tag += 1
+                return item
+            }
+        }
+        for (index, section) in sections.enumerated() {
+            if index < inlineSections {
+                if index > 0 { menu.addItem(.separator()) }
+                if let sectionTitle = section.title { menu.addItem(.sectionHeader(title: sectionTitle)) }
+                items(section.segments).forEach(menu.addItem)
+            } else {
+                if index == inlineSections, index > 0 { menu.addItem(.separator()) }
+                let submenu = NSMenu(title: section.title ?? "")
+                submenu.autoenablesItems = false
+                items(section.segments).forEach(submenu.addItem)
+                let item = NSMenuItem(title: section.title ?? "", action: nil, keyEquivalent: "")
+                item.submenu = submenu
+                menu.addItem(item)
+            }
+        }
+        return menu
+    }
+
+    /// A pop-up button that says when the pointer is over it, so the
+    /// SwiftUI capsule under it can light up.
+    final class HoverPopUpButton: NSPopUpButton {
+        var onHover: (Bool) -> Void = { _ in }
+        private var hoverArea: NSTrackingArea?
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            if let hoverArea { removeTrackingArea(hoverArea) }
+            let area = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+            addTrackingArea(area)
+            hoverArea = area
+        }
+
+        override func mouseEntered(with event: NSEvent) { onHover(true) }
+        override func mouseExited(with event: NSEvent) { onHover(false) }
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var values: [Value] = []
+        var onChoose: (Value) -> Void = { _ in }
+
+        @objc func pick(_ item: NSMenuItem) {
+            guard values.indices.contains(item.tag) else { return }
+            onChoose(values[item.tag])
         }
     }
 }
