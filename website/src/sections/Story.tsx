@@ -23,7 +23,7 @@ const LAYERS: { id: LayerId; src: string; w: number; h: number; top?: number; dx
   { id: 'reminders', src: 'reminders', w: 650, h: 374, alt: 'The island on its Reminders tab: three active reminders, from checking the staging deploy at 10:00 to booking the onboarding design review, and one in the archive.' },
   { id: 'pill-meeting', src: 'pill-meeting', w: 464, h: 38, dx: -29, alt: 'The closed notch four minutes before Design review, 09:53 to 10:23.' },
   { id: 'banner', src: 'meeting', w: 650, h: 416, alt: 'The island with the Design review banner above the agent list: in 4 minutes, 09:54 to 10:24, with Join.' },
-  { id: 'settings', src: 'settings-window', w: 906, h: 766, top: 52, alt: 'NotchTune Settings on Personalization: previews of the MacBook notch and an external display linked with Sync, and the first row of twenty pixel characters.' },
+  { id: 'settings', src: 'settings-pill', w: 906, h: 766, top: 52, alt: 'NotchTune Settings on Personalization, its sections in one pill across the title bar: previews of the MacBook notch and an external display linked with Sync, and the first row of twenty pixel characters.' },
 ];
 
 type CamId = 'full' | 'notch' | 'pill' | 'window';
