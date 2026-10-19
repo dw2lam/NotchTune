@@ -195,10 +195,11 @@ h1, h2, p, figure { margin: 0; }
    a card closes back into the notch and the next one opens out of it. */
 
 .layer {
-  position: absolute; top: calc(var(--pt) * var(--top)); left: 50%;
+  position: absolute; top: calc(var(--pt) * var(--top)); left: calc(50% + var(--pt) * var(--dx));
   width: calc(var(--pt) * var(--w)); height: auto; transform: translateX(-50%);
   opacity: 0; visibility: hidden;
-  clip-path: inset(0 calc(50% - var(--pt) * 94) calc(100% - var(--pt) * 32) calc(50% - var(--pt) * 94) round 0 0 calc(var(--pt) * 9) calc(var(--pt) * 9));
+  /* closed: just the notch (which sits --dx left of the image's centre) */
+  clip-path: inset(0 calc(50% + var(--pt) * (var(--dx) - 94)) calc(100% - var(--pt) * 32) calc(50% - var(--pt) * (var(--dx) + 94)) round 0 0 calc(var(--pt) * 9) calc(var(--pt) * 9));
   transition: clip-path 0.42s cubic-bezier(0.4, 0, 0.7, 1), opacity 0.15s linear 0.3s, visibility 0s linear 0.45s;
 }
 .layer.on {

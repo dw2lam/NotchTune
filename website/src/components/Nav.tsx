@@ -3,6 +3,7 @@ import { useLatestRelease } from '../hooks/useLatestRelease';
 const LINKS = [
   { label: 'Agents', href: '#agents' },
   { label: 'Music', href: '#music' },
+  { label: 'Myspace', href: '#myspace' },
   { label: 'Meetings', href: '#meetings' },
   { label: 'Personalize', href: '#personalize' },
 ];

@@ -7,18 +7,22 @@ import MacBook from '../components/MacBook';
    there. Every picture on the screen is a real capture of the app (made by
    its headless harness at 2x), placed at its true size in macOS points. */
 
-type LayerId = 'pill-working' | 'island' | 'pill-waiting' | 'summary' | 'player' | 'pill-meeting' | 'banner' | 'settings';
+type LayerId = 'pill-working' | 'island' | 'pill-waiting' | 'summary' | 'player' | 'myspace' | 'reminders' | 'pill-meeting' | 'banner' | 'settings';
 
-// w/h in points; `top` is where the image sits on the screen (cards hang
-// from the very top, the Settings window sits under the menu bar)
-const LAYERS: { id: LayerId; src: string; w: number; h: number; top?: number; alt: string }[] = [
-  { id: 'pill-working', src: 'pill-working', w: 468, h: 38, alt: 'The closed notch while Claude Code works in api: running swift test, 41 seconds in.' },
+// w/h in points; `top` is where the image sits on the screen (the island
+// hangs from the very top, the Settings window sits under the menu bar).
+// The closed pills' wings are uneven, so `dx` puts their notch gap on the
+// notch: how far the image's centre sits from the screen's.
+const LAYERS: { id: LayerId; src: string; w: number; h: number; top?: number; dx?: number; alt: string }[] = [
+  { id: 'pill-working', src: 'pill-working', w: 468, h: 38, dx: -54, alt: 'The closed notch while Claude Code works in api: running swift test, 41 seconds in.' },
   { id: 'island', src: 'island', w: 650, h: 354, alt: 'The island open under the notch: usage limits, then four sessions. Claude is running swift test in api, Codex fixed the checkout button in web, Claude wrote the release notes in docs, and Codex renamed the color tokens in design-system.' },
-  { id: 'pill-waiting', src: 'pill-waiting', w: 488, h: 38, alt: 'The closed notch turned amber: Codex needs approval to run git push origin main, waiting 13 seconds.' },
-  { id: 'summary', src: 'summary', w: 550, h: 172, alt: 'A completion card: Claude Code finished in web. Edited 4 files, tests passed, 3 minutes 12 seconds, with Jump to Ghostty and Reply.' },
-  { id: 'player', src: 'player', w: 650, h: 203, alt: 'Music under the notch: Still Water by Juniper Coast at 1:21 of 3:56, with shuffle, previous, pause, next and repeat.' },
-  { id: 'pill-meeting', src: 'pill-meeting', w: 464, h: 38, alt: 'The closed notch four minutes before Design review, 09:53 to 10:23.' },
-  { id: 'banner', src: 'banner', w: 650, h: 75, alt: 'The Design review banner: in 4 minutes, 09:54 to 10:24, with Join.' },
+  { id: 'pill-waiting', src: 'pill-waiting', w: 488, h: 38, dx: -64, alt: 'The closed notch turned amber: Codex needs approval to run git push origin main, waiting 13 seconds.' },
+  { id: 'summary', src: 'completion', w: 550, h: 203, alt: 'The island showing a finished task: Claude Code finished in web. Edited 4 files, tests passed, 3 minutes 12 seconds, with Jump to Ghostty and Reply.' },
+  { id: 'player', src: 'music', w: 650, h: 283, alt: 'The island on its Music tab: Still Water by Juniper Coast at 1:21 of 3:56, with shuffle, previous, pause, next and repeat.' },
+  { id: 'myspace', src: 'myspace', w: 650, h: 430, alt: 'The island on its Myspace tab: a box to drop a thought, filters for text, images and files, today\'s three images, and a note about lazy-loading the product grid.' },
+  { id: 'reminders', src: 'reminders', w: 650, h: 374, alt: 'The island on its Reminders tab: three active reminders, from checking the staging deploy at 10:00 to booking the onboarding design review, and one in the archive.' },
+  { id: 'pill-meeting', src: 'pill-meeting', w: 464, h: 38, dx: -29, alt: 'The closed notch four minutes before Design review, 09:53 to 10:23.' },
+  { id: 'banner', src: 'meeting', w: 650, h: 416, alt: 'The island with the Design review banner above the agent list: in 4 minutes, 09:54 to 10:24, with Join.' },
   { id: 'settings', src: 'settings-window', w: 906, h: 766, top: 52, alt: 'NotchTune Settings on Personalization: previews of the MacBook notch and an external display linked with Sync, and the first row of twenty pixel characters.' },
 ];
 
@@ -52,6 +56,16 @@ const FRAMES: { id?: string; cam: CamId; layer: LayerId; title?: string; line?: 
     line: 'Spotify or Apple Music under the notch: the cover, the controls, and a two-finger swipe to skip.',
   },
   {
+    id: 'myspace', cam: 'notch', layer: 'myspace',
+    title: 'A space for loose thoughts.',
+    line: 'Jot a note or drop a file on the notch. Images, screenshots and files wait for you there, on your Mac.',
+  },
+  {
+    cam: 'notch', layer: 'reminders',
+    title: 'Reminders, right up top.',
+    line: 'Add one with or without a time, get a nudge when it’s due, and tick it off into the archive.',
+  },
+  {
     id: 'meetings', cam: 'notch', layer: 'banner',
     title: 'Meetings, a few minutes early.',
     line: 'A countdown, then a Join button, then quiet while you’re in the call. Your calendars never leave your Mac.',
@@ -65,7 +79,7 @@ const FRAMES: { id?: string; cam: CamId; layer: LayerId; title?: string; line?: 
 
 const LAST = FRAMES.length - 1;
 const HOLD = 0.6; // frames of scroll the last step stays pinned for
-const SPAN = 0.8; // viewport heights of scroll per step
+const SPAN = 0.72; // viewport heights of scroll per step
 
 type Cam = { z: number; x: number; y: number };
 
@@ -126,7 +140,7 @@ export default function Story() {
         const z = P / pt;
         return { z, x: vw / 2 - cam.offsetLeft - (sx + fx * pt) * z, y: top - cam.offsetTop - (sy + fy * pt) * z };
       };
-      const wide = Math.min(1, (vw - pad * 2) / 680, (vh - top - room) / 360);
+      const wide = Math.min(1, (vw - pad * 2) / 680, (vh - top - room) / 440);
       cams = {
         full: { z: 1, x: 0, y: 0 },
         notch: aim(756, 0, wide),
@@ -198,7 +212,7 @@ export default function Story() {
                 height={l.h}
                 alt={shown === l.id ? l.alt : ''}
                 aria-hidden={shown === l.id ? undefined : true}
-                style={{ '--w': l.w, '--h': l.h, '--top': l.top ?? 0 } as CSSProperties}
+                style={{ '--w': l.w, '--h': l.h, '--top': l.top ?? 0, '--dx': l.dx ?? 0 } as CSSProperties}
                 decoding="async"
                 {...(l.id === 'island' || l.id === 'pill-working' ? { fetchPriority: 'high' as const } : {})}
               />
