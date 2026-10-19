@@ -7,15 +7,15 @@
         <language>en</language>
         <item>
             <title>Version 2.1.5</title>
-            <sparkle:version>1206</sparkle:version>
+            <sparkle:version>1222</sparkle:version>
             <sparkle:shortVersionString>2.1.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <pubDate>Sun, 18 Oct 2026 06:00:27 GMT</pubDate>
+            <pubDate>Mon, 19 Oct 2026 08:40:25 GMT</pubDate>
             <enclosure
                 url="https://github.com/dw2lam/NotchTune/releases/download/2.1.5/NotchTune.zip"
                 type="application/octet-stream"
-                sparkle:edSignature="82CVcoTncY4QPfq4EKtDD5h6ofPaSldEN7VfJDoYjJUX6rhk9d2hmT9EYQzVBt54iSfal7eSJl5H/jVRnjdEBw=="
-                length="10718208"
+                sparkle:edSignature="nUo1peG+bovYOD8KaiAXTaPo2hMY6jyKQIC0zEjY6NYntrlolDbpGQMdgTx1r62/hCAw8GpR1/i6xZo6rdMbDg=="
+                length="10729167"
             />
         </item>
     </channel>
