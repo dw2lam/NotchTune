@@ -1,10 +1,10 @@
 import Testing
 @testable import NotchTuneApp
 
-/// The sidebar's sections now that About and Updates live on General.
-struct SettingsSidebarTests {
+/// The tab bar's sections now that About and Updates live on General.
+struct SettingsTabBarTests {
     @Test
-    func theSidebarListsSixSectionsInThreeGroups() {
+    func theTabBarListsSixSectionsInThreeGroups() {
         #expect(SettingsTab.allCases == [.general, .setup, .appearance, .display, .sound, .music])
         #expect(SettingsSection.app.tabs == [.general])
         #expect(SettingsSection.island.tabs == [.setup, .appearance, .display])

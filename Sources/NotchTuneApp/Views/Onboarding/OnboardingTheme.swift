@@ -118,7 +118,7 @@ struct OnboardingRowDivider: View {
     }
 }
 
-/// White glyph on a coloured squircle — Settings' sidebar tile.
+/// White glyph on a coloured squircle — Settings' tab tile.
 struct OnboardingRowIcon: View {
     let systemName: String
     let tint: SettingsTint
