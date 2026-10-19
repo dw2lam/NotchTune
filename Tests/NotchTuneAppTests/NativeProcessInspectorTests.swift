@@ -96,10 +96,14 @@ struct NativeProcessInspectorTests {
             try? secondHandle.close()
         }
 
+        // Tests run in parallel in this process and free descriptors, so the
+        // second file can land on the lower one: order by the real numbers.
+        let (lower, higher) = firstHandle.fileDescriptor < secondHandle.fileDescriptor
+            ? (first, second) : (second, first)
         let openFiles = try #require(NativeProcessInspector.openFiles(pid: getpid()))
-        let firstIndex = try #require(openFiles.paths.firstIndex(of: realPath(first.path)))
-        let secondIndex = try #require(openFiles.paths.firstIndex(of: realPath(second.path)))
-        #expect(firstIndex < secondIndex)
+        let lowerIndex = try #require(openFiles.paths.firstIndex(of: realPath(lower.path)))
+        let higherIndex = try #require(openFiles.paths.firstIndex(of: realPath(higher.path)))
+        #expect(lowerIndex < higherIndex)
 
         let cwdOnly = try #require(NativeProcessInspector.openFiles(pid: getpid(), includeDescriptors: false))
         #expect(cwdOnly.paths == cwdOnly.workingDirectory.map { [$0] } ?? [])
