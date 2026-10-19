@@ -96,7 +96,7 @@ final class AppModel {
     let monitoring = ProcessMonitoringCoordinator()
     let codexAppServer = CodexAppServerCoordinator()
     let playerManager = MusicPlayerManager()
-    let myspaceStore = MyspaceStore()
+    let myspaceStore = MyspaceStore.forLaunch()
     /// Meeting heads-ups and quiet-during-meetings (opt-in, read-only).
     let calendar = CalendarHeadsUpService.makeDefault()
     let updateChecker = UpdateChecker()

@@ -165,6 +165,30 @@ struct MyspaceStoreTests {
         #expect(decoded.reminderAt == reminderAt)
     }
 
+    @Test
+    func harnessRunsNeverOpenTheUsersMyspace() {
+        let store = MyspaceStore.forLaunch(environment: ["NOTCHTUNE_HARNESS_SCENARIO": "sessionList"])
+        #expect(store.thoughts.isEmpty)
+    }
+
+    @Test
+    func showcaseCapturesGetMadeUpThoughtsAndReminders() throws {
+        let file = temporaryDirectory().appendingPathComponent("moodboard.png")
+        try Data("not really a png".utf8).write(to: file)
+
+        let store = MyspaceStore.forLaunch(environment: [
+            "NOTCHTUNE_HARNESS_SCENARIO": "sessionList",
+            "NOTCHTUNE_HARNESS_SHOWCASE": "1",
+            "NOTCHTUNE_HARNESS_MYSPACE_FILES": file.path,
+        ])
+
+        let notes = store.thoughts.filter { !$0.isReminder }
+        #expect(notes.count == 2)
+        #expect(notes.contains { $0.attachments.first?.originalFilename == "moodboard.png" })
+        #expect(store.activeReminders.count == 3)
+        #expect(store.archivedReminders.count == 1)
+    }
+
     private func temporaryDirectory() -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("NotchTuneMyspaceTests-\(UUID().uuidString)", isDirectory: true)

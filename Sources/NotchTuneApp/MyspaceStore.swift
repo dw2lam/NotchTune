@@ -289,6 +289,62 @@ final class MyspaceStore {
     }
 }
 
+// MARK: - Harness
+
+extension MyspaceStore {
+    /// The store for this launch. A harness run never reads or writes the
+    /// user's own Myspace: it gets a store in a fresh temporary folder that
+    /// schedules no notifications, and a marketing capture
+    /// (`NOTCHTUNE_HARNESS_SHOWCASE=1`) a few made-up thoughts and reminders,
+    /// plus the files in `NOTCHTUNE_HARNESS_MYSPACE_FILES=<path>:<path>`.
+    static func forLaunch(environment: [String: String] = ProcessInfo.processInfo.environment) -> MyspaceStore {
+        guard environment["NOTCHTUNE_HARNESS_SCENARIO"] != nil else { return MyspaceStore() }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("notchtune-harness-myspace-\(UUID().uuidString)", isDirectory: true)
+        let store = MyspaceStore(rootURL: root, notificationsEnabled: false)
+        if environment["NOTCHTUNE_HARNESS_SHOWCASE"] == "1" {
+            let files = (environment["NOTCHTUNE_HARNESS_MYSPACE_FILES"] ?? "")
+                .split(separator: ":")
+                .map { URL(fileURLWithPath: String($0)) }
+            store.seedShowcase(files: files)
+        }
+        return store
+    }
+
+    private func seedShowcase(files: [URL], now: Date = .now) {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        func at(day: Int = 0, _ hour: Int, _ minute: Int) -> Date {
+            calendar.date(byAdding: DateComponents(day: day, hour: hour, minute: minute), to: today) ?? now
+        }
+        func thought(_ text: String, _ createdAt: Date, remindAt: Date? = nil, done: Bool = false) -> MyspaceThought {
+            MyspaceThought(
+                id: UUID(), text: text, createdAt: createdAt,
+                isReminder: remindAt != nil, reminderAt: remindAt,
+                isReminderCompleted: done, attachments: []
+            )
+        }
+
+        var seeded: [MyspaceThought] = files.enumerated().compactMap { index, file in
+            let id = UUID()
+            guard let attachments = try? importAttachments([file], thoughtID: id) else { return nil }
+            return MyspaceThought(
+                id: id, text: "", createdAt: at(9, 12 + index * 9),
+                reminderAt: nil, isReminderCompleted: false, attachments: attachments
+            )
+        }
+        seeded += [
+            thought("Checkout feels fast now. Try lazy images on the product grid too.", at(10, 24)),
+            thought("Check the staging deploy before standup", at(8, 50), remindAt: at(10, 0)),
+            thought("Send the 2.1.5 notes to the beta testers", at(9, 5), remindAt: at(15, 30)),
+            thought("Book the onboarding design review", at(day: -1, 16, 40), remindAt: at(day: 1, 9, 30)),
+            thought("Rotate the staging API key", at(day: -1, 11, 20), remindAt: at(day: -1, 14, 0), done: true),
+        ]
+        thoughts = seeded.sorted { $0.createdAt > $1.createdAt }
+        try? persist()
+    }
+}
+
 extension JSONEncoder {
     static var myspace: JSONEncoder {
         let encoder = JSONEncoder()
