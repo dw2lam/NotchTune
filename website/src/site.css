@@ -1,0 +1,322 @@
+/* ============================================================
+   NotchTune — one MacBook, then the light.
+   The page opens on a MacBook drawn to scale. Scrolling moves in on its
+   notch and steps through what NotchTune shows there; every picture on
+   the screen is the app itself, rendered by its headless harness at 2x.
+   Plain SF Pro type carries the rest, on black and on Apple's grey.
+   ============================================================ */
+
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+
+  --text: #f5f5f7;
+  --sub: #a1a1a6;
+  --dim: #86868b;
+  --link: #2997ff;
+  --blue: #0066cc;
+  --rule: rgba(255, 255, 255, 0.16);
+
+  --max: 1200px;
+  --pad: clamp(20px, 4vw, 40px);
+  --nav-h: 48px;
+  --sec: clamp(120px, 13vw, 184px);
+  --ease: cubic-bezier(0.25, 0.7, 0.25, 1);
+
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: var(--nav-h); }
+
+body {
+  margin: 0;
+  background: #000;
+  color: var(--text);
+  font: 17px/1.47 var(--font);
+  letter-spacing: -0.022em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+
+a { color: inherit; }
+img { display: block; max-width: none; }
+h1, h2, p, figure { margin: 0; }
+
+:focus-visible { outline: 2px solid var(--link); outline-offset: 3px; border-radius: 4px; }
+
+.skip-link {
+  position: absolute; left: 16px; top: -80px; z-index: 100;
+  padding: 8px 14px; border-radius: 980px; background: var(--text); color: #000;
+  font-size: 14px; text-decoration: none;
+}
+.skip-link:focus { top: 8px; }
+
+.frame { width: 100%; max-width: calc(var(--max) + 2 * var(--pad)); margin-inline: auto; padding-inline: var(--pad); }
+
+/* ---------- Type ---------- */
+
+.h1 { font-size: clamp(40px, 5vw, 64px); line-height: 1.0625; font-weight: 600; letter-spacing: -0.02em; text-wrap: balance; }
+.h2 { font-size: clamp(30px, 3.6vw, 48px); line-height: 1.08; font-weight: 600; letter-spacing: -0.018em; text-wrap: balance; }
+.lede { margin-top: 20px; max-width: 30em; font-size: clamp(17px, 1.45vw, 21px); line-height: 1.42; color: var(--sub); letter-spacing: -0.012em; text-wrap: pretty; }
+
+.cta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; margin-top: 28px; }
+.btn {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 980px;
+  background: var(--blue); color: #fff; font-size: 17px; text-decoration: none; white-space: nowrap;
+  transition: background-color 0.2s ease;
+}
+.btn:hover { background: #0071e3; }
+.more { color: var(--link); font-size: 17px; text-decoration: none; white-space: nowrap; }
+.more::after { content: "\00a0›"; }
+.more:hover { text-decoration: underline; }
+
+/* ---------- Nav: a thin translucent bar on the content width ---------- */
+
+.nav {
+  position: fixed; inset: 0 0 auto 0; z-index: 50; height: var(--nav-h);
+  background: rgba(22, 22, 23, 0.78);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.nav-in { height: 100%; display: flex; align-items: center; gap: 28px; }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; text-decoration: none; }
+.brand img { width: 18px; height: 18px; border-radius: 4px; }
+.nav-links { display: flex; gap: 28px; margin-left: auto; }
+.nav-links a { font-size: 12.5px; letter-spacing: -0.005em; color: rgba(245, 245, 247, 0.8); text-decoration: none; transition: color 0.2s ease; }
+.nav-links a:hover { color: #fff; }
+.nav-dl {
+  padding: 4px 12px; border-radius: 980px; background: var(--blue); color: #fff;
+  font-size: 12px; letter-spacing: -0.005em; text-decoration: none;
+}
+.nav-dl:hover { background: #0071e3; }
+
+/* ---------- The story: a pinned stage the page scrolls through ---------- */
+
+.story { position: relative; }
+.story-anchor { position: absolute; left: 0; width: 1px; height: 1px; pointer-events: none; }
+.story-stage {
+  position: sticky; top: 0; height: 100svh; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  padding-top: calc(var(--nav-h) + clamp(24px, 4.5vh, 52px));
+}
+.story-intro { position: relative; z-index: 2; text-align: center; }
+.story-intro .cta { justify-content: center; margin-top: 22px; }
+/* the camera: moved and scaled from script as the page scrolls */
+.story-cam {
+  width: 100%; padding-inline: var(--pad); margin-top: clamp(28px, 4vh, 48px);
+  transform-origin: 0 0;
+}
+.story-shade {
+  position: absolute; inset: auto 0 0 0; height: 50%; pointer-events: none; opacity: 0;
+  background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.8) 46%, #000 80%);
+  transition: height 0.6s var(--ease);
+}
+/* the Settings window reaches lower, so the shade under its caption is shorter */
+.story-shade.short { height: 30%; }
+.story-captions { position: absolute; left: 0; right: 0; bottom: clamp(28px, 6vh, 64px); }
+.caption {
+  position: absolute; left: var(--pad); right: var(--pad); bottom: 0;
+  display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); column-gap: 48px; align-items: end;
+  opacity: 0; transform: translateY(14px); pointer-events: none;
+  transition: opacity 0.35s ease, transform 0.5s var(--ease);
+}
+.caption.on { opacity: 1; transform: none; transition-delay: 0.12s; pointer-events: auto; }
+.caption .lede { margin: 0; max-width: 26em; }
+
+/* ---------- The MacBook: a 14-inch MacBook Pro, straight on ----------
+   Sized so the whole machine fits under the headline on a laptop screen.
+   The lid is 96.5% of the width, the screen 3024 x 1964 behind a thin
+   black bezel, and --pt is one macOS point (the screen is 1512 pt wide). */
+
+.mbp {
+  position: relative; margin: 0 auto;
+  width: min(1040px, 100%, calc((100svh - var(--nav-h) - 240px) * 1.47));
+  container-type: inline-size;
+  perspective: 2400px; perspective-origin: 50% 96%;
+  /* a glossy black floor */
+  -webkit-box-reflect: below 4px linear-gradient(transparent 84%, rgba(255, 255, 255, 0.13));
+}
+.mbp-glow {
+  position: absolute; z-index: -1; inset: -16cqw -22cqw -4cqw; pointer-events: none;
+  color: rgb(112 162 196);
+  background: radial-gradient(closest-side, currentColor, transparent);
+  opacity: 0.28;
+  transition: color 1.2s ease;
+}
+/* and the pool of it on the floor in front */
+.mbp-glow::after {
+  content: ""; position: absolute; left: 24%; right: 24%; bottom: 0; height: 9cqw;
+  background: radial-gradient(closest-side, currentColor, transparent);
+  opacity: 0.55;
+}
+.mbp-lid {
+  position: relative; width: 96.5cqw; margin: 0 auto;
+  padding: 1.5cqw 1.57cqw 2.9cqw;
+  border-radius: 2.6cqw 2.6cqw 0.9cqw 0.9cqw;
+  background: #050506;
+  /* the aluminium rim around the glass, and a soft shade beneath */
+  box-shadow: 0 0 0 0.18cqw #8e9095, 0 0 0 0.3cqw #2a2b2e, 0 2cqw 6cqw rgba(0, 0, 0, 0.6);
+  transform-origin: 50% 100%;
+}
+/* a glint that runs along the aluminium rim as the lid comes up */
+.mbp-lid::after {
+  content: ""; position: absolute; inset: -0.3cqw; padding: 0.3cqw; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.95) 50%, transparent 58%) 130% 0 / 260% 100% no-repeat;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: 0;
+}
+.mbp-screen {
+  --pt: calc(93.36cqw / 1512);
+  position: relative; aspect-ratio: 3024 / 1964; overflow: hidden;
+  border-radius: 1.2cqw 1.2cqw 0 0;
+  background: #0a0a0b;
+  isolation: isolate;
+}
+.mbp-wall { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 62% 40%; }
+.mbp-menubar {
+  position: absolute; inset: 0 0 auto 0; height: calc(var(--pt) * 34);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 calc(var(--pt) * 16) 0 calc(var(--pt) * 20);
+  color: rgba(255, 255, 255, 0.92);
+  font: 500 calc(var(--pt) * 13) / 1 var(--font); letter-spacing: 0;
+  text-shadow: 0 0 calc(var(--pt) * 6) rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+.mbp-menu, .mbp-status { display: flex; align-items: center; gap: calc(var(--pt) * 18); }
+.mbp-menu b { font-weight: 700; }
+.mbp-status { gap: calc(var(--pt) * 14); }
+.mbp-battery { width: calc(var(--pt) * 24); height: calc(var(--pt) * 12); }
+.mbp-wifi { width: calc(var(--pt) * 16); height: calc(var(--pt) * 12); }
+.mbp-notch {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: calc(var(--pt) * 188); height: calc(var(--pt) * 32);
+  border-radius: 0 0 calc(var(--pt) * 9) calc(var(--pt) * 9);
+  background: #000;
+}
+/* the bottom case: a thin slab a little wider than the lid, with the
+   scoop you open it by */
+.mbp-base {
+  position: relative; width: 100cqw; height: 1.9cqw; margin-top: -0.2cqw;
+  border-radius: 0.3cqw 0.3cqw 40% 40% / 0.3cqw 0.3cqw 100% 100%;
+  background: linear-gradient(#d9dadd, #b7b9bd 40%, #8f9196 75%, #55565a);
+  box-shadow: inset 0 0.08cqw 0 rgba(255, 255, 255, 0.85), 0 1.2cqw 2.4cqw rgba(0, 0, 0, 0.55);
+}
+.mbp-base::before {
+  content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 13cqw; height: 0.62cqw; border-radius: 0 0 0.9cqw 0.9cqw;
+  background: linear-gradient(#6d6f73, #a3a5a9);
+}
+
+/* ---------- What the notch shows ----------
+   Each capture sits at its true size in points. Like the island itself,
+   a card closes back into the notch and the next one opens out of it. */
+
+.layer {
+  position: absolute; top: calc(var(--pt) * var(--top)); left: calc(50% + var(--pt) * var(--dx));
+  width: calc(var(--pt) * var(--w)); height: auto; transform: translateX(-50%);
+  opacity: 0; visibility: hidden;
+  /* closed: just the notch (which sits --dx left of the image's centre) */
+  clip-path: inset(0 calc(50% + var(--pt) * (var(--dx) - 94)) calc(100% - var(--pt) * 32) calc(50% - var(--pt) * (var(--dx) + 94)) round 0 0 calc(var(--pt) * 9) calc(var(--pt) * 9));
+  transition: clip-path 0.42s cubic-bezier(0.4, 0, 0.7, 1), opacity 0.15s linear 0.3s, visibility 0s linear 0.45s;
+}
+.layer.on {
+  opacity: 1; visibility: visible;
+  clip-path: inset(0 0 0 0 round 0 0 calc(var(--pt) * 20) calc(var(--pt) * 20));
+  transition: clip-path 0.75s var(--ease) 0.22s, opacity 0.1s linear 0.22s, visibility 0s linear 0.22s;
+}
+/* Settings is a window: it rises onto the desktop instead */
+.layer-settings, .layer-settings.on { clip-path: none; }
+.layer-settings { transform: translateX(-50%) translateY(calc(var(--pt) * 24)) scale(0.97); transition: opacity 0.3s ease, transform 0.5s var(--ease), visibility 0s linear 0.5s; }
+.layer-settings.on { transform: translateX(-50%); transition: opacity 0.45s ease 0.15s, transform 0.7s var(--ease) 0.15s, visibility 0s; }
+
+/* ---------- Download, on Apple's grey ---------- */
+
+.band-light {
+  --text: #1d1d1f; --sub: #6e6e73; --dim: #6e6e73; --link: #0066cc; --rule: rgba(0, 0, 0, 0.12);
+  background: #f5f5f7; color: var(--text); color-scheme: light;
+}
+.download { padding: var(--sec) 0 calc(var(--sec) * 0.75); }
+.fine { margin-top: 36px; max-width: 38em; font-size: 14px; line-height: 1.5; color: var(--dim); }
+.install { margin-top: 20px; max-width: 38em; }
+.install p { font-size: 14px; line-height: 1.5; color: var(--dim); }
+.install code {
+  display: block; margin-top: 10px; padding: 12px 14px; border-radius: 10px;
+  background: #e8e8ed; color: var(--text); font: 13px/1.5 var(--mono); letter-spacing: 0; overflow-wrap: anywhere;
+}
+
+/* ---------- Footer ---------- */
+
+.footer { padding: 20px 0 40px; font-size: 12px; line-height: 1.5; color: var(--dim); letter-spacing: -0.01em; }
+.footer .frame > p { padding-bottom: 16px; border-bottom: 1px solid var(--rule); }
+.footer a { color: var(--text); text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
+.footer-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding-top: 16px; }
+.footer-row nav { display: flex; gap: 20px; }
+
+/* ---------- Motion ---------- */
+
+.js .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.9s var(--ease), transform 1s var(--ease); }
+.js .reveal.in { opacity: 1; transform: none; }
+
+/* arriving: the lid opens and the screen wakes (the notch then plays from script) */
+@media (prefers-reduced-motion: no-preference) {
+  .js .story-intro > * { animation: rise 0.9s var(--ease) both; }
+  .js .story-intro .cta { animation-delay: 0.12s; }
+  .js .mbp-lid { animation: lid-open 1.7s cubic-bezier(0.3, 0.7, 0.2, 1) 0.25s both; }
+  .js .mbp-wall, .js .mbp-menubar { animation: wake 0.9s ease 1.25s both; }
+  .js .mbp-glow { animation: glow-up 1.6s ease 1.2s both; }
+  .js .mbp-lid::after { animation: glint 1.5s cubic-bezier(0.4, 0, 0.3, 1) 1.55s both; }
+  /* the wallpaper drifts like an Aerial one */
+  .js .mbp-wall { animation: wake 0.9s ease 1.25s both, aerial 48s ease-in-out 2.2s infinite alternate; }
+}
+@keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes lid-open { from { transform: rotateX(-82deg); } to { transform: rotateX(0deg); } }
+@keyframes wake { from { opacity: 0; } to { opacity: 1; } }
+@keyframes glow-up { from { opacity: 0; } to { opacity: 0.28; } }
+@keyframes glint {
+  0% { opacity: 1; background-position: 130% 0; }
+  75% { opacity: 1; }
+  100% { opacity: 0; background-position: -30% 0; }
+}
+@keyframes aerial { from { transform: none; } to { transform: scale(1.07) translate(-1.2%, 0.6%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .js .reveal { opacity: 1; transform: none; transition: none; }
+  .layer, .layer.on { clip-path: none; }
+  .layer { transition: opacity 0.3s ease, visibility 0s linear 0.3s; }
+  .layer.on { transition: opacity 0.3s ease, visibility 0s; }
+  .layer-settings, .layer-settings.on { transform: translateX(-50%); }
+  .caption { transition: opacity 0.3s ease; transform: none; }
+  .btn, .nav-links a { transition: none; }
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 899px) {
+  .caption { grid-template-columns: minmax(0, 1fr); row-gap: 12px; }
+}
+
+/* tall screens: the headline and the MacBook sit together in the middle */
+@media (max-aspect-ratio: 3 / 4) {
+  .story-intro { margin-top: auto; }
+  .story-cam { margin-bottom: auto; padding-bottom: var(--nav-h); }
+}
+
+@media (max-width: 860px) {
+  .nav-links { display: none; }
+  .nav-dl { margin-left: auto; }
+}
+
+@media (max-width: 719px) {
+  .lede { font-size: 16px; }
+  .cta .btn { flex: 1 1 100%; justify-content: center; }
+  .story-intro .cta { gap: 12px 20px; }
+  .story-intro .cta .btn { flex: 0 1 auto; }
+}

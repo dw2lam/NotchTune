@@ -69,11 +69,13 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [model] in
                     if let tab = env["NOTCHTUNE_HARNESS_SETTINGS_TAB"] {
                         // `NOTCHTUNE_HARNESS_SETTINGS_WIDTH=<pt>` sizes the window
-                        // (e.g. 780, its minimum) to catch panes that overflow.
+                        // (e.g. 780, its minimum) to catch panes that overflow;
+                        // `_HEIGHT=<pt>` shows a long pane whole.
                         let width = env["NOTCHTUNE_HARNESS_SETTINGS_WIDTH"].flatMap(Double.init) ?? 860
+                        let height = env["NOTCHTUNE_HARNESS_SETTINGS_HEIGHT"].flatMap(Double.init) ?? 640
                         let window = HarnessHeadless.openHiddenWindow(
                             id: "harness-settings", title: "NotchTune Settings",
-                            size: NSSize(width: width, height: 640),
+                            size: NSSize(width: width, height: height),
                             rootView: SettingsView(model: model)
                         )
                         if let backdrop = env["NOTCHTUNE_HARNESS_SETTINGS_BACKDROP"] {
@@ -152,6 +154,9 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                 )
                 if let tab = harnessLaunchConfiguration.tab {
                     model.islandActiveTab = tab
+                }
+                if scenario == .closedFinished, let id = model.selectedSessionID {
+                    model.beginFinishedPeek(for: id)
                 }
             }
 
