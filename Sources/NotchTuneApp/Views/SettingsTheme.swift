@@ -21,7 +21,7 @@ enum SettingsTheme {
     static let paper = V6Palette.paper
 
     /// The app icon's sky, lifted for dark glass: switches, the selected
-    /// sidebar row, the segmented thumb, picture-tile rings and checks.
+    /// segmented thumb, picture-tile rings and checks.
     static let accent = Color(red: 0.25, green: 0.68, blue: 0.98)
     /// Glyphs and type on an accent fill.
     static let onAccent = Color.white
@@ -40,12 +40,13 @@ enum SettingsTheme {
     static let caution = IslandDesignPalette.Status.waitingAggregate
     static let critical = IslandDesignPalette.Status.waitingForApproval
 
-    static let sidebarWidth: CGFloat = 220
+    /// The row of section tabs across the top, title bar included.
+    static let tabBarHeight: CGFloat = 72
     static let surfaceRadius: CGFloat = IslandRadius.card + 2
 }
 
 /// A section's colour: a two-stop gradient, lit from the top like the
-/// island's glass, for its sidebar tile, its hero tile and the glow behind
+/// island's glass, for its tab tile, its hero tile and the glow behind
 /// the hero.
 struct SettingsTint: Equatable, Sendable {
     let top: Color
@@ -154,25 +155,6 @@ private struct SettingsBehindWindowGlass: NSViewRepresentable {
     }
 
     func updateNSView(_ view: NSVisualEffectView, context: Context) {}
-}
-
-/// The sidebar's surface, edge to edge from the window's top (behind the
-/// traffic lights) to its bottom: a frosted layer a shade lighter than the
-/// window, closed off from the pane by a hairline. (Liquid Glass here would
-/// go flat when the window loses focus, like the window's own.)
-struct SettingsSidebarBackground: View {
-    var body: some View {
-        SettingsTheme.paper.opacity(0.045)
-            .overlay(alignment: .trailing) {
-                // A dark line under a light one reads as an edge on any
-                // wallpaper.
-                HStack(spacing: 0) {
-                    Color.black.opacity(0.28).frame(width: 0.5)
-                    SettingsTheme.paper.opacity(0.10).frame(width: 0.5)
-                }
-            }
-            .accessibilityHidden(true)
-    }
 }
 
 // MARK: - Glyph tile
@@ -470,7 +452,7 @@ struct SettingsSegmentedControl<Value: Hashable>: View {
     }
 }
 
-/// The selected segment / sidebar row: the sky accent, lit from the top,
+/// The selected segment: the sky accent, lit from the top,
 /// with a bright rim.
 struct SettingsAccentThumb<S: InsettableShape>: View {
     var shape: S

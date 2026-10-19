@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 
 // MARK: - Settings tabs
 
-/// The sidebar's sections, in sidebar order. About and Updates live at the
+/// The settings sections, in tab order. About and Updates live at the
 /// top of General now; `resolving(_:)` still lands their old names there.
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general
@@ -48,7 +48,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The section's colour, from its sidebar tile to the glow behind its
+    /// The section's colour, from its tab tile to the glow behind its
     /// hero. Setup and Display take the app icon's grass and sky.
     var tint: SettingsTint {
         switch self {
@@ -70,7 +70,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// The sidebar's groups, as System Settings groups its own: the app, the
+/// The tab bar's groups, as System Settings groups its own: the app, the
 /// island and what it shows, then what it plays.
 enum SettingsSection: String, CaseIterable {
     case app
@@ -93,14 +93,16 @@ struct SettingsView: View {
     private var lang: LanguageManager { model.lang }
 
     var body: some View {
-        // One glass surface: a full-height sidebar under the traffic lights,
-        // a hairline, then the pane.
-        HStack(spacing: 0) {
-            sidebar
+        // One glass surface: the sections as a row of icon tabs across the
+        // top, in the title bar beside the traffic lights, a hairline, then
+        // the pane at the window's full width.
+        VStack(spacing: 0) {
+            tabBar
             detailView
                 .environment(\.settingsWindowIsOnScreen, isWindowOnScreen)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .ignoresSafeArea(edges: .top)
         .background {
             GeometryReader { proxy in
                 SettingsPaneGlowClock(selectedTab: selectedTab, isLive: isWindowOnScreen, window: proxy)
@@ -121,51 +123,50 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: Sidebar
+    // MARK: Tab bar
 
-    private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            // Groups are separated by spacing only — no header text that
-            // would repeat the panes' own titles.
+    private var tabBar: some View {
+        HStack(spacing: 2) {
+            // Groups are set apart by a little more space; the tabs' own
+            // labels name them.
             ForEach(Array(SettingsSection.allCases.enumerated()), id: \.element) { index, section in
                 if index > 0 {
-                    Spacer().frame(height: 16)
+                    Spacer().frame(width: 12)
                 }
                 ForEach(section.tabs) { tab in
-                    SettingsSidebarRow(
+                    SettingsTabButton(
                         title: tab.label(lang),
                         isSelected: selectedTab == tab,
                         selectionNamespace: selectionNamespace
                     ) {
                         withAnimation(.smooth(duration: 0.3, extraBounce: 0.08)) { selectedTab = tab }
                     } glyph: {
-                        sidebarGlyph(for: tab)
+                        tabGlyph(for: tab)
                     }
                 }
             }
         }
-        // The rows start under the traffic lights; the sidebar's own
-        // surface runs up behind them to the window's top edge.
-        .padding(.horizontal, 10)
-        .padding(.top, 8)
-        .frame(width: SettingsTheme.sidebarWidth)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background {
-            SettingsSidebarBackground()
-                .ignoresSafeArea()
+        .frame(maxWidth: .infinity)
+        .frame(height: SettingsTheme.tabBarHeight)
+        .overlay(alignment: .bottom) {
+            // A dark line under a light one reads as an edge on any wallpaper.
+            VStack(spacing: 0) {
+                Color.black.opacity(0.28).frame(height: 0.5)
+                SettingsTheme.paper.opacity(0.10).frame(height: 0.5)
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Settings sections")
     }
 
     @ViewBuilder
-    private func sidebarGlyph(for tab: SettingsTab) -> some View {
+    private func tabGlyph(for tab: SettingsTab) -> some View {
         if tab == .appearance {
             // Personalization is the character's own pane: it shows the one
             // being picked there (the edited profile's, which may not be
             // the one on screen right now), swapping as you choose.
             let character = model.appearancePreferences(for: model.appearanceSettingsProfile).character
-            SettingsGlyphTile(size: Self.sidebarTileSize, tint: tab.tint) {
+            SettingsGlyphTile(size: Self.tabTileSize, tint: tab.tint) {
                 ZStack {
                     PixelCharacterView(
                         character: character,
@@ -176,15 +177,15 @@ struct SettingsView: View {
                     .id(character)
                     .transition(.opacity.combined(with: .scale(scale: 0.6)))
                 }
-                .frame(width: 15, height: 15)
+                .frame(width: 20, height: 20)
                 .animation(.smooth(duration: 0.3), value: character)
             }
         } else {
-            SettingsGlyphTile(systemName: tab.icon, size: Self.sidebarTileSize, tint: tab.tint)
+            SettingsGlyphTile(systemName: tab.icon, size: Self.tabTileSize, tint: tab.tint)
         }
     }
 
-    private static let sidebarTileSize: CGFloat = 20
+    private static let tabTileSize: CGFloat = 28
 
     // MARK: Detail
 
@@ -213,21 +214,18 @@ struct SettingsView: View {
 }
 
 /// The shown section's colour, glowing up from behind its hero tile across
-/// the window's glass (sidebar included), so it never ends in an edge.
+/// the window's glass (tab bar included), so it never ends in an edge.
 private struct SettingsPaneGlow: View {
     let tint: SettingsTint
     let window: GeometryProxy
 
     var body: some View {
         let size = window.size
-        // Where the hero tile sits: past the sidebar, in the pane's column,
-        // under the title bar.
-        let sidebar = SettingsTheme.sidebarWidth
-        let paneWidth = max(size.width - sidebar, 0)
+        // Where the hero tile sits: in the pane's column, under the tab bar.
         let hero = CGPoint(
-            x: sidebar + SettingsMetrics.columnLeadingInset(forPaneWidth: paneWidth)
+            x: SettingsMetrics.columnLeadingInset(forPaneWidth: size.width)
                 + SettingsMetrics.paneHorizontalPadding + SettingsMetrics.heroIconSize / 2,
-            y: window.safeAreaInsets.top + SettingsMetrics.paneTopPadding + 6 + SettingsMetrics.heroIconSize / 2
+            y: SettingsTheme.tabBarHeight + SettingsMetrics.paneTopPadding + 6 + SettingsMetrics.heroIconSize / 2
         )
         RadialGradient(
             colors: [tint.bottom.opacity(0.34), tint.bottom.opacity(0.12), tint.bottom.opacity(0)],
@@ -241,10 +239,10 @@ private struct SettingsPaneGlow: View {
     }
 }
 
-/// One sidebar entry, sized like System Settings' own: the section's
-/// coloured tile and a label, the selected one on a sky pill that slides
-/// between rows.
-private struct SettingsSidebarRow<Glyph: View>: View {
+/// One tab, as a Mac app's settings toolbar draws them: the section's
+/// coloured tile over its name, the selected one on a soft plate that
+/// slides between tabs.
+private struct SettingsTabButton<Glyph: View>: View {
     let title: String
     let isSelected: Bool
     let selectionNamespace: Namespace.ID
@@ -255,22 +253,24 @@ private struct SettingsSidebarRow<Glyph: View>: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 9) {
+            VStack(spacing: 4) {
                 glyph()
-                    .frame(width: 20, height: 20)
+                    .frame(width: 28, height: 28)
                 Text(title)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .medium))
                     .lineLimit(1)
-                Spacer(minLength: 0)
             }
-            .foregroundStyle(isSelected ? SettingsTheme.onAccent : SettingsTheme.paper.opacity(isHovered ? 0.95 : 0.86))
-            .padding(.horizontal, 7)
-            .frame(height: 30)
+            .foregroundStyle(SettingsTheme.paper.opacity(isSelected ? 1 : (isHovered ? 0.92 : 0.7)))
+            .padding(.horizontal, 10)
+            .padding(.top, 6)
+            .padding(.bottom, 5)
+            .frame(minWidth: 72)
             .background {
-                let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+                let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
                 if isSelected {
-                    SettingsAccentThumb(shape: shape)
-                        .matchedGeometryEffect(id: "settingsSidebarSelection", in: selectionNamespace)
+                    shape.fill(SettingsTheme.paper.opacity(0.11))
+                        .overlay(shape.strokeBorder(SettingsTheme.paper.opacity(0.09), lineWidth: 0.5))
+                        .matchedGeometryEffect(id: "settingsTabSelection", in: selectionNamespace)
                 } else if isHovered {
                     shape.fill(SettingsTheme.hoverFill)
                 }
