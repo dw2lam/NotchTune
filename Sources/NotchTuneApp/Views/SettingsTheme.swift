@@ -489,17 +489,29 @@ struct SettingsMenuPicker<Value: Hashable>: View {
     let title: String
     @Binding var selection: Value
     let sections: [(title: String?, segments: [SettingsSegment<Value>])]
+    /// How many sections the menu lists in place; the rest become submenus.
+    let inlineSections: Int
 
     init(_ title: String, selection: Binding<Value>, segments: [SettingsSegment<Value>]) {
         self.title = title
         self._selection = selection
         self.sections = [(nil, segments)]
+        self.inlineSections = 1
     }
 
-    init(_ title: String, selection: Binding<Value>, sections: [(title: String?, segments: [SettingsSegment<Value>])]) {
+    /// `inlineSections` keeps a long menu on the screen: a menu taller than
+    /// the display hides its ends behind scroll arrows, so past that many
+    /// sections each one folds into its own submenu.
+    init(
+        _ title: String,
+        selection: Binding<Value>,
+        sections: [(title: String?, segments: [SettingsSegment<Value>])],
+        inlineSections: Int = .max
+    ) {
         self.title = title
         self._selection = selection
         self.sections = sections
+        self.inlineSections = inlineSections
     }
 
     private var currentTitle: String {
@@ -514,19 +526,7 @@ struct SettingsMenuPicker<Value: Hashable>: View {
 
     var body: some View {
         Menu {
-            Picker(title, selection: $selection) {
-                ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
-                    if let sectionTitle = section.title {
-                        Section(sectionTitle) {
-                            ForEach(section.segments) { Text($0.title).tag($0.value) }
-                        }
-                    } else {
-                        ForEach(section.segments) { Text($0.title).tag($0.value) }
-                    }
-                }
-            }
-            .pickerStyle(.inline)
-            .labelsHidden()
+            SettingsMenuPickerItems(selection: $selection, sections: sections, inlineSections: inlineSections)
         } label: {
             HStack(spacing: 7) {
                 Text(currentTitle)
@@ -542,6 +542,39 @@ struct SettingsMenuPicker<Value: Hashable>: View {
         .fixedSize()
         .accessibilityLabel(title)
         .accessibilityValue(currentTitle)
+    }
+}
+
+/// A `SettingsMenuPicker`'s rows: one checkmark row per choice, the first
+/// `inlineSections` sections listed in place under their headers and the
+/// rest as submenus. Rows are toggles, not one `Picker`, because a choice
+/// can sit in a submenu: picking a row (even the checked one) selects it.
+struct SettingsMenuPickerItems<Value: Hashable>: View {
+    @Binding var selection: Value
+    let sections: [(title: String?, segments: [SettingsSegment<Value>])]
+    var inlineSections: Int = .max
+
+    var body: some View {
+        ForEach(Array(sections.prefix(inlineSections).enumerated()), id: \.offset) { _, section in
+            if let sectionTitle = section.title {
+                Section(sectionTitle) { rows(section.segments) }
+            } else {
+                rows(section.segments)
+            }
+        }
+        // (a titled section already closes with a separator)
+        ForEach(Array(sections.dropFirst(inlineSections).enumerated()), id: \.offset) { _, section in
+            Menu(section.title ?? "") { rows(section.segments) }
+        }
+    }
+
+    private func rows(_ segments: [SettingsSegment<Value>]) -> some View {
+        ForEach(segments) { segment in
+            Toggle(segment.title, isOn: Binding(
+                get: { selection == segment.value },
+                set: { _ in selection = segment.value }
+            ))
+        }
     }
 }
 

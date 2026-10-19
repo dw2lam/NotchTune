@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Foundation
+import SwiftUI
 import Testing
 @testable import NotchTuneApp
 
@@ -118,5 +119,56 @@ struct NotificationSoundPackTests {
     func slugsBecomeTitles() {
         #expect(NotificationSoundService.title(forSlug: "ding-dong") == "Ding Dong")
         #expect(NotificationSoundService.title(forSlug: "coin") == "Coin")
+    }
+
+    /// The sound menu as AppKit builds it (nothing is shown or played). One
+    /// flat list of 32 + 14 sounds ran 1228 pt tall, taller than a laptop
+    /// screen, so macOS hid part of it behind scroll arrows and the pack
+    /// looked missing. The pack now sits in place and the rest in submenus.
+    @Test
+    func theSoundMenuFitsOnALaptopScreenWithEverySoundReachable() throws {
+        guard #available(macOS 14.4, *) else { return }
+        _ = NSApplication.shared // SwiftUI delivers menu actions through the app
+        let pack = NotificationSoundService.bundledSounds
+        let system = NotificationSoundService.availableSounds()
+        let sections = SoundSettingsPane.soundSections(pack: pack, system: system, custom: ["chime.aiff"], title: { $0 })
+
+        for selected in [try #require(pack.first).id, "Bottle"] {
+            var value = selected
+            let menu = NSHostingMenu(rootView: SettingsMenuPickerItems(
+                selection: Binding(get: { value }, set: { value = $0 }),
+                sections: sections,
+                inlineSections: SoundSettingsPane.inlineSoundSections
+            ))
+            menu.update()
+
+            // a 13-inch MacBook Air's screen, less the menu bar, is about 919 pt
+            #expect(menu.size.height <= 900, "the menu is \(menu.size.height) pt tall")
+
+            let rows = menu.items.filter { !$0.isSeparatorItem && !$0.isSectionHeader }
+            #expect(rows.filter { $0.submenu == nil }.map(\.title) == pack.map(\.title))
+            let submenus = rows.compactMap(\.submenu)
+            #expect(submenus.map { $0.items.map(\.title) } == [system, ["chime"]])
+
+            let checked = (rows + submenus.flatMap(\.items)).filter { $0.state == .on }.map(\.title)
+            let expected = pack.first { $0.id == selected }?.title ?? selected
+            #expect(checked == [expected])
+
+            // choosing works from the list and from a submenu (the test's own
+            // binding, so nothing plays); SwiftUI delivers the pick on the
+            // next turn of the run loop
+            let settle = { (target: String) in
+                let deadline = Date().addingTimeInterval(1)
+                while value != target, Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+            }
+            let last = try #require(pack.last)
+            menu.performActionForItem(at: try #require(menu.items.firstIndex { $0.title == last.title }))
+            settle(last.id)
+            #expect(value == last.id)
+            let systemMenu = try #require(submenus.first)
+            systemMenu.performActionForItem(at: try #require(systemMenu.items.firstIndex { $0.title == "Glass" }))
+            settle("Glass")
+            #expect(value == "Glass")
+        }
     }
 }

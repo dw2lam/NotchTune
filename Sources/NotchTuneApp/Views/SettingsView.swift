@@ -590,8 +590,9 @@ struct SoundSettingsPane: View {
         }
     }
 
-    /// A menu of every system + custom sound with a trailing preview button.
-    /// Choosing a sound plays it, like System Settings' alert-sound menu.
+    /// A menu of every bundled, system and custom sound with a trailing
+    /// preview button. Choosing a sound plays it, like System Settings'
+    /// alert-sound menu.
     @ViewBuilder
     private func soundPickerRow(
         title: String,
@@ -601,7 +602,12 @@ struct SoundSettingsPane: View {
     ) -> some View {
         SettingsRow(title) {
             HStack(spacing: 10) {
-                SettingsMenuPicker(title, selection: selection, sections: soundSections)
+                SettingsMenuPicker(
+                    title,
+                    selection: selection,
+                    sections: soundSections,
+                    inlineSections: Self.inlineSoundSections
+                )
 
                 SettingsIconButton(systemName: "play.fill", help: previewHelp, action: preview)
             }
@@ -646,26 +652,49 @@ struct SoundSettingsPane: View {
         }
     }
 
+    /// The sound menus list NotchTune's pack in place and fold the system
+    /// and custom sounds into submenus: all of them in one list (32 + 14 +
+    /// headers) runs taller than a laptop screen, and macOS then hides the
+    /// list's ends behind scroll arrows.
+    static let inlineSoundSections = 1
+
+    private var soundSections: [(title: String?, segments: [SettingsSegment<String>])] {
+        Self.soundSections(
+            pack: NotificationSoundService.bundledSounds,
+            system: availableSounds,
+            custom: customSounds,
+            title: { lang.t($0) }
+        )
+    }
+
     /// NotchTune's own pack, the system sounds, then any custom ones, for
     /// the sound menus.
-    private var soundSections: [(title: String?, segments: [SettingsSegment<String>])] {
+    static func soundSections(
+        pack: [NotificationSoundService.BundledSound],
+        system: [String],
+        custom: [String],
+        title: (String) -> String
+    ) -> [(title: String?, segments: [SettingsSegment<String>])] {
         var sections: [(title: String?, segments: [SettingsSegment<String>])] = []
-        let pack = NotificationSoundService.bundledSounds
         if !pack.isEmpty {
-            sections.append((lang.t("settings.sound.notchTuneSounds"), pack.map { SettingsSegment($0.id, $0.title) }))
+            sections.append((title("settings.sound.notchTuneSounds"), pack.map { SettingsSegment($0.id, $0.title) }))
         }
-        sections.append((lang.t("settings.sound.systemSounds"), availableSounds.map { SettingsSegment($0, $0) }))
-        if !customSounds.isEmpty {
+        sections.append((title("settings.sound.systemSounds"), system.map { SettingsSegment($0, $0) }))
+        if !custom.isEmpty {
             sections.append((
-                lang.t("settings.sound.customSounds"),
-                customSounds.map { SettingsSegment($0, cleanFilename($0)) }
+                title("settings.sound.customSounds"),
+                custom.map { SettingsSegment($0, cleanFilename($0)) }
             ))
         }
         return sections
     }
 
+    private static func cleanFilename(_ filename: String) -> String {
+        (filename as NSString).deletingPathExtension
+    }
+
     private func cleanFilename(_ filename: String) -> String {
-        return (filename as NSString).deletingPathExtension
+        Self.cleanFilename(filename)
     }
 
     private func loadCustomSounds() {
