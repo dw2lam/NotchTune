@@ -138,6 +138,21 @@ h1, h2, p, figure { margin: 0; }
   width: min(1040px, 100%, calc((100svh - var(--nav-h) - 240px) * 1.47));
   container-type: inline-size;
   perspective: 2400px; perspective-origin: 50% 96%;
+  /* a glossy black floor */
+  -webkit-box-reflect: below 4px linear-gradient(transparent 84%, rgba(255, 255, 255, 0.13));
+}
+.mbp-glow {
+  position: absolute; z-index: -1; inset: -16cqw -22cqw -4cqw; pointer-events: none;
+  color: rgb(112 162 196);
+  background: radial-gradient(closest-side, currentColor, transparent);
+  opacity: 0.28;
+  transition: color 1.2s ease;
+}
+/* and the pool of it on the floor in front */
+.mbp-glow::after {
+  content: ""; position: absolute; left: 24%; right: 24%; bottom: 0; height: 9cqw;
+  background: radial-gradient(closest-side, currentColor, transparent);
+  opacity: 0.55;
 }
 .mbp-lid {
   position: relative; width: 96.5cqw; margin: 0 auto;
@@ -148,6 +163,15 @@ h1, h2, p, figure { margin: 0; }
   box-shadow: 0 0 0 0.18cqw #8e9095, 0 0 0 0.3cqw #2a2b2e, 0 2cqw 6cqw rgba(0, 0, 0, 0.6);
   transform-origin: 50% 100%;
 }
+/* a glint that runs along the aluminium rim as the lid comes up */
+.mbp-lid::after {
+  content: ""; position: absolute; inset: -0.3cqw; padding: 0.3cqw; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.95) 50%, transparent 58%) 130% 0 / 260% 100% no-repeat;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: 0;
+}
 .mbp-screen {
   --pt: calc(93.36cqw / 1512);
   position: relative; aspect-ratio: 3024 / 1964; overflow: hidden;
@@ -155,7 +179,7 @@ h1, h2, p, figure { margin: 0; }
   background: #0a0a0b;
   isolation: isolate;
 }
-.mbp-wall { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.mbp-wall { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 62% 40%; }
 .mbp-menubar {
   position: absolute; inset: 0 0 auto 0; height: calc(var(--pt) * 34);
   display: flex; align-items: center; justify-content: space-between;
@@ -247,10 +271,21 @@ h1, h2, p, figure { margin: 0; }
   .js .story-intro .cta { animation-delay: 0.12s; }
   .js .mbp-lid { animation: lid-open 1.7s cubic-bezier(0.3, 0.7, 0.2, 1) 0.25s both; }
   .js .mbp-wall, .js .mbp-menubar { animation: wake 0.9s ease 1.25s both; }
+  .js .mbp-glow { animation: glow-up 1.6s ease 1.2s both; }
+  .js .mbp-lid::after { animation: glint 1.5s cubic-bezier(0.4, 0, 0.3, 1) 1.55s both; }
+  /* the wallpaper drifts like an Aerial one */
+  .js .mbp-wall { animation: wake 0.9s ease 1.25s both, aerial 48s ease-in-out 2.2s infinite alternate; }
 }
 @keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
 @keyframes lid-open { from { transform: rotateX(-82deg); } to { transform: rotateX(0deg); } }
 @keyframes wake { from { opacity: 0; } to { opacity: 1; } }
+@keyframes glow-up { from { opacity: 0; } to { opacity: 0.28; } }
+@keyframes glint {
+  0% { opacity: 1; background-position: 130% 0; }
+  75% { opacity: 1; }
+  100% { opacity: 0; background-position: -30% 0; }
+}
+@keyframes aerial { from { transform: none; } to { transform: scale(1.07) translate(-1.2%, 0.6%); } }
 
 @media (prefers-reduced-motion: reduce) {
   .js .reveal { opacity: 1; transform: none; transition: none; }

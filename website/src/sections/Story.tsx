@@ -28,50 +28,52 @@ const LAYERS: { id: LayerId; src: string; w: number; h: number; top?: number; dx
 
 type CamId = 'full' | 'notch' | 'pill' | 'window';
 
-const FRAMES: { id?: string; cam: CamId; layer: LayerId; title?: string; line?: string }[] = [
-  { cam: 'full', layer: 'island' },
+// tint: the colour the screen throws into the room at each step
+const MOON = 'rgb(112 162 196)';
+const FRAMES: { id?: string; cam: CamId; layer: LayerId; tint: string; title?: string; line?: string }[] = [
+  { cam: 'full', layer: 'island', tint: MOON },
   {
-    id: 'agents', cam: 'notch', layer: 'island',
+    id: 'agents', cam: 'notch', layer: 'island', tint: MOON,
     title: 'All your agents, at a glance.',
     line: 'Claude Code, Codex, Gemini CLI and six more, one line each: what it’s doing, in which terminal, and for how long.',
   },
   {
-    cam: 'pill', layer: 'pill-working',
+    cam: 'pill', layer: 'pill-working', tint: 'rgb(110 150 255)',
     title: 'Watch them work.',
     line: 'With the notch closed, it still says what’s running and for how long.',
   },
   {
-    cam: 'pill', layer: 'pill-waiting',
+    cam: 'pill', layer: 'pill-waiting', tint: 'rgb(255 166 64)',
     title: 'Amber when one needs you.',
     line: 'Allow with ⌘Y or deny with ⌘N, and the agent carries on.',
   },
   {
-    id: 'summaries', cam: 'notch', layer: 'summary',
+    id: 'summaries', cam: 'notch', layer: 'summary', tint: 'rgb(84 204 120)',
     title: 'Every finished task, in one line.',
     line: 'Files edited, whether the tests passed, and how long it took. Return jumps back to the terminal.',
   },
   {
-    id: 'music', cam: 'notch', layer: 'player',
+    id: 'music', cam: 'notch', layer: 'player', tint: 'rgb(150 176 214)',
     title: 'Music without switching apps.',
     line: 'Spotify or Apple Music under the notch: the cover, the controls, and a two-finger swipe to skip.',
   },
   {
-    id: 'myspace', cam: 'notch', layer: 'myspace',
+    id: 'myspace', cam: 'notch', layer: 'myspace', tint: 'rgb(140 150 255)',
     title: 'A space for loose thoughts.',
     line: 'Jot a note or drop a file on the notch. Images, screenshots and files wait for you there, on your Mac.',
   },
   {
-    cam: 'notch', layer: 'reminders',
+    cam: 'notch', layer: 'reminders', tint: 'rgb(255 196 110)',
     title: 'Reminders, right up top.',
     line: 'Add one with or without a time, get a nudge when it’s due, and tick it off into the archive.',
   },
   {
-    id: 'meetings', cam: 'notch', layer: 'banner',
+    id: 'meetings', cam: 'notch', layer: 'banner', tint: 'rgb(80 150 255)',
     title: 'Meetings, a few minutes early.',
     line: 'A countdown, then a Join button, then quiet while you’re in the call. Your calendars never leave your Mac.',
   },
   {
-    id: 'personalize', cam: 'window', layer: 'settings',
+    id: 'personalize', cam: 'window', layer: 'settings', tint: 'rgb(160 110 255)',
     title: 'Make it yours.',
     line: 'Twenty characters and how lively they are. Style the notch and an external display apart, or Sync both.',
   },
@@ -202,7 +204,7 @@ export default function Story() {
           </p>
         </div>
         <div ref={camRef} className="story-cam">
-          <MacBook label="A MacBook Pro with NotchTune under the notch.">
+          <MacBook label="A MacBook Pro with NotchTune under the notch." tint={FRAMES[active].tint}>
             {LAYERS.map((l) => (
               <img
                 key={l.id}

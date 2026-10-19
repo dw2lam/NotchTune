@@ -3,10 +3,13 @@ import type { ReactNode } from 'react';
 /* A 14-inch MacBook Pro seen straight on, drawn to its real proportions.
    Everything on the screen is sized in --pt, one macOS point at this
    size, so the real captures inside sit at true scale against the notch.
-   The lid opens and the screen wakes when the page loads. */
-export default function MacBook({ label, children }: { label: string; children: ReactNode }) {
+   The lid opens and the screen wakes when the page loads; the screen's
+   light spills into the room and onto a glossy floor. */
+export default function MacBook({ label, tint, children }: { label: string; tint?: string; children: ReactNode }) {
   return (
     <figure className="mbp" aria-label={label}>
+      {/* the screen's light in the dark room, in the colour of what it shows */}
+      <div className="mbp-glow" style={tint ? { color: tint } : undefined} aria-hidden="true" />
       <div className="mbp-lid">
         <div className="mbp-screen">
           <img
