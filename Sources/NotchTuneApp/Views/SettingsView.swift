@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 
 // MARK: - Settings tabs
 
-/// The settings sections, in tab order. About and Updates live at the
+/// The settings sections, in toolbar order. About and Updates live at the
 /// top of General now; `resolving(_:)` still lands their old names there.
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general
@@ -48,8 +48,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The section's colour, from its tab tile to the glow behind its
-    /// hero. Setup and Display take the app icon's grass and sky.
+    /// The section's colour, from its hero tile to the glow behind it.
+    /// Setup and Display take the app icon's grass and sky.
     var tint: SettingsTint {
         switch self {
         case .general:    .graphite
@@ -70,7 +70,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// The tab bar's groups, as System Settings groups its own: the app, the
+/// The sections' groups, as System Settings groups its own: the app, the
 /// island and what it shows, then what it plays.
 enum SettingsSection: String, CaseIterable {
     case app
@@ -88,104 +88,82 @@ struct SettingsView: View {
     var model: AppModel
     @State private var selectedTab: SettingsTab = .general
     @State private var isWindowOnScreen = true
-    @Namespace private var selectionNamespace
 
     private var lang: LanguageManager { model.lang }
 
     var body: some View {
-        // One glass surface: the sections as a row of icon tabs across the
-        // top, in the title bar beside the traffic lights, a hairline, then
-        // the pane at the window's full width.
-        VStack(spacing: 0) {
-            tabBar
-            detailView
-                .environment(\.settingsWindowIsOnScreen, isWindowOnScreen)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .ignoresSafeArea(edges: .top)
-        .background {
-            GeometryReader { proxy in
-                SettingsPaneGlowClock(selectedTab: selectedTab, isLive: isWindowOnScreen, window: proxy)
-            }
-            .ignoresSafeArea()
-        }
-        .background(SettingsWindowGlass().ignoresSafeArea())
-        .settingsTheme()
-        .onWindowOnScreenChange { isWindowOnScreen = $0 }
-        .frame(minWidth: 780, idealWidth: 860, maxWidth: 1240, minHeight: 540, idealHeight: 640)
-        .onReceive(NotificationCenter.default.publisher(for: .notchTuneSelectSetupTab)) { _ in
-            selectedTab = .setup
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .notchTuneSelectSettingsTab)) { note in
-            if let raw = note.object as? String, let tab = SettingsTab.resolving(raw) {
-                selectedTab = tab
-            }
-        }
-    }
-
-    // MARK: Tab bar
-
-    private var tabBar: some View {
-        HStack(spacing: 2) {
-            // Groups are set apart by a little more space; the tabs' own
-            // labels name them.
-            ForEach(Array(SettingsSection.allCases.enumerated()), id: \.element) { index, section in
-                if index > 0 {
-                    Spacer().frame(width: 12)
+        // One glass surface: the pane at the window's full width under the
+        // title bar, where the sections sit as one pill, as in the TV app.
+        detailView
+            .environment(\.settingsWindowIsOnScreen, isWindowOnScreen)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                GeometryReader { proxy in
+                    SettingsPaneGlowClock(selectedTab: selectedTab, isLive: isWindowOnScreen, window: proxy)
                 }
-                ForEach(section.tabs) { tab in
-                    SettingsTabButton(
-                        title: tab.label(lang),
-                        isSelected: selectedTab == tab,
-                        selectionNamespace: selectionNamespace
-                    ) {
-                        withAnimation(.smooth(duration: 0.3, extraBounce: 0.08)) { selectedTab = tab }
-                    } glyph: {
-                        tabGlyph(for: tab)
+                .ignoresSafeArea()
+            }
+            .background(SettingsWindowGlass().ignoresSafeArea())
+            .settingsTheme()
+            // Outside the theme, so the window's own button and toggle
+            // styles can't reach the system control.
+            .toolbar {
+                if #available(macOS 26.0, *) {
+                    // Its own pill, not one inside the toolbar's glass plate.
+                    ToolbarItem(placement: .principal) { toolbarPill }
+                        .sharedBackgroundVisibility(.hidden)
+                } else {
+                    ToolbarItem(placement: .principal) { toolbarPill }
+                }
+            }
+            .overlay {
+                if Self.capturesPillInContent {
+                    VStack {
+                        sectionPill.padding(.top, Self.toolbarPillCenter - Self.pillHeight / 2)
+                        Spacer(minLength: 0)
                     }
+                    .ignoresSafeArea()
                 }
             }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: SettingsTheme.tabBarHeight)
-        .overlay(alignment: .bottom) {
-            // A dark line under a light one reads as an edge on any wallpaper.
-            VStack(spacing: 0) {
-                Color.black.opacity(0.28).frame(height: 0.5)
-                SettingsTheme.paper.opacity(0.10).frame(height: 0.5)
+            .onWindowOnScreenChange { isWindowOnScreen = $0 }
+            .frame(minWidth: 780, idealWidth: 860, maxWidth: 1240, minHeight: 540, idealHeight: 640)
+            .onReceive(NotificationCenter.default.publisher(for: .notchTuneSelectSetupTab)) { _ in
+                selectedTab = .setup
             }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Settings sections")
-    }
-
-    @ViewBuilder
-    private func tabGlyph(for tab: SettingsTab) -> some View {
-        if tab == .appearance {
-            // Personalization is the character's own pane: it shows the one
-            // being picked there (the edited profile's, which may not be
-            // the one on screen right now), swapping as you choose.
-            let character = model.appearancePreferences(for: model.appearanceSettingsProfile).character
-            SettingsGlyphTile(size: Self.tabTileSize, tint: tab.tint) {
-                ZStack {
-                    PixelCharacterView(
-                        character: character,
-                        mode: .idle,
-                        paused: true,
-                        tint: tab.tint.glyph
-                    )
-                    .id(character)
-                    .transition(.opacity.combined(with: .scale(scale: 0.6)))
+            .onReceive(NotificationCenter.default.publisher(for: .notchTuneSelectSettingsTab)) { note in
+                if let raw = note.object as? String, let tab = SettingsTab.resolving(raw) {
+                    selectedTab = tab
                 }
-                .frame(width: 20, height: 20)
-                .animation(.smooth(duration: 0.3), value: character)
             }
-        } else {
-            SettingsGlyphTile(systemName: tab.icon, size: Self.tabTileSize, tint: tab.tint)
-        }
     }
 
-    private static let tabTileSize: CGFloat = 28
+    // MARK: Sections
+
+    /// Harness captures (`NOTCHTUNE_HARNESS_SETTINGS_PILL_IN_CONTENT=1`):
+    /// AppKit dims toolbar items while their window isn't in front, and a
+    /// harness window never is, so a capture draws the same pill over the
+    /// content where the toolbar centres it, behind an invisible stand-in
+    /// that keeps the bar's height.
+    private static let capturesPillInContent = HarnessHeadless.isActive
+        && ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_SETTINGS_PILL_IN_CONTENT"] == "1"
+    /// The toolbar's middle, level with the traffic lights, and the pill's height.
+    private static let toolbarPillCenter: CGFloat = 19
+    private static let pillHeight: CGFloat = 34
+
+    private var toolbarPill: some View {
+        sectionPill.opacity(Self.capturesPillInContent ? 0 : 1)
+    }
+
+    private var sectionPill: some View {
+        SettingsSectionPill(
+            tabs: SettingsTab.allCases,
+            title: { $0.label(lang) },
+            selection: Binding(
+                get: { selectedTab },
+                set: { tab in withAnimation(.smooth(duration: 0.32, extraBounce: 0.08)) { selectedTab = tab } }
+            )
+        )
+    }
 
     // MARK: Detail
 
@@ -213,19 +191,99 @@ struct SettingsView: View {
     }
 }
 
+/// The sections as one pill in the title bar, as the TV app and Apple Arcade
+/// put theirs: a frosted capsule of names, the shown one on a brighter
+/// pill that slides between them. Drawn here rather than as the system's
+/// segmented control, so it reads the same whether or not the window is
+/// in front.
+private struct SettingsSectionPill: View {
+    let tabs: [SettingsTab]
+    let title: (SettingsTab) -> String
+    @Binding var selection: SettingsTab
+
+    @State private var hovered: SettingsTab?
+    @Namespace private var thumb
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(tabs) { tab in
+                segment(tab)
+            }
+        }
+        .padding(3)
+        .background {
+            Capsule()
+                .fill(SettingsTheme.paper.opacity(0.07))
+                .overlay(
+                    Capsule().strokeBorder(
+                        LinearGradient(
+                            colors: [SettingsTheme.paper.opacity(0.18), SettingsTheme.paper.opacity(0.05)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.5
+                    )
+                )
+                .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Settings sections")
+    }
+
+    private func segment(_ tab: SettingsTab) -> some View {
+        let isSelected = selection == tab
+        return Button {
+            selection = tab
+        } label: {
+            Text(title(tab))
+                .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                .lineLimit(1)
+                .foregroundStyle(SettingsTheme.paper.opacity(isSelected ? 1 : (hovered == tab ? 0.92 : 0.66)))
+                .padding(.horizontal, 14)
+                .frame(height: 28)
+                .background {
+                    if isSelected {
+                        Capsule()
+                            .fill(SettingsTheme.paper.opacity(0.2))
+                            .overlay(
+                                Capsule().strokeBorder(
+                                    LinearGradient(
+                                        colors: [SettingsTheme.paper.opacity(0.3), SettingsTheme.paper.opacity(0.06)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ),
+                                    lineWidth: 0.5
+                                )
+                            )
+                            .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                            .matchedGeometryEffect(id: "selectedSection", in: thumb)
+                    } else if hovered == tab {
+                        Capsule().fill(SettingsTheme.paper.opacity(0.06))
+                    }
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 ? tab : (hovered == tab ? nil : hovered) }
+        .animation(.easeOut(duration: 0.12), value: hovered)
+        .accessibilityLabel(title(tab))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
 /// The shown section's colour, glowing up from behind its hero tile across
-/// the window's glass (tab bar included), so it never ends in an edge.
+/// the window's glass (title bar included), so it never ends in an edge.
 private struct SettingsPaneGlow: View {
     let tint: SettingsTint
     let window: GeometryProxy
 
     var body: some View {
         let size = window.size
-        // Where the hero tile sits: in the pane's column, under the tab bar.
+        // Where the hero tile sits: in the pane's column, under the title bar.
         let hero = CGPoint(
             x: SettingsMetrics.columnLeadingInset(forPaneWidth: size.width)
                 + SettingsMetrics.paneHorizontalPadding + SettingsMetrics.heroIconSize / 2,
-            y: SettingsTheme.tabBarHeight + SettingsMetrics.paneTopPadding + 6 + SettingsMetrics.heroIconSize / 2
+            y: window.safeAreaInsets.top + SettingsMetrics.paneTopPadding + 6 + SettingsMetrics.heroIconSize / 2
         )
         RadialGradient(
             colors: [tint.bottom.opacity(0.34), tint.bottom.opacity(0.12), tint.bottom.opacity(0)],
@@ -236,52 +294,6 @@ private struct SettingsPaneGlow: View {
         .animation(.smooth(duration: 0.35), value: tint)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-    }
-}
-
-/// One tab, as a Mac app's settings toolbar draws them: the section's
-/// coloured tile over its name, the selected one on a soft plate that
-/// slides between tabs.
-private struct SettingsTabButton<Glyph: View>: View {
-    let title: String
-    let isSelected: Bool
-    let selectionNamespace: Namespace.ID
-    let action: () -> Void
-    @ViewBuilder let glyph: () -> Glyph
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                glyph()
-                    .frame(width: 28, height: 28)
-                Text(title)
-                    .font(.system(size: 11, weight: isSelected ? .semibold : .medium))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(SettingsTheme.paper.opacity(isSelected ? 1 : (isHovered ? 0.92 : 0.7)))
-            .padding(.horizontal, 10)
-            .padding(.top, 6)
-            .padding(.bottom, 5)
-            .frame(minWidth: 72)
-            .background {
-                let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-                if isSelected {
-                    shape.fill(SettingsTheme.paper.opacity(0.11))
-                        .overlay(shape.strokeBorder(SettingsTheme.paper.opacity(0.09), lineWidth: 0.5))
-                        .matchedGeometryEffect(id: "settingsTabSelection", in: selectionNamespace)
-                } else if isHovered {
-                    shape.fill(SettingsTheme.hoverFill)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.12), value: isHovered)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

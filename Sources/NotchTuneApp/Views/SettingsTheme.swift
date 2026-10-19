@@ -40,13 +40,11 @@ enum SettingsTheme {
     static let caution = IslandDesignPalette.Status.waitingAggregate
     static let critical = IslandDesignPalette.Status.waitingForApproval
 
-    /// The row of section tabs across the top, title bar included.
-    static let tabBarHeight: CGFloat = 72
     static let surfaceRadius: CGFloat = IslandRadius.card + 2
 }
 
 /// A section's colour: a two-stop gradient, lit from the top like the
-/// island's glass, for its tab tile, its hero tile and the glow behind
+/// island's glass, for its hero tile and the glow behind
 /// the hero.
 struct SettingsTint: Equatable, Sendable {
     let top: Color
@@ -689,6 +687,8 @@ struct SettingsWindowChrome: NSViewRepresentable {
             super.viewDidMoveToWindow()
             guard let window else { return }
             window.titlebarAppearsTransparent = true
+            // The sections' pill is the title bar's only content.
+            window.titleVisibility = .hidden
             window.isOpaque = false
             window.backgroundColor = .clear
         }
