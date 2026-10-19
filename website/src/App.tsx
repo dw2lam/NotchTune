@@ -1,12 +1,7 @@
 import { useReveal } from './hooks/useReveal';
 import Nav from './components/Nav';
 import Footer from './components/Footer';
-import Hero from './sections/Hero';
-import Agents from './sections/Agents';
-import Summaries from './sections/Summaries';
-import Music from './sections/Music';
-import Meetings from './sections/Meetings';
-import Personalization from './sections/Personalization';
+import Story from './sections/Story';
 import Download from './sections/Download';
 
 export default function App() {
@@ -17,20 +12,7 @@ export default function App() {
       <Nav />
       <main id="main">
         <span id="top" />
-        <div className="band">
-          <Hero />
-          <Agents />
-        </div>
-        <div className="band band-light">
-          <Summaries />
-          <Music />
-        </div>
-        <div className="band">
-          <Meetings />
-        </div>
-        <div className="band band-light">
-          <Personalization />
-        </div>
+        <Story />
         <Download />
       </main>
       <Footer />

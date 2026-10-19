@@ -2,17 +2,18 @@ import type { ReactNode } from 'react';
 
 /* A 14-inch MacBook Pro seen straight on, drawn to its real proportions.
    Everything on the screen is sized in --pt, one macOS point at this
-   size, so the real captures inside sit at true scale against the notch. */
+   size, so the real captures inside sit at true scale against the notch.
+   The lid opens and the screen wakes when the page loads. */
 export default function MacBook({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <figure className="mbp" role="img" aria-label={label}>
+    <figure className="mbp" aria-label={label}>
       <div className="mbp-lid">
         <div className="mbp-screen">
           <img
             className="mbp-wall"
             src="/assets/wallpaper-2000.webp"
-            srcSet="/assets/wallpaper-1100.webp 1100w, /assets/wallpaper-2000.webp 2000w"
-            sizes="(max-width: 1100px) 100vw, 1000px"
+            srcSet="/assets/wallpaper-1100.webp 1100w, /assets/wallpaper-2000.webp 2000w, /assets/wallpaper-2400.webp 2365w"
+            sizes="(max-width: 719px) 200vw, 1300px"
             alt=""
             decoding="async"
           />

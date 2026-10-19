@@ -2,7 +2,7 @@ const REPO = 'https://github.com/dw2lam/NotchTune';
 
 export default function Footer() {
   return (
-    <footer className="footer">
+    <footer className="footer band-light">
       <div className="frame">
         <p>
           NotchTune is free and open source under the GPL. Built on{' '}

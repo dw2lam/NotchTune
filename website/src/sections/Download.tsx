@@ -3,7 +3,7 @@ import { useLatestRelease } from '../hooks/useLatestRelease';
 export default function Download() {
   const { version, downloadUrl } = useLatestRelease();
   return (
-    <section id="download" className="download" aria-labelledby="download-title">
+    <section id="download" className="download band-light" aria-labelledby="download-title">
       <div className="frame">
         <div className="reveal">
           <h2 id="download-title" className="h2">Get NotchTune.</h2>
