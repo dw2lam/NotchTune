@@ -51,6 +51,9 @@ final class OverlayPanelController {
     private var fileDragPresentationSnapshot: FileDragPresentationSnapshot?
     private var fileDragWatchTask: Task<Void, Never>?
     private var keyDownMonitor: Any?
+    /// The pointer, not a click, made the panel key: hand the keyboard back
+    /// when it leaves.
+    private var pointerMadePanelKey = false
     private var globalScrollMonitor: Any?
     private var localScrollMonitor: Any?
     /// Finger travel of the current two-finger swipe over the closed notch,
@@ -80,6 +83,30 @@ final class OverlayPanelController {
 
     nonisolated static func shouldActivatePanel(for reason: NotchOpenReason?) -> Bool {
         reason == .click
+    }
+
+    enum PointerKeyFocus: Equatable {
+        case keep
+        case take
+        case handBack
+    }
+
+    /// The open notch takes the keyboard while the pointer is on it, so a
+    /// card's ⌘Y / ⌘N / Return work, and gives it back when the pointer
+    /// leaves. Focus a click gave it stays until the notch closes, and so
+    /// does focus in a field the user is typing in.
+    nonisolated static func pointerKeyFocus(
+        isOpened: Bool,
+        pointerOnPanel: Bool,
+        isKey: Bool,
+        pointerMadeKey: Bool,
+        isEditingText: Bool
+    ) -> PointerKeyFocus {
+        if isOpened && pointerOnPanel {
+            return isKey ? .keep : .take
+        }
+        guard isKey, pointerMadeKey, !isEditingText else { return .keep }
+        return .handBack
     }
 
     nonisolated static func shouldWakePanelForFileDrag(
@@ -176,7 +203,60 @@ final class OverlayPanelController {
             guard model?.isOverlayDisplayFullscreen != true else { return }
             setPanelHiddenForFullscreen(false)
             presentPanel(panel, activates: Self.shouldActivatePanel(for: model?.notchOpenReason))
+        } else {
+            // Closing: the app the user was in gets its keyboard back.
+            handBackKeyFocus()
         }
+    }
+
+    /// A click inside made the panel key (see `NotchHostingView.mouseDown`):
+    /// that focus stays until the notch closes.
+    fileprivate func panelBecameKeyByClick() {
+        pointerMadePanelKey = false
+    }
+
+    private func updatePointerKeyFocus(at screenLocation: NSPoint) {
+        guard let panel, let model, !HarnessHeadless.isActive else { return }
+        let isOpened = model.notchStatus == .opened
+        // Every mouse move lands here: skip the hit test while closed.
+        guard isOpened || pointerMadePanelKey else { return }
+        let action = Self.pointerKeyFocus(
+            isOpened: isOpened,
+            pointerOnPanel: isPointInExpandedArea(screenLocation),
+            isKey: panel.isKeyWindow,
+            pointerMadeKey: pointerMadePanelKey,
+            isEditingText: Self.isEditingText(panel.firstResponder)
+        )
+        switch action {
+        case .keep:
+            break
+        case .take:
+            // A .nonactivatingPanel: the user's app stays active, only the
+            // keyboard moves. Liquid Glass also shows its key look.
+            panel.makeKey()
+            pointerMadePanelKey = true
+        case .handBack:
+            handBackKeyFocus()
+        }
+    }
+
+    /// A key panel only gives the keyboard back to the app the user was in
+    /// by leaving the screen, so order it out and straight back in. Both
+    /// land in the same window-server update, so the notch doesn't blink.
+    private func handBackKeyFocus() {
+        pointerMadePanelKey = false
+        guard let panel, panel.isKeyWindow, panel.isVisible, !HarnessHeadless.isActive else { return }
+        if NSApp.isActive {
+            // NotchTune itself is in front (Settings is open): hand it to
+            // that window instead, so a window on another Space can't pull
+            // the user over there.
+            NSApp.windows.first {
+                $0 !== panel && $0.isVisible && $0.isOnActiveSpace && $0.canBecomeKey
+            }?.makeKey()
+            return
+        }
+        panel.orderOut(nil)
+        panel.orderFrontRegardless()
     }
 
     func reposition(preferredScreenID: String?) -> OverlayPlacementDiagnostics? {
@@ -436,16 +516,15 @@ final class OverlayPanelController {
             return
         }
         if activates {
+            pointerMadePanelKey = false
             panel.makeKeyAndOrderFront(nil)
         } else {
+            // Opening on its own (an agent notification, a hover, a file
+            // drag) must not take the keyboard: a key .nonactivatingPanel
+            // still receives every keystroke, so text typed in another app
+            // landed in the notch. It turns key once the pointer is on it
+            // (`updatePointerKeyFocus`) or the user clicks it.
             panel.orderFrontRegardless()
-            // Make the panel key even on hover/notification opens (without
-            // activating the app — it's a .nonactivatingPanel, so the user's
-            // active app keeps keyboard focus). Liquid Glass renders its
-            // inactive "frosted" appearance in a non-key window and only flips
-            // to the real, backdrop-refracting material once the window is key.
-            // Without this, the glass stayed frosted until the user clicked.
-            panel.makeKey()
         }
     }
 
@@ -588,6 +667,8 @@ final class OverlayPanelController {
                 }
             }
         }
+
+        updatePointerKeyFocus(at: screenLocation)
     }
 
     /// Watches the mouse while the left button is held. AppKit's global event
@@ -1538,6 +1619,7 @@ final class NotchHostingView<Content: View>: NSHostingView<Content> {
         // SwiftUI Button may consume the first click for key acquisition
         // instead of firing its action.
         window?.makeKey()
+        notchController?.panelBecameKeyByClick()
         super.mouseDown(with: event)
     }
 

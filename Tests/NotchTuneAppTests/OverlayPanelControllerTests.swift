@@ -102,6 +102,43 @@ struct OverlayPanelControllerTests {
         #expect(!OverlayPanelController.shouldActivatePanel(for: nil))
     }
 
+    private func pointerKeyFocus(
+        isOpened: Bool = true,
+        pointerOnPanel: Bool,
+        isKey: Bool,
+        pointerMadeKey: Bool = false,
+        isEditingText: Bool = false
+    ) -> OverlayPanelController.PointerKeyFocus {
+        OverlayPanelController.pointerKeyFocus(
+            isOpened: isOpened,
+            pointerOnPanel: pointerOnPanel,
+            isKey: isKey,
+            pointerMadeKey: pointerMadeKey,
+            isEditingText: isEditingText
+        )
+    }
+
+    @Test
+    func thePointerOnTheOpenNotchGivesItTheKeyboard() {
+        #expect(pointerKeyFocus(pointerOnPanel: true, isKey: false) == .take)
+        #expect(pointerKeyFocus(pointerOnPanel: true, isKey: true, pointerMadeKey: true) == .keep)
+        // A closed pill under the pointer never takes it.
+        #expect(pointerKeyFocus(isOpened: false, pointerOnPanel: true, isKey: false) == .keep)
+    }
+
+    @Test
+    func thePointerLeavingHandsTheKeyboardBack() {
+        #expect(pointerKeyFocus(pointerOnPanel: false, isKey: true, pointerMadeKey: true) == .handBack)
+        #expect(pointerKeyFocus(isOpened: false, pointerOnPanel: false, isKey: true, pointerMadeKey: true) == .handBack)
+    }
+
+    @Test
+    func focusFromAClickOrAFieldBeingTypedInStays() {
+        #expect(pointerKeyFocus(pointerOnPanel: false, isKey: true, pointerMadeKey: false) == .keep)
+        #expect(pointerKeyFocus(pointerOnPanel: false, isKey: true, pointerMadeKey: true, isEditingText: true) == .keep)
+        #expect(pointerKeyFocus(pointerOnPanel: false, isKey: false, pointerMadeKey: true) == .keep)
+    }
+
     @Test
     func fileDragTargetRequiresFilesInsideTheNativeDropZone() {
         let activationRect = NSRect(x: 400, y: 900, width: 320, height: 60)
