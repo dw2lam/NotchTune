@@ -294,6 +294,8 @@ final class OverlayPanelController {
         panel.hasShadow = false
         panel.isMovable = false
         panel.hidesOnDeactivate = false
+        // Hiding the app (see `AppModel.dropDockIcon`) must not blink the notch.
+        panel.canHide = false
         panel.acceptsMouseMovedEvents = false
         // `.stationary` keeps the overlay pinned during the macOS Sonoma+
         // "click wallpaper to reveal desktop" gesture (and Mission Control

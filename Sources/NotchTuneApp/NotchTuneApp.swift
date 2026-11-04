@@ -37,6 +37,12 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
         )
         ProcessInfo.processInfo.disableSuddenTermination()
         NSApp.setActivationPolicy(model.showDockIcon ? .regular : .accessory)
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            nonisolated(unsafe) let closing = notification.object as? NSWindow
+            MainActor.assumeIsolated { self?.hideDockIconAfterLastWindowCloses(closing) }
+        }
         harnessRuntimeMonitor.recordMilestone("applicationDidFinishLaunching")
 
         DispatchQueue.main.async { [self] in
@@ -219,6 +225,24 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    /// SwiftUI puts the app in the Dock while Settings or onboarding is open.
+    /// With "Hide icon in Dock" on, take it out again once the last of those
+    /// windows closes, without pulling focus from the app the user goes back to.
+    private func hideDockIconAfterLastWindowCloses(_ closing: NSWindow?) {
+        guard !model.showDockIcon, !HarnessHeadless.isActive, !(closing is NSPanel) else { return }
+        DispatchQueue.main.async { [self] in
+            guard !model.showDockIcon,
+                  NSApp.activationPolicy() == .regular,
+                  !NSApp.windows.contains(where: { Self.keepsDockIcon($0) && $0 !== closing }) else { return }
+            AppModel.dropDockIcon(reactivate: false)
+        }
+    }
+
+    /// A window the user can still see and switch to from the Dock.
+    static func keepsDockIcon(_ window: NSWindow) -> Bool {
+        window.isVisible && !(window is NSPanel) && window.styleMask.contains(.titled)
     }
 
     private static func hideAllAppWindows() {

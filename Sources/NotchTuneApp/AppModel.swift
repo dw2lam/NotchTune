@@ -278,15 +278,26 @@ final class AppModel {
         didSet {
             guard hasFinishedInit, showDockIcon != oldValue else { return }
             UserDefaults.standard.set(showDockIcon, forKey: Self.showDockIconDefaultsKey)
-            NSApp.setActivationPolicy(showDockIcon ? .regular : .accessory)
-            if !showDockIcon {
-                // macOS does not immediately refresh the Dock when switching to
-                // .accessory at runtime. Briefly activating another app forces
-                // the Dock to drop the icon.
-                NSApp.hide(nil)
-                DispatchQueue.main.async {
-                    NSApp.unhide(nil)
-                }
+            if showDockIcon {
+                NSApp.setActivationPolicy(.regular)
+            } else {
+                // Settings is open and in front: bring it straight back.
+                Self.dropDockIcon(reactivate: true)
+            }
+        }
+    }
+
+    /// Back to an accessory app with no Dock icon. macOS does not refresh the
+    /// Dock when switching to .accessory at runtime; briefly hiding the app
+    /// (the notch panel can't hide) forces it to drop the icon.
+    static func dropDockIcon(reactivate: Bool) {
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.hide(nil)
+        DispatchQueue.main.async {
+            if reactivate {
+                NSApp.unhide(nil)
+            } else {
+                NSApp.unhideWithoutActivation()
             }
         }
     }
