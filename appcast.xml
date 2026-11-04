@@ -6,16 +6,16 @@
         <description>Signed NotchTune releases.</description>
         <language>en</language>
         <item>
-            <title>Version 2.1.5</title>
-            <sparkle:version>1231</sparkle:version>
-            <sparkle:shortVersionString>2.1.5</sparkle:shortVersionString>
+            <title>Version 2.2.0</title>
+            <sparkle:version>1238</sparkle:version>
+            <sparkle:shortVersionString>2.2.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <pubDate>Tue, 20 Oct 2026 06:06:04 GMT</pubDate>
+            <pubDate>Wed, 04 Nov 2026 18:25:36 GMT</pubDate>
             <enclosure
-                url="https://github.com/dw2lam/NotchTune/releases/download/2.1.5/NotchTune.zip"
+                url="https://github.com/dw2lam/NotchTune/releases/download/2.2.0/NotchTune.zip"
                 type="application/octet-stream"
-                sparkle:edSignature="yN3qMbLSRiy25eP1Y2Gx2IN2h3g0pH51fYPGDNhI2aAj3T5exmvxQQ57BCU4yROqpnFJES+hgK4hWnnpX5kUDg=="
-                length="10736913"
+                sparkle:edSignature="xdlcnWSZ43UlirMEy2lTzFRyokZHBqcBLsPhRxp59WfNDiSTQ+orsyloJCOdM1a5LMWi16h2G159f3+XlfcyDg=="
+                length="10846960"
             />
         </item>
     </channel>
