@@ -177,9 +177,51 @@ final class MusicPlayerManager {
     // MARK: - Media & Playback
 
     private func getPlayState() {
-        let current = musicApp.isPlaying
-        if current != isPlaying {
-            isPlaying = current
+        applyPolledPlayState(musicApp.isPlaying)
+    }
+
+    /// The state the play/pause button just asked for, until the player
+    /// reports it (or `PendingPlayState.window` passes).
+    @ObservationIgnored private var pendingPlayState: PendingPlayState?
+
+    struct PendingPlayState: Equatable {
+        /// How long a poll may disagree before the player is believed: Spotify
+        /// and Music take a moment to act on the command.
+        static let window: TimeInterval = 1.5
+
+        var isPlaying: Bool
+        var until: Date
+    }
+
+    /// What a poll does to `isPlaying`. Right after a toggle, the player can
+    /// still report the old state for a poll or two, which flipped the icon
+    /// back and then forward again; that stale answer is ignored until the
+    /// player agrees or the window runs out.
+    static func resolvePolledPlayState(
+        polled: Bool,
+        current: Bool,
+        pending: PendingPlayState?,
+        now: Date
+    ) -> (isPlaying: Bool, pending: PendingPlayState?) {
+        guard let pending, now < pending.until else {
+            return (polled, nil)
+        }
+        if polled == pending.isPlaying {
+            return (polled, nil)
+        }
+        return (current, pending)
+    }
+
+    private func applyPolledPlayState(_ polled: Bool) {
+        let resolved = Self.resolvePolledPlayState(
+            polled: polled,
+            current: isPlaying,
+            pending: pendingPlayState,
+            now: Date()
+        )
+        pendingPlayState = resolved.pending
+        if resolved.isPlaying != isPlaying {
+            isPlaying = resolved.isPlaying
             onPlaybackStateChange?(isPlaying)
         }
     }
@@ -242,6 +284,10 @@ final class MusicPlayerManager {
 
     func togglePlayPause() {
         isPlaying = !isPlaying
+        pendingPlayState = PendingPlayState(
+            isPlaying: isPlaying,
+            until: Date().addingTimeInterval(PendingPlayState.window)
+        )
         musicApp.playPause()
         onPlaybackStateChange?(isPlaying)
     }
@@ -331,11 +377,7 @@ final class MusicPlayerManager {
 
     private func pollForTrackChanges() {
         guard musicApp.isRunning() else { return }
-        let current = musicApp.isPlaying
-        if current != isPlaying {
-            isPlaying = current
-            onPlaybackStateChange?(isPlaying)
-        }
+        applyPolledPlayState(musicApp.isPlaying)
         let polled = musicApp.getTrackInfo()
         guard polled.title != track.title || polled.artist != track.artist ||
               polled.album != track.album || polled.duration != track.duration else { return }
