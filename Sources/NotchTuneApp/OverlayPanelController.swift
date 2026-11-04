@@ -1427,6 +1427,12 @@ final class OverlayPanelController {
             return min(cap, 160)
         }
 
+        if model.islandActiveTab == .mirror {
+            // The picture's 166 + 12 top + 8 bottom, and the same tab-bar
+            // and margin allowance as Music, so the two tabs match.
+            return MirrorPanelView.frameHeight + 12 + 8 + 42 + 8 + 8
+        }
+
         if model.islandActiveTab == .music {
             // Music content height:
             // 166 (album art) + 12 (top pad) + 8 (bottom chin) +

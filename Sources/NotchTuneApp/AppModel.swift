@@ -98,6 +98,7 @@ final class AppModel {
     let codexAppServer = CodexAppServerCoordinator()
     let playerManager = MusicPlayerManager()
     let myspaceStore = MyspaceStore.forLaunch()
+    let mirror = MirrorCamera()
     /// Meeting heads-ups and quiet-during-meetings (opt-in, read-only).
     let calendar = CalendarHeadsUpService.makeDefault()
     let updateChecker = UpdateChecker()

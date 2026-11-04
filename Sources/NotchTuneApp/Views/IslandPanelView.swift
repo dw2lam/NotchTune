@@ -1147,6 +1147,16 @@ struct IslandPanelView: View {
                                 model.measuredMyspaceContentHeight = height
                             }
                         }
+                    case .mirror:
+                        MirrorPanelView(
+                            camera: model.mirror,
+                            isLive: model.notchStatus == .opened,
+                            horizontalPadding: usesNotchAwareOpenedHeader
+                                ? Self.notchHeaderHorizontalPadding
+                                : 16
+                        )
+                        .transition(Self.tabContentTransition)
+                        .frame(maxWidth: .infinity)
                     case .reminders:
                         RemindersPanelView(store: model.myspaceStore)
                             .transition(Self.tabContentTransition)
@@ -1200,6 +1210,7 @@ struct IslandPanelView: View {
             tabButton(label: "Music", systemImage: "music.note", tab: .music)
             tabButton(label: "Myspace", systemImage: "square.grid.2x2", tab: .myspace)
             tabButton(label: "Reminders", systemImage: "bell", tab: .reminders)
+            tabButton(label: "Mirror", systemImage: "camera", tab: .mirror)
 
             Spacer()
         }

@@ -219,6 +219,7 @@ enum IslandTab: String, CaseIterable, Identifiable, Sendable {
     case music
     case myspace
     case reminders
+    case mirror
 
     var id: String { rawValue }
 }

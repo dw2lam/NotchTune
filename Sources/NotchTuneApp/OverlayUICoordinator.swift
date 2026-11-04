@@ -243,6 +243,11 @@ final class OverlayUICoordinator {
                 self?.isPointerInsideIslandSurface = false
                 self?.appModel?.measuredNotificationContentHeight = 0
                 self?.appModel?.reconcileCompactMusicView()
+                // Closing on Mirror lands back on Agents, so the next hover
+                // never turns the camera on by itself.
+                if self?.appModel?.islandActiveTab == .mirror {
+                    self?.appModel?.islandActiveTab = .agents
+                }
             }
         )
     }

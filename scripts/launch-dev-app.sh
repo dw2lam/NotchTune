@@ -96,6 +96,8 @@ cat > "$plist_path" <<EOF
     <string>14.0</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>NotchTune needs automation access to focus Terminal and iTerm sessions for jump-back.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>NotchTune's Mirror tab shows your camera while it is open. Nothing is recorded or sent anywhere.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
     <string>NotchTune reads your calendars on this Mac to give you a heads-up before meetings. Nothing is sent anywhere.</string>
     <key>NSCalendarsUsageDescription</key>
