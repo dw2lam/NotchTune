@@ -26,13 +26,21 @@ enum HapticStrength: Sendable {
     case medium
     case strong
 
-    /// MultitouchSupport actuation IDs (the ones HapticKey and friends use).
+    /// MultitouchSupport actuation IDs (the ones HapticKey and friends use;
+    /// 3 is the faintest, 6 the firmest). 3 was too faint to notice through
+    /// a resting finger, so the scale starts at 4.
     var actuationID: Int32 {
         switch self {
-        case .light: 3
-        case .medium: 4
+        case .light: 4
+        case .medium: 6
         case .strong: 6
         }
+    }
+
+    /// Strong is the firmest pulse played twice, back to back, for more
+    /// body than any single actuation has.
+    var repeats: Int {
+        self == .strong ? 2 : 1
     }
 
     /// The closest AppKit pattern, for the fallback.
@@ -68,15 +76,15 @@ enum HapticFeel: String, CaseIterable, Identifiable, Sendable {
         case .tap: [(0, .light)]
         case .click: [(0, .medium)]
         case .bump: [(0, .strong)]
-        case .ripple: zip(Self.rippleOffsets, [.strong, .medium, .light, .light]).map { ($0, $1) }
+        case .ripple: zip(Self.rippleOffsets, [.strong, .strong, .medium, .medium, .light]).map { ($0, $1) }
         case .nudge: [(0, .light), (0.12, .light)]
         }
     }
 
-    /// The gaps grow (45 → 60 → 80 ms) so the ripple eases out; it stays
-    /// under 0.2 s so it has played before a finger usually leaves the
-    /// trackpad.
-    static let rippleOffsets: [TimeInterval] = [0, 0.045, 0.105, 0.185]
+    /// Five pulses whose gaps grow (70 → 80 → 90 → 100 ms) so the ripple
+    /// rolls out and eases off over about a third of a second, instead of
+    /// one quick, sharp burst.
+    static let rippleOffsets: [TimeInterval] = [0, 0.07, 0.15, 0.24, 0.34]
 }
 
 struct HapticSettings: Equatable, Sendable {
@@ -147,6 +155,11 @@ enum NotchHaptics {
     /// where there is no built-in Force Touch trackpad to drive.
     private static func fire(_ strength: HapticStrength) {
         if TrackpadActuator.shared?.actuate(strength.actuationID) == true {
+            for repeatIndex in 1..<strength.repeats {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.014 * Double(repeatIndex)) {
+                    _ = TrackpadActuator.shared?.actuate(strength.actuationID)
+                }
+            }
             return
         }
         NSHapticFeedbackManager.defaultPerformer.perform(strength.pattern, performanceTime: .now)
@@ -161,13 +174,19 @@ final class TrackpadActuator {
     private typealias CreateFn = @convention(c) (UInt64) -> Unmanaged<CFTypeRef>?
     private typealias OpenFn = @convention(c) (CFTypeRef) -> Int32
     private typealias ActuateFn = @convention(c) (CFTypeRef, Int32, UInt32, Float, Float) -> Int32
+    private typealias CloseFn = @convention(c) (CFTypeRef) -> Int32
 
     static let shared: TrackpadActuator? = TrackpadActuator()
 
     private let create: CreateFn
     private let open: OpenFn
     private let actuateFn: ActuateFn
+    private let close: CloseFn
     private var actuator: CFTypeRef?
+    /// When the last search for an actuator came up empty. A Mac without a
+    /// Force Touch trackpad shouldn't scan the IORegistry on every pulse.
+    private var lastFailedOpen: Date?
+    private static let retryInterval: TimeInterval = 10
 
     private init?() {
         guard let handle = dlopen(
@@ -175,34 +194,42 @@ final class TrackpadActuator {
         ),
             let create = dlsym(handle, "MTActuatorCreateFromDeviceID"),
             let open = dlsym(handle, "MTActuatorOpen"),
-            let actuate = dlsym(handle, "MTActuatorActuate") else {
+            let actuate = dlsym(handle, "MTActuatorActuate"),
+            let close = dlsym(handle, "MTActuatorClose") else {
             return nil
         }
         self.create = unsafeBitCast(create, to: CreateFn.self)
         self.open = unsafeBitCast(open, to: OpenFn.self)
         self.actuateFn = unsafeBitCast(actuate, to: ActuateFn.self)
+        self.close = unsafeBitCast(close, to: CloseFn.self)
     }
 
     /// A trackpad with an actuator is connected and opens.
     var isAvailable: Bool {
-        if actuator == nil {
-            actuator = openActuator()
-        }
-        return actuator != nil
+        openIfNeeded() != nil
     }
 
     /// `true` when the pulse played.
     func actuate(_ actuationID: Int32) -> Bool {
-        if actuator == nil {
-            actuator = openActuator()
-        }
-        guard let actuator else { return false }
+        guard let actuator = openIfNeeded() else { return false }
         if actuateFn(actuator, actuationID, 0, 0, 0) == 0 {
             return true
         }
-        // The trackpad went away (sleep, a reconnect): reopen next time.
+        // The trackpad went away (sleep, a reconnect): close this handle and
+        // reopen next time.
+        _ = close(actuator)
         self.actuator = nil
         return false
+    }
+
+    private func openIfNeeded() -> CFTypeRef? {
+        if let actuator { return actuator }
+        if let lastFailedOpen, Date().timeIntervalSince(lastFailedOpen) < Self.retryInterval {
+            return nil
+        }
+        actuator = openActuator()
+        lastFailedOpen = actuator == nil ? Date() : nil
+        return actuator
     }
 
     private func openActuator() -> CFTypeRef? {

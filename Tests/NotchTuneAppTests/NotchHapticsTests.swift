@@ -13,8 +13,9 @@ struct NotchHapticsTests {
         for (earlier, later) in zip(gaps, gaps.dropFirst()) {
             #expect(later > earlier)
         }
-        // Over before a finger usually leaves the trackpad.
-        #expect((offsets.last ?? 0) < 0.2)
+        // Rolls out over a beat, not a sharp burst, but stays brief.
+        #expect((offsets.last ?? 0) >= 0.3)
+        #expect((offsets.last ?? 0) < 0.4)
     }
 
     @Test
@@ -51,6 +52,16 @@ struct NotchHapticsTests {
 
     @Test @MainActor
     func hapticsFollowTheSetting() {
+        // AppModel saves to the standard defaults: put them back after.
+        let defaults = UserDefaults.standard
+        let savedEnabled = defaults.object(forKey: "app.hapticFeedbackEnabled")
+        let savedFeels = defaults.object(forKey: "app.hapticFeels")
+        defer {
+            defaults.set(savedEnabled, forKey: "app.hapticFeedbackEnabled")
+            defaults.set(savedFeels, forKey: "app.hapticFeels")
+            NotchHaptics.isEnabled = false
+            NotchHaptics.settings = HapticSettings()
+        }
         let model = AppModel()
         model.hapticFeedbackEnabled = true
         #expect(NotchHaptics.isEnabled)
