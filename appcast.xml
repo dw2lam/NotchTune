@@ -7,16 +7,35 @@
         <language>en</language>
         <item>
             <title>Version 2.2.0</title>
-            <sparkle:version>1252</sparkle:version>
+            <sparkle:version>1254</sparkle:version>
             <sparkle:shortVersionString>2.2.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <pubDate>Wed, 04 Nov 2026 19:20:24 GMT</pubDate>
+            <pubDate>Wed, 04 Nov 2026 20:40:27 GMT</pubDate>
             <enclosure
                 url="https://github.com/dw2lam/NotchTune/releases/download/2.2.0/NotchTune.zip"
                 type="application/octet-stream"
-                sparkle:edSignature="A5ilaStzuWsivL9LVdT2n1ce9mMmwFrFHQRcMNI+GXuKXJaZv4uMnA16gpJSZ17VHy9LFjAu9/naBOH0Y8SwCQ=="
-                length="10861285"
+                sparkle:edSignature="/iQSl8pleuztIRRj2meX02RB4vc8v2OrqvtQKDzPw8xQSMtU03oFdTTvMke4cMioAgGnEJlI8U1Wq6g8rFjuAw==" length="10875965"
             />
+            <sparkle:deltas>
+                <enclosure
+                    url="https://github.com/dw2lam/NotchTune/releases/download/2.2.0/NotchTune-1254-from-1252.delta"
+                    sparkle:deltaFrom="1252"
+                    type="application/octet-stream"
+                    sparkle:edSignature="RR+Am3YrZG6VT1eSrxh1l2Suenw8lxyuHGArBfnRLFIBFc9fN7hX+/5jPsSTa6iD2XOdw5+iBUZn6Y9M02S4Dw==" length="648262"
+                />
+                <enclosure
+                    url="https://github.com/dw2lam/NotchTune/releases/download/2.2.0/NotchTune-1254-from-1231.delta"
+                    sparkle:deltaFrom="1231"
+                    type="application/octet-stream"
+                    sparkle:edSignature="ptso7u9/kBWw+/8jO+6P/GVq+jyDBsmzL/2+mATX5hjSPcnymJ2Uy733tR9HjNjSB8WywJMpA6IKOfDnm8XiDA==" length="1437078"
+                />
+                <enclosure
+                    url="https://github.com/dw2lam/NotchTune/releases/download/2.2.0/NotchTune-1254-from-1158.delta"
+                    sparkle:deltaFrom="1158"
+                    type="application/octet-stream"
+                    sparkle:edSignature="Y+W3mYdNVmKCtviRoBxBaVwmjs00DZDz1Xnh8NzcfkbDzy9ih4CDRTziEV0Y3WpNg05tEnTPDyto8uCPlKTOBw==" length="3729966"
+                />
+            </sparkle:deltas>
         </item>
     </channel>
 </rss>
