@@ -98,6 +98,9 @@ enum SettingsWelcome {
 
     /// What the update line says, most pressing first.
     enum UpdateStatus: Equatable {
+        /// Downloaded and prepared: restarting installs it.
+        case ready(String)
+        case downloading(String)
         case available(String)
         case checking
         /// The last check didn't get an answer (offline, feed unreachable).
@@ -105,6 +108,11 @@ enum SettingsWelcome {
         case upToDate(checkedAt: Date)
         /// No check on record yet: Sparkle checks on its own schedule.
         case automatic
+
+        var isDownloading: Bool {
+            if case .downloading = self { return true }
+            return false
+        }
     }
 
     /// A found update outranks a check in progress: Sparkle keeps its cycle
@@ -114,8 +122,12 @@ enum SettingsWelcome {
         isChecking: Bool,
         availableVersion: String?,
         lastCheck: Date?,
-        lastCheckFailed: Bool = false
+        lastCheckFailed: Bool = false,
+        downloadingVersion: String? = nil,
+        readyVersion: String? = nil
     ) -> UpdateStatus {
+        if let readyVersion { return .ready(readyVersion) }
+        if let downloadingVersion { return .downloading(downloadingVersion) }
         if let availableVersion { return .available(availableVersion) }
         if isChecking { return .checking }
         if lastCheckFailed { return .couldNotCheck }
@@ -380,13 +392,20 @@ private struct WelcomeUpdateRow: View {
                 isChecking: checker.isChecking,
                 availableVersion: checker.hasUpdate ? checker.latestVersion : nil,
                 lastCheck: checker.lastCheckDate,
-                lastCheckFailed: checker.lastCheckFailed
+                lastCheckFailed: checker.lastCheckFailed,
+                downloadingVersion: checker.downloadingVersion,
+                readyVersion: checker.readyVersion
             )
             : .automatic
         HStack(spacing: 12) {
             statusLine(status)
             Spacer(minLength: 0)
-            if case .available(let version) = status {
+            if case .ready = status {
+                Button(lang.t("settings.updates.restart")) {
+                    checker.installAndRelaunch()
+                }
+                .buttonStyle(SettingsAccentButtonStyle())
+            } else if case .available(let version) = status {
                 Button(lang.t("settings.updates.install", version)) {
                     checker.checkForUpdates()
                 }
@@ -395,7 +414,7 @@ private struct WelcomeUpdateRow: View {
                 Button(lang.t("settings.updates.checkForUpdates")) {
                     checker.checkForUpdates()
                 }
-                .disabled(!isLive || !checker.canCheckForUpdates || status == .checking)
+                .disabled(!isLive || !checker.canCheckForUpdates || status == .checking || status.isDownloading)
             }
         }
         // A quiet well under the identity, so the line reads as one control.
@@ -411,6 +430,14 @@ private struct WelcomeUpdateRow: View {
     private func statusLine(_ status: SettingsWelcome.UpdateStatus) -> some View {
         HStack(spacing: 6) {
             switch status {
+            case .ready(let version):
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundStyle(SettingsTheme.positive)
+                Text(lang.t("settings.updates.ready", version))
+            case .downloading(let version):
+                ProgressView()
+                    .controlSize(.mini)
+                Text(lang.t("settings.updates.downloading", version))
             case .checking:
                 ProgressView()
                     .controlSize(.mini)

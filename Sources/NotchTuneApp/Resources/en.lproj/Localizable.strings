@@ -393,6 +393,11 @@
 "settings.about.credits" = "Made by [David](https://github.com/dw2lam) · forked from [Open Vibe Island](https://github.com/Octane0411/open-vibe-island) · music foundation from [Tuneful](https://github.com/martinfekete10/Tuneful)";
 "settings.about.source" = "Source on GitHub";
 "settings.updates.install" = "Update to %@";
+"settings.updates.restart" = "Restart to Update";
+"settings.updates.ready" = "Version %@ is ready";
+"settings.updates.downloading" = "Downloading version %@…";
+"island.update.ready" = "Update";
+"island.update.ready.help" = "Version %@ is ready. Restart NotchTune to update.";
 "settings.updates.checking" = "Checking for updates…";
 "settings.updates.available" = "Version %@ is available";
 "settings.updates.upToDate" = "Up to date · checked %@";

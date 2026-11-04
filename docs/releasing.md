@@ -38,7 +38,26 @@ zsh scripts/package-app.sh
 ```
 
 This produces `output/package/NotchTune.dmg` and
-`output/package/NotchTune.zip`. To inspect its Sparkle signature manually:
+`output/package/NotchTune.zip`.
+
+### Delta updates
+
+Updates download only what changed. After packaging, build patches from the
+last few published builds and the appcast that lists them:
+
+```bash
+zsh scripts/make-release-deltas.sh <tag> [previous-release-count, default 3]
+```
+
+It writes `output/package/deltas/NotchTune-<new>-from-<old>.delta` (Sparkle
+delta format 3, which every Sparkle 2 build reads), checks each one rebuilds
+the new app exactly, signs them, and rewrites `appcast.xml` with the full zip
+plus a `<sparkle:deltas>` entry per patch. Upload the `.delta` files with the
+DMG, ZIP and appcast. A build with no patch downloads the full zip.
+
+The app downloads and prepares updates in the background, then offers
+**Update** in the notch and **Restart to Update** in Settings (or installs on
+quit); see `UpdateChecker`. To inspect its Sparkle signature manually:
 
 ```bash
 .build/artifacts/sparkle/Sparkle/bin/sign_update \

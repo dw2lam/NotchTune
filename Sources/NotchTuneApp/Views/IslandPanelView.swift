@@ -1054,6 +1054,23 @@ struct IslandPanelView: View {
 
     private var openedHeaderButtons: some View {
         HStack(spacing: Self.headerControlSpacing) {
+            // Figma-style: a downloaded update waits behind one click.
+            if let version = model.updateChecker.readyVersion {
+                Button {
+                    model.updateChecker.installAndRelaunch()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle.fill")
+                        Text(model.lang.t("island.update.ready"))
+                    }
+                }
+                .buttonStyle(IslandCompactButtonStyle(tint: IslandDesignPalette.Status.completed))
+                .fixedSize()
+                .help(model.lang.t("island.update.ready.help", version))
+                .accessibilityLabel(model.lang.t("island.update.ready.help", version))
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+
             ForEach(modelWeeklyUsage) { window in
                 usageWindowText(window, showsReset: true)
                     .lineLimit(1)

@@ -5,8 +5,12 @@ import Sparkle
 
 /// Small SwiftUI-facing wrapper around Sparkle's standard updater.
 ///
-/// Sparkle owns the update UI and installation lifecycle. This object only
-/// starts its schedule and exposes whether a manual check can currently run.
+/// Updates arrive the way Figma's do: Sparkle downloads them in the
+/// background (a small delta patch when the feed has one for this build),
+/// prepares them, and holds them; NotchTune then offers "Restart to
+/// Update" in the notch and in Settings, which swaps the app in place and
+/// relaunches it with no installer window. Left alone, the update goes in
+/// the next time NotchTune quits.
 @MainActor
 @Observable
 final class UpdateChecker: NSObject {
@@ -25,6 +29,14 @@ final class UpdateChecker: NSObject {
     /// The last check couldn't complete (offline, the feed unreachable or
     /// malformed), so `lastCheckDate` doesn't mean "up to date".
     private(set) var lastCheckFailed = false
+    /// An update is downloading in the background.
+    private(set) var downloadingVersion: String?
+    /// An update is downloaded and prepared: restarting installs it.
+    private(set) var readyVersion: String?
+
+    /// Sparkle's handler that installs the prepared update and relaunches.
+    @ObservationIgnored
+    private var installReadyUpdate: (() -> Void)?
 
     @ObservationIgnored
     private var updaterController: SPUStandardUpdaterController!
@@ -51,7 +63,8 @@ final class UpdateChecker: NSObject {
         let updater = updaterController.updater
         updater.automaticallyChecksForUpdates = true
         updater.updateCheckInterval = 60 * 60
-        updater.automaticallyDownloadsUpdates = false
+        // Download and prepare in the background; we offer the restart.
+        updater.automaticallyDownloadsUpdates = true
 
         do {
             try updater.start()
@@ -68,9 +81,22 @@ final class UpdateChecker: NSObject {
         #endif
     }
 
+    /// A check the user asked for. It runs like a scheduled one: anything
+    /// new downloads quietly and turns into "Restart to Update", with no
+    /// Sparkle window. While an update is ready this installs it instead.
     func checkForUpdates() {
-        if canCheckForUpdates { isChecking = true }
-        updaterController.checkForUpdates(nil)
+        if readyVersion != nil {
+            installAndRelaunch()
+            return
+        }
+        guard canCheckForUpdates else { return }
+        isChecking = true
+        updaterController.updater.checkForUpdatesInBackground()
+    }
+
+    /// Installs the prepared update and relaunches NotchTune.
+    func installAndRelaunch() {
+        installReadyUpdate?()
     }
 
     #if DEBUG
@@ -85,6 +111,14 @@ final class UpdateChecker: NSObject {
         case "available":
             hasUpdate = true
             latestVersion = "2.2.0"
+        case "downloading":
+            hasUpdate = true
+            latestVersion = "2.2.0"
+            downloadingVersion = "2.2.0"
+        case "ready":
+            hasUpdate = true
+            latestVersion = "2.2.0"
+            readyVersion = "2.2.0"
         case "failed":
             lastCheckFailed = true
             lastCheckDate = Date().addingTimeInterval(-5 * 60)
@@ -119,6 +153,42 @@ extension UpdateChecker: SPUUpdaterDelegate {
             self.isChecking = false
             self.lastCheckFailed = false
         }
+    }
+
+    nonisolated func updater(_ updater: SPUUpdater, willDownloadUpdate item: SUAppcastItem, with request: NSMutableURLRequest) {
+        let version = item.displayVersionString
+        Task { @MainActor in
+            self.downloadingVersion = version
+        }
+    }
+
+    nonisolated func updater(_ updater: SPUUpdater, failedToDownloadUpdate item: SUAppcastItem, error: any Error) {
+        Task { @MainActor in
+            self.downloadingVersion = nil
+            self.isChecking = false
+            self.lastCheckFailed = true
+        }
+    }
+
+    /// The update is downloaded and prepared. Taking it over (returning
+    /// true) keeps Sparkle's own window away: NotchTune shows "Restart to
+    /// Update" and runs `immediateInstallHandler` when the user picks it.
+    /// Sparkle still installs on quit if they never do.
+    nonisolated func updater(
+        _ updater: SPUUpdater,
+        willInstallUpdateOnQuit item: SUAppcastItem,
+        immediateInstallationBlock immediateInstallHandler: @escaping () -> Void
+    ) -> Bool {
+        let version = item.displayVersionString
+        nonisolated(unsafe) let install = immediateInstallHandler
+        Task { @MainActor in
+            self.installReadyUpdate = install
+            self.readyVersion = version
+            self.downloadingVersion = nil
+            self.isChecking = false
+            self.lastCheckFailed = false
+        }
+        return true
     }
 
     nonisolated func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: any Error) {

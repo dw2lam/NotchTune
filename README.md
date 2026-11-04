@@ -19,7 +19,7 @@ Monitor your agents and music all in one place.
 - **Meeting heads-up**: Opt in to see your next calendar meeting in the notch a few minutes ahead, with a Join button for video links and an optional quiet mode during meetings. Calendars are read on your Mac only.
 - **Notch-aware layouts**: Runs as a real notch surface on MacBook displays and falls back to a clean top-center bar on external or non-notch screens.
 - **Local, native, and open source**: Built with SwiftUI and AppKit. No Electron shell, no telemetry, and no remote server dependency.
-- **Automatic updates**: Signed releases update in place through the open-source Sparkle framework.
+- **Automatic updates**: NotchTune updates itself quietly in the background, the way Figma does. It downloads only what changed since your version (a small Sparkle delta patch, with the full app as the fallback), prepares it, and shows an **Update** button in the notch and **Restart to Update** in Settings. One click swaps in the new version and relaunches, with no installer or disk image; leave it, and it installs the next time NotchTune quits.
 
 ## Supported Integrations
 
