@@ -90,6 +90,11 @@ private struct MeetingJoinButtonStyle: ButtonStyle {
     let usesGlass: Bool
 
     func makeBody(configuration: Configuration) -> some View {
+        joinBody(configuration).notchHapticOnPress(configuration.isPressed)
+    }
+
+    @ViewBuilder
+    private func joinBody(_ configuration: Configuration) -> some View {
         let tint = IslandDesignPalette.Status.completed
         let label = configuration.label
             .font(.system(size: 11, weight: .semibold))

@@ -303,6 +303,7 @@ final class AppModel {
     }
     var hapticFeedbackEnabled: Bool = false {
         didSet {
+            NotchHaptics.isEnabled = hapticFeedbackEnabled
             guard hasFinishedInit, hapticFeedbackEnabled != oldValue else { return }
             UserDefaults.standard.set(hapticFeedbackEnabled, forKey: Self.hapticFeedbackEnabledDefaultsKey)
         }

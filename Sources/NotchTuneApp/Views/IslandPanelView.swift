@@ -1210,6 +1210,9 @@ struct IslandPanelView: View {
 
     private func tabButton(label: String, systemImage: String, tab: IslandTab) -> some View {
         Button {
+            if model.islandActiveTab != tab {
+                NotchHaptics.play(.detent)
+            }
             withAnimation(.smooth(duration: 0.35, extraBounce: 0.1)) { model.islandActiveTab = tab }
         } label: {
             tabPill(
@@ -3931,6 +3934,11 @@ private struct IslandCompactButtonStyle: ButtonStyle {
     @Environment(\.islandControlGlass) private var usesGlass
 
     func makeBody(configuration: Configuration) -> some View {
+        compactBody(configuration).notchHapticOnPress(configuration.isPressed)
+    }
+
+    @ViewBuilder
+    private func compactBody(_ configuration: Configuration) -> some View {
         let label = configuration.label
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(tint == .secondary ? .white.opacity(usesGlass ? 0.8 : 0.7) : tint)
@@ -3972,11 +3980,14 @@ private struct IslandActionButtonStyle: ButtonStyle {
     private static let warm = Color(red: 0.85, green: 0.55, blue: 0.15)
 
     func makeBody(configuration: Configuration) -> some View {
-        if usesGlass, LiquidGlass.isSupported {
-            glassBody(configuration)
-        } else {
-            legacyBody(configuration)
+        Group {
+            if usesGlass, LiquidGlass.isSupported {
+                glassBody(configuration)
+            } else {
+                legacyBody(configuration)
+            }
         }
+        .notchHapticOnPress(configuration.isPressed)
     }
 
     // MARK: Glass

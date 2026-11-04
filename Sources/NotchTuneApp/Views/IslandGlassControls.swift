@@ -179,6 +179,11 @@ struct IslandGlassIconDisc<Label: View>: View {
     @Environment(\.islandControlGlass) private var usesGlass
 
     var body: some View {
+        disc.notchHapticOnPress(isPressed)
+    }
+
+    @ViewBuilder
+    private var disc: some View {
         let glyph = label
             .foregroundStyle(glyphStyle)
             .contentShape(Circle())
