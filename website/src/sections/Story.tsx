@@ -7,7 +7,7 @@ import MacBook from '../components/MacBook';
    there. Every picture on the screen is a real capture of the app (made by
    its headless harness at 2x), placed at its true size in macOS points. */
 
-type LayerId = 'pill-working' | 'island' | 'pill-waiting' | 'summary' | 'player' | 'myspace' | 'reminders' | 'pill-meeting' | 'banner' | 'settings';
+type LayerId = 'pill-working' | 'island' | 'pill-waiting' | 'summary' | 'player' | 'myspace' | 'reminders' | 'mirror' | 'pill-meeting' | 'banner' | 'settings';
 
 // w/h in points; `top` is where the image sits on the screen (the island
 // hangs from the very top, the Settings window sits under the menu bar).
@@ -15,14 +15,15 @@ type LayerId = 'pill-working' | 'island' | 'pill-waiting' | 'summary' | 'player'
 // notch: how far the image's centre sits from the screen's.
 const LAYERS: { id: LayerId; src: string; w: number; h: number; top?: number; dx?: number; alt: string }[] = [
   { id: 'pill-working', src: 'pill-working', w: 468, h: 38, dx: -54, alt: 'The closed notch while Claude Code works in api: running swift test, 41 seconds in.' },
-  { id: 'island', src: 'island', w: 650, h: 354, alt: 'The island open under the notch: usage limits, then four sessions. Claude is running swift test in api, Codex fixed the checkout button in web, Claude wrote the release notes in docs, and Codex renamed the color tokens in design-system.' },
+  { id: 'island', src: 'island-220', w: 650, h: 354, alt: 'The island open under the notch: usage limits, then four sessions. Claude is running swift test in api, Codex fixed the checkout button in web, Claude wrote the release notes in docs, and Codex renamed the color tokens in design-system.' },
   { id: 'pill-waiting', src: 'pill-waiting', w: 488, h: 38, dx: -64, alt: 'The closed notch turned amber: Codex needs approval to run git push origin main, waiting 13 seconds.' },
   { id: 'summary', src: 'completion', w: 550, h: 203, alt: 'The island showing a finished task: Claude Code finished in web. Edited 4 files, tests passed, 3 minutes 12 seconds, with Jump to Ghostty and Reply.' },
-  { id: 'player', src: 'music', w: 650, h: 283, alt: 'The island on its Music tab: Still Water by Juniper Coast at 1:21 of 3:56, with shuffle, previous, pause, next and repeat.' },
-  { id: 'myspace', src: 'myspace', w: 650, h: 430, alt: 'The island on its Myspace tab: a box to drop a thought, filters for text, images and files, today\'s three images, and a note about lazy-loading the product grid.' },
-  { id: 'reminders', src: 'reminders', w: 650, h: 374, alt: 'The island on its Reminders tab: three active reminders, from checking the staging deploy at 10:00 to booking the onboarding design review, and one in the archive.' },
+  { id: 'player', src: 'music-220', w: 650, h: 283, alt: 'The island on its Music tab: Still Water by Juniper Coast at 1:21 of 3:56, with shuffle, previous, pause, next and repeat.' },
+  { id: 'myspace', src: 'myspace-220', w: 650, h: 430, alt: 'The island on its Myspace tab: a box to drop a thought, filters for text, images and files, today\'s three images, and a note about lazy-loading the product grid.' },
+  { id: 'reminders', src: 'reminders-220', w: 650, h: 374, alt: 'The island on its Reminders tab: three active reminders, from checking the staging deploy at 10:00 to booking the onboarding design review, and one in the archive.' },
+  { id: 'mirror', src: 'mirror-220', w: 650, h: 283, alt: 'The island on its Mirror tab: the camera picture, flipped like a mirror, beside a FaceTime HD Camera drop-down and Flip and Zoom controls.' },
   { id: 'pill-meeting', src: 'pill-meeting', w: 464, h: 38, dx: -29, alt: 'The closed notch four minutes before Design review, 09:53 to 10:23.' },
-  { id: 'banner', src: 'meeting', w: 650, h: 416, alt: 'The island with the Design review banner above the agent list: in 4 minutes, 09:54 to 10:24, with Join.' },
+  { id: 'banner', src: 'meeting-220', w: 650, h: 416, alt: 'The island with the Design review banner above the agent list: in 4 minutes, 09:54 to 10:24, with Join.' },
   { id: 'settings', src: 'settings-pill', w: 906, h: 766, top: 52, alt: 'NotchTune Settings on Personalization, its sections in one pill across the title bar: previews of the MacBook notch and an external display linked with Sync, and the first row of twenty pixel characters.' },
 ];
 
@@ -68,6 +69,11 @@ const FRAMES: { id?: string; cam: CamId; layer: LayerId; tint: string; title?: s
     line: 'Add one with or without a time, get a nudge when it’s due, and tick it off into the archive.',
   },
   {
+    id: 'mirror', cam: 'notch', layer: 'mirror', tint: 'rgb(226 170 132)',
+    title: 'A mirror before the call.',
+    line: 'Your camera, flipped like a mirror, with zoom and a camera picker. It’s only on while the tab is open.',
+  },
+  {
     id: 'meetings', cam: 'notch', layer: 'banner', tint: 'rgb(80 150 255)',
     title: 'Meetings, a few minutes early.',
     line: 'A countdown, then a Join button, then quiet while you’re in the call. Your calendars never leave your Mac.',
@@ -75,7 +81,7 @@ const FRAMES: { id?: string; cam: CamId; layer: LayerId; tint: string; title?: s
   {
     id: 'personalize', cam: 'window', layer: 'settings', tint: 'rgb(160 110 255)',
     title: 'Make it yours.',
-    line: 'Twenty characters and how lively they are. Style the notch and an external display apart, or Sync both.',
+    line: 'Twenty characters, how lively they are, and how every tap feels. Style the notch and an external display apart, or Sync both.',
   },
 ];
 

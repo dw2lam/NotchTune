@@ -4,6 +4,7 @@ const LINKS = [
   { label: 'Agents', href: '#agents' },
   { label: 'Music', href: '#music' },
   { label: 'Myspace', href: '#myspace' },
+  { label: 'Mirror', href: '#mirror' },
   { label: 'Meetings', href: '#meetings' },
   { label: 'Personalize', href: '#personalize' },
 ];
