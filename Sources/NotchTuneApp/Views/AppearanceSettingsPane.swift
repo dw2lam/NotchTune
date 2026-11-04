@@ -50,6 +50,7 @@ struct AppearanceSettingsPane: View {
             notchCard
             liquidGlassCard
             hapticsCard
+                .id("haptics")
             sessionListCard
         }
         // Restarts when the pin changes or the window is hidden / shown:

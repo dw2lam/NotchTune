@@ -175,11 +175,12 @@ struct IslandGlassIconDisc<Label: View>: View {
     var fallbackPressedFill: Color?
     var foreground: Color?
     var pressedForeground: Color?
+    var haptic: HapticEvent = .buttons
 
     @Environment(\.islandControlGlass) private var usesGlass
 
     var body: some View {
-        disc.notchHapticOnPress(isPressed)
+        disc.notchHapticOnPress(isPressed, haptic)
     }
 
     @ViewBuilder

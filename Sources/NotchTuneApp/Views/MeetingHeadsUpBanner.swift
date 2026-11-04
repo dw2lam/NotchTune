@@ -60,7 +60,7 @@ struct MeetingHeadsUpBanner: View {
                     .frame(width: 20, height: 20)
                     .contentShape(Circle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NotchPlainButtonStyle())
             .help("Dismiss")
             .accessibilityLabel("Dismiss meeting heads-up")
         }
@@ -90,7 +90,7 @@ private struct MeetingJoinButtonStyle: ButtonStyle {
     let usesGlass: Bool
 
     func makeBody(configuration: Configuration) -> some View {
-        joinBody(configuration).notchHapticOnPress(configuration.isPressed)
+        joinBody(configuration).notchHapticOnPress(configuration.isPressed, .confirm)
     }
 
     @ViewBuilder

@@ -85,7 +85,7 @@ struct MusicLibraryChooserView: View {
                         .background(isSelected ? Color.white.opacity(0.12) : .clear, in: Capsule())
                         .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPlainButtonStyle(haptic: .tabs))
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
@@ -141,7 +141,7 @@ struct MusicLibraryChooserView: View {
                     .frame(height: Self.headerHeight - 2)
                     .background(.white, in: Capsule())
             }
-            .buttonStyle(MusicPressButtonStyle())
+            .buttonStyle(MusicPressButtonStyle(haptic: .confirm))
             .disabled(pinDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .opacity(pinDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1)
             iconButton("xmark", help: "Cancel") { closePinField() }
@@ -204,7 +204,7 @@ struct MusicLibraryChooserView: View {
             .modifier(MusicCapsuleChrome(usesGlass: usesGlass))
             .contentShape(Capsule())
         }
-        .buttonStyle(MusicPressButtonStyle())
+        .buttonStyle(MusicPressButtonStyle(haptic: .jump))
         .help("Open \(player.displayName)")
         .accessibilityLabel("Open \(player.displayName)")
     }
@@ -482,7 +482,7 @@ struct MusicLibraryItemRow: View {
             }
             .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
-        .buttonStyle(MusicPressButtonStyle())
+        .buttonStyle(MusicPressButtonStyle(haptic: .confirm))
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.5 : 1)
         .onHover { hovering in

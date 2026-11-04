@@ -7,7 +7,7 @@ struct MusicPlaybackButtonsView: View {
 
     var body: some View {
         HStack(spacing: spacing) {
-            MusicHoverButton(icon: "shuffle", iconSize: buttonSize * 0.75) {
+            MusicHoverButton(icon: "shuffle", iconSize: buttonSize * 0.75, haptic: .switches) {
                 playerManager.setShuffle()
             }
             .fontWeight(playerManager.shuffleIsOn ? .black : .ultraLight)
@@ -38,7 +38,7 @@ struct MusicPlaybackButtonsView: View {
                 playerManager.nextTrack()
             }
 
-            MusicHoverButton(icon: "repeat", iconSize: buttonSize * 0.75) {
+            MusicHoverButton(icon: "repeat", iconSize: buttonSize * 0.75, haptic: .switches) {
                 playerManager.setRepeat()
             }
             .fontWeight(playerManager.repeatIsOn ? .bold : .light)

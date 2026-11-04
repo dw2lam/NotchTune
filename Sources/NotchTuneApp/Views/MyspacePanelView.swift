@@ -166,7 +166,7 @@ struct MyspacePanelView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.72))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPlainButtonStyle())
                 .keyboardShortcut(.cancelAction)
 
                 Text(selection.attachment.originalFilename)
@@ -183,7 +183,7 @@ struct MyspacePanelView: View {
                         .foregroundStyle(.white.opacity(0.62))
                         .frame(width: 24, height: 24)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPlainButtonStyle(haptic: .jump))
                 .accessibilityLabel("Open \(selection.attachment.originalFilename) externally")
                 .help("Open in the default app")
             }
@@ -280,7 +280,7 @@ struct MyspacePanelView: View {
                         .frame(width: 24, height: 24)
                         .background(.white, in: Circle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPlainButtonStyle(haptic: .confirm))
                 .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && pendingAttachments.isEmpty)
                 .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && pendingAttachments.isEmpty ? 0.35 : 1)
                 .accessibilityLabel("Save thought")
@@ -313,7 +313,7 @@ struct MyspacePanelView: View {
                 .frame(width: 23, height: 23)
                 .background(.white.opacity(0.07), in: Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(NotchPlainButtonStyle())
         .help(help)
     }
 
@@ -330,7 +330,7 @@ struct MyspacePanelView: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 7, weight: .bold))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NotchPlainButtonStyle(haptic: .decline))
         }
         .foregroundStyle(.white.opacity(0.6))
         .padding(.horizontal, 7)
@@ -362,7 +362,7 @@ struct MyspacePanelView: View {
                     )
                     .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPlainButtonStyle(haptic: .tabs))
             }
             Spacer(minLength: 0)
         }
@@ -505,7 +505,7 @@ struct MyspacePanelView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(.white.opacity(0.45))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPlainButtonStyle(haptic: .confirm))
                 .accessibilityLabel("Complete reminder")
             }
 
@@ -559,7 +559,7 @@ struct MyspacePanelView: View {
                         .font(.system(size: 9))
                         .foregroundStyle(.white.opacity(0.25))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPlainButtonStyle(haptic: .decline))
                 .accessibilityLabel("Delete thought")
             }
         }
@@ -736,7 +736,7 @@ struct RemindersPanelView: View {
                     )
                     .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPlainButtonStyle(haptic: .tabs))
                 .accessibilityLabel("\(section.label) reminders")
             }
         }
@@ -773,7 +773,7 @@ struct RemindersPanelView: View {
                     .frame(height: 24)
                     .background(.white.opacity(includesTime ? 0.11 : 0.055), in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPlainButtonStyle(haptic: .switches))
                 .accessibilityLabel(includesTime ? "Remove reminder time" : "Add reminder time")
 
                 if includesTime {
@@ -807,7 +807,7 @@ struct RemindersPanelView: View {
                         .frame(height: 24)
                         .background(.white, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPlainButtonStyle(haptic: .confirm))
                 .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .opacity(
                     draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.35 : 1
@@ -876,7 +876,7 @@ struct RemindersPanelView: View {
                     .frame(width: 24, height: 24)
                     .contentShape(Circle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NotchPlainButtonStyle(haptic: .confirm))
             .accessibilityLabel(isArchived ? "Restore reminder" : "Complete reminder")
 
             VStack(alignment: .leading, spacing: 5) {
@@ -922,7 +922,7 @@ struct RemindersPanelView: View {
                         .font(.system(size: 9))
                         .foregroundStyle(.white.opacity(0.25))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPlainButtonStyle(haptic: .decline))
                 .accessibilityLabel("Delete reminder")
             }
         }
@@ -1019,7 +1019,7 @@ private struct MyspaceMediaStripCell: View {
                                 .foregroundStyle(.white.opacity(0.85))
                                 .shadow(color: .black.opacity(0.6), radius: 3)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(NotchPlainButtonStyle(haptic: .decline))
                         .padding(4)
                         .accessibilityLabel("Delete")
                     }
@@ -1040,7 +1040,10 @@ private struct MyspaceMediaStripCell: View {
                 .frame(width: 96)
         }
         .contentShape(Rectangle())
-        .onTapGesture(perform: onOpen)
+        .onTapGesture {
+            NotchHaptics.play(.jump)
+            onOpen()
+        }
         .onHover { hovering = $0 }
         .task(id: url) {
             fileIcon = NSWorkspace.shared.icon(forFile: url.path)
@@ -1104,7 +1107,7 @@ private struct CopyTextButton: View {
                 .frame(width: 12, height: 12)
                 .contentTransition(.symbolEffect(.replace))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(NotchPlainButtonStyle())
         .help(didCopy ? "Copied" : "Copy")
         .accessibilityLabel(didCopy ? "Copied" : accessibilityLabel)
         .onDisappear { resetTask?.cancel() }

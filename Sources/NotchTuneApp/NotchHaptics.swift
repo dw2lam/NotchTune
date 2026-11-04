@@ -5,10 +5,22 @@ import SwiftUI
 /// Where the notch plays a haptic. Each one picks its own feel in
 /// Settings → Personalization → Haptics.
 enum HapticEvent: String, CaseIterable, Identifiable, Sendable {
-    /// A button inside the open notch.
+    /// Any other button inside the open notch: settings, search, close, copy.
     case buttons
-    /// Switching tabs.
+    /// Moving between pages: tabs, section pickers, filters, the ‹ › through
+    /// finished tasks.
     case tabs
+    /// Changing a setting in place: flip, zoom, expand, shuffle, repeat, a
+    /// question's options.
+    case switches
+    /// Saying yes or finishing something: Allow, Submit, Send, Join, saving
+    /// a note, ticking off a reminder, picking a song, Update.
+    case confirm
+    /// Saying no or throwing something away: Deny, delete, remove.
+    case decline
+    /// Leaving the notch for somewhere else: jump to a terminal, open a
+    /// file or the player's app.
+    case jump
     /// Play and pause, the top of the hierarchy (the buttons and the closed
     /// pill's cover). Keeps the raw value it had when it also covered skip,
     /// so a feel the user already picked carries over.
@@ -76,6 +88,12 @@ enum HapticFeel: String, CaseIterable, Identifiable, Sendable {
     case nudge
     /// A short firm pulse and a faint echo.
     case flick
+    /// Two pulses climbing, a small "yes".
+    case rise
+    /// Two firm, even knocks, a small "no".
+    case knock
+    /// Three quick pulses climbing, off to somewhere else.
+    case swoosh
 
     var id: String { rawValue }
 
@@ -89,6 +107,9 @@ enum HapticFeel: String, CaseIterable, Identifiable, Sendable {
         case .ripple: zip(Self.rippleOffsets, Self.rippleStrengths).map { ($0, $1) }
         case .nudge: [(0, .light), (0.12, .light)]
         case .flick: [(0, .soft), (0.08, .faint)]
+        case .rise: [(0, .light), (0.07, .medium)]
+        case .knock: [(0, .medium), (0.11, .medium)]
+        case .swoosh: [(0, .faint), (0.04, .light), (0.08, .medium)]
         }
     }
 
@@ -103,6 +124,10 @@ struct HapticSettings: Equatable, Sendable {
     static let defaultFeels: [HapticEvent: HapticFeel] = [
         .buttons: .tap,
         .tabs: .click,
+        .switches: .click,
+        .confirm: .rise,
+        .decline: .knock,
+        .jump: .swoosh,
         .playPause: .ripple,
         .skip: .flick,
         .hoverOpen: .click,
@@ -265,6 +290,17 @@ final class TrackpadActuator {
             return actuator
         }
         return nil
+    }
+}
+
+/// `.plain` with a haptic: for the notch's plain text and icon buttons.
+struct NotchPlainButtonStyle: ButtonStyle {
+    var haptic: HapticEvent = .buttons
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .notchHapticOnPress(configuration.isPressed, haptic)
     }
 }
 

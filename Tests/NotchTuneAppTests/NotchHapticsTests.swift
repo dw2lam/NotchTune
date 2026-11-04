@@ -54,6 +54,24 @@ struct NotchHapticsTests {
     }
 
     @Test
+    func eachKindOfButtonHasItsOwnCharacter() {
+        let settings = HapticSettings()
+        #expect(settings.feel(for: .confirm) == .rise)
+        #expect(settings.feel(for: .decline) == .knock)
+        #expect(settings.feel(for: .jump) == .swoosh)
+
+        func strengths(_ feel: HapticFeel) -> [Int] { feel.pulses.map(\.strength.rawValue) }
+        // Yes climbs, no stays level, a jump climbs through three steps.
+        #expect(strengths(.rise) == strengths(.rise).sorted() && strengths(.rise).first != strengths(.rise).last)
+        #expect(Set(strengths(.knock)).count == 1 && strengths(.knock).count == 2)
+        #expect(strengths(.swoosh) == strengths(.swoosh).sorted() && strengths(.swoosh).count == 3)
+
+        // No two kinds of action share a multi-pulse feel.
+        let signature = [HapticEvent.playPause, .skip, .confirm, .decline, .jump, .agentFinished].map { settings.feel(for: $0) }
+        #expect(Set(signature).count == signature.count)
+    }
+
+    @Test
     func aFeelPickedForPlaybackCarriesOverToPlayAndPause() {
         let restored = HapticSettings(stored: ["playback": "bump"])
         #expect(restored.feel(for: .playPause) == .bump)

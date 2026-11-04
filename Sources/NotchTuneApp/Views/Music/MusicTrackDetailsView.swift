@@ -20,6 +20,6 @@ struct PlayerTrackDetailsView: View {
             }
         }
         .musicPressStyle()
-        .buttonStyle(.plain)
+        .buttonStyle(NotchPlainButtonStyle(haptic: .jump))
     }
 }

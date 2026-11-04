@@ -34,6 +34,7 @@ struct MusicAlbumArtView: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
             .onTapGesture {
                 isPressed = true
+                NotchHaptics.play(.jump)
                 playerManager.openMusicApp()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     isPressed = false

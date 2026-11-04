@@ -1064,7 +1064,7 @@ struct IslandPanelView: View {
                         Text(model.lang.t("island.update.ready"))
                     }
                 }
-                .buttonStyle(IslandCompactButtonStyle(tint: IslandDesignPalette.Status.completed))
+                .buttonStyle(IslandCompactButtonStyle(tint: IslandDesignPalette.Status.completed, haptic: .confirm))
                 .fixedSize()
                 .help(model.lang.t("island.update.ready.help", version))
                 .accessibilityLabel(model.lang.t("island.update.ready.help", version))
@@ -1394,7 +1394,7 @@ struct IslandPanelView: View {
                     )
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(NotchPlainButtonStyle())
     }
 
     private var sessionBootstrapPlaceholder: some View {
@@ -1614,7 +1614,7 @@ struct IslandPanelView: View {
                             .padding(.top, 6)
                             .padding(.bottom, 2)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(NotchPlainButtonStyle())
                 }
             } else {
                 ForEach(model.islandSessionSections) { section in
@@ -2015,7 +2015,7 @@ struct IslandPanelView: View {
             .contentShape(Capsule())
             .clipped()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(NotchPlainButtonStyle(haptic: .tabs))
         .onHover { isHoveringUsage = $0 }
         .help(providers.count > 1
             ? "\(usageHelpText(for: provider)) — click for \(providers[(index + 1) % providers.count].title)"
@@ -3058,7 +3058,7 @@ private struct IslandSessionRow: View {
                         keys: showsKeyHints ? "⌘N" : nil
                     )
                 }
-                .buttonStyle(IslandActionButtonStyle(kind: .secondary, expands: true))
+                .buttonStyle(IslandActionButtonStyle(kind: .secondary, expands: true, haptic: .decline))
                 Button { onApprove?(.allowOnce) } label: {
                     NotificationKeyHintedTitle(
                         session.permissionRequest?.primaryActionTitle ?? lang.t("approval.allowOnce"),
@@ -3170,7 +3170,7 @@ private struct IslandSessionRow: View {
                     .foregroundColor(replyText.trimmingCharacters(in: .whitespaces).isEmpty
                         ? .white.opacity(0.2) : .white.opacity(0.9))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NotchPlainButtonStyle(haptic: .confirm))
             .disabled(replyText.trimmingCharacters(in: .whitespaces).isEmpty)
             .accessibilityLabel(lang.t("question.sendReply"))
         }
@@ -3356,6 +3356,7 @@ private struct IslandSessionRow: View {
 
     private func handlePrimaryTap() {
         guard isInteractive else { return }
+        NotchHaptics.play(.jump)
         onJump()
     }
 
@@ -3377,7 +3378,7 @@ private struct IslandSessionRow: View {
                 .rotationEffect(.degrees(isOpen ? 180 : 0))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(NotchPlainButtonStyle(haptic: .switches))
         .accessibilityLabel(isOpen ? "Collapse session detail" : "Expand session detail")
     }
 
@@ -3597,7 +3598,7 @@ private struct StructuredQuestionPromptView: View {
                 .padding(.vertical, 6)
                 .padding(.horizontal, 12)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NotchPlainButtonStyle(haptic: .switches))
 
             if showsFreeform {
                 Divider()
@@ -3959,11 +3960,12 @@ private extension String {
 
 private struct IslandCompactButtonStyle: ButtonStyle {
     var tint: Color
+    var haptic: HapticEvent = .buttons
 
     @Environment(\.islandControlGlass) private var usesGlass
 
     func makeBody(configuration: Configuration) -> some View {
-        compactBody(configuration).notchHapticOnPress(configuration.isPressed)
+        compactBody(configuration).notchHapticOnPress(configuration.isPressed, haptic)
     }
 
     @ViewBuilder
@@ -4002,6 +4004,7 @@ private struct IslandActionButtonStyle: ButtonStyle {
 
     let kind: Kind
     var expands = false
+    var haptic: HapticEvent = .confirm
 
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.islandControlGlass) private var usesGlass
@@ -4016,7 +4019,7 @@ private struct IslandActionButtonStyle: ButtonStyle {
                 legacyBody(configuration)
             }
         }
-        .notchHapticOnPress(configuration.isPressed)
+        .notchHapticOnPress(configuration.isPressed, haptic)
     }
 
     // MARK: Glass
@@ -4244,7 +4247,7 @@ private struct DismissButton: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.white.opacity(isHovered ? 0.8 : 0.4))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(NotchPlainButtonStyle())
         .onHover { isHovered = $0 }
     }
 }

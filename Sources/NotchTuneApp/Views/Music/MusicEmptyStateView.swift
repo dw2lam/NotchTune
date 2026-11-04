@@ -61,7 +61,7 @@ struct MusicPlayerIdentityTile: View {
             .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .buttonStyle(MusicPressButtonStyle())
+        .buttonStyle(MusicPressButtonStyle(haptic: .jump))
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.15)) { isHovering = hovering }
         }
@@ -126,7 +126,7 @@ struct MusicNowPlayingTile: View {
                 }
                 .contentShape(shape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(NotchPlainButtonStyle())
         .accessibilityLabel("Show the full player")
         .overlay(alignment: .topLeading) { badge.accessibilityHidden(true) }
         // The hover extras stay in the view tree, faded out and click-through

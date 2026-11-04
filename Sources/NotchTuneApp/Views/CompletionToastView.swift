@@ -156,7 +156,7 @@ struct CompletionToastView: View {
                         }
                     }
                 }
-                .buttonStyle(ToastButtonStyle(kind: .primary))
+                .buttonStyle(ToastButtonStyle(kind: .primary, haptic: .jump))
 
                 if onReply != nil {
                     Button {
@@ -181,7 +181,7 @@ struct CompletionToastView: View {
                         .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(V6Palette.paper.opacity(0.42))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NotchPlainButtonStyle())
             }
             .frame(height: Self.actionRowHeight)
             .transition(.opacity)
@@ -197,7 +197,7 @@ struct CompletionToastView: View {
                     .font(.system(size: 9, weight: .bold))
                     .frame(width: 18, height: 18)
             }
-            .buttonStyle(ToastIconButtonStyle())
+            .buttonStyle(ToastIconButtonStyle(haptic: .tabs))
             .accessibilityLabel(lang.t("completion.toast.previous"))
 
             Text("\(position.index + 1)/\(position.count)")
@@ -212,7 +212,7 @@ struct CompletionToastView: View {
                     .font(.system(size: 9, weight: .bold))
                     .frame(width: 18, height: 18)
             }
-            .buttonStyle(ToastIconButtonStyle())
+            .buttonStyle(ToastIconButtonStyle(haptic: .tabs))
             .accessibilityLabel(lang.t("completion.toast.next"))
         }
         .padding(.trailing, 4)
@@ -236,7 +236,7 @@ struct CompletionToastView: View {
                         trimmedReply.isEmpty ? V6Palette.paper.opacity(0.22) : V6Palette.paper.opacity(0.92)
                     )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NotchPlainButtonStyle(haptic: .confirm))
             .disabled(trimmedReply.isEmpty)
             .accessibilityLabel(lang.t("question.sendReply"))
 
@@ -371,10 +371,16 @@ private struct ToastButtonStyle: ButtonStyle {
     }
 
     let kind: Kind
+    var haptic: HapticEvent = .buttons
 
     @Environment(\.islandControlGlass) private var usesGlass
 
     func makeBody(configuration: Configuration) -> some View {
+        toastBody(configuration).notchHapticOnPress(configuration.isPressed, haptic)
+    }
+
+    @ViewBuilder
+    private func toastBody(_ configuration: Configuration) -> some View {
         if usesGlass, LiquidGlass.isSupported {
             configuration.label
                 .font(.system(size: 11, weight: .semibold))
@@ -436,6 +442,8 @@ private struct ToastButtonStyle: ButtonStyle {
 
 /// Small circular toast controls (queue chevrons, cancel reply).
 private struct ToastIconButtonStyle: ButtonStyle {
+    var haptic: HapticEvent = .buttons
+
     @Environment(\.islandControlGlass) private var usesGlass
 
     func makeBody(configuration: Configuration) -> some View {
@@ -445,7 +453,8 @@ private struct ToastIconButtonStyle: ButtonStyle {
             fallbackFill: .white.opacity(0.06),
             fallbackPressedFill: .white.opacity(0.14),
             foreground: V6Palette.paper.opacity(usesGlass ? 0.72 : 0.55),
-            pressedForeground: V6Palette.paper.opacity(0.9)
+            pressedForeground: V6Palette.paper.opacity(0.9),
+            haptic: haptic
         )
     }
 }

@@ -320,7 +320,7 @@ private struct MirrorRowBody: View {
             .scaleEffect(configuration.isPressed ? 0.94 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
             .onHover { isHovering = $0 }
-            .notchHapticOnPress(configuration.isPressed)
+            .notchHapticOnPress(configuration.isPressed, .switches)
     }
 }
 
@@ -332,7 +332,7 @@ private struct MirrorCapsuleButtonStyle: ButtonStyle {
             .padding(.horizontal, 14)
             .frame(height: 26)
             .background(.white.opacity(configuration.isPressed ? 0.75 : 0.9), in: Capsule())
-            .notchHapticOnPress(configuration.isPressed)
+            .notchHapticOnPress(configuration.isPressed, .confirm)
     }
 }
 
