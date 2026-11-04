@@ -4,22 +4,20 @@ import Testing
 
 struct NotchHapticsTests {
     @Test
-    func theRippleEasesOut() {
+    func theRippleSwellsToAPeakAndSettles() {
         let offsets = HapticFeel.ripple.pulses.map(\.offset)
         #expect(offsets.first == 0)
-        let gaps = zip(offsets.dropFirst(), offsets).map { $0 - $1 }
-        #expect(gaps.count >= 2)
-        // Each gap is longer than the last: an ease-out.
-        for (earlier, later) in zip(gaps, gaps.dropFirst()) {
-            #expect(later > earlier)
-        }
+        #expect(offsets == offsets.sorted())
         // Spread out over a beat, not a sharp burst, and still brief.
-        #expect((offsets.last ?? 0) >= 0.35)
-        #expect((offsets.last ?? 0) < 0.6)
-        // Firmest to faintest.
+        #expect((offsets.last ?? 0) >= 0.4)
+        #expect((offsets.last ?? 0) < 0.7)
+        // Up to the firmest pulse, then down to the faintest.
         let strengths = HapticFeel.ripple.pulses.map(\.strength.rawValue)
-        #expect(strengths == strengths.sorted(by: >))
-        #expect(Set(strengths).count == strengths.count)
+        let peak = strengths.firstIndex(of: strengths.max()!)!
+        #expect(peak > 0 && peak < strengths.count - 1)
+        #expect(Array(strengths[...peak]) == strengths[...peak].sorted())
+        #expect(Array(strengths[peak...]) == strengths[peak...].sorted(by: >))
+        #expect(strengths.last == strengths.min())
     }
 
     @Test

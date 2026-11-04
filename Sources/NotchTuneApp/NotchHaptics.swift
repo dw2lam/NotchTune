@@ -85,10 +85,11 @@ enum HapticFeel: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// Four pulses, firmest to faintest, each gap longer than the last (100
-    /// → 140 → 180 ms): a drop in water, spreading out and dying away.
-    static let rippleOffsets: [TimeInterval] = [0, 0.1, 0.24, 0.42]
-    static let rippleStrengths: [HapticStrength] = [.strong, .soft, .light, .faint]
+    /// "doo dooo dooooo doo do": five pulses that swell to a peak and settle,
+    /// after the pulse iOS plays when wired earbuds pause. The longest note
+    /// is the firmest (played twice) and holds a beat before the tail.
+    static let rippleOffsets: [TimeInterval] = [0, 0.12, 0.26, 0.44, 0.56]
+    static let rippleStrengths: [HapticStrength] = [.light, .soft, .strong, .light, .faint]
 }
 
 struct HapticSettings: Equatable, Sendable {
