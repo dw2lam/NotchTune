@@ -1207,9 +1207,6 @@ final class AppModel {
         overlay.onNotificationSurfaceShown = { [weak self] sessionID in
             self?.notificationCardShownAt = Date()
             self?.markCompletionToastShown(for: sessionID)
-            if self?.state.session(id: sessionID)?.phase == .completed {
-                NotchHaptics.play(.agentFinished)
-            }
         }
         overlay.isSoundMutedAccessor = { [weak self] in
             self?.isSoundSilencedNow ?? false

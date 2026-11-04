@@ -243,11 +243,7 @@ final class OverlayUICoordinator {
                 self?.isPointerInsideIslandSurface = false
                 self?.appModel?.measuredNotificationContentHeight = 0
                 self?.appModel?.reconcileCompactMusicView()
-                // Closing on Mirror lands back on Agents, so the next hover
-                // never turns the camera on by itself.
-                if self?.appModel?.islandActiveTab == .mirror {
-                    self?.appModel?.islandActiveTab = .agents
-                }
+                self?.leaveMirrorOnClose()
             }
         )
     }
@@ -278,6 +274,7 @@ final class OverlayUICoordinator {
         }
 
         let wasOpened = notchStatus == .opened
+        let previousSurfaceSessionID = islandSurface.sessionID
         islandSurface = surface
         notchOpenReason = reason
         notchStatus = status
@@ -310,6 +307,14 @@ final class OverlayUICoordinator {
             if appModel.isOverlayDisplayFullscreen {
                 overlayPanelController.orderOutPanel()
             } else {
+                // A fresh completion toast the user can see: a soft nudge.
+                // Rotating through queued toasts doesn't come through here.
+                if reason == .notification,
+                   let sessionID = surface.sessionID,
+                   !wasOpened || previousSurfaceSessionID != sessionID,
+                   appModel.state.session(id: sessionID)?.phase == .completed {
+                    NotchHaptics.play(.agentFinished)
+                }
                 overlayPlacementDiagnostics = overlayPanelController.show(
                     model: appModel,
                     preferredScreenID: preferredOverlayScreenID
@@ -462,6 +467,15 @@ final class OverlayUICoordinator {
         overlayPanelController.setInteractive(false)
         appModel?.measuredNotificationContentHeight = 0
         appModel?.reconcileCompactMusicView()
+        leaveMirrorOnClose()
+    }
+
+    /// Closing on Mirror (by hand, or hidden for a fullscreen app) lands back
+    /// on Agents, so the next hover never turns the camera on by itself.
+    private func leaveMirrorOnClose() {
+        if appModel?.islandActiveTab == .mirror {
+            appModel?.islandActiveTab = .agents
+        }
     }
 
     // Legacy compatibility

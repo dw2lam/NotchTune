@@ -72,7 +72,7 @@ final class MirrorCamera {
         didSet {
             defaults.set(selectedDeviceID, forKey: Self.cameraKey)
             if wantsRunning, access == .granted {
-                capture.run(deviceID: activeDeviceID)
+                runActiveDevice()
             }
         }
     }
@@ -91,6 +91,7 @@ final class MirrorCamera {
 
     private let defaults: UserDefaults
     private var wantsRunning = false
+    private var owner: UUID?
     private var deviceObservers: [NSObjectProtocol] = []
 
     init(
@@ -129,8 +130,11 @@ final class MirrorCamera {
         devices.first { $0.id == activeDeviceID }?.name
     }
 
-    /// The Mirror tab came on screen.
-    func start() {
+    /// The Mirror tab came on screen. `owner` is that view's token: during a
+    /// tab transition an outgoing Mirror view can disappear after a new one
+    /// started the camera, and its `stop` must not turn the camera off.
+    func start(owner: UUID) {
+        self.owner = owner
         wantsRunning = true
         guard !isSimulated else { return }
         observeDevicesIfNeeded()
@@ -138,8 +142,7 @@ final class MirrorCamera {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             access = .granted
-            capture.run(deviceID: activeDeviceID)
-            isRunning = true
+            runActiveDevice()
         case .notDetermined:
             access = .notDetermined
         default:
@@ -148,11 +151,28 @@ final class MirrorCamera {
     }
 
     /// The Mirror tab left the screen (another tab, or the notch closed).
-    func stop() {
+    /// Ignored when another Mirror view has started the camera since.
+    func stop(owner: UUID) {
+        guard owner == self.owner else { return }
         wantsRunning = false
         guard !isSimulated, isRunning else { return }
         capture.stop()
         isRunning = false
+    }
+
+    /// Runs the camera in use, or stops when there is none (no camera, or
+    /// the only one was unplugged), so the tab never shows a "running"
+    /// session with no picture.
+    private func runActiveDevice() {
+        guard let deviceID = activeDeviceID else {
+            if isRunning {
+                capture.stop()
+                isRunning = false
+            }
+            return
+        }
+        capture.run(deviceID: deviceID)
+        isRunning = true
     }
 
     /// Asks for camera access; the camera starts if the tab is still open.
@@ -162,8 +182,8 @@ final class MirrorCamera {
             Task { @MainActor in
                 guard let self else { return }
                 self.access = granted ? .granted : .denied
-                if granted, self.wantsRunning {
-                    self.start()
+                if granted, self.wantsRunning, let owner = self.owner {
+                    self.start(owner: owner)
                 }
             }
         }
@@ -201,8 +221,8 @@ final class MirrorCamera {
                     guard let self else { return }
                     let previous = self.activeDeviceID
                     self.refreshDevices()
-                    if self.isRunning, self.activeDeviceID != previous {
-                        self.capture.run(deviceID: self.activeDeviceID)
+                    if self.wantsRunning, self.access == .granted, self.activeDeviceID != previous {
+                        self.runActiveDevice()
                     }
                 }
             })
@@ -224,15 +244,19 @@ final class MirrorCaptureSession: @unchecked Sendable {
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "app.notchtune.mirror.capture")
 
-    func run(deviceID: String?) {
+    /// Posted on the main queue after the input changes: a new input gets a
+    /// new preview connection with default mirroring, which the picture
+    /// has to set again.
+    static let inputDidChange = Notification.Name("MirrorCaptureSession.inputDidChange")
+
+    func run(deviceID: String) {
         queue.async { [session] in
             session.beginConfiguration()
             session.sessionPreset = .high
             for input in session.inputs {
                 session.removeInput(input)
             }
-            if let deviceID,
-               let device = AVCaptureDevice(uniqueID: deviceID),
+            if let device = AVCaptureDevice(uniqueID: deviceID),
                let input = try? AVCaptureDeviceInput(device: device),
                session.canAddInput(input) {
                 session.addInput(input)
@@ -240,6 +264,9 @@ final class MirrorCaptureSession: @unchecked Sendable {
             session.commitConfiguration()
             if !session.isRunning {
                 session.startRunning()
+            }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: Self.inputDidChange, object: session)
             }
         }
     }

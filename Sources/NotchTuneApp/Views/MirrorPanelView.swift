@@ -18,6 +18,9 @@ struct MirrorPanelView: View {
     /// Asks the notch to resize after Expand or a first width measurement.
     var relayout: () -> Void = {}
 
+    /// This view's claim on the camera (see `MirrorCamera.start(owner:)`).
+    @State private var cameraOwner = UUID()
+
     static let controlsHeight: CGFloat = 30
     static let spacing: CGFloat = 10
     static let topPadding: CGFloat = 4
@@ -33,7 +36,9 @@ struct MirrorPanelView: View {
         let natural = (width * (isExpanded ? expandedAspect : aspect)).rounded()
         guard let cap else { return natural }
         let room = cap - controlsHeight - spacing - topPadding - bottomPadding
-        return max(120, min(natural, room.rounded(.down)))
+        // Never past the cap, even on a very short screen: the controls stay
+        // on it and the picture gives way.
+        return max(0, min(natural, room.rounded(.down)))
     }
 
     /// The whole tab's height for a picture `width` wide (padding included).
@@ -59,12 +64,12 @@ struct MirrorPanelView: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .task(id: isLive) {
             if isLive {
-                camera.start()
+                camera.start(owner: cameraOwner)
             } else {
-                camera.stop()
+                camera.stop(owner: cameraOwner)
             }
         }
-        .onDisappear { camera.stop() }
+        .onDisappear { camera.stop(owner: cameraOwner) }
     }
 
     // MARK: Picture
@@ -74,7 +79,7 @@ struct MirrorPanelView: View {
     /// into the layout.
     private var mirrorFrame: some View {
         Color.white.opacity(0.04)
-            .frame(maxWidth: .infinity, minHeight: 120, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay { frameContent }
             .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
             .overlay {
@@ -90,6 +95,20 @@ struct MirrorPanelView: View {
     @ViewBuilder
     private var frameContent: some View {
             switch camera.access {
+            case .granted where camera.activeDeviceID == nil:
+                VStack(spacing: 6) {
+                    Image(systemName: "video.slash.fill")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.5))
+                    Text("No camera found")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.88))
+                    Text("Connect one, or use your iPhone as a Continuity Camera.")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 20)
             case .granted:
                 picture
                     .transition(.opacity)
@@ -341,6 +360,7 @@ private struct MirrorVideoView: NSViewRepresentable {
 final class MirrorVideoNSView: NSView {
     private let previewLayer: AVCaptureVideoPreviewLayer
     nonisolated(unsafe) private var startObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var inputObserver: NSObjectProtocol?
 
     var isMirrored = true {
         didSet { if isMirrored != oldValue { applyMirroring() } }
@@ -372,6 +392,13 @@ final class MirrorVideoNSView: NSView {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.applyMirroring() }
         }
+        inputObserver = NotificationCenter.default.addObserver(
+            forName: MirrorCaptureSession.inputDidChange,
+            object: session,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyMirroring() }
+        }
     }
 
     @available(*, unavailable)
@@ -380,8 +407,8 @@ final class MirrorVideoNSView: NSView {
     }
 
     deinit {
-        if let startObserver {
-            NotificationCenter.default.removeObserver(startObserver)
+        for observer in [startObserver, inputObserver].compactMap({ $0 }) {
+            NotificationCenter.default.removeObserver(observer)
         }
     }
 

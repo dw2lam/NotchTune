@@ -17,9 +17,10 @@ struct MirrorCameraTests {
         // it must not wake the Mac's camera.
         let model = AppModel()
         #expect(model.mirror.isSimulated)
-        model.mirror.start()
+        let owner = UUID()
+        model.mirror.start(owner: owner)
         #expect(!model.mirror.isRunning)
-        model.mirror.stop()
+        model.mirror.stop(owner: owner)
     }
 
     @Test
