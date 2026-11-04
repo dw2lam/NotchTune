@@ -30,7 +30,8 @@
 "settings.appearance.haptics.noTrackpad" = "No Force Touch trackpad found, so haptics can't play on this Mac right now.";
 "settings.appearance.haptics.event.buttons" = "Buttons";
 "settings.appearance.haptics.event.tabs" = "Switching tabs";
-"settings.appearance.haptics.event.playback" = "Play, pause and skip";
+"settings.appearance.haptics.event.playback" = "Play and pause";
+"settings.appearance.haptics.event.skip" = "Skip and back";
 "settings.appearance.haptics.event.hoverOpen" = "Opening on hover";
 "settings.appearance.haptics.event.agentFinished" = "Agent finished";
 "settings.appearance.haptics.feel.off" = "Off";
@@ -39,6 +40,7 @@
 "settings.appearance.haptics.feel.bump" = "Bump";
 "settings.appearance.haptics.feel.ripple" = "Ripple";
 "settings.appearance.haptics.feel.nudge" = "Nudge";
+"settings.appearance.haptics.feel.flick" = "Flick";
 "settings.general.suppressFrontmostNotifications" = "Smart suppression";
 "settings.general.suppressFrontmostNotifications.note" = "Don't open the notch when the agent's terminal tab is already in focus. Finishes still show a quiet peek in the pill.";
 "settings.general.showCodexUsage" = "Show Codex usage";

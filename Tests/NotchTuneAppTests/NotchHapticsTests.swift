@@ -34,7 +34,8 @@ struct NotchHapticsTests {
         for event in HapticEvent.allCases {
             #expect(settings.feel(for: event) != .off)
         }
-        #expect(settings.feel(for: .playback) == .ripple)
+        #expect(settings.feel(for: .playPause) == .ripple)
+        #expect(settings.feel(for: .skip) == .flick)
         #expect(settings.feel(for: .agentFinished) == .nudge)
     }
 
@@ -49,7 +50,28 @@ struct NotchHapticsTests {
         let restored = HapticSettings(stored: stored)
         #expect(restored.feel(for: .buttons) == .off)
         #expect(restored.feel(for: .tabs) == .bump)
-        #expect(restored.feel(for: .playback) == .ripple)
+        #expect(restored.feel(for: .playPause) == .ripple)
+    }
+
+    @Test
+    func aFeelPickedForPlaybackCarriesOverToPlayAndPause() {
+        let restored = HapticSettings(stored: ["playback": "bump"])
+        #expect(restored.feel(for: .playPause) == .bump)
+        #expect(restored.feel(for: .skip) == .flick)
+    }
+
+    @Test
+    func playbackHapticsFollowTheHierarchy() {
+        // The sum of each pulse's strength, the double hit counted twice.
+        func weight(_ feel: HapticFeel) -> Int {
+            feel.pulses.reduce(0) { $0 + $1.strength.rawValue * $1.strength.repeats }
+        }
+        let settings = HapticSettings()
+        let playPause = weight(settings.feel(for: .playPause))
+        let skip = weight(settings.feel(for: .skip))
+        let button = weight(settings.feel(for: .buttons))
+        #expect(playPause > skip)
+        #expect(skip > button)
     }
 
     @Test @MainActor

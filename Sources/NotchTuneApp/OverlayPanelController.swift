@@ -742,7 +742,7 @@ final class OverlayPanelController {
             if isPointOnClosedMusicArt(screenLocation) {
                 model.playerManager.togglePlayPause()
                 model.notchPop()
-                performMusicHaptic(model)
+                NotchHaptics.play(.playPause)
                 return
             }
             model.notchOpen(reason: .click)
@@ -828,11 +828,7 @@ final class OverlayPanelController {
             model.showMusicSkipFeedback(.previous)
             model.playerManager.previousTrack()
         }
-        performMusicHaptic(model)
-    }
-
-    private func performMusicHaptic(_ model: AppModel) {
-        NotchHaptics.play(.playback)
+        NotchHaptics.play(.skip)
     }
 
     // MARK: - File drag shelf

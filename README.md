@@ -12,7 +12,7 @@ Monitor your agents and music all in one place.
 - **Agent monitoring**: Track local coding-agent sessions from the menu bar or notch, including running state, waiting approvals, questions, completions, subagents, and usage summaries.
 - **Myspace**: Save dictated thoughts, drop in images or files, and keep time-based reminders in a local personal space.
 - **Mirror**: A tab that turns the notch into a hand mirror: your camera, flipped like a mirror, with zoom and a camera picker. The camera is only on while the tab is open.
-- **Haptics**: On a Force Touch trackpad, feel the notch's buttons, tab switches, an easing ripple for play, pause and skip, and a soft nudge when an agent finishes. Each one can be retuned or turned off in Personalization.
+- **Haptics**: On a Force Touch trackpad, feel the notch's buttons, tab switches, a full ripple for play and pause, a lighter flick for skip and back, and a soft nudge when an agent finishes. Each one can be retuned or turned off in Personalization.
 - **Character personalization**: Choose from twenty pixel characters for the island, from the dino and Claude's Clawd to a goopy blob and Italian-brainrot favourites like Tung Tung Tung Sahur, set how much they move (Calm, Lively or Still), and style the MacBook notch and an external display separately or together with Sync.
 - **Notification sounds**: 32 original bundled sounds, loudness-matched to the macOS alerts, alongside system and custom sounds.
 - **Finished-task summaries**: When Claude Code or Codex finishes, the completion card shows what changed (files edited, tests run and their result, turn time), worked out locally from the session's own events.

@@ -9,9 +9,13 @@ enum HapticEvent: String, CaseIterable, Identifiable, Sendable {
     case buttons
     /// Switching tabs.
     case tabs
-    /// Play, pause, previous and next (buttons, the closed pill's cover, the
-    /// two-finger skip swipe).
-    case playback
+    /// Play and pause, the top of the hierarchy (the buttons and the closed
+    /// pill's cover). Keeps the raw value it had when it also covered skip,
+    /// so a feel the user already picked carries over.
+    case playPause = "playback"
+    /// Previous and next (the buttons and the two-finger swipe): a step
+    /// below play and pause, a step above any other button.
+    case skip
     /// The notch opening on hover.
     case hoverOpen
     /// An agent finishing its task.
@@ -70,6 +74,8 @@ enum HapticFeel: String, CaseIterable, Identifiable, Sendable {
     case ripple
     /// Two soft pulses: a gentle "hey".
     case nudge
+    /// A short firm pulse and a faint echo.
+    case flick
 
     var id: String { rawValue }
 
@@ -82,6 +88,7 @@ enum HapticFeel: String, CaseIterable, Identifiable, Sendable {
         case .bump: [(0, .strong)]
         case .ripple: zip(Self.rippleOffsets, Self.rippleStrengths).map { ($0, $1) }
         case .nudge: [(0, .light), (0.12, .light)]
+        case .flick: [(0, .soft), (0.08, .faint)]
         }
     }
 
@@ -96,7 +103,8 @@ struct HapticSettings: Equatable, Sendable {
     static let defaultFeels: [HapticEvent: HapticFeel] = [
         .buttons: .tap,
         .tabs: .click,
-        .playback: .ripple,
+        .playPause: .ripple,
+        .skip: .flick,
         .hoverOpen: .click,
         .agentFinished: .nudge,
     ]

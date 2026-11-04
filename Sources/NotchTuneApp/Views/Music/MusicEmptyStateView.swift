@@ -266,18 +266,21 @@ struct MusicTileMiniControls: View {
                     playerManager.track.isPodcast ? "15.arrow.trianglehead.counterclockwise" : "backward.fill",
                     size: 11,
                     label: "Previous track",
+                    haptic: .skip,
                     action: playerManager.previousTrack
                 )
                 button(
                     playerManager.isPlaying ? "pause.fill" : "play.fill",
                     size: 15,
                     label: playerManager.isPlaying ? "Pause" : "Play",
+                    haptic: .playPause,
                     action: playerManager.togglePlayPause
                 )
                 button(
                     playerManager.track.isPodcast ? "15.arrow.trianglehead.clockwise" : "forward.fill",
                     size: 11,
                     label: "Next track",
+                    haptic: .skip,
                     action: playerManager.nextTrack
                 )
             }
@@ -307,7 +310,13 @@ struct MusicTileMiniControls: View {
         .accessibilityValue("\(playerManager.formattedPlaybackPosition) of \(playerManager.formattedDuration)")
     }
 
-    private func button(_ symbol: String, size: CGFloat, label: String, action: @escaping () -> Void) -> some View {
+    private func button(
+        _ symbol: String,
+        size: CGFloat,
+        label: String,
+        haptic: HapticEvent,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: size, weight: .bold))
@@ -316,7 +325,7 @@ struct MusicTileMiniControls: View {
                 .frame(width: 24, height: 22)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(MusicPressButtonStyle(haptic: .playback))
+        .buttonStyle(MusicPressButtonStyle(haptic: haptic))
         .help(label)
         .accessibilityLabel(label)
     }

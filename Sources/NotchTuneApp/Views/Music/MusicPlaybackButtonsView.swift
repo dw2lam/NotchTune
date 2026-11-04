@@ -17,7 +17,7 @@ struct MusicPlaybackButtonsView: View {
             MusicHoverButton(
                 icon: playerManager.track.isPodcast ? "15.arrow.trianglehead.counterclockwise" : "backward.fill",
                 iconSize: buttonSize,
-                haptic: .playback
+                haptic: .skip
             ) {
                 playerManager.previousTrack()
             }
@@ -25,7 +25,7 @@ struct MusicPlaybackButtonsView: View {
             MusicHoverButton(
                 icon: playerManager.isPlaying ? "pause.fill" : "play.fill",
                 iconSize: buttonSize * 1.3,
-                haptic: .playback
+                haptic: .playPause
             ) {
                 playerManager.togglePlayPause()
             }
@@ -33,7 +33,7 @@ struct MusicPlaybackButtonsView: View {
             MusicHoverButton(
                 icon: playerManager.track.isPodcast ? "15.arrow.trianglehead.clockwise" : "forward.fill",
                 iconSize: buttonSize,
-                haptic: .playback
+                haptic: .skip
             ) {
                 playerManager.nextTrack()
             }
