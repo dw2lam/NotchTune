@@ -77,6 +77,10 @@ final class MirrorCamera {
         }
     }
 
+    /// The picture's width as last laid out; the notch's height follows from
+    /// it (`MirrorPanelView.contentHeight`). Not saved.
+    @ObservationIgnored var layoutWidth: CGFloat = 0
+
     /// A still shown in place of the camera: harness captures (where the
     /// camera never runs) and the website.
     let stillImage: NSImage?

@@ -102,6 +102,15 @@ struct OverlayPanelControllerTests {
         #expect(!OverlayPanelController.shouldActivatePanel(for: nil))
     }
 
+    @Test
+    func onlyAHoverOpenTakesTheKeyboardAtOnce() {
+        #expect(OverlayPanelController.takesKeyOnOpen(for: .hover))
+        #expect(!OverlayPanelController.takesKeyOnOpen(for: .notification))
+        #expect(!OverlayPanelController.takesKeyOnOpen(for: .boot))
+        #expect(!OverlayPanelController.takesKeyOnOpen(for: .drag))
+        #expect(!OverlayPanelController.takesKeyOnOpen(for: nil))
+    }
+
     private func pointerKeyFocus(
         isOpened: Bool = true,
         pointerOnPanel: Bool,

@@ -1,28 +1,22 @@
 @preconcurrency import AVFoundation
 import SwiftUI
 
-struct MirrorContentHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
 /// The Mirror tab: a hand mirror from the Mac's camera. The picture spans
 /// the open notch's width; its controls sit in one row underneath. Expand
 /// only makes the picture taller (the notch keeps its width), as far as
 /// the screen allows.
+///
+/// The notch's height comes from `contentHeight` (the panel controller
+/// works it out), and the picture just fills whatever height it is given.
+/// So expanding is one animation, the window's own resize, with the
+/// picture growing in step frame by frame.
 struct MirrorPanelView: View {
     var camera: MirrorCamera
     /// The notch is open on this tab; the camera runs only then.
     var isLive: Bool
     var horizontalPadding: CGFloat = 24
-    /// Tallest this tab's content may be before the notch would run off the
-    /// screen (`nil` before there is a screen).
-    var maxContentHeight: CGFloat?
-
-    @State private var width: CGFloat = 0
+    /// Asks the notch to resize after Expand or a first width measurement.
+    var relayout: () -> Void = {}
 
     static let controlsHeight: CGFloat = 30
     static let spacing: CGFloat = 10
@@ -42,8 +36,10 @@ struct MirrorPanelView: View {
         return max(120, min(natural, room.rounded(.down)))
     }
 
-    private var pictureHeight: CGFloat {
-        Self.pictureHeight(width: width, isExpanded: camera.isExpanded, cap: maxContentHeight)
+    /// The whole tab's height for a picture `width` wide (padding included).
+    static func contentHeight(width: CGFloat, isExpanded: Bool, cap: CGFloat?) -> CGFloat {
+        pictureHeight(width: width, isExpanded: isExpanded, cap: cap)
+            + controlsHeight + spacing + topPadding + bottomPadding
     }
 
     var body: some View {
@@ -52,16 +48,15 @@ struct MirrorPanelView: View {
             controls
                 .frame(height: Self.controlsHeight)
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            guard abs(camera.layoutWidth - width) >= 1 else { return }
+            camera.layoutWidth = width
+            relayout()
+        }
         .padding(.horizontal, horizontalPadding)
         .padding(.top, Self.topPadding)
         .padding(.bottom, Self.bottomPadding)
-        .fixedSize(horizontal: false, vertical: true)
-        .background {
-            GeometryReader { geometry in
-                Color.clear.preference(key: MirrorContentHeightKey.self, value: geometry.size.height)
-            }
-        }
+        .frame(maxHeight: .infinity, alignment: .top)
         .task(id: isLive) {
             if isLive {
                 camera.start()
@@ -79,8 +74,7 @@ struct MirrorPanelView: View {
     /// into the layout.
     private var mirrorFrame: some View {
         Color.white.opacity(0.04)
-            .frame(maxWidth: .infinity)
-            .frame(height: pictureHeight)
+            .frame(maxWidth: .infinity, minHeight: 120, maxHeight: .infinity)
             .overlay { frameContent }
             .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
             .overlay {
@@ -201,7 +195,10 @@ struct MirrorPanelView: View {
                 help: camera.isExpanded ? "Make the mirror smaller" : "Make the mirror bigger",
                 isOn: camera.isExpanded
             ) {
-                withAnimation(.smooth(duration: 0.35)) { camera.isExpanded.toggle() }
+                // No SwiftUI animation: the window's resize is the animation,
+                // and the picture fills it as it goes.
+                camera.isExpanded.toggle()
+                relayout()
             }
         }
         .disabled(camera.access != .granted)
@@ -350,8 +347,14 @@ final class MirrorVideoNSView: NSView {
     }
 
     var zoom: CGFloat = 1 {
-        didSet { if zoom != oldValue { needsLayout = true } }
+        didSet {
+            if zoom != oldValue {
+                animatesNextLayout = true
+                needsLayout = true
+            }
+        }
     }
+    private var animatesNextLayout = false
 
     init(session: AVCaptureSession) {
         previewLayer = AVCaptureVideoPreviewLayer(session: session)
@@ -387,7 +390,14 @@ final class MirrorVideoNSView: NSView {
         let width = bounds.width * zoom
         let height = bounds.height * zoom
         CATransaction.begin()
-        CATransaction.setAnimationDuration(0.25)
+        // A zoom eases in; a size change (Expand, the window resizing)
+        // follows the view exactly, frame by frame.
+        if animatesNextLayout {
+            CATransaction.setAnimationDuration(0.25)
+        } else {
+            CATransaction.setDisableActions(true)
+        }
+        animatesNextLayout = false
         previewLayer.frame = CGRect(
             x: (bounds.width - width) / 2,
             y: (bounds.height - height) / 2,

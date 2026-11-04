@@ -1452,18 +1452,6 @@ final class AppModel {
     }
 
     /// Measured by SwiftUI from the Reminders tab's natural content height.
-    /// Measured by SwiftUI from the Mirror tab (it grows when expanded).
-    var measuredMirrorContentHeight: CGFloat = 0 {
-        didSet {
-            let delta = abs(measuredMirrorContentHeight - oldValue)
-            if delta >= 2, measuredMirrorContentHeight > 0 {
-                DispatchQueue.main.async { [weak self] in
-                    self?.overlay.refreshOverlayPlacementIfVisible()
-                }
-            }
-        }
-    }
-
     var measuredRemindersContentHeight: CGFloat = 0 {
         didSet {
             let delta = abs(measuredRemindersContentHeight - oldValue)

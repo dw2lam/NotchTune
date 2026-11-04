@@ -85,6 +85,14 @@ final class OverlayPanelController {
         reason == .click
     }
 
+    /// Hovering opens the notch under the pointer, so it takes the keyboard
+    /// at once, as the pointer rule would a frame later: Liquid Glass draws
+    /// flat in a window without focus, so waiting showed a fill turning into
+    /// glass. Notifications, boot and drags still never take it.
+    nonisolated static func takesKeyOnOpen(for reason: NotchOpenReason?) -> Bool {
+        reason == .hover
+    }
+
     enum PointerKeyFocus: Equatable {
         case keep
         case take
@@ -142,8 +150,12 @@ final class OverlayPanelController {
             panel.orderFrontRegardless()
         }
 
-        panel.ignoresMouseEvents = true
-        panel.acceptsMouseMovedEvents = false
+        // Called again while the notch is open (a track change, a fullscreen
+        // check): only a closed notch lets clicks through, or the open one
+        // passed every click to the app behind it.
+        let isOpen = model.notchStatus == .opened && !model.isOverlayDisplayFullscreen
+        panel.ignoresMouseEvents = !isOpen
+        panel.acceptsMouseMovedEvents = isOpen
         startEventMonitoring()
         return diagnostics
     }
@@ -520,8 +532,15 @@ final class OverlayPanelController {
         if activates {
             pointerMadePanelKey = false
             panel.makeKeyAndOrderFront(nil)
+        } else if Self.takesKeyOnOpen(for: model?.notchOpenReason) {
+            panel.orderFrontRegardless()
+            if !panel.isKeyWindow {
+                panel.makeKey()
+                // Handed back when the pointer leaves, like any hover focus.
+                pointerMadePanelKey = true
+            }
         } else {
-            // Opening on its own (an agent notification, a hover, a file
+            // Opening on its own (an agent notification, boot, a file
             // drag) must not take the keyboard: a key .nonactivatingPanel
             // still receives every keystroke, so text typed in another app
             // landed in the notch. It turns key once the pointer is on it
@@ -1428,12 +1447,17 @@ final class OverlayPanelController {
         }
 
         if model.islandActiveTab == .mirror {
-            // The tab sizes its picture to fit under the content cap, so the
-            // measured height never runs the notch off the screen.
-            let measured = model.measuredMirrorContentHeight > 0
-                ? model.measuredMirrorContentHeight
-                : 420
-            return measured + Self.agentsTabChromeHeight
+            // Worked out, not measured: the picture fills whatever height the
+            // window gives it, so Expand animates as one window resize.
+            // Before the first layout, assume the usual side insets.
+            let width = model.mirror.layoutWidth > 0
+                ? model.mirror.layoutWidth
+                : openedPanelWidth(for: screen) - 2 * 16
+            return MirrorPanelView.contentHeight(
+                width: width,
+                isExpanded: model.mirror.isExpanded,
+                cap: agentsContentHeightCap()
+            ) + Self.agentsTabChromeHeight
         }
 
         if model.islandActiveTab == .music {
