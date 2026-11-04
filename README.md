@@ -39,6 +39,17 @@ This release is currently unsigned. If macOS blocks the first launch, right-clic
 
 Open NotchTune, go to **Settings → Setup**, and install hooks for the coding agents you use. Grant Accessibility permission if macOS asks; NotchTune uses it to detect terminal windows and jump back to active sessions.
 
+### Updates
+
+You only install NotchTune once. After that it keeps itself up to date:
+
+1. It checks for a new version every hour (or right away from **Settings → General → Check for Updates…**).
+2. It downloads the update in the background. Usually that is a small patch with just what changed, often under 1 MB; if there's no patch for your version, it downloads the full app instead.
+3. When the update is ready, an **Update** button appears in the notch and **Restart to Update** in Settings. Click either one and NotchTune swaps in the new version and relaunches in a second or two, with no disk image or installer.
+4. If you never click it, the update installs the next time NotchTune quits.
+
+Permissions you grant (camera for Mirror, calendars, Accessibility) are remembered between launches. While releases are unsigned, macOS may ask again once after an update, because it ties those grants to the app's signature.
+
 ### Run From Source
 
 Clone the repo and run the app locally:
@@ -75,6 +86,7 @@ swift test
 zsh scripts/harness.sh
 zsh scripts/launch-dev-app.sh
 zsh scripts/package-app.sh
+zsh scripts/make-release-deltas.sh <tag>   # delta patches + appcast for a release
 ```
 
 ## Credits

@@ -40,13 +40,14 @@ deltas_xml=""
 seen_builds=" $new_build "
 # The newest releases, the tag itself included: re-shipping a version
 # (same tag, newer build) patches from the build it replaces.
-for previous_tag in $(gh release list --repo "$repo" --limit "$previous_count" --json tagName --jq '.[].tagName'); do
+# Fetched first so a GitHub outage stops the script instead of quietly
+# shipping an appcast with no patches.
+previous_tags="$(gh release list --repo "$repo" --limit "$previous_count" --json tagName --jq '.[].tagName')"
+[[ -n "$previous_tags" ]] || { echo "No releases found on $repo." >&2; exit 1; }
+for previous_tag in ${(f)previous_tags}; do
     dir="$work/old-$previous_tag"
     mkdir -p "$dir"
-    if ! gh release download "$previous_tag" --repo "$repo" --pattern NotchTune.zip --dir "$dir" >/dev/null 2>&1; then
-        echo "skip $previous_tag: no NotchTune.zip"
-        continue
-    fi
+    gh release download "$previous_tag" --repo "$repo" --pattern NotchTune.zip --dir "$dir"
     ditto -x -k "$dir/NotchTune.zip" "$dir"
     old_app="$dir/NotchTune.app"
     old_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$old_app/Contents/Info.plist")"
@@ -61,10 +62,14 @@ for previous_tag in $(gh release list --repo "$repo" --limit "$previous_count" -
     # Format 3 reads on every Sparkle 2 release, so old builds can use it.
     "$bin/BinaryDelta" create --version 3 "$old_app" "$new_app" "$delta_path"
 
-    # Prove the patch rebuilds the new app exactly before shipping it.
+    # Prove the patch rebuilds the new app exactly before shipping it:
+    # BinaryDelta checks the rebuilt tree against the hash in the patch, and
+    # the code signature's CDHash (it seals every file) must match too.
     check="$dir/check.app"
     "$bin/BinaryDelta" apply "$old_app" "$check" "$delta_path" >/dev/null
-    if ! diff -rq "$new_app" "$check" >/dev/null; then
+    expected="$(codesign -dv --verbose=4 "$new_app" 2>&1 | grep '^CDHash=')"
+    rebuilt="$(codesign -dv --verbose=4 "$check" 2>&1 | grep '^CDHash=')"
+    if [[ -z "$expected" || "$expected" != "$rebuilt" ]] || ! codesign --verify --deep --strict "$check" 2>/dev/null; then
         echo "delta from $old_build does not rebuild $new_build" >&2
         exit 1
     fi
