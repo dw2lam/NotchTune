@@ -20,20 +20,24 @@ enum HapticEvent: String, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
 }
 
-/// One trackpad pulse.
-enum HapticStrength: Sendable {
+/// One trackpad pulse, faintest to firmest.
+enum HapticStrength: Int, CaseIterable, Sendable {
+    case whisper = 1
+    case faint
     case light
+    case soft
     case medium
     case strong
 
-    /// MultitouchSupport actuation IDs (the ones HapticKey and friends use;
-    /// 3 is the faintest, 6 the firmest). 3 was too faint to notice through
-    /// a resting finger, so the scale starts at 4.
+    /// MultitouchSupport actuation IDs 1 (faintest) to 6 (firmest), the
+    /// scale HapticKey and friends use.
     var actuationID: Int32 {
         switch self {
+        case .whisper: 1
+        case .faint: 2
         case .light: 4
-        case .medium: 6
-        case .strong: 6
+        case .soft: 5
+        case .medium, .strong: 6
         }
     }
 
@@ -46,8 +50,8 @@ enum HapticStrength: Sendable {
     /// The closest AppKit pattern, for the fallback.
     var pattern: NSHapticFeedbackManager.FeedbackPattern {
         switch self {
-        case .light: .generic
-        case .medium: .alignment
+        case .whisper, .faint, .light: .generic
+        case .soft, .medium: .alignment
         case .strong: .levelChange
         }
     }
@@ -76,15 +80,16 @@ enum HapticFeel: String, CaseIterable, Identifiable, Sendable {
         case .tap: [(0, .light)]
         case .click: [(0, .medium)]
         case .bump: [(0, .strong)]
-        case .ripple: zip(Self.rippleOffsets, [.strong, .strong, .medium, .medium, .light]).map { ($0, $1) }
+        case .ripple: zip(Self.rippleOffsets, Self.rippleStrengths).map { ($0, $1) }
         case .nudge: [(0, .light), (0.12, .light)]
         }
     }
 
-    /// Five pulses whose gaps grow (70 → 80 → 90 → 100 ms) so the ripple
-    /// rolls out and eases off over about a third of a second, instead of
-    /// one quick, sharp burst.
-    static let rippleOffsets: [TimeInterval] = [0, 0.07, 0.15, 0.24, 0.34]
+    /// Six pulses, firmest to faintest, each gap longer than the last (90 →
+    /// 110 → 130 → 150 → 170 ms): a drop in water, spreading out and dying
+    /// away over about two thirds of a second.
+    static let rippleOffsets: [TimeInterval] = [0, 0.09, 0.2, 0.33, 0.48, 0.65]
+    static let rippleStrengths: [HapticStrength] = [.strong, .medium, .soft, .light, .faint, .whisper]
 }
 
 struct HapticSettings: Equatable, Sendable {

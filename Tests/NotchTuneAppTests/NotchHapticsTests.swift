@@ -13,9 +13,13 @@ struct NotchHapticsTests {
         for (earlier, later) in zip(gaps, gaps.dropFirst()) {
             #expect(later > earlier)
         }
-        // Rolls out over a beat, not a sharp burst, but stays brief.
-        #expect((offsets.last ?? 0) >= 0.3)
-        #expect((offsets.last ?? 0) < 0.4)
+        // Spread out over a beat, not a sharp burst, and still brief.
+        #expect((offsets.last ?? 0) >= 0.5)
+        #expect((offsets.last ?? 0) < 0.8)
+        // Firmest to faintest.
+        let strengths = HapticFeel.ripple.pulses.map(\.strength.rawValue)
+        #expect(strengths == strengths.sorted(by: >))
+        #expect(Set(strengths).count == strengths.count)
     }
 
     @Test
