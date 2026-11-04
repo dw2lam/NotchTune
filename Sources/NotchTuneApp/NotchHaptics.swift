@@ -85,11 +85,10 @@ enum HapticFeel: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// Six pulses, firmest to faintest, each gap longer than the last (90 →
-    /// 110 → 130 → 150 → 170 ms): a drop in water, spreading out and dying
-    /// away over about two thirds of a second.
-    static let rippleOffsets: [TimeInterval] = [0, 0.09, 0.2, 0.33, 0.48, 0.65]
-    static let rippleStrengths: [HapticStrength] = [.strong, .medium, .soft, .light, .faint, .whisper]
+    /// Four pulses, firmest to faintest, each gap longer than the last (100
+    /// → 140 → 180 ms): a drop in water, spreading out and dying away.
+    static let rippleOffsets: [TimeInterval] = [0, 0.1, 0.24, 0.42]
+    static let rippleStrengths: [HapticStrength] = [.strong, .soft, .light, .faint]
 }
 
 struct HapticSettings: Equatable, Sendable {
