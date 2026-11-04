@@ -24,6 +24,7 @@ final class AppModel {
     private static let soundMutedDefaultsKey = "overlay.sound.muted"
     private static let showDockIconDefaultsKey = "app.showDockIcon"
     private static let hapticFeedbackEnabledDefaultsKey = "app.hapticFeedbackEnabled"
+    private static let hapticFeelsDefaultsKey = "app.hapticFeels"
     private static let islandRightSlotDefaultsKey = "appearance.island.v6.rightSlot"
     private static let islandCenterLabelDefaultsKey = "appearance.island.v6.centerLabel"
     private static let showCodexUsageDefaultsKey = "app.showCodexUsage"
@@ -306,6 +307,14 @@ final class AppModel {
             NotchHaptics.isEnabled = hapticFeedbackEnabled
             guard hasFinishedInit, hapticFeedbackEnabled != oldValue else { return }
             UserDefaults.standard.set(hapticFeedbackEnabled, forKey: Self.hapticFeedbackEnabledDefaultsKey)
+        }
+    }
+    /// The feel of each haptic (Settings → Personalization → Haptics).
+    var hapticSettings = HapticSettings() {
+        didSet {
+            NotchHaptics.settings = hapticSettings
+            guard hasFinishedInit, hapticSettings != oldValue else { return }
+            UserDefaults.standard.set(hapticSettings.stored, forKey: Self.hapticFeelsDefaultsKey)
         }
     }
     /// Dwell before hover opens the notch (Settings → General).
@@ -1132,6 +1141,9 @@ final class AppModel {
         selectedSoundName = NotificationSoundService.selectedSoundName
         showDockIcon = UserDefaults.standard.bool(forKey: Self.showDockIconDefaultsKey)
         hapticFeedbackEnabled = UserDefaults.standard.bool(forKey: Self.hapticFeedbackEnabledDefaultsKey)
+        hapticSettings = HapticSettings(
+            stored: UserDefaults.standard.dictionary(forKey: Self.hapticFeelsDefaultsKey) as? [String: String] ?? [:]
+        )
         hoverOpenMode = HoverOpenMode(
             rawValue: UserDefaults.standard.string(forKey: Self.hoverOpenModeDefaultsKey) ?? ""
         ) ?? .normal
@@ -1194,6 +1206,9 @@ final class AppModel {
         overlay.onNotificationSurfaceShown = { [weak self] sessionID in
             self?.notificationCardShownAt = Date()
             self?.markCompletionToastShown(for: sessionID)
+            if self?.state.session(id: sessionID)?.phase == .completed {
+                NotchHaptics.play(.agentFinished)
+            }
         }
         overlay.isSoundMutedAccessor = { [weak self] in
             self?.isSoundSilencedNow ?? false

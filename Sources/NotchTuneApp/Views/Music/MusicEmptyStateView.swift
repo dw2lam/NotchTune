@@ -316,7 +316,7 @@ struct MusicTileMiniControls: View {
                 .frame(width: 24, height: 22)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(MusicPressButtonStyle(haptic: .ripple))
+        .buttonStyle(MusicPressButtonStyle(haptic: .playback))
         .help(label)
         .accessibilityLabel(label)
     }

@@ -3,7 +3,7 @@ import SwiftUI
 struct MusicHoverButton: View {
     var icon: String
     var iconSize: CGFloat = 60
-    var haptic: NotchHaptics.Feel = .tap
+    var haptic: HapticEvent = .buttons
     var action: () -> Void
 
     @State private var isHovering = false

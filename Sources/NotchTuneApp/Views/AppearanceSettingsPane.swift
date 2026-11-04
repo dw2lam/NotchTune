@@ -49,6 +49,7 @@ struct AppearanceSettingsPane: View {
                 .id("character")
             notchCard
             liquidGlassCard
+            hapticsCard
             sessionListCard
         }
         // Restarts when the pin changes or the window is hidden / shown:
@@ -458,6 +459,46 @@ struct AppearanceSettingsPane: View {
 
             }
             .disabled(glassControlsDisabled)
+        }
+    }
+
+    // MARK: - Haptics
+
+    private var hapticsCard: some View {
+        SettingsCard(
+            title: lang.t("settings.appearance.haptics.title"),
+            footer: lang.t("settings.appearance.haptics.footer")
+        ) {
+            SettingsToggleRow(
+                lang.t("settings.general.hapticFeedback"),
+                subtitle: lang.t("settings.appearance.haptics.enabled.note"),
+                isOn: Binding(
+                    get: { model.hapticFeedbackEnabled },
+                    set: { model.hapticFeedbackEnabled = $0 }
+                )
+            )
+
+            Group {
+                ForEach(HapticEvent.allCases) { event in
+                    SettingsRowDivider()
+
+                    SettingsPickerRow(
+                        lang.t("settings.appearance.haptics.event.\(event.rawValue)"),
+                        selection: Binding(
+                            get: { model.hapticSettings.feel(for: event) },
+                            set: { feel in
+                                model.hapticSettings.feels[event] = feel
+                                // Picked with a finger on the trackpad: feel it.
+                                NotchHaptics.perform(feel)
+                            }
+                        ),
+                        segments: HapticFeel.allCases.map {
+                            SettingsSegment($0, lang.t("settings.appearance.haptics.feel.\($0.rawValue)"))
+                        }
+                    )
+                }
+            }
+            .disabled(!model.hapticFeedbackEnabled)
         }
     }
 

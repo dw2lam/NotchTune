@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MusicPressButtonStyle: ButtonStyle {
-    var haptic: NotchHaptics.Feel = .tap
+    var haptic: HapticEvent = .buttons
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

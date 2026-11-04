@@ -1211,7 +1211,7 @@ struct IslandPanelView: View {
     private func tabButton(label: String, systemImage: String, tab: IslandTab) -> some View {
         Button {
             if model.islandActiveTab != tab {
-                NotchHaptics.play(.detent)
+                NotchHaptics.play(.tabs)
             }
             withAnimation(.smooth(duration: 0.35, extraBounce: 0.1)) { model.islandActiveTab = tab }
         } label: {

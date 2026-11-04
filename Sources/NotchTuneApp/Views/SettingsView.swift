@@ -337,13 +337,6 @@ struct GeneralSettingsPane: View {
 
                 SettingsRowDivider()
 
-                SettingsToggleRow(lang.t("settings.general.hapticFeedback"), isOn: Binding(
-                    get: { model.hapticFeedbackEnabled },
-                    set: { model.hapticFeedbackEnabled = $0 }
-                ))
-
-                SettingsRowDivider()
-
                 SettingsToggleRow(lang.t("settings.general.completionReply"), isOn: Binding(
                     get: { model.completionReplyEnabled },
                     set: { model.completionReplyEnabled = $0 }

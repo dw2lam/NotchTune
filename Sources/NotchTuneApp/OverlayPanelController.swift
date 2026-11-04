@@ -813,7 +813,7 @@ final class OverlayPanelController {
     }
 
     private func performMusicHaptic(_ model: AppModel) {
-        NotchHaptics.play(.ripple)
+        NotchHaptics.play(.playback)
     }
 
     // MARK: - File drag shelf
@@ -1084,7 +1084,7 @@ final class OverlayPanelController {
     private func performHoverOpen(_ model: AppModel) {
         guard model.notchStatus == .closed else { return }
 
-        NotchHaptics.play(.detent)
+        NotchHaptics.play(.hoverOpen)
 
         model.notchOpen(reason: .hover)
     }
