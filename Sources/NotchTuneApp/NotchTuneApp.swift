@@ -37,6 +37,7 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
         )
         ProcessInfo.processInfo.disableSuddenTermination()
         NSApp.setActivationPolicy(model.showDockIcon ? .regular : .accessory)
+        NotchMenuTracking.startObserving()
         NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: nil, queue: .main
         ) { [weak self] notification in

@@ -21,7 +21,7 @@ const LAYERS: { id: LayerId; src: string; w: number; h: number; top?: number; dx
   { id: 'player', src: 'music-220', w: 650, h: 283, alt: 'The island on its Music tab: Still Water by Juniper Coast at 1:21 of 3:56, with shuffle, previous, pause, next and repeat.' },
   { id: 'myspace', src: 'myspace-220', w: 650, h: 430, alt: 'The island on its Myspace tab: a box to drop a thought, filters for text, images and files, today\'s three images, and a note about lazy-loading the product grid.' },
   { id: 'reminders', src: 'reminders-220', w: 650, h: 374, alt: 'The island on its Reminders tab: three active reminders, from checking the staging deploy at 10:00 to booking the onboarding design review, and one in the archive.' },
-  { id: 'mirror', src: 'mirror-220', w: 650, h: 283, alt: 'The island on its Mirror tab: the camera picture, flipped like a mirror, beside a FaceTime HD Camera drop-down and Flip and Zoom controls.' },
+  { id: 'mirror', src: 'mirror-wide-220', w: 650, h: 476, alt: 'The island on its Mirror tab: the camera picture across the full width, flipped like a mirror, with a FaceTime HD Camera drop-down and zoom, flip and expand buttons underneath.' },
   { id: 'pill-meeting', src: 'pill-meeting', w: 464, h: 38, dx: -29, alt: 'The closed notch four minutes before Design review, 09:53 to 10:23.' },
   { id: 'banner', src: 'meeting-220', w: 650, h: 416, alt: 'The island with the Design review banner above the agent list: in 4 minutes, 09:54 to 10:24, with Join.' },
   { id: 'settings', src: 'settings-pill', w: 906, h: 766, top: 52, alt: 'NotchTune Settings on Personalization, its sections in one pill across the title bar: previews of the MacBook notch and an external display linked with Sync, and the first row of twenty pixel characters.' },
@@ -71,7 +71,7 @@ const FRAMES: { id?: string; cam: CamId; layer: LayerId; tint: string; title?: s
   {
     id: 'mirror', cam: 'notch', layer: 'mirror', tint: 'rgb(226 170 132)',
     title: 'A mirror before the call.',
-    line: 'Your camera, flipped like a mirror, with zoom and a camera picker. It’s only on while the tab is open.',
+    line: 'Your camera across the notch, flipped like a mirror, with zoom and a camera picker, or expanded for a closer look. It’s only on while the tab is open.',
   },
   {
     id: 'meetings', cam: 'notch', layer: 'banner', tint: 'rgb(80 150 255)',

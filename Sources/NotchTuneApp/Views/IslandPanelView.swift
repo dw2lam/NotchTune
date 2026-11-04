@@ -1153,10 +1153,16 @@ struct IslandPanelView: View {
                             isLive: model.notchStatus == .opened,
                             horizontalPadding: usesNotchAwareOpenedHeader
                                 ? Self.notchHeaderHorizontalPadding
-                                : 16
+                                : 16,
+                            maxContentHeight: model.agentsContentHeightCap
                         )
                         .transition(Self.tabContentTransition)
                         .frame(maxWidth: .infinity)
+                        .onPreferenceChange(MirrorContentHeightKey.self) { height in
+                            if height > 0 {
+                                model.measuredMirrorContentHeight = height
+                            }
+                        }
                     case .reminders:
                         RemindersPanelView(store: model.myspaceStore)
                             .transition(Self.tabContentTransition)

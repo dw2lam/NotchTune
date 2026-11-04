@@ -1,29 +1,67 @@
 @preconcurrency import AVFoundation
 import SwiftUI
 
-/// The Mirror tab: a hand mirror from the Mac's camera, laid out like the
-/// Music tab — the picture where the cover sits, its controls beside it.
+struct MirrorContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// The Mirror tab: a hand mirror from the Mac's camera. The picture spans
+/// the open notch's width; its controls sit in one row underneath. Expand
+/// only makes the picture taller (the notch keeps its width), as far as
+/// the screen allows.
 struct MirrorPanelView: View {
     var camera: MirrorCamera
     /// The notch is open on this tab; the camera runs only then.
     var isLive: Bool
     var horizontalPadding: CGFloat = 24
+    /// Tallest this tab's content may be before the notch would run off the
+    /// screen (`nil` before there is a screen).
+    var maxContentHeight: CGFloat?
 
-    static let frameHeight: CGFloat = 166
-    static let frameWidth: CGFloat = 296
-    private static let headerHeight: CGFloat = 26
-    private static let rowHeight: CGFloat = 38
+    @State private var width: CGFloat = 0
+
+    static let controlsHeight: CGFloat = 30
+    static let spacing: CGFloat = 10
+    static let topPadding: CGFloat = 4
+    static let bottomPadding: CGFloat = 14
+    /// Height / width of the picture: a wide 16:9, or square when expanded.
+    static let aspect: CGFloat = 9.0 / 16.0
+    static let expandedAspect: CGFloat = 1
+    private static let cornerRadius: CGFloat = 16
+
+    /// The picture's height for a given width, fitted under `cap` (the whole
+    /// tab's content budget) so the controls always stay on screen.
+    static func pictureHeight(width: CGFloat, isExpanded: Bool, cap: CGFloat?) -> CGFloat {
+        let natural = (width * (isExpanded ? expandedAspect : aspect)).rounded()
+        guard let cap else { return natural }
+        let room = cap - controlsHeight - spacing - topPadding - bottomPadding
+        return max(120, min(natural, room.rounded(.down)))
+    }
+
+    private var pictureHeight: CGFloat {
+        Self.pictureHeight(width: width, isExpanded: camera.isExpanded, cap: maxContentHeight)
+    }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 20) {
+        VStack(spacing: Self.spacing) {
             mirrorFrame
             controls
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .frame(height: Self.controlsHeight)
         }
-        .frame(height: Self.frameHeight)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .padding(.horizontal, horizontalPadding)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.top, Self.topPadding)
+        .padding(.bottom, Self.bottomPadding)
+        .fixedSize(horizontal: false, vertical: true)
+        .background {
+            GeometryReader { geometry in
+                Color.clear.preference(key: MirrorContentHeightKey.self, value: geometry.size.height)
+            }
+        }
         .task(id: isLive) {
             if isLive {
                 camera.start()
@@ -36,10 +74,27 @@ struct MirrorPanelView: View {
 
     // MARK: Picture
 
+    /// The picture and prompts are an overlay on a plain frame, so a
+    /// picture's own size (a still filling the frame, say) never feeds back
+    /// into the layout.
     private var mirrorFrame: some View {
-        ZStack {
-            Color.white.opacity(0.04)
+        Color.white.opacity(0.04)
+            .frame(maxWidth: .infinity)
+            .frame(height: pictureHeight)
+            .overlay { frameContent }
+            .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                    .stroke(.white.opacity(0.08), lineWidth: 0.5)
+            }
+            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+            .animation(.easeInOut(duration: 0.2), value: camera.access)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Mirror")
+    }
 
+    @ViewBuilder
+    private var frameContent: some View {
             switch camera.access {
             case .granted:
                 picture
@@ -59,17 +114,6 @@ struct MirrorPanelView: View {
                     action: camera.openPrivacySettings
                 )
             }
-        }
-        .frame(width: Self.frameWidth, height: Self.frameHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(.white.opacity(0.08), lineWidth: 0.5)
-        }
-        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-        .animation(.easeInOut(duration: 0.2), value: camera.access)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Mirror")
     }
 
     @ViewBuilder
@@ -90,13 +134,14 @@ struct MirrorPanelView: View {
             }
             .scaleEffect(x: camera.isMirrored ? -1 : 1, y: 1)
             .scaleEffect(camera.zoom.rawValue)
-            .frame(width: Self.frameWidth, height: Self.frameHeight)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
         } else {
             MirrorVideoView(
                 session: camera.capture.session,
                 isMirrored: camera.isMirrored,
-                zoom: camera.zoom.rawValue
+                zoom: camera.zoom.rawValue,
+                cornerRadius: Self.cornerRadius
             )
         }
     }
@@ -109,19 +154,19 @@ struct MirrorPanelView: View {
     ) -> some View {
         VStack(spacing: 6) {
             Image(systemName: "camera.fill")
-                .font(.system(size: 20, weight: .medium))
+                .font(.system(size: 22, weight: .medium))
                 .foregroundStyle(.white.opacity(0.5))
                 .padding(.bottom, 2)
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.88))
             Text(detail)
-                .font(.system(size: 10.5, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.45))
                 .multilineTextAlignment(.center)
             Button(button, action: action)
                 .buttonStyle(MirrorCapsuleButtonStyle())
-                .padding(.top, 4)
+                .padding(.top, 6)
         }
         .padding(.horizontal, 20)
     }
@@ -129,32 +174,35 @@ struct MirrorPanelView: View {
     // MARK: Controls
 
     private var controls: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 8) {
             cameraMenu
-                .frame(height: Self.headerHeight)
 
-            VStack(spacing: 6) {
-                controlRow(
-                    systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right",
-                    title: "Flip",
-                    detail: camera.isMirrored ? "Mirrored, like a mirror" : "As others see you",
-                    isOn: camera.isMirrored
-                ) {
-                    camera.isMirrored.toggle()
-                }
-                controlRow(
-                    systemImage: camera.zoom == .one ? "plus.magnifyingglass" : "minus.magnifyingglass",
-                    title: "Zoom",
-                    detail: camera.zoom.label,
-                    isOn: camera.zoom != .one
-                ) {
-                    withAnimation(.smooth(duration: 0.3)) { camera.zoom = camera.zoom.next }
-                }
+            Spacer(minLength: 8)
+
+            iconButton(
+                camera.zoom == .one ? "plus.magnifyingglass" : "minus.magnifyingglass",
+                label: camera.zoom.label,
+                help: "Zoom: \(camera.zoom.label)",
+                isOn: camera.zoom != .one
+            ) {
+                withAnimation(.smooth(duration: 0.3)) { camera.zoom = camera.zoom.next }
             }
-
-            Spacer(minLength: 0)
-
-            statusLine
+            iconButton(
+                "arrow.left.and.right.righttriangle.left.righttriangle.right",
+                help: camera.isMirrored ? "Flip: mirrored, like a mirror" : "Flip: as others see you",
+                isOn: camera.isMirrored
+            ) {
+                camera.isMirrored.toggle()
+            }
+            iconButton(
+                camera.isExpanded
+                    ? "arrow.down.right.and.arrow.up.left"
+                    : "arrow.up.left.and.arrow.down.right",
+                help: camera.isExpanded ? "Make the mirror smaller" : "Make the mirror bigger",
+                isOn: camera.isExpanded
+            ) {
+                withAnimation(.smooth(duration: 0.35)) { camera.isExpanded.toggle() }
+            }
         }
         .disabled(camera.access != .granted)
         .opacity(camera.access == .granted ? 1 : 0.45)
@@ -180,11 +228,11 @@ struct MirrorPanelView: View {
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "video.fill")
-                    .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.55))
+                Circle()
+                    .fill(camera.isRunning || camera.isSimulated ? Color.green : Color.white.opacity(0.3))
+                    .frame(width: 5, height: 5)
                 Text(camera.activeDeviceName ?? "Camera")
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.88))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -193,70 +241,53 @@ struct MirrorPanelView: View {
                     .foregroundStyle(.white.opacity(0.45))
             }
             .padding(.horizontal, 12)
-            .frame(height: Self.headerHeight)
-            .background(.white.opacity(0.04), in: Capsule())
-            .overlay { Capsule().stroke(.white.opacity(0.07), lineWidth: 0.5) }
+            .frame(height: Self.controlsHeight)
+            .background(.white.opacity(0.06), in: Capsule())
+            .overlay { Capsule().stroke(.white.opacity(0.08), lineWidth: 0.5) }
             .contentShape(Capsule())
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Choose a camera")
+        .help("Choose a camera. It's only on while Mirror is open.")
         .accessibilityLabel("Camera: \(camera.activeDeviceName ?? "none")")
     }
 
-    private func controlRow(
-        systemImage: String,
-        title: String,
-        detail: String,
+    private func iconButton(
+        _ systemImage: String,
+        label: String? = nil,
+        help: String,
         isOn: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 10) {
+            HStack(spacing: 5) {
                 Image(systemName: systemImage)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(isOn ? 0.92 : 0.6))
-                    .frame(width: 30, height: 30)
-                    .background(.white.opacity(isOn ? 0.16 : 0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .contentTransition(.symbolEffect(.replace))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                    Text(detail)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.46))
-                        .contentTransition(.opacity)
+                if let label {
+                    Text(label)
+                        .font(.system(size: 11, weight: .semibold))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
                 }
-                .lineLimit(1)
-                Spacer(minLength: 0)
             }
-            .padding(4)
-            .frame(height: Self.rowHeight)
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .foregroundStyle(.white.opacity(isOn ? 0.95 : 0.7))
+            .padding(.horizontal, label == nil ? 0 : 11)
+            .frame(minWidth: Self.controlsHeight, minHeight: Self.controlsHeight)
+            .background(.white.opacity(isOn ? 0.16 : 0.06), in: Capsule())
+            .overlay { Capsule().stroke(.white.opacity(0.08), lineWidth: 0.5) }
+            .contentShape(Capsule())
         }
         .buttonStyle(MirrorRowButtonStyle())
-        .accessibilityLabel(title)
-        .accessibilityValue(detail)
-    }
-
-    private var statusLine: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(camera.isRunning || camera.isSimulated ? Color.green : Color.white.opacity(0.3))
-                .frame(width: 5, height: 5)
-            Text("Camera is on only while Mirror is open")
-                .font(.system(size: 9.5, weight: .medium))
-                .foregroundStyle(.white.opacity(0.34))
-                .lineLimit(1)
-        }
+        .help(help)
+        .accessibilityLabel(help)
     }
 }
 
-/// A list-row button: a soft fill on hover, a slight press, and the notch's
-/// button haptic.
+/// A control button: a soft brighten on hover, a slight press, and the
+/// notch's button haptic.
 private struct MirrorRowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         MirrorRowBody(configuration: configuration)
@@ -269,11 +300,8 @@ private struct MirrorRowBody: View {
 
     var body: some View {
         configuration.label
-            .background(
-                .white.opacity(configuration.isPressed ? 0.1 : (isHovering ? 0.06 : 0)),
-                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-            )
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .brightness(configuration.isPressed ? 0.12 : (isHovering ? 0.06 : 0))
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
             .onHover { isHovering = $0 }
             .notchHapticOnPress(configuration.isPressed)
@@ -299,9 +327,12 @@ private struct MirrorVideoView: NSViewRepresentable {
     let session: AVCaptureSession
     let isMirrored: Bool
     let zoom: CGFloat
+    let cornerRadius: CGFloat
 
     func makeNSView(context: Context) -> MirrorVideoNSView {
-        MirrorVideoNSView(session: session)
+        let view = MirrorVideoNSView(session: session)
+        view.layer?.cornerRadius = cornerRadius
+        return view
     }
 
     func updateNSView(_ view: MirrorVideoNSView, context: Context) {

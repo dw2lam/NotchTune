@@ -1428,9 +1428,12 @@ final class OverlayPanelController {
         }
 
         if model.islandActiveTab == .mirror {
-            // The picture's 166 + 12 top + 8 bottom, and the same tab-bar
-            // and margin allowance as Music, so the two tabs match.
-            return MirrorPanelView.frameHeight + 12 + 8 + 42 + 8 + 8
+            // The tab sizes its picture to fit under the content cap, so the
+            // measured height never runs the notch off the screen.
+            let measured = model.measuredMirrorContentHeight > 0
+                ? model.measuredMirrorContentHeight
+                : 420
+            return measured + Self.agentsTabChromeHeight
         }
 
         if model.islandActiveTab == .music {

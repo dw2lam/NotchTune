@@ -53,4 +53,31 @@ struct MirrorCameraTests {
         #expect(camera.activeDeviceID == "harness")
         #expect(camera.activeDeviceName == "FaceTime HD Camera")
     }
+
+    @Test
+    func theMirrorSpansTheWidthAndExpandOnlyMakesItTaller() {
+        let normal = MirrorPanelView.pictureHeight(width: 600, isExpanded: false, cap: 2000)
+        let expanded = MirrorPanelView.pictureHeight(width: 600, isExpanded: true, cap: 2000)
+        #expect(normal == 338) // 16:9 across the full width
+        #expect(expanded == 600)
+    }
+
+    @Test
+    func anExpandedMirrorStopsAtTheScreenWithItsControlsOnScreen() {
+        let cap: CGFloat = 500
+        let height = MirrorPanelView.pictureHeight(width: 600, isExpanded: true, cap: cap)
+        let content = height + MirrorPanelView.controlsHeight + MirrorPanelView.spacing
+            + MirrorPanelView.topPadding + MirrorPanelView.bottomPadding
+        #expect(content <= cap)
+        #expect(height < 600)
+    }
+
+    @Test
+    func expandedPersists() {
+        let defaults = freshDefaults()
+        let camera = MirrorCamera(defaults: defaults, isSimulated: true, stillImage: nil)
+        #expect(!camera.isExpanded)
+        camera.isExpanded = true
+        #expect(MirrorCamera(defaults: defaults, isSimulated: true, stillImage: nil).isExpanded)
+    }
 }

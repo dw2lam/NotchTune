@@ -45,6 +45,7 @@ final class MirrorCamera {
     private static let mirroredKey = "mirror.mirrored"
     private static let zoomKey = "mirror.zoom"
     private static let cameraKey = "mirror.camera"
+    private static let expandedKey = "mirror.expanded"
 
     private(set) var devices: [Device] = []
     private(set) var access: Access = .notDetermined
@@ -57,6 +58,12 @@ final class MirrorCamera {
 
     var zoom: MirrorZoom {
         didSet { defaults.set(zoom.rawValue, forKey: Self.zoomKey) }
+    }
+
+    /// The bigger mirror: the notch grows taller (never wider), as far as
+    /// the screen allows.
+    var isExpanded: Bool {
+        didSet { defaults.set(isExpanded, forKey: Self.expandedKey) }
     }
 
     /// The chosen camera's `uniqueID`; `nil` until one is picked (the
@@ -92,10 +99,16 @@ final class MirrorCamera {
         self.stillImage = stillImage
         isMirrored = defaults.object(forKey: Self.mirroredKey) as? Bool ?? true
         zoom = MirrorZoom(rawValue: defaults.double(forKey: Self.zoomKey)) ?? .one
+        isExpanded = defaults.bool(forKey: Self.expandedKey)
         selectedDeviceID = defaults.string(forKey: Self.cameraKey)
         if isSimulated {
             devices = [Device(id: "harness", name: "FaceTime HD Camera")]
             access = .granted
+            // `NOTCHTUNE_HARNESS_MIRROR_EXPANDED=1` captures the bigger mirror.
+            // Set on the backing store so it isn't saved as the user's choice.
+            if ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_MIRROR_EXPANDED"] == "1" {
+                _isExpanded = true
+            }
         }
     }
 

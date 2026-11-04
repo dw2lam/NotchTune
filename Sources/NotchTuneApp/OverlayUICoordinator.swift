@@ -520,6 +520,12 @@ final class OverlayUICoordinator {
             return false
         }
 
+        // A menu from the notch (the Mirror camera picker, a context menu)
+        // hangs outside it: moving onto its items isn't leaving.
+        if NotchMenuTracking.isActive {
+            return false
+        }
+
         if ignoresPointerExitDuringHarness {
             return false
         }
@@ -852,5 +858,25 @@ final class OverlayUICoordinator {
         } else {
             defaults.set(overlayDisplaySelectionID, forKey: "overlay.display.preference")
         }
+    }
+}
+
+/// Whether one of NotchTune's menus is open. Observed once, app-wide.
+@MainActor
+enum NotchMenuTracking {
+    private(set) static var isActive = false
+    private static var observers: [NSObjectProtocol] = []
+
+    static func startObserving() {
+        guard observers.isEmpty else { return }
+        let center = NotificationCenter.default
+        observers = [
+            center.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { isActive = true }
+            },
+            center.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { isActive = false }
+            },
+        ]
     }
 }
