@@ -467,7 +467,9 @@ struct AppearanceSettingsPane: View {
     private var hapticsCard: some View {
         SettingsCard(
             title: lang.t("settings.appearance.haptics.title"),
-            footer: lang.t("settings.appearance.haptics.footer")
+            footer: TrackpadActuator.shared?.isAvailable == true
+                ? lang.t("settings.appearance.haptics.footer")
+                : lang.t("settings.appearance.haptics.noTrackpad")
         ) {
             SettingsToggleRow(
                 lang.t("settings.general.hapticFeedback"),
