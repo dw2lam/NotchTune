@@ -25,7 +25,12 @@ signing_identity="${NOTCHTUNE_SIGN_IDENTITY:-}"
 stable_identity="${NOTCHTUNE_STABLE_SIGN_IDENTITY:-}"
 if [[ -z "$signing_identity" && -z "$stable_identity" ]]; then
     stable_identity="$(security find-identity -p codesigning -v "$HOME/Library/Keychains/login.keychain-db" 2>/dev/null \
-        | grep '"Open Island Dev Local"' | head -n 1 | awk '{print $2}')"
+        | grep '"Open Island Dev Local"' | head -n 1 | awk '{print $2}' || true)"
+fi
+# Tag-driven releases set this: they must never ship an ad-hoc build.
+if [[ "${NOTCHTUNE_REQUIRE_STABLE_SIGNING:-}" == "1" && -z "$signing_identity" && -z "$stable_identity" ]]; then
+    echo "No signing identity: an ad-hoc release would drop users' permissions on update." >&2
+    exit 1
 fi
 notary_profile="${NOTCHTUNE_NOTARY_PROFILE:-}"
 sparkle_public_key="${NOTCHTUNE_EDDSA_PUBLIC_KEY:-}"
@@ -195,52 +200,31 @@ fi
 
 sparkle_fw="$bundle_dir/Contents/Frameworks/Sparkle.framework"
 
-if [[ -n "$signing_identity" ]]; then
+code_identity="${signing_identity:-$stable_identity}"
+if [[ -n "$code_identity" ]]; then
+    # The hardened runtime is for Developer ID only: under a self-signed
+    # certificate its library validation would refuse Sparkle.framework,
+    # which has no team ID to match.
+    code_flags=()
+    if [[ -n "$signing_identity" ]]; then
+        code_flags=(--options runtime --timestamp)
+    fi
+
     # Sign nested code objects inside-out: Sparkle internals → helpers → app.
-
     if [[ -d "$sparkle_fw" ]]; then
         for xpc in "$sparkle_fw"/Versions/B/XPCServices/*.xpc; do
-            [[ -d "$xpc" ]] && codesign --force --options runtime --timestamp --sign "$signing_identity" "$xpc"
+            [[ -d "$xpc" ]] && codesign --force "${code_flags[@]}" --sign "$code_identity" "$xpc"
         done
         [[ -f "$sparkle_fw/Versions/B/Autoupdate" ]] && \
-            codesign --force --options runtime --timestamp --sign "$signing_identity" "$sparkle_fw/Versions/B/Autoupdate"
+            codesign --force "${code_flags[@]}" --sign "$code_identity" "$sparkle_fw/Versions/B/Autoupdate"
         [[ -d "$sparkle_fw/Versions/B/Updater.app" ]] && \
-            codesign --force --options runtime --timestamp --sign "$signing_identity" "$sparkle_fw/Versions/B/Updater.app"
-        codesign --force --options runtime --timestamp --sign "$signing_identity" "$sparkle_fw"
+            codesign --force "${code_flags[@]}" --sign "$code_identity" "$sparkle_fw/Versions/B/Updater.app"
+        codesign --force "${code_flags[@]}" --sign "$code_identity" "$sparkle_fw"
     fi
 
-    codesign --force --options runtime --timestamp --sign "$signing_identity" \
-        "$bundle_dir/Contents/Helpers/NotchTuneHooks"
-    codesign --force --options runtime --timestamp --sign "$signing_identity" \
-        "$bundle_dir/Contents/Helpers/NotchTuneSetup"
-
-    codesign \
-        --force \
-        --options runtime \
-        --timestamp \
-        --entitlements "$entitlements_path" \
-        --sign "$signing_identity" \
-        "$bundle_dir"
-
-    codesign --verify --deep --strict --verbose=2 "$bundle_dir"
-elif [[ -n "$stable_identity" ]]; then
-    # Inside-out, like the Developer ID path, but without the hardened
-    # runtime: library validation would refuse Sparkle.framework, since a
-    # self-signed certificate has no team ID to match.
-    if [[ -d "$sparkle_fw" ]]; then
-        for xpc in "$sparkle_fw"/Versions/B/XPCServices/*.xpc; do
-            [[ -d "$xpc" ]] && codesign --force --sign "$stable_identity" "$xpc"
-        done
-        [[ -f "$sparkle_fw/Versions/B/Autoupdate" ]] && \
-            codesign --force --sign "$stable_identity" "$sparkle_fw/Versions/B/Autoupdate"
-        [[ -d "$sparkle_fw/Versions/B/Updater.app" ]] && \
-            codesign --force --sign "$stable_identity" "$sparkle_fw/Versions/B/Updater.app"
-        codesign --force --sign "$stable_identity" "$sparkle_fw"
-    fi
-
-    codesign --force --sign "$stable_identity" "$bundle_dir/Contents/Helpers/NotchTuneHooks"
-    codesign --force --sign "$stable_identity" "$bundle_dir/Contents/Helpers/NotchTuneSetup"
-    codesign --force --entitlements "$entitlements_path" --sign "$stable_identity" "$bundle_dir"
+    codesign --force "${code_flags[@]}" --sign "$code_identity" "$bundle_dir/Contents/Helpers/NotchTuneHooks"
+    codesign --force "${code_flags[@]}" --sign "$code_identity" "$bundle_dir/Contents/Helpers/NotchTuneSetup"
+    codesign --force "${code_flags[@]}" --entitlements "$entitlements_path" --sign "$code_identity" "$bundle_dir"
 
     codesign --verify --deep --strict --verbose=2 "$bundle_dir"
 else
@@ -318,8 +302,10 @@ echo "Archive: $zip_path"
 echo "DMG: $dmg_path"
 if [[ -n "$signing_identity" ]]; then
     echo "Signed with identity: $signing_identity"
+elif [[ -n "$stable_identity" ]]; then
+    echo "Signed with stable local identity: $stable_identity (not notarized)"
 else
-    echo "No signing identity configured; produced an unsigned local bundle."
+    echo "No signing identity configured; produced an ad-hoc local bundle."
 fi
 
 if [[ -n "$notary_profile" ]]; then

@@ -233,14 +233,11 @@ final class OverlayUICoordinator {
     private struct ClosingPresentation: Equatable {
         var surface: IslandSurface
         var openReason: NotchOpenReason?
+        var contentWidth: CGFloat?
     }
 
     private var closingPresentation: ClosingPresentation?
-    @ObservationIgnored private var closingPresentationGeneration: UInt64 = 0
-
-    /// How long the panel's content lives through a close: the morph, up to
-    /// the moment the opened surface unmounts.
-    private static let closingPresentationDuration: TimeInterval = 0.44
+    @ObservationIgnored private var closeMorphGeneration: UInt64 = 0
 
     /// The surface the open panel draws (the live one, except during a close).
     var presentedSurface: IslandSurface {
@@ -251,17 +248,41 @@ final class OverlayUICoordinator {
         closingPresentation.map(\.openReason) ?? notchOpenReason
     }
 
-    private func holdPresentationForClose(wasOpened: Bool, status: NotchStatus) {
-        closingPresentationGeneration &+= 1
-        guard wasOpened, status != .opened else {
+    /// The width a close morphs from, when the window has since widened.
+    var presentedContentWidth: CGFloat? {
+        closingPresentation?.contentWidth
+    }
+
+    /// A close is one phase with one end (`CloseMorph.settled`): the panel's
+    /// content, its tab and the window all hold until then, so nothing moves
+    /// under the morph. Reopening ends it early; a second close changes nothing.
+    private func updateCloseMorph(wasOpened: Bool, status: NotchStatus) {
+        if status == .opened {
+            guard closingPresentation != nil else { return }
+            closeMorphGeneration &+= 1
             closingPresentation = nil
+            overlayPanelController.isHoldingFrameForClose = false
+            // A reopen must not land back on Mirror: only a click on the
+            // tab turns the camera on.
+            leaveMirrorOnClose()
             return
         }
-        closingPresentation = ClosingPresentation(surface: islandSurface, openReason: notchOpenReason)
-        let generation = closingPresentationGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.closingPresentationDuration) { [weak self] in
-            guard let self, self.closingPresentationGeneration == generation else { return }
+        guard wasOpened else { return }
+
+        closeMorphGeneration &+= 1
+        let generation = closeMorphGeneration
+        closingPresentation = ClosingPresentation(
+            surface: islandSurface,
+            openReason: notchOpenReason,
+            contentWidth: overlayPanelController.currentContentWidth
+        )
+        overlayPanelController.isHoldingFrameForClose = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + CloseMorph.settled) { [weak self] in
+            guard let self, self.closeMorphGeneration == generation else { return }
             self.closingPresentation = nil
+            self.overlayPanelController.isHoldingFrameForClose = false
+            self.leaveMirrorOnClose()
+            self.refreshOverlayPlacementIfVisible()
         }
     }
 
@@ -281,7 +302,6 @@ final class OverlayUICoordinator {
                 self?.isPointerInsideIslandSurface = false
                 self?.appModel?.measuredNotificationContentHeight = 0
                 self?.appModel?.reconcileCompactMusicView()
-                self?.leaveMirrorOnClose()
             }
         )
     }
@@ -313,7 +333,7 @@ final class OverlayUICoordinator {
 
         let wasOpened = notchStatus == .opened
         let previousSurfaceSessionID = islandSurface.sessionID
-        holdPresentationForClose(wasOpened: wasOpened, status: status)
+        updateCloseMorph(wasOpened: wasOpened, status: status)
         islandSurface = surface
         notchOpenReason = reason
         notchStatus = status
@@ -363,6 +383,12 @@ final class OverlayUICoordinator {
 
         afterStateChange?()
         onPlacementResolved?()
+
+        // The surface and open reason just reset: widen the window for the
+        // pill now (the height holds until the close settles).
+        if wasOpened, status != .opened {
+            refreshOverlayPlacement()
+        }
     }
 
     func notchPop() {

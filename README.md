@@ -35,7 +35,7 @@ Supported terminal jump-back includes Terminal.app, Ghostty, cmux, Kaku, WezTerm
 
 Download the latest `NotchTune.dmg` from [Releases](https://github.com/dw2lam/NotchTune/releases), open it, and drag `NotchTune.app` into Applications.
 
-This release is currently unsigned. If macOS blocks the first launch, right-click `NotchTune.app`, choose **Open**, then confirm the Gatekeeper prompt.
+This release isn't notarized yet. If macOS blocks the first launch, right-click `NotchTune.app`, choose **Open**, then confirm the Gatekeeper prompt.
 
 Open NotchTune, go to **Settings → Setup**, and install hooks for the coding agents you use. Grant Accessibility permission if macOS asks; NotchTune uses it to detect terminal windows and jump back to active sessions.
 
@@ -48,7 +48,7 @@ You only install NotchTune once. After that it keeps itself up to date:
 3. When the update is ready, an **Update** button appears in the notch and **Restart to Update** in Settings. Click either one and NotchTune swaps in the new version and relaunches in a second or two, with no disk image or installer.
 4. If you never click it, the update installs the next time NotchTune quits.
 
-Permissions you grant (camera for Mirror, calendars, Accessibility) are remembered between launches and across updates: releases are signed with one stable certificate, so macOS sees each update as the same app.
+Permissions you grant (camera for Mirror, calendars, Accessibility) are remembered between launches and across updates: releases are signed with one stable certificate, so macOS sees each update as the same app. Coming from 2.2.0 or earlier, macOS asks once more after that first update.
 
 ### Run From Source
 

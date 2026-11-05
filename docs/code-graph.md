@@ -79,8 +79,8 @@ get `stateAccessor` closures instead of holding state.
 ## Notch states and the close sequence
 
 - `ClosedNotchState` is the one place that decides what the closed notch shows (`musicNotification`, `compactMusic`, `hidden`, `liveActivity`, `pill`, in that order of precedence). Size, position and the close target read it; add a new closed state there first.
-- A close runs as one motion, and nothing under it may move: the shape morphs straight to the resting state (`closesIntoHardwareNotch` only for `hidden`), `OverlayUICoordinator.presentedSurface` / `presentedOpenReason` keep the panel's content in place, and `OverlayPanelController` holds the window's frame until the morph ends (`closeMorphHoldUntil`).
-- The closed surface must be solid before the opened surface unmounts (`openedSurfaceUnmountDelay`), or the notch blinks empty. `NOTCHTUNE_HARNESS_FILMSTRIP=1` or `close` records a close frame by frame to check it.
+- A close runs as one motion, and nothing under it may move: the shape morphs straight to the resting state (`closesIntoHardwareNotch` only for `hidden`), and `OverlayUICoordinator.updateCloseMorph` owns the phase: `presentedSurface` / `presentedOpenReason` keep the panel's content, Mirror's tab reset waits, and the window holds its frame (`isHoldingFrameForClose`), all ending together at `CloseMorph.settled`. The timeline's order lives in `CloseMorph`.
+- The closed surface must be solid before the opened surface unmounts, or the notch blinks empty. `NOTCHTUNE_HARNESS_FILMSTRIP=1` or `close` records a close frame by frame to check it.
 
 ## Size outliers (organization candidates)
 

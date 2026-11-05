@@ -81,10 +81,10 @@ private let openAnimation  = Animation.spring(response: 0.42, dampingFraction: 0
 // Close: a fixed-length ease-in-out that lands EXACTLY on the notch at 0.4s
 // (a spring's long settling tail left the corners peeking out beside the
 // cutout just as the wings started to re-emerge).
-private let closeAnimationDuration: TimeInterval = 0.4
+private let closeAnimationDuration = CloseMorph.duration
 private let closeAnimation = Animation.timingCurve(0.4, 0, 0.2, 1, duration: closeAnimationDuration)
 private let popAnimation   = Animation.spring(response: 0.35, dampingFraction: 0.65)
-private let openedSurfaceUnmountDelay: TimeInterval = 0.42
+private let openedSurfaceUnmountDelay = CloseMorph.surfaceUnmount
 
 private struct ConditionalDrawingGroup: ViewModifier {
     let enabled: Bool
@@ -293,21 +293,36 @@ struct IslandPanelView: View {
 
     private var compactClipLeftWingWidth: CGFloat {
         guard !isExternalDisplayPlacement else { return 0 }
-        if liveActivityLeftWingWidth > 0 { return liveActivityLeftWingWidth }
-        if isShowingCompactMusicView {
+        switch closedNotchState {
+        case .musicNotification:
+            return musicNotificationLeftWingWidth
+        case .compactMusic:
             return chromeMetrics.notchedCompactMusicLeftWingReserve()
+        case .hidden, .liveActivity, .pill:
+            return liveActivityLeftWingWidth > 0 ? liveActivityLeftWingWidth : standardClosedWingReserve
         }
-        let rightSlotWidth = model.islandClosedRightSlotContent()
-            .map { V6RightSlotView.intrinsicWidth(of: $0) } ?? 0
-        return chromeMetrics.notchedClosedWingReserve(rightSlotWidth: rightSlotWidth)
     }
 
     private var compactClipRightWingWidth: CGFloat {
         guard !isExternalDisplayPlacement else { return 0 }
-        if liveActivityRightWingWidth > 0 { return liveActivityRightWingWidth }
-        if isShowingCompactMusicView {
+        switch closedNotchState {
+        case .musicNotification:
+            return musicNotificationRightWingWidth
+        case .compactMusic:
             return chromeMetrics.notchedCompactMusicRightWingReserve()
+        case .hidden, .liveActivity, .pill:
+            return liveActivityRightWingWidth > 0 ? liveActivityRightWingWidth : standardClosedWingReserve
         }
+    }
+
+    /// The width the closed surface lays out against: the resting panel's.
+    /// A notification card's window is narrower, and it stays that size
+    /// through a close, which capped the wings short until the window grew.
+    private func closedLayoutWidth(fallback: CGFloat) -> CGFloat {
+        targetOverlayScreen.map { model.overlay.overlayPanelController.openedPanelWidth(for: $0) } ?? fallback
+    }
+
+    private var standardClosedWingReserve: CGFloat {
         let rightSlotWidth = model.islandClosedRightSlotContent()
             .map { V6RightSlotView.intrinsicWidth(of: $0) } ?? 0
         return chromeMetrics.notchedClosedWingReserve(rightSlotWidth: rightSlotWidth)
@@ -572,11 +587,11 @@ struct IslandPanelView: View {
         let panelShadowBottomInset = IslandChromeMetrics.openedShadowBottomInset
         let layoutWidth = max(0, availableSize.width - (panelShadowHorizontalInset * 2))
         let layoutHeight = max(0, availableSize.height - panelShadowBottomInset)
-        let resolvedPanelContentWidth = layoutWidth > 0 ? layoutWidth : panelContentWidth
+        let resolvedPanelContentWidth = layoutWidth > 0 ? closedLayoutWidth(fallback: layoutWidth) : panelContentWidth
 
         let outerHorizontalPadding: CGFloat = 0
         let outerBottomPadding: CGFloat = 0
-        let openedWidth = max(0, layoutWidth - outerHorizontalPadding)
+        let openedWidth = model.overlay.presentedContentWidth ?? max(0, layoutWidth - outerHorizontalPadding)
         let openedHeight = max(closedNotchHeight, layoutHeight - outerBottomPadding)
         // Read once per pass: each of these walks the wing math, which resolves
         // `model.islandLiveActivity` several times over.
@@ -615,7 +630,7 @@ struct IslandPanelView: View {
                                 // is solid before the backdrop behind it
                                 // unmounts (`openedSurfaceUnmountDelay`), or
                                 // the notch blinks empty between the two.
-                                : .easeOut(duration: 0.16).delay(0.2),
+                                : .easeOut(duration: CloseMorph.pillFadeDuration).delay(CloseMorph.pillFadeDelay),
                             value: usesOpenedVisualState
                         )
                         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.isPeeking)
@@ -670,7 +685,7 @@ struct IslandPanelView: View {
         // far short of their budget).
         .onChange(of: layoutWidth, initial: true) { _, newWidth in
             if newWidth > 0 {
-                panelContentWidth = newWidth
+                panelContentWidth = closedLayoutWidth(fallback: newWidth)
             }
         }
     }

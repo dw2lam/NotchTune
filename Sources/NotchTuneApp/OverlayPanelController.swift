@@ -54,12 +54,11 @@ final class OverlayPanelController {
     /// The pointer, not a click, made the panel key: hand the keyboard back
     /// when it leaves.
     private var pointerMadePanelKey = false
-    /// A close is morphing inside the window until this time. Closing resets
-    /// the surface, tab and notification state the window's size comes from,
-    /// and resizing now would yank the morph's start out from under it, so
-    /// the new size waits (`positionPanel`).
-    private var closeMorphHoldUntil: Date?
-    private var isClosePlacementPending = false
+    /// A close is morphing inside the window. Closing resets the surface, tab
+    /// and notification state the window's size comes from, and resizing now
+    /// would yank the morph's start out from under it. The coordinator sets
+    /// this and places the panel once the close has settled.
+    var isHoldingFrameForClose = false
     private var globalScrollMonitor: Any?
     private var localScrollMonitor: Any?
     /// Finger travel of the current two-finger swipe over the closed notch,
@@ -212,12 +211,6 @@ final class OverlayPanelController {
     func setInteractive(_ interactive: Bool) {
         guard let panel else {
             return
-        }
-
-        if interactive {
-            closeMorphHoldUntil = nil
-        } else if !panel.ignoresMouseEvents {
-            closeMorphHoldUntil = Date().addingTimeInterval(Self.closeMorphHoldDuration)
         }
 
         panel.ignoresMouseEvents = !interactive
@@ -486,14 +479,12 @@ final class OverlayPanelController {
         // with the window. Open/close, first present, and display moves still
         // snap instantly (see `shouldAnimateResize`).
         if panel.frame != windowFrame {
-            if let holdUntil = closeMorphHoldUntil,
-               Self.holdsFrameForClose(
-                   current: panel.frame,
-                   target: windowFrame,
-                   holdUntil: holdUntil,
-                   now: Date()
-               ) {
-                placeAfterCloseMorph(panel, preferredScreenID: preferredScreenID, at: holdUntil)
+            if isHoldingFrameForClose, Self.isSameDisplayPlacement(panel.frame, windowFrame) {
+                // The coordinator re-places the panel when the close settles.
+                let held = Self.heldCloseFrame(current: panel.frame, target: windowFrame)
+                if held != panel.frame {
+                    panel.setFrame(held, display: true)
+                }
             } else if animated, shouldAnimateResize(panel: panel, to: windowFrame) {
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = Self.panelResizeAnimationDuration
@@ -513,33 +504,24 @@ final class OverlayPanelController {
         )
     }
 
-    /// Slightly past the close animation and the backdrop's unmount.
-    private static let closeMorphHoldDuration: TimeInterval = 0.46
-
-    /// A resize waits for a close in progress. A move to another display
-    /// (a different top edge or centre) never does.
-    nonisolated static func holdsFrameForClose(
-        current: NSRect,
-        target: NSRect,
-        holdUntil: Date,
-        now: Date
-    ) -> Bool {
-        now < holdUntil
-            && abs(current.maxY - target.maxY) < 0.5
-            && abs(current.midX - target.midX) < 0.5
+    /// The window during a close: its height stays, since the morph starts
+    /// from it, but it widens at once. A notification card's window is
+    /// narrower than the pill a close lands on and would crop it; the morph
+    /// keeps the card's width regardless (`presentedContentWidth`).
+    nonisolated static func heldCloseFrame(current: NSRect, target: NSRect) -> NSRect {
+        let width = max(current.width, target.width)
+        return NSRect(x: current.midX - width / 2, y: current.minY, width: width, height: current.height)
     }
 
-    private func placeAfterCloseMorph(_ panel: NSPanel, preferredScreenID: String?, at date: Date) {
-        guard !isClosePlacementPending else { return }
-        isClosePlacementPending = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, date.timeIntervalSinceNow)) { [weak self, weak panel] in
-            guard let self, let panel else { return }
-            self.isClosePlacementPending = false
-            self.closeMorphHoldUntil = nil
-            // Reopened meanwhile: the open path already placed it.
-            guard self.model?.notchStatus != .opened else { return }
-            _ = self.positionPanel(panel, preferredScreenID: preferredScreenID, animated: false)
-        }
+    /// The width of the panel's content right now.
+    var currentContentWidth: CGFloat? {
+        panel.map { $0.frame.width - panelShadowInsets.horizontal * 2 }
+    }
+
+    /// A resize, not a move to another display (which never waits): the top
+    /// edge and centre stay put.
+    nonisolated static func isSameDisplayPlacement(_ current: NSRect, _ target: NSRect) -> Bool {
+        abs(current.maxY - target.maxY) < 0.5 && abs(current.midX - target.midX) < 0.5
     }
 
     /// How long the opened panel takes to morph to a new height. Tuned to sit

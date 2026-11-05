@@ -35,6 +35,7 @@ jobs:
         env:
           NOTCHTUNE_VERSION: ${{ steps.version.outputs.version }}
           NOTCHTUNE_EDDSA_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
+          NOTCHTUNE_REQUIRE_STABLE_SIGNING: "1"
         run: |
           test -n "$NOTCHTUNE_EDDSA_PUBLIC_KEY" || {
             echo "SPARKLE_PUBLIC_KEY is not configured" >&2

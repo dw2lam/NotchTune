@@ -114,7 +114,7 @@ Release notes are English-only. Use the following template:
 
 1. Download **NotchTune.dmg**, open it, and drag **NotchTune** to **Applications**.
 
-2. Since this is an unsigned app, macOS may show **"NotchTune is damaged"** when you try to open it. Run this command in Terminal to fix it:
+2. Since this app isn't notarized yet, macOS may show **"NotchTune is damaged"** when you try to open it. Run this command in Terminal to fix it:
 
    ```bash
    xattr -dr com.apple.quarantine "/Applications/NotchTune.app"
@@ -122,7 +122,7 @@ Release notes are English-only. Use the following template:
 
 3. Requirements: **macOS 14+**, **Apple Silicon** (M1/M2/M3/M4/M5).
 
-> ⚠️ **Note**: This is an unsigned early-access build. Code signing and notarization will be added once our Apple Developer account is approved.
+> ⚠️ **Note**: This is an early-access build without a Developer ID. Code signing and notarization will be added once our Apple Developer account is approved.
 ```
 
 ## Assets

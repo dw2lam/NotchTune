@@ -112,19 +112,29 @@ struct OverlayPanelControllerTests {
     }
 
     @Test
-    func theWindowHoldsItsSizeWhileACloseMorphs() {
-        let now = Date()
+    func aCloseHoldsResizesButNeverADisplayMove() {
         let current = NSRect(x: 100, y: 500, width: 640, height: 400)
         let shorter = NSRect(x: 100, y: 600, width: 640, height: 300)
         let narrower = NSRect(x: 160, y: 700, width: 520, height: 200)
         let otherDisplay = NSRect(x: 2100, y: 500, width: 640, height: 400)
-        let later = now.addingTimeInterval(0.3)
 
-        #expect(OverlayPanelController.holdsFrameForClose(current: current, target: shorter, holdUntil: later, now: now))
-        #expect(OverlayPanelController.holdsFrameForClose(current: current, target: narrower, holdUntil: later, now: now))
-        // A display move never waits, and the hold ends.
-        #expect(!OverlayPanelController.holdsFrameForClose(current: current, target: otherDisplay, holdUntil: later, now: now))
-        #expect(!OverlayPanelController.holdsFrameForClose(current: current, target: shorter, holdUntil: now, now: now))
+        #expect(OverlayPanelController.isSameDisplayPlacement(current, shorter))
+        #expect(OverlayPanelController.isSameDisplayPlacement(current, narrower))
+        #expect(!OverlayPanelController.isSameDisplayPlacement(current, otherDisplay))
+    }
+
+    @Test
+    func aClosingWindowWidensForThePillButKeepsItsHeight() {
+        // A notification card's window closing onto the wider resting one.
+        let card = NSRect(x: 460, y: 700, width: 520, height: 200)
+        let resting = NSRect(x: 400, y: 500, width: 640, height: 400)
+        let held = OverlayPanelController.heldCloseFrame(current: card, target: resting)
+        #expect(held == NSRect(x: 400, y: 700, width: 640, height: 200))
+
+        // Never narrower than it already is.
+        let wide = NSRect(x: 400, y: 500, width: 640, height: 400)
+        let narrow = NSRect(x: 460, y: 700, width: 520, height: 200)
+        #expect(OverlayPanelController.heldCloseFrame(current: wide, target: narrow) == wide)
     }
 
     private func pointerKeyFocus(
