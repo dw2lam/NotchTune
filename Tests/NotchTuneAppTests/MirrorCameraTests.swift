@@ -1,3 +1,4 @@
+@preconcurrency import AVFoundation
 import Foundation
 import Testing
 @testable import NotchTuneApp
@@ -38,6 +39,14 @@ struct MirrorCameraTests {
         #expect(!reopened.isMirrored)
         #expect(reopened.zoom == .two)
         #expect(reopened.selectedDeviceID == "harness")
+    }
+
+    @Test
+    func accessFollowsWhatMacOSHasRecorded() {
+        #expect(MirrorCamera.access(for: .authorized) == .granted)
+        #expect(MirrorCamera.access(for: .notDetermined) == .notDetermined)
+        #expect(MirrorCamera.access(for: .denied) == .denied)
+        #expect(MirrorCamera.access(for: .restricted) == .denied)
     }
 
     @Test

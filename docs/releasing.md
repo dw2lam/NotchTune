@@ -40,6 +40,17 @@ zsh scripts/package-app.sh
 This produces `output/package/NotchTune.dmg` and
 `output/package/NotchTune.zip`.
 
+### Signing
+
+Until there is a Developer ID, `package-app.sh` signs with a stable local
+certificate (the `Open Island Dev Local` identity from
+`scripts/setup-dev-signing.sh`, or `NOTCHTUNE_STABLE_SIGN_IDENTITY`). Without
+one it falls back to ad-hoc signing and warns: macOS ties permissions to an
+ad-hoc build's own hash, so every update would drop the user's Camera,
+Calendar and Accessibility access. Keep that certificate: a new one means
+users grant those once more. Sparkle allows the identity to change because
+the EdDSA key stays the same.
+
 ### Delta updates
 
 Updates download only what changed. After packaging, build patches from the

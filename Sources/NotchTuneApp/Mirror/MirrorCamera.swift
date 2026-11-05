@@ -106,6 +106,11 @@ final class MirrorCamera {
         zoom = MirrorZoom(rawValue: defaults.double(forKey: Self.zoomKey)) ?? .one
         isExpanded = defaults.bool(forKey: Self.expandedKey)
         selectedDeviceID = defaults.string(forKey: Self.cameraKey)
+        if !isSimulated {
+            // Known before the tab first draws, so a granted camera never
+            // flashes the Turn On Camera prompt. Reading this doesn't ask.
+            access = Self.access(for: AVCaptureDevice.authorizationStatus(for: .video))
+        }
         if isSimulated {
             devices = [Device(id: "harness", name: "FaceTime HD Camera")]
             access = .granted
@@ -139,14 +144,17 @@ final class MirrorCamera {
         guard !isSimulated else { return }
         observeDevicesIfNeeded()
         refreshDevices()
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            access = .granted
+        access = Self.access(for: AVCaptureDevice.authorizationStatus(for: .video))
+        if access == .granted {
             runActiveDevice()
-        case .notDetermined:
-            access = .notDetermined
-        default:
-            access = .denied
+        }
+    }
+
+    nonisolated static func access(for status: AVAuthorizationStatus) -> Access {
+        switch status {
+        case .authorized: .granted
+        case .notDetermined: .notDetermined
+        default: .denied
         }
     }
 

@@ -17,6 +17,16 @@ bundle_dir="${NOTCHTUNE_BUNDLE_DIR:-$package_root/$app_name.app}"
 zip_path="${NOTCHTUNE_ZIP_PATH:-$package_root/$app_name.zip}"
 dmg_path="${NOTCHTUNE_DMG_PATH:-$package_root/$app_name.dmg}"
 signing_identity="${NOTCHTUNE_SIGN_IDENTITY:-}"
+# Until there is a Developer ID, releases are signed with a stable local
+# identity. An ad-hoc signature's designated requirement is the build's own
+# cdhash, so macOS treats every build as a new app and drops its Camera,
+# Calendar and Accessibility grants on each update; a certificate-based
+# requirement stays the same from build to build. See setup-dev-signing.sh.
+stable_identity="${NOTCHTUNE_STABLE_SIGN_IDENTITY:-}"
+if [[ -z "$signing_identity" && -z "$stable_identity" ]]; then
+    stable_identity="$(security find-identity -p codesigning -v "$HOME/Library/Keychains/login.keychain-db" 2>/dev/null \
+        | grep '"Open Island Dev Local"' | head -n 1 | awk '{print $2}')"
+fi
 notary_profile="${NOTCHTUNE_NOTARY_PROFILE:-}"
 sparkle_public_key="${NOTCHTUNE_EDDSA_PUBLIC_KEY:-}"
 
@@ -213,7 +223,29 @@ if [[ -n "$signing_identity" ]]; then
         "$bundle_dir"
 
     codesign --verify --deep --strict --verbose=2 "$bundle_dir"
+elif [[ -n "$stable_identity" ]]; then
+    # Inside-out, like the Developer ID path, but without the hardened
+    # runtime: library validation would refuse Sparkle.framework, since a
+    # self-signed certificate has no team ID to match.
+    if [[ -d "$sparkle_fw" ]]; then
+        for xpc in "$sparkle_fw"/Versions/B/XPCServices/*.xpc; do
+            [[ -d "$xpc" ]] && codesign --force --sign "$stable_identity" "$xpc"
+        done
+        [[ -f "$sparkle_fw/Versions/B/Autoupdate" ]] && \
+            codesign --force --sign "$stable_identity" "$sparkle_fw/Versions/B/Autoupdate"
+        [[ -d "$sparkle_fw/Versions/B/Updater.app" ]] && \
+            codesign --force --sign "$stable_identity" "$sparkle_fw/Versions/B/Updater.app"
+        codesign --force --sign "$stable_identity" "$sparkle_fw"
+    fi
+
+    codesign --force --sign "$stable_identity" "$bundle_dir/Contents/Helpers/NotchTuneHooks"
+    codesign --force --sign "$stable_identity" "$bundle_dir/Contents/Helpers/NotchTuneSetup"
+    codesign --force --entitlements "$entitlements_path" --sign "$stable_identity" "$bundle_dir"
+
+    codesign --verify --deep --strict --verbose=2 "$bundle_dir"
 else
+    echo "WARNING: ad-hoc signing. Users will lose Camera, Calendar and Accessibility" >&2
+    echo "  access on every update. Run: zsh scripts/setup-dev-signing.sh" >&2
     # Ad-hoc sign so macOS accepts the embedded Sparkle.framework.
     if [[ -d "$sparkle_fw" ]]; then
         for xpc in "$sparkle_fw"/Versions/B/XPCServices/*.xpc; do

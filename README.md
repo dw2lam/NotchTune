@@ -48,7 +48,7 @@ You only install NotchTune once. After that it keeps itself up to date:
 3. When the update is ready, an **Update** button appears in the notch and **Restart to Update** in Settings. Click either one and NotchTune swaps in the new version and relaunches in a second or two, with no disk image or installer.
 4. If you never click it, the update installs the next time NotchTune quits.
 
-Permissions you grant (camera for Mirror, calendars, Accessibility) are remembered between launches. While releases are unsigned, macOS may ask again once after an update, because it ties those grants to the app's signature.
+Permissions you grant (camera for Mirror, calendars, Accessibility) are remembered between launches and across updates: releases are signed with one stable certificate, so macOS sees each update as the same app.
 
 ### Run From Source
 
