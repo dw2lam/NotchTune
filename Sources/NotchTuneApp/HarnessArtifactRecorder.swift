@@ -298,6 +298,17 @@ enum HarnessArtifactRecorder {
         }
     }
 
+    /// `NOTCHTUNE_HARNESS_FILMSTRIP=close`: sample the window while the notch
+    /// closes from whatever the scenario opened (a notification card, say),
+    /// into `<artifacts>/filmstrip/close-NN.png`.
+    static func recordCloseFilmstrip(model: AppModel, directoryURL: URL) {
+        guard let window = orderedVisibleWindows().first else { return }
+        let dir = directoryURL.appendingPathComponent("filmstrip", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        captureBurst(windowNumber: UInt32(window.windowNumber), bounds: .null, directory: dir, prefix: "close")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) { model.notchClose() }
+    }
+
     /// `NOTCHTUNE_HARNESS_FILMSTRIP=music`: with the Music tab open, sample
     /// the window while it cross-fades to the library and back, into
     /// `<artifacts>/filmstrip/{library,controls}-NN.png`.

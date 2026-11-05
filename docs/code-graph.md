@@ -76,6 +76,12 @@ get `stateAccessor` closures instead of holding state.
 | Settings | `Views/SettingsView.swift` (tabs incl. Setup + Onboarding entries), `Views/AppearanceSettingsPane.swift`, `NudgeSettings.swift`, `NotificationSoundService.swift`, `LaunchAtLoginService.swift`, `UpdateChecker.swift`, `Localization/LanguageManager.swift`, `ResourceBundle.swift` |
 | Harness/debug | `HarnessLaunchConfiguration/HarnessRuntimeMonitor/HarnessArtifactRecorder.swift`, `IslandDebugScenario.swift` (`loadDebugSnapshot` REPLACES SessionState — never use it for additive injection; use `SessionState.insertSession`) |
 
+## Notch states and the close sequence
+
+- `ClosedNotchState` is the one place that decides what the closed notch shows (`musicNotification`, `compactMusic`, `hidden`, `liveActivity`, `pill`, in that order of precedence). Size, position and the close target read it; add a new closed state there first.
+- A close runs as one motion, and nothing under it may move: the shape morphs straight to the resting state (`closesIntoHardwareNotch` only for `hidden`), `OverlayUICoordinator.presentedSurface` / `presentedOpenReason` keep the panel's content in place, and `OverlayPanelController` holds the window's frame until the morph ends (`closeMorphHoldUntil`).
+- The closed surface must be solid before the opened surface unmounts (`openedSurfaceUnmountDelay`), or the notch blinks empty. `NOTCHTUNE_HARNESS_FILMSTRIP=1` or `close` records a close frame by frame to check it.
+
 ## Size outliers (organization candidates)
 
 IslandPanelView (~3.3k), BridgeServer (~2.9k), AppModel (~2.4k),

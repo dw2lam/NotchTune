@@ -111,6 +111,22 @@ struct OverlayPanelControllerTests {
         #expect(!OverlayPanelController.takesKeyOnOpen(for: nil))
     }
 
+    @Test
+    func theWindowHoldsItsSizeWhileACloseMorphs() {
+        let now = Date()
+        let current = NSRect(x: 100, y: 500, width: 640, height: 400)
+        let shorter = NSRect(x: 100, y: 600, width: 640, height: 300)
+        let narrower = NSRect(x: 160, y: 700, width: 520, height: 200)
+        let otherDisplay = NSRect(x: 2100, y: 500, width: 640, height: 400)
+        let later = now.addingTimeInterval(0.3)
+
+        #expect(OverlayPanelController.holdsFrameForClose(current: current, target: shorter, holdUntil: later, now: now))
+        #expect(OverlayPanelController.holdsFrameForClose(current: current, target: narrower, holdUntil: later, now: now))
+        // A display move never waits, and the hold ends.
+        #expect(!OverlayPanelController.holdsFrameForClose(current: current, target: otherDisplay, holdUntil: later, now: now))
+        #expect(!OverlayPanelController.holdsFrameForClose(current: current, target: shorter, holdUntil: now, now: now))
+    }
+
     private func pointerKeyFocus(
         isOpened: Bool = true,
         pointerOnPanel: Bool,

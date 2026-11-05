@@ -209,6 +209,16 @@ struct IslandPanelView: View {
         isShowingMusicNotification || isShowingCompactMusicView
     }
 
+    /// What the closed notch shows (see `ClosedNotchState`).
+    private var closedNotchState: ClosedNotchState {
+        .resolve(
+            showsMusicNotification: isShowingMusicNotification,
+            showsCompactMusic: isShowingCompactMusicView,
+            collapsesBehindNotch: model.shouldCollapseClosedNotch && !model.isPeeking,
+            hasLiveActivity: liveActivityWingWidth > 0 || externalLiveActivityWidth > 0
+        )
+    }
+
     private var closedMusicSurfacePhase: V6ClosedMusicSurfacePhase {
         isShowingMusicNotification ? .notification : .compact
     }
@@ -305,15 +315,16 @@ struct IslandPanelView: View {
 
     private var macbookNotchAlignmentOffsetX: CGFloat {
         guard !isExternalDisplayPlacement else { return 0 }
-        if isShowingMusicNotification {
+        switch closedNotchState {
+        case .musicNotification:
             return -(musicNotificationLeftWingWidth - musicNotificationRightWingWidth) / 2
-        }
-        if isShowingCompactMusicView {
+        case .compactMusic:
             let leftWing = chromeMetrics.notchedCompactMusicLeftWingReserve()
             let rightWing = chromeMetrics.notchedCompactMusicRightWingReserve()
             return -(leftWing - rightWing) / 2
+        case .hidden, .liveActivity, .pill:
+            return -(compactClipLeftWingWidth - compactClipRightWingWidth) / 2
         }
-        return -(compactClipLeftWingWidth - compactClipRightWingWidth) / 2
     }
 
     private var externalLiveActivityWidth: CGFloat {
@@ -343,38 +354,40 @@ struct IslandPanelView: View {
     }
 
     private var closedSurfaceClipWidth: CGFloat {
-        if isShowingMusicNotification {
+        switch closedNotchState {
+        case .musicNotification:
             if closedPillWidth > 0 { return closedPillWidth }
             if activeMusicClipMetrics.width > 0 { return activeMusicClipMetrics.width }
             return standardClosedPillClipWidth
-        }
-        if isShowingCompactMusicView {
-            if closedPillWidth > 0 { return closedPillWidth }
-            if isExternalDisplayPlacement {
-                return min(
-                    chromeMetrics.estimatedExternalMusicWidth(track: model.playerManager.track),
-                    panelContentWidth
+        case .compactMusic:
+            // The music pill only exists once the notch closes, so while a
+            // close runs `closedPillWidth` still holds the agent pill's width.
+            // Aiming there made the morph land short, then jump to size.
+            if !isExternalDisplayPlacement {
+                return chromeMetrics.notchedCompactMusicOuterWidth(
+                    physicalNotchWidth: macbookPhysicalNotchWidth
                 )
             }
-            return chromeMetrics.notchedCompactMusicOuterWidth(
-                physicalNotchWidth: macbookPhysicalNotchWidth
+            if closedPillWidth > 0, !shouldRenderOpenedSurface { return closedPillWidth }
+            return min(
+                chromeMetrics.estimatedExternalMusicWidth(track: model.playerManager.track),
+                panelContentWidth
             )
-        }
-        if liveActivityWingWidth > 0 || externalLiveActivityWidth > 0 {
+        case .liveActivity:
             return standardClosedPillClipWidth
+        case .hidden, .pill:
+            // Hidden can still hold a live activity (auto-hide, peek).
+            if liveActivityWingWidth > 0 || externalLiveActivityWidth > 0 {
+                return standardClosedPillClipWidth
+            }
+            return closedPillWidth > 0 ? closedPillWidth : standardClosedPillClipWidth
         }
-        if closedPillWidth > 0 { return closedPillWidth }
-        return standardClosedPillClipWidth
     }
 
     private var closedSurfaceVerticalOffset: CGFloat {
         guard !usesOpenedVisualState else { return 0 }
         if model.isOverlayDisplayFullscreen { return -closedNotchHeight }
-        if isShowingMusicNotification || isShowingCompactMusicView { return 0 }
-        if model.shouldCollapseClosedNotch && !model.isPeeking {
-            return -closedNotchHeight
-        }
-        return 0
+        return closedNotchState == .hidden ? -closedNotchHeight : 0
     }
 
     private var usesNotchAwareOpenedHeader: Bool {
@@ -522,11 +535,16 @@ struct IslandPanelView: View {
                 setMorphCompactTarget(.pill)
                 withAnimation(openAnimation) { morphProgress = 1 }
             case .closed, .popping:
-                // Close tucks the panel into the hardware notch, then the
-                // pill's wings grow back out of it (pops don't come from open).
+                // Close lands straight on what the notch is showing: the
+                // music or agent pill at its own size, in one motion. Only
+                // with nothing to show does it tuck into the hardware notch
+                // (pops don't come from open).
                 if oldStatus == .opened {
-                    setMorphCompactTarget(.hardwareNotch)
-                    scheduleWingsEmerge()
+                    let tucks = closedNotchState.closesIntoHardwareNotch
+                    setMorphCompactTarget(tucks ? .hardwareNotch : .pill)
+                    if tucks {
+                        scheduleWingsEmerge()
+                    }
                 }
                 withAnimation(closeAnimation) { morphProgress = 0 }
                 // The panel stops accepting mouse events once it closes, so
@@ -585,18 +603,19 @@ struct IslandPanelView: View {
                     }
 
                     v6ClosedSurface(panelContentWidth: resolvedPanelContentWidth)
-                        .offset(
-                            x: usesOpenedVisualState ? 0 : alignmentOffsetX,
-                            y: closedSurfaceVerticalOffset
-                        )
+                        // Always on the notch: resetting x while open made the
+                        // pill slide sideways as it faded back in.
+                        .offset(x: alignmentOffsetX, y: closedSurfaceVerticalOffset)
                         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: alignmentOffsetX)
                         .opacity(usesOpenedVisualState ? 0 : 1)
                         .animation(
                             usesOpenedVisualState
                                 ? .easeOut(duration: 0.05)
-                                // Comes back as the tuck into the notch
-                                // settles, just before the wings emerge.
-                                : .easeOut(duration: 0.16).delay(0.34),
+                                // Comes back as the morph reaches the pill, and
+                                // is solid before the backdrop behind it
+                                // unmounts (`openedSurfaceUnmountDelay`), or
+                                // the notch blinks empty between the two.
+                                : .easeOut(duration: 0.16).delay(0.2),
                             value: usesOpenedVisualState
                         )
                         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.isPeeking)
@@ -1123,7 +1142,7 @@ struct IslandPanelView: View {
 
     private var openedContent: some View {
         Group {
-            if model.notchOpenReason == .drag {
+            if model.overlay.presentedOpenReason == .drag {
                 fileDragTargetContent
                     .transition(.opacity)
             } else {
@@ -1189,7 +1208,7 @@ struct IslandPanelView: View {
                 .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: model.notchOpenReason)
+        .animation(.easeInOut(duration: 0.18), value: model.overlay.presentedOpenReason)
         .animation(.smooth(duration: 0.35, extraBounce: 0.1), value: model.islandActiveTab)
     }
 
@@ -1432,12 +1451,17 @@ struct IslandPanelView: View {
     }
 
     private var actionableSessionID: String? {
-        model.islandSurface.sessionID
+        model.overlay.presentedSurface.sessionID
+    }
+
+    /// The card on the panel, which stays until a close has finished.
+    private var presentedCardSession: AgentSession? {
+        actionableSessionID.flatMap { model.state.session(id: $0) }
     }
 
     /// Whether the panel was opened by a notification (show only actionable session + footer).
     private var isNotificationMode: Bool {
-        model.notchOpenReason == .notification && actionableSessionID != nil
+        model.overlay.presentedOpenReason == .notification && actionableSessionID != nil
     }
 
     /// Screen-fraction budget for the current notification surface (see
@@ -1448,7 +1472,7 @@ struct IslandPanelView: View {
         return NotificationSurfaceMetrics.maxContentHeight(
             screenHeight: screenHeight,
             notchHeight: closedNotchHeight,
-            phase: model.activeIslandCardSession?.phase
+            phase: presentedCardSession?.phase
         )
     }
 
@@ -1563,7 +1587,7 @@ struct IslandPanelView: View {
                 sessionPanelHeader(referenceDate: referenceDate)
             }
 
-            if isNotificationMode, let session = model.activeIslandCardSession, session.phase == .completed {
+            if isNotificationMode, let session = presentedCardSession, session.phase == .completed {
                 CompletionToastView(
                     session: session,
                     referenceDate: referenceDate,
@@ -1579,7 +1603,7 @@ struct IslandPanelView: View {
                     onShowAll: { model.expandNotificationToSessionList(clearExpansion: true) }
                 )
                 .id(notificationCardIdentity(for: session))
-            } else if isNotificationMode, let session = model.activeIslandCardSession {
+            } else if isNotificationMode, let session = presentedCardSession {
                 IslandSessionRow(
                     session: session,
                     referenceDate: referenceDate,

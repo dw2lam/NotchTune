@@ -227,6 +227,44 @@ final class OverlayUICoordinator {
         )
     }
 
+    /// What the open panel keeps showing while a close morphs. Closing resets
+    /// `islandSurface` and `notchOpenReason` at once, which swapped a card for
+    /// the tab bar and session list halfway through the shrink.
+    private struct ClosingPresentation: Equatable {
+        var surface: IslandSurface
+        var openReason: NotchOpenReason?
+    }
+
+    private var closingPresentation: ClosingPresentation?
+    @ObservationIgnored private var closingPresentationGeneration: UInt64 = 0
+
+    /// How long the panel's content lives through a close: the morph, up to
+    /// the moment the opened surface unmounts.
+    private static let closingPresentationDuration: TimeInterval = 0.44
+
+    /// The surface the open panel draws (the live one, except during a close).
+    var presentedSurface: IslandSurface {
+        closingPresentation?.surface ?? islandSurface
+    }
+
+    var presentedOpenReason: NotchOpenReason? {
+        closingPresentation.map(\.openReason) ?? notchOpenReason
+    }
+
+    private func holdPresentationForClose(wasOpened: Bool, status: NotchStatus) {
+        closingPresentationGeneration &+= 1
+        guard wasOpened, status != .opened else {
+            closingPresentation = nil
+            return
+        }
+        closingPresentation = ClosingPresentation(surface: islandSurface, openReason: notchOpenReason)
+        let generation = closingPresentationGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.closingPresentationDuration) { [weak self] in
+            guard let self, self.closingPresentationGeneration == generation else { return }
+            self.closingPresentation = nil
+        }
+    }
+
     func notchClose() {
         transitionOverlay(
             to: .closed,
@@ -275,6 +313,7 @@ final class OverlayUICoordinator {
 
         let wasOpened = notchStatus == .opened
         let previousSurfaceSessionID = islandSurface.sessionID
+        holdPresentationForClose(wasOpened: wasOpened, status: status)
         islandSurface = surface
         notchOpenReason = reason
         notchStatus = status

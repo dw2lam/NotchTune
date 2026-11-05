@@ -54,6 +54,12 @@ final class OverlayPanelController {
     /// The pointer, not a click, made the panel key: hand the keyboard back
     /// when it leaves.
     private var pointerMadePanelKey = false
+    /// A close is morphing inside the window until this time. Closing resets
+    /// the surface, tab and notification state the window's size comes from,
+    /// and resizing now would yank the morph's start out from under it, so
+    /// the new size waits (`positionPanel`).
+    private var closeMorphHoldUntil: Date?
+    private var isClosePlacementPending = false
     private var globalScrollMonitor: Any?
     private var localScrollMonitor: Any?
     /// Finger travel of the current two-finger swipe over the closed notch,
@@ -206,6 +212,12 @@ final class OverlayPanelController {
     func setInteractive(_ interactive: Bool) {
         guard let panel else {
             return
+        }
+
+        if interactive {
+            closeMorphHoldUntil = nil
+        } else if !panel.ignoresMouseEvents {
+            closeMorphHoldUntil = Date().addingTimeInterval(Self.closeMorphHoldDuration)
         }
 
         panel.ignoresMouseEvents = !interactive
@@ -474,7 +486,15 @@ final class OverlayPanelController {
         // with the window. Open/close, first present, and display moves still
         // snap instantly (see `shouldAnimateResize`).
         if panel.frame != windowFrame {
-            if animated, shouldAnimateResize(panel: panel, to: windowFrame) {
+            if let holdUntil = closeMorphHoldUntil,
+               Self.holdsFrameForClose(
+                   current: panel.frame,
+                   target: windowFrame,
+                   holdUntil: holdUntil,
+                   now: Date()
+               ) {
+                placeAfterCloseMorph(panel, preferredScreenID: preferredScreenID, at: holdUntil)
+            } else if animated, shouldAnimateResize(panel: panel, to: windowFrame) {
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = Self.panelResizeAnimationDuration
                     context.timingFunction = Self.panelResizeTimingFunction
@@ -491,6 +511,35 @@ final class OverlayPanelController {
             preferredScreenID: preferredScreenID,
             panelSize: panel.frame.size
         )
+    }
+
+    /// Slightly past the close animation and the backdrop's unmount.
+    private static let closeMorphHoldDuration: TimeInterval = 0.46
+
+    /// A resize waits for a close in progress. A move to another display
+    /// (a different top edge or centre) never does.
+    nonisolated static func holdsFrameForClose(
+        current: NSRect,
+        target: NSRect,
+        holdUntil: Date,
+        now: Date
+    ) -> Bool {
+        now < holdUntil
+            && abs(current.maxY - target.maxY) < 0.5
+            && abs(current.midX - target.midX) < 0.5
+    }
+
+    private func placeAfterCloseMorph(_ panel: NSPanel, preferredScreenID: String?, at date: Date) {
+        guard !isClosePlacementPending else { return }
+        isClosePlacementPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, date.timeIntervalSinceNow)) { [weak self, weak panel] in
+            guard let self, let panel else { return }
+            self.isClosePlacementPending = false
+            self.closeMorphHoldUntil = nil
+            // Reopened meanwhile: the open path already placed it.
+            guard self.model?.notchStatus != .opened else { return }
+            _ = self.positionPanel(panel, preferredScreenID: preferredScreenID, animated: false)
+        }
     }
 
     /// How long the opened panel takes to morph to a new height. Tuned to sit

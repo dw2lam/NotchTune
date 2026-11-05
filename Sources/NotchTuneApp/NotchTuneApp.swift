@@ -198,6 +198,8 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                         switch ProcessInfo.processInfo.environment["NOTCHTUNE_HARNESS_FILMSTRIP"] {
                         case "1":
                             HarnessArtifactRecorder.recordFilmstrip(model: model, directoryURL: directoryURL)
+                        case "close":
+                            HarnessArtifactRecorder.recordCloseFilmstrip(model: model, directoryURL: directoryURL)
                         case "music":
                             HarnessArtifactRecorder.recordMusicFadeFilmstrip(model: model, directoryURL: directoryURL)
                         case let mode? where mode.hasPrefix("settings:"):
