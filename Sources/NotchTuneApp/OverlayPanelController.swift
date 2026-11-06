@@ -1010,18 +1010,30 @@ final class OverlayPanelController {
 
     fileprivate func acceptDroppedFileURLs(_ urls: [URL]) -> Bool {
         guard let model, canAcceptDroppedFileURLs, !urls.isEmpty else { return false }
-        do {
-            try model.myspaceStore.holdFiles(urls)
-            acceptedCurrentFileDrop = true
-            fileDragEndGeneration &+= 1
-            fileDragPresentationSnapshot = nil
-            model.islandActiveTab = .myspace
-            model.notchOpen(reason: .click)
-            model.lastActionMessage = "Held \(urls.count) file\(urls.count == 1 ? "" : "s") in Myspace."
-            return true
-        } catch {
-            model.lastActionMessage = "Could not hold file: \(error.localizedDescription)"
-            return false
+        acceptedCurrentFileDrop = true
+        fileDragEndGeneration &+= 1
+        fileDragPresentationSnapshot = nil
+        holdDroppedFiles(urls, in: model)
+        return true
+    }
+
+    /// The panel answers at once; the files land in the list when their copy
+    /// finishes, or a notice says why they didn't.
+    private func holdDroppedFiles(_ urls: [URL], in model: AppModel, removingAfterwards folder: URL? = nil) {
+        model.islandActiveTab = .myspace
+        model.notchOpen(reason: .click)
+        Task { @MainActor [weak model] in
+            defer {
+                if let folder { try? FileManager.default.removeItem(at: folder) }
+            }
+            guard let model else { return }
+            do {
+                try await model.myspaceStore.holdFiles(urls)
+                model.lastActionMessage = "Held \(urls.count) file\(urls.count == 1 ? "" : "s") in Myspace."
+            } catch {
+                model.lastActionMessage = "Could not hold file: \(error.localizedDescription)"
+                model.post(AppNotice(message: "Couldn't hold that in Myspace: \(error.localizedDescription)"))
+            }
         }
     }
 
@@ -1059,17 +1071,10 @@ final class OverlayPanelController {
         group.notify(queue: .main) { [weak self] in
             guard let self, let model = self.model, !received.isEmpty else {
                 self?.model?.lastActionMessage = "Could not receive the dropped files."
+                self?.model?.post(AppNotice(message: "Couldn't receive the dropped files."))
                 return
             }
-            do {
-                try model.myspaceStore.holdFiles(received)
-                model.islandActiveTab = .myspace
-                model.notchOpen(reason: .click)
-                model.lastActionMessage = "Held \(received.count) file\(received.count == 1 ? "" : "s") in Myspace."
-            } catch {
-                model.lastActionMessage = "Could not hold file: \(error.localizedDescription)"
-            }
-            try? FileManager.default.removeItem(at: destination)
+            self.holdDroppedFiles(received, in: model, removingAfterwards: destination)
         }
         return true
     }

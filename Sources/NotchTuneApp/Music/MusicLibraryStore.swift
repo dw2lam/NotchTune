@@ -24,8 +24,11 @@ struct MusicLibraryArchive: Codable, Equatable, Sendable {
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         appleMusic = try container.decodeIfPresent(MusicLibrarySnapshot.self, forKey: .appleMusic)
-        spotifyPins = try container.decodeIfPresent([MusicLibraryItem].self, forKey: .spotifyPins) ?? []
-        spotifyHistory = try container.decodeIfPresent([MusicLibraryItem].self, forKey: .spotifyHistory) ?? []
+        // Pins are what the user typed in; one bad entry can't cost the rest.
+        let pins = try container.decodeIfPresent([LossyElement<MusicLibraryItem>].self, forKey: .spotifyPins) ?? []
+        spotifyPins = pins.compactMap(\.value)
+        let history = try container.decodeIfPresent([LossyElement<MusicLibraryItem>].self, forKey: .spotifyHistory) ?? []
+        spotifyHistory = history.compactMap(\.value)
     }
 }
 
@@ -37,11 +40,21 @@ final class MusicLibraryStore {
 
     init(fileURL: URL?, seed: MusicLibraryArchive = MusicLibraryArchive()) {
         self.fileURL = fileURL
-        if let fileURL,
-           let data = try? Data(contentsOf: fileURL),
-           let decoded = try? JSONDecoder.musicLibrary.decode(MusicLibraryArchive.self, from: data) {
+        guard let fileURL else {
+            archive = seed
+            return
+        }
+
+        let outcome = RecoverableJSONFile(url: fileURL).load(
+            decode: { data in
+                .init(value: try JSONDecoder.musicLibrary.decode(MusicLibraryArchive.self, from: data), isComplete: true)
+            },
+            merge: { survivors, _ in survivors }
+        )
+        switch outcome {
+        case let .intact(decoded), let .recovered(decoded):
             archive = decoded
-        } else {
+        case .missing, .lost:
             archive = seed
         }
     }
@@ -70,8 +83,7 @@ final class MusicLibraryStore {
                 at: fileURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            let data = try JSONEncoder.musicLibrary.encode(archive)
-            try data.write(to: fileURL, options: .atomic)
+            try RecoverableJSONFile(url: fileURL).write(JSONEncoder.musicLibrary.encode(archive))
         } catch {
             // Best effort: losing the cache only costs a re-read / re-pin.
         }

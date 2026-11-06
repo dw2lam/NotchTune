@@ -283,8 +283,6 @@ final class AppModel {
         switch action {
         case let .openPrivacyPane(pane):
             pane.settingsURL.map { _ = NSWorkspace.shared.open($0) }
-        case .openNotificationSettings:
-            MyspaceReminderService.openSystemSettings()
         case .openSetup:
             showSettings()
             // `showSettings` may be what first mounts SettingsView, and the
@@ -1926,6 +1924,9 @@ final class AppModel {
         ensureOverlayPanel()
         if shouldPerformBootAnimation {
             performBootAnimation()
+        }
+        if let problem = myspaceStore.loadProblem {
+            post(AppNotice(message: problem))
         }
 
         guard startBridge else {

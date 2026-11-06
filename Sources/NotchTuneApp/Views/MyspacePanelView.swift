@@ -76,6 +76,7 @@ private struct MyspaceQuickLookView: NSViewRepresentable {
 
 private struct MyspacePreviewSelection: Identifiable {
     let attachment: MyspaceAttachment
+    let thoughtID: UUID
     let url: URL
     let createdAt: Date
 
@@ -131,6 +132,7 @@ struct MyspacePanelView: View {
                 filterBar
                 thoughtList(store.thoughts.filter { !$0.isReminder })
             }
+            MyspaceUndoBar(store: store)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 14)
@@ -186,6 +188,21 @@ struct MyspacePanelView: View {
                 .buttonStyle(NotchPlainButtonStyle(haptic: .jump))
                 .accessibilityLabel("Open \(selection.attachment.originalFilename) externally")
                 .help("Open in the default app")
+
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        previewSelection = nil
+                        store.deleteAttachment(id: selection.attachment.id, fromThought: selection.thoughtID)
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(NotchPlainButtonStyle(haptic: .decline))
+                .accessibilityLabel("Delete \(selection.attachment.originalFilename)")
+                .help("Delete")
             }
 
             ZStack {
@@ -449,11 +466,11 @@ struct MyspacePanelView: View {
                             url: store.attachmentURL(for: item.attachment, thoughtID: item.thought.id),
                             filename: item.attachment.originalFilename,
                             stripWidth: stripGeo.size.width,
-                            deletable: item.thought.text.isEmpty && item.thought.attachments.count == 1,
                             onOpen: {
                                 withAnimation(.easeOut(duration: 0.18)) {
                                     previewSelection = MyspacePreviewSelection(
                                         attachment: item.attachment,
+                                        thoughtID: item.thought.id,
                                         url: store.attachmentURL(for: item.attachment, thoughtID: item.thought.id),
                                         createdAt: item.thought.createdAt
                                     )
@@ -461,7 +478,7 @@ struct MyspacePanelView: View {
                             },
                             onDelete: {
                                 withAnimation(.easeInOut(duration: 0.15)) {
-                                    store.deleteThought(id: item.thought.id)
+                                    store.deleteAttachment(id: item.attachment.id, fromThought: item.thought.id)
                                 }
                             }
                         )
@@ -571,6 +588,11 @@ struct MyspacePanelView: View {
                     MyspaceClipboard.copy(thought.text)
                 }
             }
+            Button("Delete", role: .destructive) {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    store.deleteThought(id: thought.id)
+                }
+            }
         }
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -614,15 +636,17 @@ struct MyspacePanelView: View {
 
     private func holdFiles(_ urls: [URL]) -> Bool {
         guard !urls.isEmpty else { return false }
-        do {
-            try store.holdFiles(urls)
-            composerMessage = "Held \(urls.count) file\(urls.count == 1 ? "" : "s")"
-            onFilesHeld()
-            return true
-        } catch {
-            composerMessage = error.localizedDescription
-            return false
+        composerMessage = "Holding \(urls.count) file\(urls.count == 1 ? "" : "s")…"
+        Task {
+            do {
+                try await store.holdFiles(urls)
+                composerMessage = "Held \(urls.count) file\(urls.count == 1 ? "" : "s")"
+                onFilesHeld()
+            } catch {
+                composerMessage = error.localizedDescription
+            }
         }
+        return true
     }
 
     private func saveThought() {
@@ -692,9 +716,13 @@ struct RemindersPanelView: View {
         VStack(spacing: 10) {
             reminderSectionPicker
             if selectedSection == .active {
+                if store.hasRemindersThatCantAlert || (includesTime && store.notificationStatus == .off) {
+                    notificationsOffRow
+                }
                 reminderComposer
             }
             reminderList
+            MyspaceUndoBar(store: store)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 14)
@@ -707,7 +735,49 @@ struct RemindersPanelView: View {
                 )
             }
         }
+        // Live, not once: the switch is in System Settings, and this row has
+        // to go away the moment it's flipped.
+        .task {
+            while !Task.isCancelled {
+                await store.refreshNotificationStatus()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
         .transition(.opacity)
+    }
+
+    /// Only shown when it matters: a reminder is counting on an alert, or
+    /// one is being given a time. Untimed reminders never notify anyway.
+    private var notificationsOffRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "bell.slash.fill")
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(IslandDesignPalette.Status.waitingAggregate.opacity(0.85))
+            Text("Notifications are off, so timed reminders won't alert you.")
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.72))
+                .lineLimit(2)
+            Spacer(minLength: 4)
+            Button {
+                MyspaceReminderService.openSystemSettings()
+            } label: {
+                Text("Turn On")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.88))
+                    .padding(.horizontal, 9)
+                    .frame(height: 24)
+                    .background(.white.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(NotchPlainButtonStyle(haptic: .jump))
+            .help("Open Notifications in System Settings")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(.white.opacity(0.025), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(.white.opacity(0.08), lineWidth: 0.5)
+        }
     }
 
     private var reminderSectionPicker: some View {
@@ -932,6 +1002,11 @@ struct RemindersPanelView: View {
             Button("Copy") {
                 MyspaceClipboard.copy(reminder.text)
             }
+            Button("Delete", role: .destructive) {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    store.deleteThought(id: reminder.id)
+                }
+            }
         }
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -970,13 +1045,12 @@ struct RemindersPanelView: View {
 /// Async-loading thumbnail for image clips (42px cap keeps rows light).
 
 /// A gallery cell for the day strip: 96×74 QuickLook preview with a subtle
-/// horizontal parallax as the strip scrolls, filename beneath, hover delete
-/// for attachment-only thoughts.
+/// horizontal parallax as the strip scrolls, filename beneath, delete on
+/// hover and in the context menu.
 private struct MyspaceMediaStripCell: View {
     let url: URL
     let filename: String
     let stripWidth: CGFloat
-    let deletable: Bool
     let onOpen: () -> Void
     let onDelete: () -> Void
 
@@ -1012,7 +1086,7 @@ private struct MyspaceMediaStripCell: View {
                     .frame(width: geo.size.width, height: geo.size.height)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                    if deletable, hovering {
+                    if hovering {
                         Button(action: onDelete) {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 12))
@@ -1045,6 +1119,14 @@ private struct MyspaceMediaStripCell: View {
             onOpen()
         }
         .onHover { hovering = $0 }
+        .contextMenu {
+            Button("Preview", action: onOpen)
+            Button("Open in Default App") {
+                NSWorkspace.shared.open(url)
+            }
+            Divider()
+            Button("Delete", role: .destructive, action: onDelete)
+        }
         .task(id: url) {
             fileIcon = NSWorkspace.shared.icon(forFile: url.path)
             let scale = NSScreen.main?.backingScaleFactor ?? 2
@@ -1059,6 +1141,46 @@ private struct MyspaceMediaStripCell: View {
                     continuation.resume(returning: representation?.nsImage)
                 }
             }
+        }
+    }
+}
+
+/// Takes back the last delete, for as long as the store still can.
+private struct MyspaceUndoBar: View {
+    let store: MyspaceStore
+
+    var body: some View {
+        if let deletion = store.pendingDeletion {
+            HStack(spacing: 8) {
+                Text("Deleted \u{201C}\(deletion.title)\u{201D}")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.62))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 4)
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        store.undoDeletion()
+                    }
+                } label: {
+                    Text("Undo")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .padding(.horizontal, 10)
+                        .frame(height: 24)
+                        .background(.white.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(NotchPlainButtonStyle(haptic: .confirm))
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, 6)
+            .padding(.vertical, 5)
+            .background(.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(.white.opacity(0.08), lineWidth: 0.5)
+            }
+            .transition(.opacity)
         }
     }
 }

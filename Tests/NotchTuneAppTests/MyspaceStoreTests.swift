@@ -47,7 +47,7 @@ struct MyspaceStoreTests {
     }
 
     @Test
-    func holdingFilesCreatesAnAttachmentOnlyThought() throws {
+    func holdingFilesCreatesAnAttachmentOnlyThought() async throws {
         let root = temporaryDirectory()
         let source = root.appendingPathComponent("held.pdf")
         try Data("held file".utf8).write(to: source)
@@ -56,7 +56,7 @@ struct MyspaceStoreTests {
             notificationsEnabled: false
         )
 
-        let thought = try store.holdFiles([source])
+        let thought = try await store.holdFiles([source])
 
         #expect(thought.text.isEmpty)
         #expect(thought.attachments.map(\.originalFilename) == ["held.pdf"])
