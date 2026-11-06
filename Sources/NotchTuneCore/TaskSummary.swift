@@ -197,6 +197,7 @@ public enum TaskActivityClassifier {
     private static let shellToolNames: Set<String> = [
         "bash", "shell", "exec_command", "local_shell", "run_shell_command",
         "container.exec", "terminal", "run_terminal_cmd", "powershell",
+        "execute", "execute_command",
     ]
     private static let pathKeys = ["file_path", "filePath", "notebook_path", "path", "target_file", "filename"]
 
@@ -213,6 +214,11 @@ public enum TaskActivityClassifier {
             }
         }
         return []
+    }
+
+    /// Whether the tool runs arbitrary commands, in any agent's spelling.
+    public static func isShellTool(_ toolName: String) -> Bool {
+        shellToolNames.contains(toolName.lowercased())
     }
 
     /// The command line of a shell tool call, nil for any other tool.

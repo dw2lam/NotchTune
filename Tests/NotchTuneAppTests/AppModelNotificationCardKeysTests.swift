@@ -141,7 +141,7 @@ struct AppModelNotificationCardKeysTests {
         start(model, id: "s1")
         requestApproval(model, id: "s1")
         try await waitUntilOpened(model)
-        #expect(model.keyboardNotificationCard?.kind == .approval(supportsAlwaysAllow: true))
+        #expect(model.keyboardNotificationCard?.kind == .approval(supportsAlwaysAllow: false))
 
         #expect(model.performNotificationCardKeyCommand(.deny))
         #expect(model.state.session(id: "s1")?.phase != .waitingForApproval)
@@ -213,6 +213,8 @@ struct AppModelNotificationCardKeysTests {
             MainActor.assumeIsolated { received.commands.append(command) }
         }
         defer { NotificationCenter.default.removeObserver(token) }
+
+        model.notificationCardShownAt = Date().addingTimeInterval(-5)
 
         // Submit with nothing selected: the view's Submit is disabled.
         #expect(model.performNotificationCardKeyCommand(.submit))

@@ -290,6 +290,21 @@ public struct SessionState: Equatable, Sendable {
         upsert(session)
     }
 
+    /// Puts a session back as it was before an optimistic answer whose
+    /// command never reached the agent, which is still blocked on the request.
+    public mutating func restoreRequest(from original: AgentSession) {
+        guard var session = sessionsByID[original.id] else {
+            return
+        }
+
+        session.phase = original.phase
+        session.summary = original.summary
+        session.permissionRequest = original.permissionRequest
+        session.questionPrompt = original.questionPrompt
+        session.updatedAt = original.updatedAt
+        upsert(session)
+    }
+
     public mutating func answerQuestion(
         sessionID: String,
         response: QuestionPromptResponse,
@@ -419,6 +434,14 @@ public struct SessionState: Equatable, Sendable {
                     continue
                 }
 
+                // An agent blocked on the user can't be judged by polling:
+                // IDE-extension agents have no tty, so discovery never sees
+                // them. Its hook process holds the request, and a dead agent
+                // drops that connection, which resolves the request.
+                if session.hasPendingRequest {
+                    continue
+                }
+
                 if aliveSessionIDs.contains(id) {
                     session.processNotSeenCount = 0
                 } else {
@@ -458,13 +481,17 @@ public struct SessionState: Equatable, Sendable {
     /// Remove sessions that are no longer visible in the island.
     /// Returns `true` if any sessions were removed.
     @discardableResult
-    /// Manually mark a session as completed and ended.
-    /// Intended for remote sessions whose SSH tunnel dropped without a
-    /// SessionEnd hook.
+    /// Manually mark a session as completed and ended, for what nothing else
+    /// will clear: remote sessions whose SSH tunnel dropped without a
+    /// SessionEnd hook, local ones that are stuck. A process that really is
+    /// alive brings a polled session back on the next tick.
     public mutating func dismissSession(id: String) {
         guard var session = sessionsByID[id] else { return }
         session.isSessionEnded = true
+        session.isProcessAlive = false
         session.phase = .completed
+        session.permissionRequest = nil
+        session.questionPrompt = nil
         session.updatedAt = .now
         upsert(session)
     }

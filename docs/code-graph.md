@@ -82,6 +82,14 @@ get `stateAccessor` closures instead of holding state.
 - A notice never opens under a close, an agent's card, a file drag, boot or a full-screen app: it waits (`AppNoticeDelivery`) and `OverlayUICoordinator.deliverNotice` retries when any of those ends. With the notch closed it opens passively as `IslandSurface.notice` (no sound, no key focus, no tab change); `presentedNotice` keeps it on the panel through the close.
 - The closed surface must be solid before the opened surface unmounts, or the notch blinks empty. `NOTCHTUNE_HARNESS_FILMSTRIP=1` or `close` records a close frame by frame to check it.
 
+## Approvals and questions
+
+- A request lives on the session (`permissionRequest` / `questionPrompt`), and only there: it isn't persisted, so `withoutOrphanedAttention` demotes a restored attention phase, and `hasPendingRequest` is what "blocked on the user" means (an attention phase alone can be a ghost).
+- `BridgeServer.pendingClaudeInteractions` queues hooks per session: a session shows one request, the next is presented when it's settled. Tool-call hooks settle only their own request; turn boundaries clear all of them.
+- `AppModel+AttentionQueue` orders blocked sessions by wait for the one card on screen: nothing displaces a card an agent is blocked on, and every way a card goes (`OverlayUICoordinator.closeNotificationCardOrAdvance`, `notchClose`) hands over to the next. Keep new close paths on those two.
+- An answer carries the id of the request it was given for, from the card through `BridgeCommand` to the hook. It's applied optimistically; a failed send restores the request (`restoreUndeliveredRequest`).
+- `AlwaysAllowOffer` decides whether and what "Always Allow" grants. `PermissionRequest.commandPreview` is the card's command; past `characterLimit` it's marked truncated and bare Return won't approve it.
+
 ## Size outliers (organization candidates)
 
 IslandPanelView (~3.3k), BridgeServer (~2.9k), AppModel (~2.4k),

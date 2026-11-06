@@ -4,8 +4,9 @@ import NotchTuneCore
 /// Which notification card is on screen, as far as keyboard control cares.
 enum NotificationCardKind: Equatable, Sendable {
     /// Permission request. `supportsAlwaysAllow` mirrors the "Always Allow"
-    /// button, which only exists when the request names a tool.
-    case approval(supportsAlwaysAllow: Bool)
+    /// button (see `AlwaysAllowOffer`). `isCommandTruncated`: the card can't
+    /// show all of what would run.
+    case approval(supportsAlwaysAllow: Bool, isCommandTruncated: Bool = false)
     /// Structured or freeform question.
     case question
     /// Completion toast. `hasReply` mirrors the toast's Reply button.
@@ -14,7 +15,10 @@ enum NotificationCardKind: Equatable, Sendable {
     init?(session: AgentSession, replyAvailable: Bool) {
         switch session.phase {
         case .waitingForApproval:
-            self = .approval(supportsAlwaysAllow: session.permissionRequest?.toolName != nil)
+            self = .approval(
+                supportsAlwaysAllow: session.alwaysAllowOffer != nil,
+                isCommandTruncated: session.permissionRequest?.commandPreview?.isTruncated == true
+            )
         case .waitingForAnswer:
             self = .question
         case .completed:
@@ -50,9 +54,9 @@ struct NotificationCardKeyInput: Equatable, Sendable {
 ///
 /// | Card        | Keys                                   | Command                |
 /// |-------------|----------------------------------------|------------------------|
-/// | approval    | ⌘Y / Return                            | allow once             |
+/// | approval    | ⌘Y / Return (not if truncated)         | allow once             |
 /// | approval    | ⌘N                                     | deny                   |
-/// | approval    | ⌘⇧Y (tool-scoped requests only)        | always allow           |
+/// | approval    | ⌘⇧Y (when `AlwaysAllowOffer` exists)   | always allow           |
 /// | question    | ⌘1 … ⌘9                                | pick numbered option   |
 /// | question    | Return                                 | submit (if enabled)    |
 /// | completion  | Return / ⌘J                            | jump                   |
@@ -87,10 +91,11 @@ enum NotificationCardKeyCommand: Equatable, Sendable {
         var timeSinceUnmappedKey: TimeInterval = .infinity
     }
 
-    /// A bare Return approving a tool call must be deliberate: it is ignored
-    /// until the card has been visible this long and the user has not been
-    /// typing into the panel for this long. ⌘Y is always deliberate.
-    static let bareReturnApprovalArmDelay: TimeInterval = 0.8
+    /// A key must answer the card the user read, not one that just took its
+    /// place (the chord may have been meant for the card before it), so
+    /// nothing answers an approval until it has been visible this long. Bare
+    /// Return also waits this long after any typing into the panel.
+    static let approvalArmDelay: TimeInterval = 0.8
 
     private enum KeyCode {
         static let returnKey: UInt16 = 36
@@ -129,7 +134,8 @@ enum NotificationCardKeyCommand: Equatable, Sendable {
         }
 
         switch context.card {
-        case let .approval(supportsAlwaysAllow):
+        case let .approval(supportsAlwaysAllow, _):
+            guard context.cardAge >= approvalArmDelay else { return nil }
             switch (key, isShift) {
             case ("y", false): return .allowOnce
             case ("y", true): return supportsAlwaysAllow ? .alwaysAllow : nil
@@ -159,9 +165,12 @@ enum NotificationCardKeyCommand: Equatable, Sendable {
 
     private static func returnCommand(context: Context) -> NotificationCardKeyCommand? {
         switch context.card {
-        case .approval:
-            guard context.cardAge >= bareReturnApprovalArmDelay,
-                  context.timeSinceUnmappedKey >= bareReturnApprovalArmDelay else {
+        case let .approval(_, isCommandTruncated):
+            // Part of the command is off the card: only ⌘Y can mean "I read
+            // it in the terminal".
+            guard !isCommandTruncated,
+                  context.cardAge >= approvalArmDelay,
+                  context.timeSinceUnmappedKey >= approvalArmDelay else {
                 return nil
             }
             return .allowOnce
@@ -179,20 +188,6 @@ enum NotificationCardKeyCommand: Equatable, Sendable {
             return Int(scalar.value) - Int(("1" as Unicode.Scalar).value)
         }
         return KeyCode.digits.firstIndex(of: input.keyCode)
-    }
-}
-
-extension ApprovalAction {
-    /// The "Always Allow (<tool>)" action: allow now and add a session-scoped
-    /// allow rule for the tool. Shared by the card button and ⌘⇧Y.
-    static func alwaysAllow(toolName: String) -> ApprovalAction {
-        let rule = ClaudePermissionRuleValue(toolName: toolName)
-        let update = ClaudePermissionUpdate.addRules(
-            destination: .session,
-            rules: [rule],
-            behavior: .allow
-        )
-        return .allowWithUpdates([update])
     }
 }
 

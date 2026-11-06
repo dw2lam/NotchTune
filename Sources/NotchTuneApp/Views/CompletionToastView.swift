@@ -25,6 +25,8 @@ struct CompletionToastView: View {
     var lang: LanguageManager = .shared
     let onJump: () -> Void
     var onReply: ((String) -> Void)?
+    /// A reply that failed to send, back for the field.
+    var unsentReply: String?
     var onRotate: ((Bool) -> Void)?
     let onShowAll: () -> Void
 
@@ -89,6 +91,11 @@ struct CompletionToastView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(headlineText)
+        .onChange(of: unsentReply, initial: true) { _, unsent in
+            guard let unsent else { return }
+            replyText = unsent
+            isReplying = true
+        }
     }
 
     // MARK: - Header

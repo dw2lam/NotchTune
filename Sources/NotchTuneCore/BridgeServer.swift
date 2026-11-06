@@ -30,12 +30,38 @@ public final class BridgeServer: @unchecked Sendable {
 
     private struct PendingClaudeInteraction {
         enum Kind {
-            case permission(ClaudeHookPayload)
+            case permission(ClaudeHookPayload, PermissionRequest)
             case question(ClaudeHookPayload, QuestionPrompt)
         }
 
         let clientID: UUID
+        let toolUseID: String?
         let kind: Kind
+
+        var payload: ClaudeHookPayload {
+            switch kind {
+            case let .permission(payload, _), let .question(payload, _):
+                payload
+            }
+        }
+
+        var requestID: UUID {
+            switch kind {
+            case let .permission(_, request):
+                request.id
+            case let .question(_, prompt):
+                prompt.id
+            }
+        }
+
+        /// Whether a tool-call hook is about this request. Permission hooks
+        /// often carry no `tool_use_id`, so the tool and its input stand in.
+        func isSameToolCall(as other: ClaudeHookPayload) -> Bool {
+            if let toolUseID, let otherID = other.toolUseID {
+                return toolUseID == otherID
+            }
+            return payload.permissionCorrelationKey == other.permissionCorrelationKey
+        }
     }
 
     private struct PendingOpenCodeInteraction {
@@ -67,7 +93,10 @@ public final class BridgeServer: @unchecked Sendable {
     private var clients: [UUID: ClientConnection] = [:]
     private var pendingApprovals: [String: PendingApproval] = [:]
     private var pendingClaudeToolContexts: [String: PendingClaudeToolContext] = [:]
-    private var pendingClaudeInteractions: [String: PendingClaudeInteraction] = [:]
+    /// Waiting hooks per session, oldest first. Parallel tool calls ask at
+    /// once, but a session shows one request: the first is presented, the
+    /// rest when it's settled. An entry is never left empty.
+    private var pendingClaudeInteractions: [String: [PendingClaudeInteraction]] = [:]
     private var pendingOpenCodeInteractions: [String: PendingOpenCodeInteraction] = [:]
     private var pendingCursorInteractions: [String: PendingCursorInteraction] = [:]
     /// Caches Agent tool description from preToolUse for use by the next subagentStart.
@@ -338,9 +367,9 @@ public final class BridgeServer: @unchecked Sendable {
             )
             send(.response(.acknowledged), to: clientID)
 
-        case let .resolvePermission(sessionID, resolution):
+        case let .resolvePermission(sessionID, resolution, requestID):
             if pendingClaudeInteractions[sessionID] != nil {
-                resolvePendingClaudeInteraction(sessionID: sessionID, resolution: resolution)
+                resolvePendingClaudeInteraction(sessionID: sessionID, requestID: requestID, resolution: resolution)
                 send(.response(.acknowledged), to: clientID)
                 return
             }
@@ -437,9 +466,9 @@ public final class BridgeServer: @unchecked Sendable {
             resolvePendingApproval(sessionID: sessionID, resolution: resolution)
             send(.response(.acknowledged), to: clientID)
 
-        case let .answerQuestion(sessionID, response):
+        case let .answerQuestion(sessionID, response, requestID):
             if pendingClaudeInteractions[sessionID] != nil {
-                resolvePendingClaudeQuestion(sessionID: sessionID, response: response)
+                resolvePendingClaudeQuestion(sessionID: sessionID, requestID: requestID, response: response)
                 send(.response(.acknowledged), to: clientID)
                 return
             }
@@ -545,6 +574,7 @@ public final class BridgeServer: @unchecked Sendable {
                         title: "Run Bash command",
                         summary: "Codex wants to run a shell command.",
                         affectedPath: payload.commandText ?? command,
+                        commandPreview: PermissionCommandPreview(payload.commandText),
                         primaryActionTitle: "Allow",
                         secondaryActionTitle: "Deny"
                     ),
@@ -572,6 +602,7 @@ public final class BridgeServer: @unchecked Sendable {
                             title: payload.permissionRequestTitle,
                             summary: payload.permissionRequestSummary,
                             affectedPath: payload.permissionRequestAffectedPath,
+                            commandPreview: PermissionCommandPreview(payload.commandText),
                             primaryActionTitle: "Allow",
                             secondaryActionTitle: "Deny",
                             toolName: payload.toolName,
@@ -781,51 +812,32 @@ public final class BridgeServer: @unchecked Sendable {
             synchronizeClaudeJumpTarget(for: payload)
             synchronizeClaudeMetadata(for: payload)
 
-            if let prompt = payload.questionPrompt {
-                emit(
-                    .questionAsked(
-                        QuestionAsked(
-                            sessionID: payload.sessionID,
-                            prompt: prompt,
-                            timestamp: .now
-                        )
+            let kind: PendingClaudeInteraction.Kind = payload.questionPrompt.map { .question(payload, $0) }
+                ?? .permission(
+                    payload,
+                    PermissionRequest(
+                        title: payload.permissionRequestTitle,
+                        summary: payload.permissionRequestSummary,
+                        affectedPath: payload.permissionAffectedPath,
+                        commandPreview: payload.permissionCommandPreview,
+                        primaryActionTitle: "Allow Once",
+                        secondaryActionTitle: "Deny",
+                        toolName: payload.toolName,
+                        toolUseID: claudeToolUseID(for: payload),
+                        suggestedUpdates: payload.permissionSuggestions ?? []
                     )
                 )
-
-                pendingClaudeInteractions[payload.sessionID] = PendingClaudeInteraction(
+            enqueueClaudeInteraction(
+                PendingClaudeInteraction(
                     clientID: clientID,
-                    kind: .question(payload, prompt)
-                )
-            } else {
-                let suggestions = payload.permissionSuggestions ?? []
-
-                emit(
-                    .permissionRequested(
-                        PermissionRequested(
-                            sessionID: payload.sessionID,
-                            request: PermissionRequest(
-                                title: payload.permissionRequestTitle,
-                                summary: payload.permissionRequestSummary,
-                                affectedPath: payload.permissionAffectedPath,
-                                primaryActionTitle: "Allow Once",
-                                secondaryActionTitle: "Deny",
-                                toolName: payload.toolName,
-                                toolUseID: claudeToolUseID(for: payload),
-                                suggestedUpdates: suggestions
-                            ),
-                            timestamp: .now
-                        )
-                    )
-                )
-
-                pendingClaudeInteractions[payload.sessionID] = PendingClaudeInteraction(
-                    clientID: clientID,
-                    kind: .permission(payload)
-                )
-            }
+                    toolUseID: claudeToolUseID(for: payload),
+                    kind: kind
+                ),
+                sessionID: payload.sessionID
+            )
 
         case .postToolUse:
-            clearStaleClaudeInteractionIfNeeded(for: payload.sessionID)
+            clearStaleClaudeInteraction(matching: payload)
             ensureClaudeSessionExists(for: payload)
             synchronizeClaudeJumpTarget(for: payload)
             synchronizeClaudeMetadata(for: payload)
@@ -874,7 +886,7 @@ public final class BridgeServer: @unchecked Sendable {
             send(.response(.acknowledged), to: clientID)
 
         case .postToolUseFailure:
-            clearStaleClaudeInteractionIfNeeded(for: payload.sessionID)
+            clearStaleClaudeInteraction(matching: payload)
             ensureClaudeSessionExists(for: payload)
             synchronizeClaudeJumpTarget(for: payload)
             synchronizeClaudeMetadata(for: payload)
@@ -894,19 +906,30 @@ public final class BridgeServer: @unchecked Sendable {
             send(.response(.acknowledged), to: clientID)
 
         case .permissionDenied:
-            clearStaleClaudeInteractionIfNeeded(for: payload.sessionID)
+            clearStaleClaudeInteraction(matching: payload)
             ensureClaudeSessionExists(for: payload)
             synchronizeClaudeJumpTarget(for: payload)
             synchronizeClaudeMetadata(for: payload)
 
+            // One denied call doesn't end a turn with another still waiting.
+            let deniedSummary = payload.error ?? "\(payload.resolvedAgentTool.displayName) permission was denied."
             emit(
-                .sessionCompleted(
-                    SessionCompleted(
-                        sessionID: payload.sessionID,
-                        summary: payload.error ?? "\(payload.resolvedAgentTool.displayName) permission was denied.",
-                        timestamp: .now
+                pendingClaudeInteractions[payload.sessionID] == nil
+                    ? .sessionCompleted(
+                        SessionCompleted(
+                            sessionID: payload.sessionID,
+                            summary: deniedSummary,
+                            timestamp: .now
+                        )
                     )
-                )
+                    : .activityUpdated(
+                        SessionActivityUpdated(
+                            sessionID: payload.sessionID,
+                            summary: deniedSummary,
+                            phase: .running,
+                            timestamp: .now
+                        )
+                    )
             )
             send(.response(.acknowledged), to: clientID)
 
@@ -1215,6 +1238,7 @@ public final class BridgeServer: @unchecked Sendable {
                             title: payload.permissionTitle ?? payload.toolName.map { "Allow \($0)" } ?? "Allow OpenCode tool",
                             summary: payload.permissionDescription ?? "OpenCode needs permission to continue.",
                             affectedPath: payload.toolInputPreview ?? payload.cwd,
+                            commandPreview: PermissionCommandPreview(payload.toolInput),
                             primaryActionTitle: "Allow",
                             secondaryActionTitle: "Deny",
                             toolName: payload.toolName
@@ -2110,6 +2134,7 @@ public final class BridgeServer: @unchecked Sendable {
         )
     }
 
+    /// The turn started or ended, so no call in it can still be waiting.
     private func clearStaleClaudeInteractionIfNeeded(for sessionID: String) {
         guard pendingClaudeInteractions.removeValue(forKey: sessionID) != nil else {
             return
@@ -2124,6 +2149,71 @@ public final class BridgeServer: @unchecked Sendable {
                 )
             )
         )
+    }
+
+    /// A tool call finished: only its own request is settled. A parallel
+    /// call in the same session is still blocking its hook.
+    private func clearStaleClaudeInteraction(matching payload: ClaudeHookPayload) {
+        let sessionID = payload.sessionID
+        guard let index = pendingClaudeInteractions[sessionID]?.firstIndex(where: { $0.isSameToolCall(as: payload) }) else {
+            return
+        }
+
+        removeClaudeInteraction(at: index, sessionID: sessionID)
+        guard index == 0 else { return }
+        settleClaudeRequestOnScreen(sessionID: sessionID, summary: "Approval was handled outside NotchTune.")
+    }
+
+    private func enqueueClaudeInteraction(_ interaction: PendingClaudeInteraction, sessionID: String) {
+        let isFirst = pendingClaudeInteractions[sessionID] == nil
+        pendingClaudeInteractions[sessionID, default: []].append(interaction)
+        if isFirst {
+            presentClaudeInteraction(interaction, sessionID: sessionID)
+        }
+    }
+
+    private func presentClaudeInteraction(_ interaction: PendingClaudeInteraction, sessionID: String) {
+        switch interaction.kind {
+        case let .permission(_, request):
+            emit(.permissionRequested(PermissionRequested(sessionID: sessionID, request: request, timestamp: .now)))
+        case let .question(_, prompt):
+            emit(.questionAsked(QuestionAsked(sessionID: sessionID, prompt: prompt, timestamp: .now)))
+        }
+    }
+
+    private func removeClaudeInteraction(at index: Int, sessionID: String) {
+        pendingClaudeInteractions[sessionID]?.remove(at: index)
+        if pendingClaudeInteractions[sessionID]?.isEmpty == true {
+            pendingClaudeInteractions[sessionID] = nil
+        }
+    }
+
+    /// The request a session was showing is gone: the next one takes its
+    /// place, or the session is free again.
+    private func settleClaudeRequestOnScreen(sessionID: String, summary: String) {
+        if let next = pendingClaudeInteractions[sessionID]?.first {
+            presentClaudeInteraction(next, sessionID: sessionID)
+            return
+        }
+
+        emit(
+            .actionableStateResolved(
+                ActionableStateResolved(
+                    sessionID: sessionID,
+                    summary: summary,
+                    timestamp: .now
+                )
+            )
+        )
+    }
+
+    /// Where `requestID` sits in the session's queue. No id means the request
+    /// on screen; an id that isn't here was settled while the answer travelled.
+    private func claudeInteractionIndex(sessionID: String, requestID: UUID?) -> Int? {
+        guard let requestID else {
+            return pendingClaudeInteractions[sessionID]?.indices.first
+        }
+        return pendingClaudeInteractions[sessionID]?.firstIndex { $0.requestID == requestID }
     }
 
     private func ensureSessionExists(for payload: CodexHookPayload) {
@@ -3047,18 +3137,21 @@ public final class BridgeServer: @unchecked Sendable {
 
     private func resolvePendingClaudeInteraction(
         sessionID: String,
+        requestID: UUID?,
         resolution: PermissionResolution
     ) {
-        guard let pendingInteraction = pendingClaudeInteractions.removeValue(forKey: sessionID) else {
+        guard let index = claudeInteractionIndex(sessionID: sessionID, requestID: requestID),
+              let pendingInteraction = pendingClaudeInteractions[sessionID]?[index] else {
             return
         }
+        removeClaudeInteraction(at: index, sessionID: sessionID)
 
         let directive: ClaudeHookDirective
         let summary: String
         let phase: SessionPhase
 
         switch (pendingInteraction.kind, resolution) {
-        case let (.permission(payload), .allowOnce(updatedInput, updatedPermissions)):
+        case let (.permission(payload, _), .allowOnce(updatedInput, updatedPermissions)):
             let finalInput = updatedInput ?? payload.toolInput
             directive = .permissionRequest(
                 .allow(updatedInput: finalInput, updatedPermissions: updatedPermissions)
@@ -3066,7 +3159,7 @@ public final class BridgeServer: @unchecked Sendable {
             summary = payload.toolName.map { "Permission approved for \($0)." } ?? "Permission approved."
             phase = .running
 
-        case let (.permission(_), .deny(message, interrupt)):
+        case let (.permission, .deny(message, interrupt)):
             directive = .permissionRequest(
                 .deny(message: message ?? "Permission denied in NotchTune.", interrupt: interrupt)
             )
@@ -3110,19 +3203,27 @@ public final class BridgeServer: @unchecked Sendable {
         )
 
         send(.response(.claudeHookDirective(directive)), to: pendingInteraction.clientID)
+        presentNextClaudeInteraction(sessionID: sessionID, afterSettling: index)
+    }
+
+    private func presentNextClaudeInteraction(sessionID: String, afterSettling index: Int) {
+        guard index == 0, let next = pendingClaudeInteractions[sessionID]?.first else {
+            return
+        }
+        presentClaudeInteraction(next, sessionID: sessionID)
     }
 
     private func resolvePendingClaudeQuestion(
         sessionID: String,
+        requestID: UUID?,
         response: QuestionPromptResponse
     ) {
-        guard let pendingInteraction = pendingClaudeInteractions.removeValue(forKey: sessionID) else {
+        guard let index = claudeInteractionIndex(sessionID: sessionID, requestID: requestID),
+              let pendingInteraction = pendingClaudeInteractions[sessionID]?[index],
+              case let .question(payload, prompt) = pendingInteraction.kind else {
             return
         }
-
-        guard case let .question(payload, prompt) = pendingInteraction.kind else {
-            return
-        }
+        removeClaudeInteraction(at: index, sessionID: sessionID)
 
         let updatedInput = mergedClaudeQuestionInput(
             payload: payload,
@@ -3152,6 +3253,7 @@ public final class BridgeServer: @unchecked Sendable {
             ),
             to: pendingInteraction.clientID
         )
+        presentNextClaudeInteraction(sessionID: sessionID, afterSettling: index)
     }
 
     private func claudeToolUseID(for payload: ClaudeHookPayload) -> String? {
@@ -3262,22 +3364,14 @@ public final class BridgeServer: @unchecked Sendable {
             )
         }
 
-        let pendingClaudeSessionIDs = pendingClaudeInteractions.compactMap { entry -> String? in
-            let (sessionID, pendingInteraction) = entry
-            return pendingInteraction.clientID == clientID ? sessionID : nil
-        }
-
-        for sessionID in pendingClaudeSessionIDs {
-            pendingClaudeInteractions.removeValue(forKey: sessionID)
-            emit(
-                .actionableStateResolved(
-                    ActionableStateResolved(
-                        sessionID: sessionID,
-                        summary: "Hook process disconnected.",
-                        timestamp: .now
-                    )
-                )
-            )
+        for (sessionID, interactions) in pendingClaudeInteractions
+        where interactions.contains(where: { $0.clientID == clientID }) {
+            let wasOnScreen = interactions.first?.clientID == clientID
+            let remaining = interactions.filter { $0.clientID != clientID }
+            pendingClaudeInteractions[sessionID] = remaining.isEmpty ? nil : remaining
+            if wasOnScreen {
+                settleClaudeRequestOnScreen(sessionID: sessionID, summary: "Hook process disconnected.")
+            }
         }
 
         let pendingOpenCodeSessionIDs = pendingOpenCodeInteractions.compactMap { entry -> String? in

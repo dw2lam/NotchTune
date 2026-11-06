@@ -86,8 +86,8 @@ struct NotificationCardKeyCommandTests {
         #expect(resolve(key(Code.returnKey, "\r"), approval, cardAge: 0.2) == nil)
         // User was typing into the panel a moment ago.
         #expect(resolve(key(Code.returnKey, "\r"), approval, cardAge: 5, sinceUnmapped: 0.3) == nil)
-        // ⌘Y is deliberate and not gated.
-        #expect(resolve(key(Code.y, "y", .command), approval, cardAge: 0.05, sinceUnmapped: 0.05) == .allowOnce)
+        // ⌘Y is deliberate: typing doesn't gate it, only a card's age does.
+        #expect(resolve(key(Code.y, "y", .command), approval, cardAge: 5, sinceUnmapped: 0.05) == .allowOnce)
     }
 
     @Test
@@ -167,15 +167,54 @@ struct NotificationCardKeyCommandTests {
     // MARK: Card kind / event conversion
 
     @Test
-    func cardKindFollowsSessionPhase() {
-        var session = AgentSession(
+    func noApprovalChordAnswersACardThatJustAppeared() {
+        let young = NotificationCardKeyCommand.approvalArmDelay - 0.1
+
+        #expect(resolve(key(Code.y, "y", .command), approval, cardAge: young) == nil)
+        #expect(resolve(key(Code.y, "Y", [.command, .shift]), approval, cardAge: young) == nil)
+        #expect(resolve(key(Code.n, "n", .command), approval, cardAge: young) == nil)
+
+        let armed = NotificationCardKeyCommand.approvalArmDelay
+        #expect(resolve(key(Code.y, "y", .command), approval, cardAge: armed) == .allowOnce)
+    }
+
+    @Test
+    func bareReturnNeverApprovesATruncatedCommand() {
+        let truncated = NotificationCardKind.approval(supportsAlwaysAllow: false, isCommandTruncated: true)
+
+        #expect(resolve(key(Code.returnKey, "\r"), truncated) == nil)
+        #expect(resolve(key(Code.y, "y", .command), truncated) == .allowOnce)
+    }
+
+    @Test
+    func aTruncatedCommandMarksTheCard() throws {
+        let command = try #require(PermissionCommandPreview(String(repeating: "x", count: 900)))
+        let session = AgentSession(
             id: "s",
-            title: "Codex · s",
+            title: "s",
             tool: .codex,
             phase: .waitingForApproval,
             summary: "",
             updatedAt: Date(timeIntervalSince1970: 0),
-            permissionRequest: PermissionRequest(title: "Bash", summary: "ls", affectedPath: "", toolName: "Bash")
+            permissionRequest: PermissionRequest(title: "Bash", summary: "", affectedPath: "", commandPreview: command)
+        )
+
+        #expect(
+            NotificationCardKind(session: session, replyAvailable: false)
+                == .approval(supportsAlwaysAllow: false, isCommandTruncated: true)
+        )
+    }
+
+    @Test
+    func cardKindFollowsSessionPhase() {
+        var session = AgentSession(
+            id: "s",
+            title: "Codex · s",
+            tool: .claudeCode,
+            phase: .waitingForApproval,
+            summary: "",
+            updatedAt: Date(timeIntervalSince1970: 0),
+            permissionRequest: PermissionRequest(title: "Read", summary: "ls", affectedPath: "", toolName: "Read")
         )
         #expect(NotificationCardKind(session: session, replyAvailable: false) == .approval(supportsAlwaysAllow: true))
 
@@ -208,16 +247,5 @@ struct NotificationCardKeyCommandTests {
             keyCode: Code.y, characters: "y", modifierFlags: [.command, .option], isRepeat: false
         )
         #expect(option.modifiers == [.command, .option])
-    }
-
-    @Test
-    func alwaysAllowActionAddsSessionRuleForTool() {
-        guard case let .allowWithUpdates(updates) = ApprovalAction.alwaysAllow(toolName: "Bash") else {
-            Issue.record("expected allowWithUpdates")
-            return
-        }
-        #expect(updates == [
-            .addRules(destination: .session, rules: [ClaudePermissionRuleValue(toolName: "Bash")], behavior: .allow),
-        ])
     }
 }

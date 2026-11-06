@@ -21,9 +21,10 @@ struct TerminalTextSender {
         // tmux sessions: any terminal can receive send-keys.
         if target.tmuxTarget != nil { return true }
 
-        // Ghostty: native AppleScript input text (1.3.0+).
+        // Ghostty: native AppleScript input text (1.3.0+). Only with an exact
+        // terminal id: nothing else tells two tabs in one folder apart.
         let app = target.terminalApp.lowercased()
-        if app == "ghostty" { return true }
+        if app == "ghostty" { return target.hasTerminalSessionID }
 
         return false
     }
@@ -43,7 +44,7 @@ struct TerminalTextSender {
         }
 
         let app = target.terminalApp.lowercased()
-        if app == "ghostty" {
+        if app == "ghostty", target.hasTerminalSessionID {
             return sendViaGhostty(text, target: target)
         }
 
@@ -71,18 +72,14 @@ struct TerminalTextSender {
     // MARK: - Ghostty
 
     private static func sendViaGhostty(_ text: String, target: JumpTarget) -> Bool {
-        // Build an AppleScript that:
-        //   1. Finds the correct terminal (by session id, working directory, or name)
-        //   2. Focuses it
-        //   3. Sends the reply text + newline via `input text`
-        let script = ghosttySendScript(text: text, target: target)
-        return runAppleScript(script)
+        runAppleScript(ghosttySendScript(text: text, target: target))
     }
 
-    private static func ghosttySendScript(text: String, target: JumpTarget) -> String {
+    /// Typing here runs as a command, so the terminal must be the session's
+    /// own: an id that no longer exists fails rather than settling for a
+    /// tab that merely shares a folder or a title.
+    static func ghosttySendScript(text: String, target: JumpTarget) -> String {
         let terminalSessionID = escapeAppleScript(target.terminalSessionID)
-        let workingDirectory = escapeAppleScript(target.workingDirectory)
-        let paneTitle = escapeAppleScript(target.paneTitle)
         let escapedText = escapeAppleScript(text)
 
         return """
@@ -91,53 +88,18 @@ struct TerminalTextSender {
 
             set targetTerminal to missing value
 
-            -- Match by terminal session ID (most precise)
-            if "\(terminalSessionID)" is not "" then
-                repeat with aWindow in windows
-                    repeat with aTab in tabs of aWindow
-                        repeat with aTerminal in terminals of aTab
-                            if (id of aTerminal as text) is "\(terminalSessionID)" then
-                                set targetTerminal to aTerminal
-                                exit repeat
-                            end if
-                        end repeat
-                        if targetTerminal is not missing value then exit repeat
+            repeat with aWindow in windows
+                repeat with aTab in tabs of aWindow
+                    repeat with aTerminal in terminals of aTab
+                        if (id of aTerminal as text) is "\(terminalSessionID)" then
+                            set targetTerminal to aTerminal
+                            exit repeat
+                        end if
                     end repeat
                     if targetTerminal is not missing value then exit repeat
                 end repeat
-            end if
-
-            -- Fallback: match by working directory
-            if targetTerminal is missing value and "\(workingDirectory)" is not "" then
-                repeat with aWindow in windows
-                    repeat with aTab in tabs of aWindow
-                        repeat with aTerminal in terminals of aTab
-                            if (working directory of aTerminal as text) is "\(workingDirectory)" then
-                                set targetTerminal to aTerminal
-                                exit repeat
-                            end if
-                        end repeat
-                        if targetTerminal is not missing value then exit repeat
-                    end repeat
-                    if targetTerminal is not missing value then exit repeat
-                end repeat
-            end if
-
-            -- Fallback: match by pane title
-            if targetTerminal is missing value and "\(paneTitle)" is not "" then
-                repeat with aWindow in windows
-                    repeat with aTab in tabs of aWindow
-                        repeat with aTerminal in terminals of aTab
-                            if (name of aTerminal as text) contains "\(paneTitle)" then
-                                set targetTerminal to aTerminal
-                                exit repeat
-                            end if
-                        end repeat
-                        if targetTerminal is not missing value then exit repeat
-                    end repeat
-                    if targetTerminal is not missing value then exit repeat
-                end repeat
-            end if
+                if targetTerminal is not missing value then exit repeat
+            end repeat
 
             if targetTerminal is missing value then return "error"
 
@@ -219,5 +181,11 @@ struct TerminalTextSender {
         } catch {
             return false
         }
+    }
+}
+
+private extension JumpTarget {
+    var hasTerminalSessionID: Bool {
+        terminalSessionID?.isEmpty == false
     }
 }

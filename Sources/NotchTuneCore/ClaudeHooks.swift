@@ -854,17 +854,25 @@ public extension ClaudeHookPayload {
     }
 
     var toolInputPreview: String? {
-        // For object-type tool inputs, extract the most relevant field
-        // instead of serializing the entire JSON structure.
+        clipped(toolInputText)
+    }
+
+    /// For object-type tool inputs, the most relevant field instead of the
+    /// entire JSON structure.
+    private var toolInputText: String? {
         if case let .object(obj) = toolInput {
             let keyPriority = ["command", "file_path", "pattern", "query", "prompt", "description", "skill", "url"]
             for key in keyPriority {
                 if let val = obj[key]?.stringValue, !val.isEmpty {
-                    return clipped(val)
+                    return val
                 }
             }
         }
-        return clipped(stringValue(for: toolInput))
+        return stringValue(for: toolInput)
+    }
+
+    var permissionCommandPreview: PermissionCommandPreview? {
+        PermissionCommandPreview(toolInputText)
     }
 
     var toolResponsePreview: String? {

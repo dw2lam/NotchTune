@@ -13,6 +13,17 @@ public enum AgentTool: String, CaseIterable, Codable, Sendable {
     case kimiCLI
     case antigravity
 
+    /// Whether the agent acts on `updatedPermissions` in a hook reply: the
+    /// agents on the Claude hook format. The rest ignore it.
+    public var appliesPermissionUpdates: Bool {
+        switch self {
+        case .claudeCode, .qoder, .qwenCode, .factory, .codebuddy, .kimiCLI:
+            true
+        case .codex, .geminiCLI, .openCode, .cursor, .antigravity:
+            false
+        }
+    }
+
     public var displayName: String {
         switch self {
         case .claudeCode:
@@ -181,11 +192,45 @@ public struct JumpTarget: Equatable, Codable, Sendable {
     }
 }
 
+/// What a request wants to run, as the user will read it on the card: the
+/// agent's own text with its line breaks, up to a cap.
+public struct PermissionCommandPreview: Equatable, Codable, Sendable {
+    public static let characterLimit = 600
+
+    public var text: String
+    /// The agent's text ran past `characterLimit`: approving means approving
+    /// something the card can't show.
+    public var isTruncated: Bool
+
+    public init?(_ command: String?, limit: Int = characterLimit) {
+        guard let trimmed = command?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            return nil
+        }
+        isTruncated = trimmed.count > limit
+        text = isTruncated ? String(trimmed.prefix(limit)) : trimmed
+    }
+
+    /// Whether `line` is only this command again (agents report it as the
+    /// affected path too), whole or clipped to a one-line preview.
+    public func repeats(_ line: String) -> Bool {
+        let clipped = line.hasSuffix("…") ? String(line.dropLast()) : line
+        return Self.flattened(text).hasPrefix(Self.flattened(clipped))
+    }
+
+    private static func flattened(_ value: String) -> String {
+        value.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+}
+
 public struct PermissionRequest: Equatable, Identifiable, Codable, Sendable {
     public var id: UUID
     public var title: String
     public var summary: String
     public var affectedPath: String
+    /// The request's own command. Always prefer it to the session's
+    /// "current tool" preview, which may describe a different tool call.
+    public var commandPreview: PermissionCommandPreview?
     public var primaryActionTitle: String
     public var secondaryActionTitle: String
     public var toolName: String?
@@ -198,6 +243,7 @@ public struct PermissionRequest: Equatable, Identifiable, Codable, Sendable {
         title: String,
         summary: String,
         affectedPath: String,
+        commandPreview: PermissionCommandPreview? = nil,
         primaryActionTitle: String = "Allow",
         secondaryActionTitle: String = "Deny",
         toolName: String? = nil,
@@ -209,6 +255,7 @@ public struct PermissionRequest: Equatable, Identifiable, Codable, Sendable {
         self.title = title
         self.summary = summary
         self.affectedPath = affectedPath
+        self.commandPreview = commandPreview
         self.primaryActionTitle = primaryActionTitle
         self.secondaryActionTitle = secondaryActionTitle
         self.toolName = toolName
@@ -534,6 +581,31 @@ public extension AgentSession {
 
     var isAttachedToTerminal: Bool {
         attachmentState.isLive
+    }
+
+    /// In an attention phase with something to act on. An attention phase
+    /// with no request is a ghost: the phase survives a relaunch, the request
+    /// (and the hook process holding it) doesn't.
+    var hasPendingRequest: Bool {
+        switch phase {
+        case .waitingForApproval:
+            permissionRequest != nil
+        case .waitingForAnswer:
+            questionPrompt != nil
+        case .running, .completed:
+            false
+        }
+    }
+
+    /// The session as it comes back from a registry. Requests aren't
+    /// persisted and their hooks ended with the app, so the agent has gone
+    /// back to its own prompt: nothing here can be answered any more.
+    var withoutOrphanedAttention: AgentSession {
+        guard phase.requiresAttention, !hasPendingRequest else { return self }
+        var session = self
+        session.phase = .completed
+        session.summary = "This request ended when NotchTune closed."
+        return session
     }
 
     /// Visibility rule for the island UI.

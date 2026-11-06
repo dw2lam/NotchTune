@@ -53,6 +53,18 @@ final class OverlayUICoordinator {
     @ObservationIgnored
     var nextUnseenCompletionAccessor: (() -> String?)?
 
+    /// The session waiting longest for a card of its own, if any.
+    @ObservationIgnored
+    var nextQueuedAttentionAccessor: (() -> String?)?
+
+    /// The user left this session's card without acting on it.
+    @ObservationIgnored
+    var onNotificationCardLeft: ((String) -> Void)?
+
+    /// The notch has closed: a session still waiting can have it back.
+    @ObservationIgnored
+    var onNotchClosed: (() -> Void)?
+
     /// Called whenever a notification surface for a session is put on screen
     /// (first present or rotation), so the model can mark it as seen.
     @ObservationIgnored
@@ -306,6 +318,11 @@ final class OverlayUICoordinator {
     }
 
     func notchClose() {
+        // Whatever closed it, the card is off screen unanswered.
+        if notchOpenReason == .notification, let sessionID = islandSurface.sessionID {
+            onNotificationCardLeft?(sessionID)
+        }
+
         transitionOverlay(
             to: .closed,
             reason: nil,
@@ -323,6 +340,7 @@ final class OverlayUICoordinator {
                 self?.appModel?.reconcileCompactMusicView()
             }
         )
+        onNotchClosed?()
     }
 
     /// Coordinates overlay transitions.
@@ -703,7 +721,7 @@ final class OverlayUICoordinator {
         }
 
         if notchOpenReason == .notification {
-            notchClose()
+            leaveNotificationCard()
         } else {
             schedulePointerExitCollapse()
         }
@@ -858,6 +876,12 @@ final class OverlayUICoordinator {
             return false
         }
 
+        // An agent is blocked on this card: what comes next waits its turn
+        // (see `AppModel.nextQueuedAttentionSessionID`).
+        if activeIslandCardSession?.hasPendingRequest == true {
+            return true
+        }
+
         return isPointerInsideCurrentNotificationCard
     }
 
@@ -869,7 +893,7 @@ final class OverlayUICoordinator {
         let session = activeIslandCardSession
         guard islandSurface.matchesCurrentState(of: session) else {
             if notchOpenReason == .notification {
-                notchClose()
+                closeNotificationCardOrAdvance()
             } else {
                 islandSurface = .sessionList()
             }
@@ -889,7 +913,7 @@ final class OverlayUICoordinator {
             return
         }
 
-        notchClose()
+        closeNotificationCardOrAdvance()
     }
 
     /// Esc on a notification card: collapse it without acting on it (a
@@ -900,7 +924,25 @@ final class OverlayUICoordinator {
             return
         }
 
-        notchClose()
+        leaveNotificationCard()
+    }
+
+    /// The user walked away from the card without answering it.
+    private func leaveNotificationCard() {
+        if let sessionID = islandSurface.sessionID {
+            onNotificationCardLeft?(sessionID)
+        }
+        closeNotificationCardOrAdvance()
+    }
+
+    /// A card is done: the next blocked session takes its place in the open
+    /// notch, so the notch only closes when nobody is waiting.
+    private func closeNotificationCardOrAdvance() {
+        guard let next = nextQueuedAttentionAccessor?(), next != islandSurface.sessionID else {
+            notchClose()
+            return
+        }
+        rotateNotificationSurface(to: next)
     }
 
     func dismissOverlayForJump() {
@@ -951,14 +993,16 @@ final class OverlayUICoordinator {
             }
 
             // Rotate through the completions that piled up while this toast
-            // was showing before letting the notch close.
-            if let nextSessionID = self.nextUnseenCompletionAccessor?(),
+            // was showing before letting the notch close. A blocked agent
+            // goes ahead of them.
+            if self.nextQueuedAttentionAccessor?() == nil,
+               let nextSessionID = self.nextUnseenCompletionAccessor?(),
                nextSessionID != self.islandSurface.sessionID {
                 self.rotateNotificationSurface(to: nextSessionID)
                 return
             }
 
-            self.notchClose()
+            self.closeNotificationCardOrAdvance()
         }
     }
 

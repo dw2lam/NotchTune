@@ -1679,6 +1679,7 @@ struct IslandPanelView: View {
                     onJump: { model.jumpToSession(session) },
                     onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
                         ? { model.replyToSession(session, text: $0) } : nil,
+                    unsentReply: model.unsentReplies[session.id],
                     onRotate: { model.rotateCompletionToast(forward: $0) },
                     onShowAll: { model.expandNotificationToSessionList(clearExpansion: true) }
                 )
@@ -1697,10 +1698,13 @@ struct IslandPanelView: View {
                     presentation: .notification,
                     sideInset: sessionListSideInset,
                     isFlashing: model.completionFlashSessionID == session.id,
-                    lang: model.lang,                    onApprove: { model.approvePermission(for: session.id, action: $0) },
-                    onAnswer: { model.answerQuestion(for: session.id, answer: $0) },
+                    lang: model.lang,
+                    queuePosition: model.attentionQueuePosition,
+                    onApprove: { model.approveFromCard(session, action: $0) },
+                    onAnswer: { model.answerFromCard(session, answer: $0) },
                     onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
                         ? { model.replyToSession(session, text: $0) } : nil,
+                    unsentReply: model.unsentReplies[session.id],
                     onJump: { model.jumpToSession(session) }
                 )
                 .id(notificationCardIdentity(for: session))
@@ -1740,12 +1744,14 @@ struct IslandPanelView: View {
                                 isInteractive: model.notchStatus == .opened,
                                 sideInset: sessionListSideInset,
                                 isFlashing: model.completionFlashSessionID == session.id,
-                                lang: model.lang,                                onApprove: { model.approvePermission(for: session.id, action: $0) },
-                                onAnswer: { model.answerQuestion(for: session.id, answer: $0) },
+                                lang: model.lang,                                onApprove: { model.approvePermission(for: session.id, requestID: session.permissionRequest?.id, action: $0) },
+                                onAnswer: { model.answerQuestion(for: session.id, requestID: session.questionPrompt?.id, answer: $0) },
                                 onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
                                     ? { model.replyToSession(session, text: $0) } : nil,
+                                unsentReply: model.unsentReplies[session.id],
                                 onJump: { model.jumpToSession(session) },
-                                onDismiss: session.isRemote ? { model.dismissSession(session.id) } : nil
+                                onDismiss: session.isRemote ? { model.dismissSession(session.id) } : nil,
+                                onDismissStuck: { model.dismissSession(session.id) }
                             )
                         }
                     }
@@ -1792,12 +1798,14 @@ struct IslandPanelView: View {
                         isInteractive: model.notchStatus == .opened,
                         sideInset: sessionListSideInset,
                         isFlashing: model.completionFlashSessionID == session.id,
-                        lang: model.lang,                        onApprove: { model.approvePermission(for: session.id, action: $0) },
-                        onAnswer: { model.answerQuestion(for: session.id, answer: $0) },
+                        lang: model.lang,                        onApprove: { model.approvePermission(for: session.id, requestID: session.permissionRequest?.id, action: $0) },
+                        onAnswer: { model.answerQuestion(for: session.id, requestID: session.questionPrompt?.id, answer: $0) },
                         onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
                             ? { model.replyToSession(session, text: $0) } : nil,
+                        unsentReply: model.unsentReplies[session.id],
                         onJump: { model.jumpToSession(session) },
-                        onDismiss: session.isRemote ? { model.dismissSession(session.id) } : nil
+                        onDismiss: session.isRemote ? { model.dismissSession(session.id) } : nil,
+                        onDismissStuck: { model.dismissSession(session.id) }
                     )
                 }
             }
@@ -2491,11 +2499,17 @@ private struct IslandSessionRow: View {
     var sideInset: CGFloat = 16
     var isFlashing: Bool = false
     var lang: LanguageManager = .shared
+    /// Where this card sits among the sessions waiting on the user.
+    var queuePosition: AttentionQueuePosition?
     var onApprove: ((ApprovalAction) -> Void)?
     var onAnswer: ((QuestionPromptResponse) -> Void)?
     var onReply: ((String) -> Void)?
+    /// A reply that failed to send, back for the field.
+    var unsentReply: String?
     let onJump: () -> Void
     var onDismiss: (() -> Void)?
+    /// The row's context menu, offered when the session looks stuck.
+    var onDismissStuck: (() -> Void)?
 
     @State private var isHighlighted = false
     @State private var detailOverride: Bool?
@@ -2569,6 +2583,11 @@ private struct IslandSessionRow: View {
         .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.15), value: isHighlighted)
         .onTapGesture(perform: handlePrimaryTap)
+        .contextMenu {
+            if let onDismissStuck, session.isDismissibleLocally(at: referenceDate) {
+                Button(lang.t("island.dismissSession"), action: onDismissStuck)
+            }
+        }
         .onHover { hovering in
             guard isInteractive, allowsRowHoverHighlight else { return }
             isHighlighted = hovering
@@ -2753,6 +2772,9 @@ private struct IslandSessionRow: View {
 
             // Same flat tags as the session list, so a card and its row match.
             HStack(spacing: 6) {
+                if let queuePosition {
+                    listPill(lang.t("approval.queuePosition", queuePosition.index + 1, queuePosition.count))
+                }
                 listAgentTag
                 if session.isRemote {
                     listPill("SSH")
@@ -3123,6 +3145,9 @@ private struct IslandSessionRow: View {
 
     // MARK: - Approval action area
 
+    /// About ten lines: most commands fit whole, the rest scroll.
+    private static let approvalCommandMaxHeight: CGFloat = 150
+
     private var approvalActionBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(lang.t("approval.toolPermissionRequested"))
@@ -3130,13 +3155,21 @@ private struct IslandSessionRow: View {
                 .foregroundStyle(V6Palette.paper.opacity(0.86))
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(commandPreviewText)
-                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(V6Palette.paper.opacity(0.78))
-                    .fixedSize(horizontal: false, vertical: true)
+                AutoHeightScrollView(maxHeight: Self.approvalCommandMaxHeight) {
+                    Text(commandPreviewText)
+                        .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(V6Palette.paper.opacity(0.78))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
 
-                if let path = session.permissionRequest?.affectedPath.trimmedForNotificationCard,
-                   !path.isEmpty {
+                if session.permissionRequest?.commandPreview?.isTruncated == true {
+                    Text(lang.t("approval.commandTruncated"))
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(V6Palette.paper.opacity(0.72))
+                }
+
+                if let path = approvalPathLine {
                     Text(path)
                         .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(V6Palette.paper.opacity(0.42))
@@ -3152,35 +3185,56 @@ private struct IslandSessionRow: View {
                     .fill(Color.white.opacity(0.045))
             )
 
-            // Key hints only where the shortcuts work: the notification card
-            // (see NotificationCardKeyCommand).
-            let showsKeyHints = presentation == .notification
             HStack(spacing: 8) {
-                Button { onApprove?(.deny) } label: {
-                    NotificationKeyHintedTitle(
-                        session.permissionRequest?.secondaryActionTitle ?? lang.t("approval.deny"),
-                        keys: showsKeyHints ? "⌘N" : nil
-                    )
-                }
-                .buttonStyle(IslandActionButtonStyle(kind: .secondary, expands: true, haptic: .decline))
-                Button { onApprove?(.allowOnce) } label: {
-                    NotificationKeyHintedTitle(
-                        session.permissionRequest?.primaryActionTitle ?? lang.t("approval.allowOnce"),
-                        keys: showsKeyHints ? "⌘Y" : nil
-                    )
-                }
-                .buttonStyle(IslandActionButtonStyle(kind: .warning, expands: true))
-                if let toolName = session.permissionRequest?.toolName {
-                    Button { onApprove?(.alwaysAllow(toolName: toolName)) } label: {
-                        NotificationKeyHintedTitle(
-                            lang.t("approval.alwaysAllow", toolName),
-                            keys: showsKeyHints ? "⇧⌘Y" : nil
-                        )
-                    }
-                    .buttonStyle(IslandActionButtonStyle(kind: .primary, expands: true))
-                }
+                approvalAnswerButtons
+            }
+
+            // A row of its own: the label is what it grants, so it can't be
+            // squeezed down to "Always Al…".
+            if let offer = session.alwaysAllowOffer {
+                alwaysAllowButton(offer)
             }
         }
+    }
+
+    /// Key hints only where the shortcuts work: the notification card
+    /// (see NotificationCardKeyCommand).
+    private var showsApprovalKeyHints: Bool {
+        presentation == .notification
+    }
+
+    @ViewBuilder
+    private var approvalAnswerButtons: some View {
+        Button { onApprove?(.deny) } label: {
+            NotificationKeyHintedTitle(
+                session.permissionRequest?.secondaryActionTitle ?? lang.t("approval.deny"),
+                keys: showsApprovalKeyHints ? "⌘N" : nil
+            )
+        }
+        .buttonStyle(IslandActionButtonStyle(kind: .secondary, expands: true, haptic: .decline))
+        Button { onApprove?(.allowOnce) } label: {
+            NotificationKeyHintedTitle(
+                session.permissionRequest?.primaryActionTitle ?? lang.t("approval.allowOnce"),
+                keys: showsApprovalKeyHints ? "⌘Y" : nil
+            )
+        }
+        .buttonStyle(IslandActionButtonStyle(kind: .warning, expands: true))
+    }
+
+    private func alwaysAllowButton(_ offer: AlwaysAllowOffer) -> some View {
+        let title = switch offer.grant {
+        case let .scope(scope):
+            lang.t("approval.alwaysAllow", scope)
+        case .allEdits:
+            lang.t("approval.alwaysAllowEdits")
+        }
+        return Button { onApprove?(offer.action) } label: {
+            NotificationKeyHintedTitle(keys: showsApprovalKeyHints ? "⇧⌘Y" : nil) {
+                Text(title).truncationMode(.middle)
+            }
+        }
+        .buttonStyle(IslandActionButtonStyle(kind: .primary, expands: true))
+        .help(title)
     }
 
     // MARK: - Question action area
@@ -3280,6 +3334,9 @@ private struct IslandSessionRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .onChange(of: unsentReply, initial: true) { _, unsent in
+            if let unsent { replyText = unsent }
+        }
     }
 
     private func submitReply() {
@@ -3312,11 +3369,23 @@ private struct IslandSessionRow: View {
     }
 
     private var commandPreviewText: String {
+        if let command = session.permissionRequest?.commandPreview {
+            return "$ \(command.text)"
+        }
         let preview = session.currentCommandPreviewText?.trimmedForNotificationCard
         if let preview, !preview.isEmpty {
             return "$ \(preview)"
         }
         return session.permissionRequest?.summary.trimmedForNotificationCard ?? session.summary.trimmedForNotificationCard
+    }
+
+    /// The affected path, unless it only repeats the command above it.
+    private var approvalPathLine: String? {
+        guard let path = session.permissionRequest?.affectedPath.trimmedForNotificationCard,
+              !path.isEmpty else {
+            return nil
+        }
+        return session.permissionRequest?.commandPreview?.repeats(path) == true ? nil : path
     }
 
     private var runningDetailText: String? {

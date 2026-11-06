@@ -338,6 +338,19 @@ extension AgentSession {
         return .inactive
     }
 
+    /// Long enough without a word that a local row may be stuck. A long tool
+    /// call can go this quiet too, which is why dismissing takes a right-click.
+    static let stuckSessionThreshold: TimeInterval = 10 * 60
+
+    /// Whether a local row offers Dismiss: a ghost, or a session gone quiet.
+    /// A live request isn't stuck: Deny answers it, where Dismiss would leave
+    /// its hook blocking the agent with nothing on screen.
+    func isDismissibleLocally(at referenceDate: Date) -> Bool {
+        guard !isRemote, !isDemoSession, !hasPendingRequest else { return false }
+        return phase.requiresAttention
+            || referenceDate.timeIntervalSince(updatedAt) >= Self.stuckSessionThreshold
+    }
+
     /// v8 UI-only staleness: keep `SessionPhase.completed` unchanged, but
     /// visually fold older completed rows into the low-priority presentation.
     func isStaleCompletedForIsland(
