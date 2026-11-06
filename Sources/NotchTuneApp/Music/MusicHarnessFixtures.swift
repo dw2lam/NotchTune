@@ -21,6 +21,7 @@ import SwiftUI
 ///   track, as the now-playing library button does)
 /// - `NOTCHTUNE_HARNESS_MUSIC_SCROLL_TO=<item id>` (the section's list opens
 ///   scrolled to that row, as if left there)
+/// - `NOTCHTUNE_HARNESS_MUSIC_AUTOMATION=denied` (macOS refuses the player)
 struct MusicHarnessOverride: Equatable, Sendable {
     enum PlaybackState: String, Sendable {
         case closed
@@ -40,6 +41,7 @@ struct MusicHarnessOverride: Equatable, Sendable {
     /// starts hovered, showing its mini controls.
     var hoversNowPlayingTile: Bool
     var scrollAnchor: String?
+    var automationDenied: Bool
 
     /// Harness runs, and unit tests (which build real AppModels), use the
     /// fake player — neither may talk to the user's Music / Spotify.
@@ -70,6 +72,7 @@ struct MusicHarnessOverride: Equatable, Sendable {
         opensLibrary = environment["NOTCHTUNE_HARNESS_MUSIC_BROWSE"] == "1"
         hoversNowPlayingTile = environment["NOTCHTUNE_HARNESS_MUSIC_TILE_HOVER"] == "1"
         scrollAnchor = environment["NOTCHTUNE_HARNESS_MUSIC_SCROLL_TO"]
+        automationDenied = environment["NOTCHTUNE_HARNESS_MUSIC_AUTOMATION"] == "denied"
     }
 
     private static func playerValue(_ raw: String) -> MusicPlayerKind? {
@@ -176,6 +179,10 @@ final class MusicHarnessLibraryBackend: MusicLibraryBackend, @unchecked Sendable
     }
 
     var canReadLibrary: Bool { kind == .appleMusic }
+
+    func automationAccess() async -> MusicAutomationAccess {
+        override.automationDenied ? .denied : .unknown
+    }
 
     func isPlayerRunning() -> Bool { override.isPlayerRunning }
 

@@ -26,6 +26,12 @@ protocol MusicLibraryBackend: AnyObject, Sendable {
     /// Explicit user action: launch the player in the background if needed,
     /// then start `item`. Returns whether the play command was delivered.
     func play(_ item: MusicLibraryItem) async -> Bool
+    /// Whether macOS lets NotchTune script the running player. Never prompts.
+    func automationAccess() async -> MusicAutomationAccess
+}
+
+extension MusicLibraryBackend {
+    func automationAccess() async -> MusicAutomationAccess { .unknown }
 }
 
 // MARK: - Process helpers
@@ -76,6 +82,44 @@ enum MusicPlayerProcess {
     }
 }
 
+// MARK: - Automation permission
+
+enum MusicAutomationAccess: Equatable, Sendable {
+    case allowed
+    /// Refused in System Settings → Privacy & Security → Automation. Every
+    /// Apple Event comes back as a nil, which reads as "nothing playing".
+    case denied
+    /// Not answered yet, or the player isn't running.
+    case unknown
+}
+
+enum MusicAutomationPermission {
+    /// A blocking round trip to the target, so it runs off the main thread
+    /// and never on a per-second path (`MusicLibraryBrowser` paces it).
+    static func access(bundleID: String) async -> MusicAutomationAccess {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                let target = NSAppleEventDescriptor(bundleIdentifier: bundleID)
+                let status = AEDeterminePermissionToAutomateTarget(
+                    target.aeDesc,
+                    AEEventClass(typeWildCard),
+                    AEEventID(typeWildCard),
+                    false
+                )
+                continuation.resume(returning: access(forStatus: status))
+            }
+        }
+    }
+
+    static func access(forStatus status: OSStatus) -> MusicAutomationAccess {
+        switch status {
+        case noErr: .allowed
+        case OSStatus(errAEEventNotPermitted): .denied
+        default: .unknown
+        }
+    }
+}
+
 // MARK: - Scripting errors
 
 /// Swallows failed Apple Events (no current track, a pid that just quit, a
@@ -86,6 +130,17 @@ final class MusicScriptingErrorSink: NSObject, SBApplicationDelegate, @unchecked
 
     func eventDidFail(_ event: UnsafePointer<AppleEvent>, withError error: any Error) -> Any? {
         nil
+    }
+}
+
+/// Notes that an event failed, for commands with no reply to check: `play
+/// track` hands back nothing either way, so a refused play looked delivered.
+final class MusicScriptingFailureRecorder: NSObject, SBApplicationDelegate, @unchecked Sendable {
+    private(set) var didFail = false
+
+    func eventDidFail(_ event: UnsafePointer<AppleEvent>, withError error: any Error) -> Any? {
+        didFail = true
+        return nil
     }
 }
 
