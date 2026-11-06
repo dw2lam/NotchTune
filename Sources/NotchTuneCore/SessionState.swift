@@ -290,6 +290,21 @@ public struct SessionState: Equatable, Sendable {
         upsert(session)
     }
 
+    /// Puts a session back as it was before an optimistic answer whose
+    /// command never reached the agent, which is still blocked on the request.
+    public mutating func restoreRequest(from original: AgentSession) {
+        guard var session = sessionsByID[original.id] else {
+            return
+        }
+
+        session.phase = original.phase
+        session.summary = original.summary
+        session.permissionRequest = original.permissionRequest
+        session.questionPrompt = original.questionPrompt
+        session.updatedAt = original.updatedAt
+        upsert(session)
+    }
+
     public mutating func answerQuestion(
         sessionID: String,
         response: QuestionPromptResponse,

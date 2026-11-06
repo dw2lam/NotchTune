@@ -1633,8 +1633,10 @@ struct IslandPanelView: View {
                     presentation: .notification,
                     sideInset: sessionListSideInset,
                     isFlashing: model.completionFlashSessionID == session.id,
-                    lang: model.lang,                    onApprove: { model.approvePermission(for: session.id, action: $0) },
-                    onAnswer: { model.answerQuestion(for: session.id, answer: $0) },
+                    lang: model.lang,
+                    queuePosition: model.attentionQueuePosition,
+                    onApprove: { model.approveFromCard(session, action: $0) },
+                    onAnswer: { model.answerFromCard(session, answer: $0) },
                     onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
                         ? { model.replyToSession(session, text: $0) } : nil,
                     unsentReply: model.unsentReplies[session.id],
@@ -1677,8 +1679,8 @@ struct IslandPanelView: View {
                                 isInteractive: model.notchStatus == .opened,
                                 sideInset: sessionListSideInset,
                                 isFlashing: model.completionFlashSessionID == session.id,
-                                lang: model.lang,                                onApprove: { model.approvePermission(for: session.id, action: $0) },
-                                onAnswer: { model.answerQuestion(for: session.id, answer: $0) },
+                                lang: model.lang,                                onApprove: { model.approvePermission(for: session.id, requestID: session.permissionRequest?.id, action: $0) },
+                                onAnswer: { model.answerQuestion(for: session.id, requestID: session.questionPrompt?.id, answer: $0) },
                                 onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
                                     ? { model.replyToSession(session, text: $0) } : nil,
                                 unsentReply: model.unsentReplies[session.id],
@@ -1730,8 +1732,8 @@ struct IslandPanelView: View {
                         isInteractive: model.notchStatus == .opened,
                         sideInset: sessionListSideInset,
                         isFlashing: model.completionFlashSessionID == session.id,
-                        lang: model.lang,                        onApprove: { model.approvePermission(for: session.id, action: $0) },
-                        onAnswer: { model.answerQuestion(for: session.id, answer: $0) },
+                        lang: model.lang,                        onApprove: { model.approvePermission(for: session.id, requestID: session.permissionRequest?.id, action: $0) },
+                        onAnswer: { model.answerQuestion(for: session.id, requestID: session.questionPrompt?.id, answer: $0) },
                         onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
                             ? { model.replyToSession(session, text: $0) } : nil,
                         unsentReply: model.unsentReplies[session.id],
@@ -2430,6 +2432,8 @@ private struct IslandSessionRow: View {
     var sideInset: CGFloat = 16
     var isFlashing: Bool = false
     var lang: LanguageManager = .shared
+    /// Where this card sits among the sessions waiting on the user.
+    var queuePosition: AttentionQueuePosition?
     var onApprove: ((ApprovalAction) -> Void)?
     var onAnswer: ((QuestionPromptResponse) -> Void)?
     var onReply: ((String) -> Void)?
@@ -2694,6 +2698,9 @@ private struct IslandSessionRow: View {
 
             // Same flat tags as the session list, so a card and its row match.
             HStack(spacing: 6) {
+                if let queuePosition {
+                    listPill(lang.t("approval.queuePosition", queuePosition.index + 1, queuePosition.count))
+                }
                 listAgentTag
                 if session.isRemote {
                     listPill("SSH")

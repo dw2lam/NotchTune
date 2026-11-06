@@ -449,6 +449,9 @@ final class AppModel {
     /// "Waiting Xm Ys" display doesn't reset if `updatedAt` bumps mid-wait.
     var attentionStartedAt: [String: Date] = [:]
 
+    /// Requests whose card the user left unanswered (see `AppModel+AttentionQueue`).
+    @ObservationIgnored var skippedAttentionRequestIDs: Set<UUID> = []
+
     var isSoundMuted = false {
         didSet {
             guard isSoundMuted != oldValue else {
@@ -811,16 +814,17 @@ final class AppModel {
 
     /// Wire up resolution callbacks so Watch/iPhone actions flow back to the bridge.
     private func setupWatchRelayCallbacks(_ relay: WatchNotificationRelay) {
-        relay.onResolvePermission = { [weak self] sessionID, approved in
+        relay.onResolvePermission = { [weak self] sessionID, requestID, approved in
             Task { @MainActor [weak self] in
-                self?.approvePermission(for: sessionID, approved: approved)
+                self?.approvePermission(for: sessionID, requestID: requestID, action: approved ? .allowOnce : .deny)
             }
         }
 
-        relay.onAnswerQuestion = { [weak self] sessionID, answer in
+        relay.onAnswerQuestion = { [weak self] sessionID, requestID, answer in
             Task { @MainActor [weak self] in
                 self?.answerQuestion(
                     for: sessionID,
+                    requestID: requestID,
                     answer: QuestionPromptResponse(answer: answer)
                 )
             }
@@ -857,6 +861,10 @@ final class AppModel {
 
     @ObservationIgnored
     private var bridgeClient = LocalBridgeClient()
+
+    /// Replaces the bridge for tests.
+    @ObservationIgnored
+    var bridgeCommandSender: (@Sendable (BridgeCommand) async throws -> Void)?
 
     @ObservationIgnored
     private let terminalJumpAction: @Sendable (JumpTarget) throws -> String
@@ -1034,12 +1042,17 @@ final class AppModel {
     /// Fires after the configured threshold if the session is still waiting.
     func scheduleIdleNudgeIfNeeded(for sessionID: String) {
         nudgeTimers[sessionID]?.cancel()
-        // Anchor the wait-start once (the displayed "Waiting Xm Ys" must not
-        // reset if updatedAt bumps mid-wait). Preserved across re-arms.
+        anchorAttentionStart(for: sessionID)
+        armNudgeTimer(for: sessionID, after: nudgeSettings.threshold.seconds)
+    }
+
+    /// Anchors the wait-start once (the displayed "Waiting Xm Ys" must not
+    /// reset if updatedAt bumps mid-wait, and the card queue is ordered by
+    /// it). Preserved across re-arms.
+    func anchorAttentionStart(for sessionID: String) {
         if attentionStartedAt[sessionID] == nil {
             attentionStartedAt[sessionID] = state.session(id: sessionID)?.updatedAt ?? Date()
         }
-        armNudgeTimer(for: sessionID, after: nudgeSettings.threshold.seconds)
     }
 
     private func armNudgeTimer(for sessionID: String, after seconds: TimeInterval) {
@@ -1224,6 +1237,15 @@ final class AppModel {
         }
         overlay.nextUnseenCompletionAccessor = { [weak self] in
             self?.nextUnseenCompletedSessionID
+        }
+        overlay.nextQueuedAttentionAccessor = { [weak self] in
+            self?.nextQueuedAttentionSessionID
+        }
+        overlay.onNotificationCardLeft = { [weak self] sessionID in
+            self?.skipAttentionRequest(of: sessionID)
+        }
+        overlay.onNotchClosed = { [weak self] in
+            self?.presentQueuedAttentionCardIfNeeded()
         }
         overlay.onNotificationSurfaceShown = { [weak self] sessionID in
             self?.notificationCardShownAt = Date()
@@ -2406,32 +2428,11 @@ final class AppModel {
         }
     }
 
-    func approvePermission(for sessionID: String, approved: Bool) {
-        guard let session = state.session(id: sessionID) else {
-            return
-        }
-
-        let resolution = permissionResolution(for: approved)
-        dismissNotificationSurfaceIfPresent(for: sessionID)
-        state.resolvePermission(sessionID: session.id, resolution: resolution)
-        reconcileNudgeTimers()
-        synchronizeSelection()
-        refreshOverlayPlacementIfVisible()
-
-        // The onboarding tour's demo session has no live agent behind it —
-        // resolve locally only, never over the bridge.
-        guard !session.isDemoSession else { return }
-
-        send(
-            .resolvePermission(sessionID: session.id, resolution: resolution),
-            userMessage: approved
-                ? "Approving permission for \(session.title)."
-                : "Denying permission for \(session.title)."
-        )
-    }
-
-    func approvePermission(for sessionID: String, action: ApprovalAction) {
-        guard let session = state.session(id: sessionID) else {
+    /// `requestID` is the request the user was looking at. When a newer one
+    /// has taken its place, the answer is dropped, not applied to that one.
+    func approvePermission(for sessionID: String, requestID: UUID? = nil, action: ApprovalAction) {
+        guard let session = state.session(id: sessionID),
+              requestID == nil || session.permissionRequest?.id == requestID else {
             return
         }
 
@@ -2450,18 +2451,21 @@ final class AppModel {
             message = "Always allowing for \(session.title)."
         }
 
-        dismissNotificationSurfaceIfPresent(for: sessionID)
         state.resolvePermission(sessionID: session.id, resolution: resolution)
+        let resolvedAt = state.session(id: session.id)?.updatedAt
+        dismissNotificationSurfaceIfPresent(for: sessionID)
         reconcileNudgeTimers()
         synchronizeSelection()
         refreshOverlayPlacementIfVisible()
 
-        // Demo sessions resolve locally only (see approvePermission(for:approved:)).
+        // The onboarding tour's demo session has no live agent behind it —
+        // resolve locally only, never over the bridge.
         guard !session.isDemoSession else { return }
 
         send(
-            .resolvePermission(sessionID: session.id, resolution: resolution),
-            userMessage: message
+            .resolvePermission(sessionID: session.id, resolution: resolution, requestID: session.permissionRequest?.id),
+            userMessage: message,
+            onFailure: { [weak self] in self?.restoreUndeliveredRequest(session, resolvedAt: resolvedAt) }
         )
     }
 
@@ -2472,21 +2476,48 @@ final class AppModel {
         synchronizeSelection()
     }
 
-    func answerQuestion(for sessionID: String, answer: QuestionPromptResponse) {
-        guard let session = state.session(id: sessionID) else {
+    /// `requestID`: see `approvePermission(for:requestID:action:)`.
+    func answerQuestion(for sessionID: String, requestID: UUID? = nil, answer: QuestionPromptResponse) {
+        guard let session = state.session(id: sessionID),
+              requestID == nil || session.questionPrompt?.id == requestID else {
             return
         }
 
-        dismissNotificationSurfaceIfPresent(for: sessionID)
         state.answerQuestion(sessionID: session.id, response: answer)
+        let resolvedAt = state.session(id: session.id)?.updatedAt
+        dismissNotificationSurfaceIfPresent(for: sessionID)
         reconcileNudgeTimers()
         synchronizeSelection()
         refreshOverlayPlacementIfVisible()
 
         send(
-            .answerQuestion(sessionID: session.id, response: answer),
-            userMessage: "Sending answer for \(session.title)."
+            .answerQuestion(sessionID: session.id, response: answer, requestID: session.questionPrompt?.id),
+            userMessage: "Sending answer for \(session.title).",
+            onFailure: { [weak self] in self?.restoreUndeliveredRequest(session, resolvedAt: resolvedAt) }
         )
+    }
+
+    /// The UI moves on the moment the user answers, but the agent stays
+    /// blocked until the command gets through. If it didn't, the session goes
+    /// back to waiting and the card returns. Anything newer than our own
+    /// answer means the agent has moved on regardless.
+    private func restoreUndeliveredRequest(_ original: AgentSession, resolvedAt: Date?) {
+        guard let current = state.session(id: original.id), current.updatedAt == resolvedAt else {
+            return
+        }
+
+        state.restoreRequest(from: original)
+        anchorAttentionStart(for: original.id)
+        if nudgeSettings.isEnabled {
+            scheduleIdleNudgeIfNeeded(for: original.id)
+        }
+        synchronizeSelection()
+        post(AppNotice(message: lang.t("notice.answerNotDelivered", original.tool.displayName)))
+
+        let surface = IslandSurface.sessionList(actionableSessionID: original.id)
+        if notificationSurfaceIsEligibleForPresentation(surface, ingress: .bridge) {
+            presentNotificationSurface(surface)
+        }
     }
 
     /// The card stays up until the reply has landed: a failed send puts the
@@ -2516,7 +2547,11 @@ final class AppModel {
     }
 
 
-    private func send(_ command: BridgeCommand, userMessage: String) {
+    private func send(
+        _ command: BridgeCommand,
+        userMessage: String,
+        onFailure: (@MainActor () -> Void)? = nil
+    ) {
         lastActionMessage = userMessage
 
         Task { [weak self] in
@@ -2525,9 +2560,14 @@ final class AppModel {
             }
 
             do {
-                try await self.bridgeClient.send(command)
+                if let bridgeCommandSender = self.bridgeCommandSender {
+                    try await bridgeCommandSender(command)
+                } else {
+                    try await self.bridgeClient.send(command)
+                }
             } catch {
                 self.lastActionMessage = "Failed to send bridge command: \(error.localizedDescription)"
+                onFailure?()
             }
         }
     }
@@ -2554,10 +2594,13 @@ final class AppModel {
             return state.session(id: payload.sessionID)?.phase == .completed
         }()
 
-        // Phase before the event lands, so a repeated approval/question for a
-        // session that is already waiting in that phase can be told apart
-        // from a fresh request (see `NotificationCoalescer.decideRequest`).
+        // Phase before the event lands, for the running-transition bookkeeping.
         let priorPhase: SessionPhase? = event.sessionID.flatMap { state.session(id: $0)?.phase }
+        // Told apart before the event overwrites what the session is waiting
+        // on (see `NotificationCoalescer.decideRequest`).
+        let isRepeatOfPendingRequest = event.sessionID
+            .flatMap { state.session(id: $0) }?
+            .isAlreadyWaiting(on: event) ?? false
 
         // Guard: don't let rollout events downgrade a session from completed
         // back to running. The bridge's sessionCompleted is authoritative; the
@@ -2576,6 +2619,12 @@ final class AppModel {
             restartCardRevealIfContentReplaced(sessionID: sessionID, by: event)
         }
         reconcileIslandSurfaceAfterStateChange()
+
+        switch event {
+        case let .permissionRequested(p): anchorAttentionStart(for: p.sessionID)
+        case let .questionAsked(p): anchorAttentionStart(for: p.sessionID)
+        default: break
+        }
 
         // Arm an idle nudge when a session enters an attention phase.
         if nudgeSettings.isEnabled {
@@ -2644,7 +2693,7 @@ final class AppModel {
 
         coalesceNotification(
             for: event,
-            priorPhase: priorPhase,
+            isRepeatOfPendingRequest: isRepeatOfPendingRequest,
             wasAlreadyCompleted: wasAlreadyCompleted,
             ingress: ingress
         )
@@ -2663,7 +2712,7 @@ final class AppModel {
     /// attention signal in the same group cancels the hold.
     private func coalesceNotification(
         for event: AgentEvent,
-        priorPhase: SessionPhase?,
+        isRepeatOfPendingRequest: Bool,
         wasAlreadyCompleted: Bool,
         ingress: TrackedEventIngress
     ) {
@@ -2697,7 +2746,7 @@ final class AppModel {
             let surface = IslandSurface.sessionList(actionableSessionID: sessionID)
             let decision = notificationCoalescer.decideRequest(
                 group: group,
-                isRepeatOfPendingRequest: priorPhase == session.phase,
+                isRepeatOfPendingRequest: isRepeatOfPendingRequest,
                 isAlreadyPresented: isNotificationSurfaceCurrentlyPresented(surface),
                 now: now
             )
@@ -2803,7 +2852,7 @@ final class AppModel {
         notificationCoalescer.pendingCompletions.values.map(\.payload.sessionID).sorted()
     }
 
-    private func scheduleNotificationSurfacePresentationIfNeeded(
+    func scheduleNotificationSurfacePresentationIfNeeded(
         _ surface: IslandSurface,
         ingress: TrackedEventIngress
     ) {

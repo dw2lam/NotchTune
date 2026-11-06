@@ -214,6 +214,8 @@ struct AppModelNotificationCardKeysTests {
         }
         defer { NotificationCenter.default.removeObserver(token) }
 
+        model.notificationCardShownAt = Date().addingTimeInterval(-5)
+
         // Submit with nothing selected: the view's Submit is disabled.
         #expect(model.performNotificationCardKeyCommand(.submit))
         #expect(model.state.session(id: "s1")?.phase == .waitingForAnswer)

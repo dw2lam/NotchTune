@@ -91,10 +91,11 @@ enum NotificationCardKeyCommand: Equatable, Sendable {
         var timeSinceUnmappedKey: TimeInterval = .infinity
     }
 
-    /// A bare Return approving a tool call must be deliberate: it is ignored
-    /// until the card has been visible this long and the user has not been
-    /// typing into the panel for this long. ⌘Y is always deliberate.
-    static let bareReturnApprovalArmDelay: TimeInterval = 0.8
+    /// A key must answer the card the user read, not one that just took its
+    /// place (the chord may have been meant for the card before it), so
+    /// nothing answers an approval until it has been visible this long. Bare
+    /// Return also waits this long after any typing into the panel.
+    static let approvalArmDelay: TimeInterval = 0.8
 
     private enum KeyCode {
         static let returnKey: UInt16 = 36
@@ -134,6 +135,7 @@ enum NotificationCardKeyCommand: Equatable, Sendable {
 
         switch context.card {
         case let .approval(supportsAlwaysAllow, _):
+            guard context.cardAge >= approvalArmDelay else { return nil }
             switch (key, isShift) {
             case ("y", false): return .allowOnce
             case ("y", true): return supportsAlwaysAllow ? .alwaysAllow : nil
@@ -167,8 +169,8 @@ enum NotificationCardKeyCommand: Equatable, Sendable {
             // Part of the command is off the card: only ⌘Y can mean "I read
             // it in the terminal".
             guard !isCommandTruncated,
-                  context.cardAge >= bareReturnApprovalArmDelay,
-                  context.timeSinceUnmappedKey >= bareReturnApprovalArmDelay else {
+                  context.cardAge >= approvalArmDelay,
+                  context.timeSinceUnmappedKey >= approvalArmDelay else {
                 return nil
             }
             return .allowOnce

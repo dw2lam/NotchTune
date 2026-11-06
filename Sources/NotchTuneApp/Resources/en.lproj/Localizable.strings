@@ -268,6 +268,8 @@
 "approval.alwaysAllow" = "Always Allow (%@)";
 "approval.alwaysAllowEdits" = "Allow All Edits This Session";
 "approval.commandTruncated" = "Truncated. Check the terminal for the full command.";
+"approval.queuePosition" = "%lld of %lld";
+"notice.answerNotDelivered" = "Couldn't reach %@, so your answer wasn't delivered. The request is still waiting.";
 "notice.replyNotSent" = "Your reply to %@ wasn't sent: its terminal is gone. The text is still in the reply field.";
 
 
