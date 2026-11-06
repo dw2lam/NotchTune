@@ -27,7 +27,7 @@ if [[ -z "$signing_identity" && -z "$stable_identity" ]]; then
     stable_identity="$(security find-identity -p codesigning -v "$HOME/Library/Keychains/login.keychain-db" 2>/dev/null \
         | grep '"Open Island Dev Local"' | head -n 1 | awk '{print $2}' || true)"
 fi
-# Tag-driven releases set this: they must never ship an ad-hoc build.
+# Set this for a release: it must never ship an ad-hoc build.
 if [[ "${NOTCHTUNE_REQUIRE_STABLE_SIGNING:-}" == "1" && -z "$signing_identity" && -z "$stable_identity" ]]; then
     echo "No signing identity: an ad-hoc release would drop users' permissions on update." >&2
     exit 1
@@ -127,7 +127,7 @@ cat > "$bundle_dir/Contents/Info.plist" <<EOF
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>NotchTune needs automation access to focus Terminal and iTerm sessions for jump-back.</string>
+    <string>NotchTune uses automation to jump back to your agents' terminals and editors, to send them keystrokes through System Events, and to show and control what's playing in Spotify and Music. Nothing is sent anywhere.</string>
     <key>NSCameraUsageDescription</key>
     <string>NotchTune's Mirror tab shows your camera while it is open. Nothing is recorded or sent anywhere.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
@@ -172,14 +172,38 @@ echo "Bundle structure verified."
 # --- Smoke-test the app outside the repo to catch Bundle.module fallback hacks ---
 # SPM's generated resource accessor has a hardcoded fallback to the local .build/
 # directory. Running from /tmp ensures the app works without that crutch.
-smoke_dir="$(mktemp -d)/smoke-test"
-mkdir -p "$smoke_dir"
+#
+# This is the real binary, often on a Mac running the real app, so it gets
+# nothing of the user's to touch:
+#   - A harness scenario skips hook installs and session discovery (so the
+#     managed hooks binary and agent configs stay as they are), keeps every
+#     window off screen, and keeps Sparkle from starting.
+#   - The bridge stays off, and its socket path points here in any case.
+#   - HOME moves Application Support and the agent configs aside.
+#   - Its own bundle ID keeps it out of the real defaults: cfprefsd ignores
+#     HOME and CFFIXED_USER_HOME.
+smoke_root="$(mktemp -d)"
+smoke_bundle_id="app.notchtune.smoke"
+smoke_dir="$smoke_root/smoke-test"
+mkdir -p "$smoke_dir" "$smoke_root/home"
 cp -R "$bundle_dir" "$smoke_dir/"
 smoke_app="$smoke_dir/$(basename "$bundle_dir")"
 smoke_binary="$smoke_app/Contents/MacOS/$app_name"
+smoke_cleanup() {
+    defaults delete "$smoke_bundle_id" 2>/dev/null || true
+    rm -rf "$smoke_root"
+}
 if [[ -x "$smoke_binary" ]]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $smoke_bundle_id" "$smoke_app/Contents/Info.plist"
     # Launch and give it a few seconds — if it crashes, the pid disappears.
-    "$smoke_binary" &
+    env \
+        HOME="$smoke_root/home" \
+        CFFIXED_USER_HOME="$smoke_root/home" \
+        NOTCHTUNE_SOCKET_PATH="$smoke_root/bridge.sock" \
+        NOTCHTUNE_HARNESS_SCENARIO=closed \
+        NOTCHTUNE_HARNESS_START_BRIDGE=0 \
+        NOTCHTUNE_HARNESS_BOOT_ANIMATION=0 \
+        "$smoke_binary" &
     smoke_pid=$!
     sleep 3
     if kill -0 "$smoke_pid" 2>/dev/null; then
@@ -190,10 +214,10 @@ if [[ -x "$smoke_binary" ]]; then
         wait "$smoke_pid" 2>/dev/null || true
         echo "ERROR: app crashed when launched outside the repo directory." >&2
         echo "       This likely means Bundle.module cannot find its resource bundle." >&2
-        rm -rf "$(dirname "$smoke_dir")"
+        smoke_cleanup
         exit 1
     fi
-    rm -rf "$(dirname "$smoke_dir")"
+    smoke_cleanup
 else
     echo "WARNING: smoke test skipped — binary not found at $smoke_binary" >&2
 fi
