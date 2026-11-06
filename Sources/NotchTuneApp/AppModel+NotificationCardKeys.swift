@@ -45,7 +45,7 @@ extension AppModel {
             approvePermission(for: session.id, action: .allowOnce)
         case (.deny, .approval):
             approvePermission(for: session.id, action: .deny)
-        case (.alwaysAllow, .approval(supportsAlwaysAllow: true)):
+        case (.alwaysAllow, .approval(supportsAlwaysAllow: true, _)):
             guard let offer = session.alwaysAllowOffer else { return false }
             approvePermission(for: session.id, action: offer.action)
 

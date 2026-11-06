@@ -3064,6 +3064,9 @@ private struct IslandSessionRow: View {
 
     // MARK: - Approval action area
 
+    /// About ten lines: most commands fit whole, the rest scroll.
+    private static let approvalCommandMaxHeight: CGFloat = 150
+
     private var approvalActionBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(lang.t("approval.toolPermissionRequested"))
@@ -3071,13 +3074,21 @@ private struct IslandSessionRow: View {
                 .foregroundStyle(V6Palette.paper.opacity(0.86))
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(commandPreviewText)
-                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(V6Palette.paper.opacity(0.78))
-                    .fixedSize(horizontal: false, vertical: true)
+                AutoHeightScrollView(maxHeight: Self.approvalCommandMaxHeight) {
+                    Text(commandPreviewText)
+                        .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(V6Palette.paper.opacity(0.78))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
 
-                if let path = session.permissionRequest?.affectedPath.trimmedForNotificationCard,
-                   !path.isEmpty {
+                if session.permissionRequest?.commandPreview?.isTruncated == true {
+                    Text(lang.t("approval.commandTruncated"))
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(V6Palette.paper.opacity(0.72))
+                }
+
+                if let path = approvalPathLine {
                     Text(path)
                         .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(V6Palette.paper.opacity(0.42))
@@ -3288,11 +3299,23 @@ private struct IslandSessionRow: View {
     }
 
     private var commandPreviewText: String {
+        if let command = session.permissionRequest?.commandPreview {
+            return "$ \(command.text)"
+        }
         let preview = session.currentCommandPreviewText?.trimmedForNotificationCard
         if let preview, !preview.isEmpty {
             return "$ \(preview)"
         }
         return session.permissionRequest?.summary.trimmedForNotificationCard ?? session.summary.trimmedForNotificationCard
+    }
+
+    /// The affected path, unless it only repeats the command above it.
+    private var approvalPathLine: String? {
+        guard let path = session.permissionRequest?.affectedPath.trimmedForNotificationCard,
+              !path.isEmpty else {
+            return nil
+        }
+        return session.permissionRequest?.commandPreview?.repeats(path) == true ? nil : path
     }
 
     private var runningDetailText: String? {

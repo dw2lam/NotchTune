@@ -167,6 +167,33 @@ struct NotificationCardKeyCommandTests {
     // MARK: Card kind / event conversion
 
     @Test
+    func bareReturnNeverApprovesATruncatedCommand() {
+        let truncated = NotificationCardKind.approval(supportsAlwaysAllow: false, isCommandTruncated: true)
+
+        #expect(resolve(key(Code.returnKey, "\r"), truncated) == nil)
+        #expect(resolve(key(Code.y, "y", .command), truncated) == .allowOnce)
+    }
+
+    @Test
+    func aTruncatedCommandMarksTheCard() throws {
+        let command = try #require(PermissionCommandPreview(String(repeating: "x", count: 900)))
+        let session = AgentSession(
+            id: "s",
+            title: "s",
+            tool: .codex,
+            phase: .waitingForApproval,
+            summary: "",
+            updatedAt: Date(timeIntervalSince1970: 0),
+            permissionRequest: PermissionRequest(title: "Bash", summary: "", affectedPath: "", commandPreview: command)
+        )
+
+        #expect(
+            NotificationCardKind(session: session, replyAvailable: false)
+                == .approval(supportsAlwaysAllow: false, isCommandTruncated: true)
+        )
+    }
+
+    @Test
     func cardKindFollowsSessionPhase() {
         var session = AgentSession(
             id: "s",

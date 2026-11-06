@@ -192,11 +192,45 @@ public struct JumpTarget: Equatable, Codable, Sendable {
     }
 }
 
+/// What a request wants to run, as the user will read it on the card: the
+/// agent's own text with its line breaks, up to a cap.
+public struct PermissionCommandPreview: Equatable, Codable, Sendable {
+    public static let characterLimit = 600
+
+    public var text: String
+    /// The agent's text ran past `characterLimit`: approving means approving
+    /// something the card can't show.
+    public var isTruncated: Bool
+
+    public init?(_ command: String?, limit: Int = characterLimit) {
+        guard let trimmed = command?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            return nil
+        }
+        isTruncated = trimmed.count > limit
+        text = isTruncated ? String(trimmed.prefix(limit)) : trimmed
+    }
+
+    /// Whether `line` is only this command again (agents report it as the
+    /// affected path too), whole or clipped to a one-line preview.
+    public func repeats(_ line: String) -> Bool {
+        let clipped = line.hasSuffix("…") ? String(line.dropLast()) : line
+        return Self.flattened(text).hasPrefix(Self.flattened(clipped))
+    }
+
+    private static func flattened(_ value: String) -> String {
+        value.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+}
+
 public struct PermissionRequest: Equatable, Identifiable, Codable, Sendable {
     public var id: UUID
     public var title: String
     public var summary: String
     public var affectedPath: String
+    /// The request's own command. Always prefer it to the session's
+    /// "current tool" preview, which may describe a different tool call.
+    public var commandPreview: PermissionCommandPreview?
     public var primaryActionTitle: String
     public var secondaryActionTitle: String
     public var toolName: String?
@@ -209,6 +243,7 @@ public struct PermissionRequest: Equatable, Identifiable, Codable, Sendable {
         title: String,
         summary: String,
         affectedPath: String,
+        commandPreview: PermissionCommandPreview? = nil,
         primaryActionTitle: String = "Allow",
         secondaryActionTitle: String = "Deny",
         toolName: String? = nil,
@@ -220,6 +255,7 @@ public struct PermissionRequest: Equatable, Identifiable, Codable, Sendable {
         self.title = title
         self.summary = summary
         self.affectedPath = affectedPath
+        self.commandPreview = commandPreview
         self.primaryActionTitle = primaryActionTitle
         self.secondaryActionTitle = secondaryActionTitle
         self.toolName = toolName

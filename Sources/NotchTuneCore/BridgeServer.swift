@@ -545,6 +545,7 @@ public final class BridgeServer: @unchecked Sendable {
                         title: "Run Bash command",
                         summary: "Codex wants to run a shell command.",
                         affectedPath: payload.commandText ?? command,
+                        commandPreview: PermissionCommandPreview(payload.commandText),
                         primaryActionTitle: "Allow",
                         secondaryActionTitle: "Deny"
                     ),
@@ -572,6 +573,7 @@ public final class BridgeServer: @unchecked Sendable {
                             title: payload.permissionRequestTitle,
                             summary: payload.permissionRequestSummary,
                             affectedPath: payload.permissionRequestAffectedPath,
+                            commandPreview: PermissionCommandPreview(payload.commandText),
                             primaryActionTitle: "Allow",
                             secondaryActionTitle: "Deny",
                             toolName: payload.toolName,
@@ -807,6 +809,7 @@ public final class BridgeServer: @unchecked Sendable {
                                 title: payload.permissionRequestTitle,
                                 summary: payload.permissionRequestSummary,
                                 affectedPath: payload.permissionAffectedPath,
+                                commandPreview: payload.permissionCommandPreview,
                                 primaryActionTitle: "Allow Once",
                                 secondaryActionTitle: "Deny",
                                 toolName: payload.toolName,
@@ -1215,6 +1218,7 @@ public final class BridgeServer: @unchecked Sendable {
                             title: payload.permissionTitle ?? payload.toolName.map { "Allow \($0)" } ?? "Allow OpenCode tool",
                             summary: payload.permissionDescription ?? "OpenCode needs permission to continue.",
                             affectedPath: payload.toolInputPreview ?? payload.cwd,
+                            commandPreview: PermissionCommandPreview(payload.toolInput),
                             primaryActionTitle: "Allow",
                             secondaryActionTitle: "Deny",
                             toolName: payload.toolName

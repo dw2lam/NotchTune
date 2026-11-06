@@ -4,8 +4,9 @@ import NotchTuneCore
 /// Which notification card is on screen, as far as keyboard control cares.
 enum NotificationCardKind: Equatable, Sendable {
     /// Permission request. `supportsAlwaysAllow` mirrors the "Always Allow"
-    /// button (see `AlwaysAllowOffer`).
-    case approval(supportsAlwaysAllow: Bool)
+    /// button (see `AlwaysAllowOffer`). `isCommandTruncated`: the card can't
+    /// show all of what would run.
+    case approval(supportsAlwaysAllow: Bool, isCommandTruncated: Bool = false)
     /// Structured or freeform question.
     case question
     /// Completion toast. `hasReply` mirrors the toast's Reply button.
@@ -14,7 +15,10 @@ enum NotificationCardKind: Equatable, Sendable {
     init?(session: AgentSession, replyAvailable: Bool) {
         switch session.phase {
         case .waitingForApproval:
-            self = .approval(supportsAlwaysAllow: session.alwaysAllowOffer != nil)
+            self = .approval(
+                supportsAlwaysAllow: session.alwaysAllowOffer != nil,
+                isCommandTruncated: session.permissionRequest?.commandPreview?.isTruncated == true
+            )
         case .waitingForAnswer:
             self = .question
         case .completed:
@@ -50,7 +54,7 @@ struct NotificationCardKeyInput: Equatable, Sendable {
 ///
 /// | Card        | Keys                                   | Command                |
 /// |-------------|----------------------------------------|------------------------|
-/// | approval    | ⌘Y / Return                            | allow once             |
+/// | approval    | ⌘Y / Return (not if truncated)         | allow once             |
 /// | approval    | ⌘N                                     | deny                   |
 /// | approval    | ⌘⇧Y (when `AlwaysAllowOffer` exists)   | always allow           |
 /// | question    | ⌘1 … ⌘9                                | pick numbered option   |
@@ -129,7 +133,7 @@ enum NotificationCardKeyCommand: Equatable, Sendable {
         }
 
         switch context.card {
-        case let .approval(supportsAlwaysAllow):
+        case let .approval(supportsAlwaysAllow, _):
             switch (key, isShift) {
             case ("y", false): return .allowOnce
             case ("y", true): return supportsAlwaysAllow ? .alwaysAllow : nil
@@ -159,8 +163,11 @@ enum NotificationCardKeyCommand: Equatable, Sendable {
 
     private static func returnCommand(context: Context) -> NotificationCardKeyCommand? {
         switch context.card {
-        case .approval:
-            guard context.cardAge >= bareReturnApprovalArmDelay,
+        case let .approval(_, isCommandTruncated):
+            // Part of the command is off the card: only ⌘Y can mean "I read
+            // it in the terminal".
+            guard !isCommandTruncated,
+                  context.cardAge >= bareReturnApprovalArmDelay,
                   context.timeSinceUnmappedKey >= bareReturnApprovalArmDelay else {
                 return nil
             }

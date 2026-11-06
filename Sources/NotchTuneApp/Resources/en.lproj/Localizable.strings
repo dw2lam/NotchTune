@@ -267,6 +267,7 @@
 "approval.allowOnce" = "Yes";
 "approval.alwaysAllow" = "Always Allow (%@)";
 "approval.alwaysAllowEdits" = "Allow All Edits This Session";
+"approval.commandTruncated" = "Truncated. Check the terminal for the full command.";
 "notice.replyNotSent" = "Your reply to %@ wasn't sent: its terminal is gone. The text is still in the reply field.";
 
 
