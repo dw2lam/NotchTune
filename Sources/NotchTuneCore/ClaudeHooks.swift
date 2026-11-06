@@ -2,13 +2,30 @@ import Foundation
 
 public typealias ClaudeHookJSONValue = CodexHookJSONValue
 
-public enum ClaudePermissionMode: String, Codable, Sendable {
+public enum ClaudePermissionMode: OpenHookValue {
     case `default`
     case acceptEdits
     case plan
     case dontAsk
     case bypassPermissions
     case auto
+    case unknown(String)
+
+    public static let knownCases: [Self] = [
+        .default, .acceptEdits, .plan, .dontAsk, .bypassPermissions, .auto,
+    ]
+
+    public var rawValue: String {
+        switch self {
+        case .default: "default"
+        case .acceptEdits: "acceptEdits"
+        case .plan: "plan"
+        case .dontAsk: "dontAsk"
+        case .bypassPermissions: "bypassPermissions"
+        case .auto: "auto"
+        case let .unknown(rawValue): rawValue
+        }
+    }
 }
 
 public enum ClaudePermissionBehavior: String, Codable, Sendable {
@@ -166,6 +183,8 @@ public enum ClaudePermissionUpdate: Equatable, Codable, Sendable {
                 return "Manual Mode"
             case .auto:
                 return "Auto Mode"
+            case let .unknown(rawValue):
+                return "Switch to \(rawValue)"
             }
         case .replaceRules:
             return "Update Rules"
@@ -380,28 +399,83 @@ public struct ClaudeSessionMetadata: Equatable, Codable, Sendable {
     }
 }
 
-public enum ClaudeHookEventName: String, Codable, Sendable {
-    case sessionStart = "SessionStart"
-    case sessionEnd = "SessionEnd"
-    case userPromptSubmit = "UserPromptSubmit"
-    case preToolUse = "PreToolUse"
-    case postToolUse = "PostToolUse"
-    case postToolUseFailure = "PostToolUseFailure"
-    case permissionRequest = "PermissionRequest"
-    case permissionDenied = "PermissionDenied"
-    case notification = "Notification"
-    case stop = "Stop"
-    case stopFailure = "StopFailure"
-    case subagentStart = "SubagentStart"
-    case subagentStop = "SubagentStop"
-    case preCompact = "PreCompact"
+public enum ClaudeHookEventName: OpenHookValue {
+    case sessionStart
+    case sessionEnd
+    case userPromptSubmit
+    case preToolUse
+    case postToolUse
+    case postToolUseFailure
+    case permissionRequest
+    case permissionDenied
+    case notification
+    case stop
+    case stopFailure
+    case subagentStart
+    case subagentStop
+    case preCompact
+    case unknown(String)
+
+    public static let knownCases: [Self] = [
+        .sessionStart,
+        .sessionEnd,
+        .userPromptSubmit,
+        .preToolUse,
+        .postToolUse,
+        .postToolUseFailure,
+        .permissionRequest,
+        .permissionDenied,
+        .notification,
+        .stop,
+        .stopFailure,
+        .subagentStart,
+        .subagentStop,
+        .preCompact,
+    ]
+
+    public var rawValue: String {
+        switch self {
+        case .sessionStart: "SessionStart"
+        case .sessionEnd: "SessionEnd"
+        case .userPromptSubmit: "UserPromptSubmit"
+        case .preToolUse: "PreToolUse"
+        case .postToolUse: "PostToolUse"
+        case .postToolUseFailure: "PostToolUseFailure"
+        case .permissionRequest: "PermissionRequest"
+        case .permissionDenied: "PermissionDenied"
+        case .notification: "Notification"
+        case .stop: "Stop"
+        case .stopFailure: "StopFailure"
+        case .subagentStart: "SubagentStart"
+        case .subagentStop: "SubagentStop"
+        case .preCompact: "PreCompact"
+        case let .unknown(rawValue): rawValue
+        }
+    }
 }
 
-public enum ClaudeSessionStartSource: String, Codable, Sendable {
+public enum ClaudeSessionStartSource: OpenHookValue {
     case startup
     case resume
     case clear
     case compact
+    case fork
+    case unknown(String)
+
+    public static let knownCases: [Self] = [
+        .startup, .resume, .clear, .compact, .fork,
+    ]
+
+    public var rawValue: String {
+        switch self {
+        case .startup: "startup"
+        case .resume: "resume"
+        case .clear: "clear"
+        case .compact: "compact"
+        case .fork: "fork"
+        case let .unknown(rawValue): rawValue
+        }
+    }
 }
 
 public struct ClaudeHookPayload: Equatable, Codable, Sendable {
@@ -554,6 +628,44 @@ public struct ClaudeHookPayload: Equatable, Codable, Sendable {
         self.terminalTitle = terminalTitle
         self.warpPaneUUID = warpPaneUUID
         self.remote = remote
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        cwd = container.lenient(String.self, forKey: .cwd) ?? ""
+        hookEventName = try container.decode(ClaudeHookEventName.self, forKey: .hookEventName)
+        sessionID = try container.decode(String.self, forKey: .sessionID)
+        transcriptPath = container.lenient(String.self, forKey: .transcriptPath)
+        hookSource = container.lenient(String.self, forKey: .hookSource)
+        permissionMode = container.lenient(ClaudePermissionMode.self, forKey: .permissionMode)
+        agentID = container.lenient(String.self, forKey: .agentID)
+        agentType = container.lenient(String.self, forKey: .agentType)
+        model = container.lenient(String.self, forKey: .model)
+        source = container.lenient(ClaudeSessionStartSource.self, forKey: .source)
+        toolName = container.lenient(String.self, forKey: .toolName)
+        toolInput = container.lenient(ClaudeHookJSONValue.self, forKey: .toolInput)
+        toolUseID = container.lenient(String.self, forKey: .toolUseID)
+        toolResponse = container.lenient(ClaudeHookJSONValue.self, forKey: .toolResponse)
+        // An unfamiliar suggestion only costs its own "always allow" option.
+        permissionSuggestions = container.lenientList(ClaudePermissionUpdate.self, forKey: .permissionSuggestions)
+        prompt = container.lenient(String.self, forKey: .prompt)
+        message = container.lenient(String.self, forKey: .message)
+        title = container.lenient(String.self, forKey: .title)
+        notificationType = container.lenient(String.self, forKey: .notificationType)
+        subtype = container.lenient(String.self, forKey: .subtype)
+        stopHookActive = container.lenient(Bool.self, forKey: .stopHookActive)
+        lastAssistantMessage = container.lenient(String.self, forKey: .lastAssistantMessage)
+        error = container.lenient(String.self, forKey: .error)
+        errorDetails = container.lenient(String.self, forKey: .errorDetails)
+        isInterrupt = container.lenient(Bool.self, forKey: .isInterrupt)
+        agentTranscriptPath = container.lenient(String.self, forKey: .agentTranscriptPath)
+        backgroundTaskList = container.lenient(ClaudeBackgroundTaskList.self, forKey: .backgroundTaskList)
+        terminalApp = container.lenient(String.self, forKey: .terminalApp)
+        terminalSessionID = container.lenient(String.self, forKey: .terminalSessionID)
+        terminalTTY = container.lenient(String.self, forKey: .terminalTTY)
+        terminalTitle = container.lenient(String.self, forKey: .terminalTitle)
+        warpPaneUUID = container.lenient(String.self, forKey: .warpPaneUUID)
+        remote = container.lenient(Bool.self, forKey: .remote)
     }
 }
 
@@ -715,7 +827,7 @@ public enum ClaudeHookOutputEncoder {
 
         let data: Data?
         switch response {
-        case .acknowledged:
+        case .acknowledged, .doctorPong:
             data = nil
         case .codexHookDirective:
             data = nil
@@ -807,7 +919,9 @@ public extension ClaudeHookPayload {
                 return "Cleared \(agent) context in \(workspaceName)."
             case .compact:
                 return "Compacted \(agent) context in \(workspaceName)."
-            case .startup, .none:
+            case .fork:
+                return "Forked \(agent) session in \(workspaceName)."
+            case .startup, .unknown, .none:
                 return "Started \(agent) session in \(workspaceName)."
             }
         case .userPromptSubmit:
@@ -836,6 +950,8 @@ public extension ClaudeHookPayload {
             return "\(agent) is compacting the conversation in \(workspaceName)."
         case .sessionEnd:
             return "\(agent) session ended in \(workspaceName)."
+        case .unknown:
+            return "\(agent) is active in \(workspaceName)."
         }
     }
 
@@ -1023,7 +1139,7 @@ public extension ClaudeHookPayload {
     func withRuntimeContext(environment: [String: String]) -> ClaudeHookPayload {
         withRuntimeContext(
             environment: environment,
-            currentTTYProvider: { currentTTY() },
+            currentTTYProvider: { HookTerminalProbe.currentTTY() },
             terminalLocatorProvider: { terminalLocator(for: $0) },
             warpPaneResolver: Self.defaultWarpPaneResolver
         )
@@ -1107,7 +1223,11 @@ public extension ClaudeHookPayload {
                 useLocator = false
             }
         } else {
-            useLocator = shouldUseFocusedTerminalLocator(for: payload.terminalApp ?? "")
+            // The same rule as Ghostty above: only these two events are sure
+            // to find the user in this terminal, and asking later would
+            // stall a tool call to return some other tab.
+            useLocator = (payload.hookEventName == .sessionStart || payload.hookEventName == .userPromptSubmit)
+                && shouldUseFocusedTerminalLocator(for: payload.terminalApp ?? "")
         }
 
         if useLocator, let terminalApp = payload.terminalApp {
@@ -1325,29 +1445,6 @@ public extension ClaudeHookPayload {
         return nil
     }
 
-    private func currentTTY() -> String? {
-        if let tty = commandOutput(executablePath: "/usr/bin/tty", arguments: []),
-           !tty.contains("not a tty") {
-            return tty
-        }
-
-        return parentProcessTTY()
-    }
-
-    private func parentProcessTTY() -> String? {
-        let ppid = getppid()
-        guard let raw = commandOutput(executablePath: "/bin/ps", arguments: ["-p", "\(ppid)", "-o", "tty="]) else {
-            return nil
-        }
-
-        let tty = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !tty.isEmpty, tty != "??", tty != "-" else {
-            return nil
-        }
-
-        return tty.hasPrefix("/dev/") ? tty : "/dev/\(tty)"
-    }
-
     private func terminalLocator(for terminalApp: String) -> (sessionID: String?, tty: String?, title: String?) {
         let normalized = terminalApp.lowercased()
 
@@ -1408,7 +1505,7 @@ public extension ClaudeHookPayload {
     }
 
     private func osascriptValues(script: String) -> [String] {
-        guard let raw = commandOutput(executablePath: "/usr/bin/osascript", arguments: ["-e", script]) else {
+        guard let raw = HookTerminalProbe.osascript(script) else {
             return []
         }
 
@@ -1416,36 +1513,6 @@ public extension ClaudeHookPayload {
         return raw
             .components(separatedBy: separator)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-    }
-
-    private func commandOutput(executablePath: String, arguments: [String]) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executablePath)
-        process.arguments = arguments
-
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            return nil
-        }
-
-        guard process.terminationStatus == 0 else {
-            return nil
-        }
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        guard let output = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-              !output.isEmpty else {
-            return nil
-        }
-
-        return output
     }
 }
 

@@ -92,10 +92,15 @@ public final class BridgeServer: @unchecked Sendable {
     /// overwritten whenever AppModel pushes a fresh snapshot.
     private var localState = SessionState()
 
+    /// Nil outside the real app, so tests and the harness never touch it.
+    private let activityStore: HookActivityStore?
+
     public init(
-        socketURL: URL = BridgeSocketLocation.defaultURL
+        socketURL: URL = BridgeSocketLocation.defaultURL,
+        activityStore: HookActivityStore? = nil
     ) {
         self.socketURL = socketURL
+        self.activityStore = activityStore
         queue.setSpecific(key: queueKey, value: ())
     }
 
@@ -310,8 +315,33 @@ public final class BridgeServer: @unchecked Sendable {
         }
     }
 
-    private func handle(_ command: BridgeCommand, from clientID: UUID) {
+    /// A doctor ping is deliberately not activity: a passing test mustn't
+    /// turn "no events yet" into "working".
+    private func recordHookActivity(for command: BridgeCommand) {
+        let agent: AgentIdentifier?
         switch command {
+        case .processCodexHook: agent = .codex
+        case let .processClaudeHook(payload): agent = AgentIdentifier(hookSource: payload.hookSource ?? "claude")
+        case .processOpenCodeHook: agent = .openCode
+        case .processCursorHook: agent = .cursor
+        case .processGeminiHook: agent = .gemini
+        case .processAntigravityHook: agent = .antigravity
+        default: agent = nil
+        }
+
+        if let agent {
+            activityStore?.record(agent)
+        }
+    }
+
+    private func handle(_ command: BridgeCommand, from clientID: UUID) {
+        recordHookActivity(for: command)
+
+        switch command {
+        case let .doctorPing(nonce):
+            // Answered here and nowhere else: no event, no session, no sound.
+            send(.response(.doctorPong(nonce: nonce)), to: clientID)
+
         case let .registerClient(role):
             guard var client = clients[clientID] else {
                 return
@@ -627,6 +657,11 @@ public final class BridgeServer: @unchecked Sendable {
                 )
             )
             send(.response(.acknowledged), to: clientID)
+
+        case .unknown:
+            // An event added after this build: nothing to show for it, and
+            // the agent mustn't wait on us.
+            send(.response(.acknowledged), to: clientID)
         }
     }
 
@@ -667,6 +702,13 @@ public final class BridgeServer: @unchecked Sendable {
     }
 
     private func handleClaudeHook(_ payload: ClaudeHookPayload, from clientID: UUID) {
+        // Kimi reuses this format, but its PermissionRequest only observes: it
+        // can't be answered, so an approval card here would be a dead button.
+        if payload.hookSource == "kimi", payload.hookEventName == .permissionRequest {
+            send(.response(.acknowledged), to: clientID)
+            return
+        }
+
         // Subagents fire their own tool hooks with `agent_id` set. They carry
         // the PARENT's session_id and transcript path (verified against Claude
         // Code's payloads), so they can't create a duplicate session — and they
@@ -1125,6 +1167,11 @@ public final class BridgeServer: @unchecked Sendable {
                 )
             )
             send(.response(.acknowledged), to: clientID)
+
+        case .unknown:
+            // An event added after this build: nothing to show for it, and
+            // the agent mustn't wait on us.
+            send(.response(.acknowledged), to: clientID)
         }
     }
 
@@ -1405,6 +1452,11 @@ public final class BridgeServer: @unchecked Sendable {
                 )
             )
             send(.response(.acknowledged), to: clientID)
+
+        case .unknown:
+            // An event added after this build: nothing to show for it, and
+            // the agent mustn't wait on us.
+            send(.response(.acknowledged), to: clientID)
         }
     }
 
@@ -1501,6 +1553,11 @@ public final class BridgeServer: @unchecked Sendable {
                 )
             )
 
+            send(.response(.acknowledged), to: clientID)
+
+        case .unknown:
+            // An event added after this build: nothing to show for it, and
+            // the agent mustn't wait on us.
             send(.response(.acknowledged), to: clientID)
         }
     }
@@ -1641,6 +1698,11 @@ public final class BridgeServer: @unchecked Sendable {
                 )
                 send(.response(.acknowledged), to: clientID)
             }
+
+        case .unknown:
+            // An event added after this build: nothing to show for it, and
+            // the agent mustn't wait on us.
+            send(.response(.acknowledged), to: clientID)
         }
     }
 
@@ -2357,7 +2419,7 @@ public final class BridgeServer: @unchecked Sendable {
         switch hookEventName {
         case .userPromptSubmit, .postToolUse, .stop:
             return nil
-        case .sessionStart, .preToolUse, .permissionRequest:
+        case .sessionStart, .preToolUse, .permissionRequest, .unknown:
             return existing
         }
     }
@@ -2981,7 +3043,7 @@ public final class BridgeServer: @unchecked Sendable {
         switch hookEventName {
         case .postToolUse, .postToolUseFailure, .permissionDenied, .stop, .stopFailure, .sessionEnd:
             return nil
-        case .sessionStart, .userPromptSubmit, .preToolUse, .permissionRequest, .notification, .subagentStart, .subagentStop, .preCompact:
+        case .sessionStart, .userPromptSubmit, .preToolUse, .permissionRequest, .notification, .subagentStart, .subagentStop, .preCompact, .unknown:
             return existing
         }
     }
@@ -2998,7 +3060,7 @@ public final class BridgeServer: @unchecked Sendable {
         switch hookEventName {
         case .postToolUse, .postToolUseFailure, .permissionDenied, .stop, .stopFailure, .sessionEnd:
             return nil
-        case .sessionStart, .userPromptSubmit, .preToolUse, .permissionRequest, .notification, .subagentStart, .subagentStop, .preCompact:
+        case .sessionStart, .userPromptSubmit, .preToolUse, .permissionRequest, .notification, .subagentStart, .subagentStop, .preCompact, .unknown:
             return existing
         }
     }
@@ -3015,7 +3077,7 @@ public final class BridgeServer: @unchecked Sendable {
         switch hookEventName {
         case .userPromptSubmit, .postToolUse, .stop:
             return nil
-        case .sessionStart, .preToolUse, .permissionRequest:
+        case .sessionStart, .preToolUse, .permissionRequest, .unknown:
             return existing
         }
     }
@@ -3037,7 +3099,7 @@ public final class BridgeServer: @unchecked Sendable {
             response = .codexHookDirective(
                 .permissionRequest(.deny(message: message ?? "Permission denied in NotchTune."))
             )
-        case (.sessionStart, _), (.postToolUse, _), (.userPromptSubmit, _), (.stop, _):
+        case (.sessionStart, _), (.postToolUse, _), (.userPromptSubmit, _), (.stop, _), (.unknown, _):
             assertionFailure("Unexpected Codex hook waiting for permission.")
             response = .acknowledged
         }

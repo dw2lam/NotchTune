@@ -1,11 +1,27 @@
 import Foundation
 
-public enum GeminiHookEventName: String, Codable, Sendable {
-    case sessionStart = "SessionStart"
-    case sessionEnd = "SessionEnd"
-    case beforeAgent = "BeforeAgent"
-    case afterAgent = "AfterAgent"
-    case notification = "Notification"
+public enum GeminiHookEventName: OpenHookValue {
+    case sessionStart
+    case sessionEnd
+    case beforeAgent
+    case afterAgent
+    case notification
+    case unknown(String)
+
+    public static let knownCases: [Self] = [
+        .sessionStart, .sessionEnd, .beforeAgent, .afterAgent, .notification,
+    ]
+
+    public var rawValue: String {
+        switch self {
+        case .sessionStart: "SessionStart"
+        case .sessionEnd: "SessionEnd"
+        case .beforeAgent: "BeforeAgent"
+        case .afterAgent: "AfterAgent"
+        case .notification: "Notification"
+        case let .unknown(rawValue): rawValue
+        }
+    }
 }
 
 public struct GeminiHookPayload: Equatable, Codable, Sendable {
@@ -87,6 +103,28 @@ public struct GeminiHookPayload: Equatable, Codable, Sendable {
         self.terminalSessionID = terminalSessionID
         self.terminalTTY = terminalTTY
         self.terminalTitle = terminalTitle
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        cwd = container.lenient(String.self, forKey: .cwd) ?? ""
+        hookEventName = try container.decode(GeminiHookEventName.self, forKey: .hookEventName)
+        sessionID = try container.decode(String.self, forKey: .sessionID)
+        transcriptPath = container.lenient(String.self, forKey: .transcriptPath)
+        timestamp = container.lenient(String.self, forKey: .timestamp)
+        prompt = container.lenient(String.self, forKey: .prompt)
+        promptResponse = container.lenient(String.self, forKey: .promptResponse)
+        source = container.lenient(String.self, forKey: .source)
+        reason = container.lenient(String.self, forKey: .reason)
+        notificationType = container.lenient(String.self, forKey: .notificationType)
+        message = container.lenient(String.self, forKey: .message)
+        usage = container.lenient(CodexHookJSONValue.self, forKey: .usage)
+        details = container.lenient(CodexHookJSONValue.self, forKey: .details)
+        stopHookActive = container.lenient(Bool.self, forKey: .stopHookActive)
+        terminalApp = container.lenient(String.self, forKey: .terminalApp)
+        terminalSessionID = container.lenient(String.self, forKey: .terminalSessionID)
+        terminalTTY = container.lenient(String.self, forKey: .terminalTTY)
+        terminalTitle = container.lenient(String.self, forKey: .terminalTitle)
     }
 }
 
@@ -182,6 +220,8 @@ public extension GeminiHookPayload {
             return promptResponsePreview ?? "Gemini CLI completed a turn in \(workspaceName)."
         case .notification:
             return notificationSummary
+        case .unknown:
+            return "Gemini CLI is active in \(workspaceName)."
         }
     }
 
@@ -208,7 +248,7 @@ public extension GeminiHookPayload {
     func withRuntimeContext(environment: [String: String]) -> GeminiHookPayload {
         withRuntimeContext(
             environment: environment,
-            currentTTYProvider: { currentTTY() },
+            currentTTYProvider: { HookTerminalProbe.currentTTY() },
             terminalLocatorProvider: { terminalLocator(for: $0) }
         )
     }
@@ -235,13 +275,16 @@ public extension GeminiHookPayload {
             switch payload.hookEventName {
             case .sessionStart, .beforeAgent, .notification:
                 useLocator = true
-            case .sessionEnd, .afterAgent:
+            case .sessionEnd, .afterAgent, .unknown:
                 payload.terminalSessionID = nil
                 payload.terminalTitle = nil
                 useLocator = false
             }
         } else {
-            useLocator = shouldUseFocusedTerminalLocator(for: payload.terminalApp ?? "")
+            // The same rule as Ghostty above: only these two events are sure
+            // to find the user in this terminal.
+            useLocator = (payload.hookEventName == .sessionStart || payload.hookEventName == .beforeAgent)
+                && shouldUseFocusedTerminalLocator(for: payload.terminalApp ?? "")
         }
 
         if useLocator, let terminalApp = payload.terminalApp {
@@ -398,29 +441,6 @@ public extension GeminiHookPayload {
         return nil
     }
 
-    private func currentTTY() -> String? {
-        if let tty = commandOutput(executablePath: "/usr/bin/tty", arguments: []),
-           !tty.contains("not a tty") {
-            return tty
-        }
-
-        return parentProcessTTY()
-    }
-
-    private func parentProcessTTY() -> String? {
-        let ppid = getppid()
-        guard let raw = commandOutput(executablePath: "/bin/ps", arguments: ["-p", "\(ppid)", "-o", "tty="]) else {
-            return nil
-        }
-
-        let tty = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !tty.isEmpty, tty != "??", tty != "-" else {
-            return nil
-        }
-
-        return tty.hasPrefix("/dev/") ? tty : "/dev/\(tty)"
-    }
-
     private func terminalLocator(for terminalApp: String) -> (sessionID: String?, tty: String?, title: String?) {
         let normalized = terminalApp.lowercased()
 
@@ -493,7 +513,7 @@ public extension GeminiHookPayload {
     }
 
     private func osascriptValues(script: String) -> [String] {
-        guard let raw = commandOutput(executablePath: "/usr/bin/osascript", arguments: ["-e", script]) else {
+        guard let raw = HookTerminalProbe.osascript(script) else {
             return []
         }
 
@@ -501,31 +521,6 @@ public extension GeminiHookPayload {
         return raw
             .components(separatedBy: separator)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-    }
-
-    private func commandOutput(executablePath: String, arguments: [String]) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executablePath)
-        process.arguments = arguments
-
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            return nil
-        }
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        guard !data.isEmpty else {
-            return nil
-        }
-
-        return String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

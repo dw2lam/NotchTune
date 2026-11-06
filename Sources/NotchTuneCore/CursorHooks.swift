@@ -1,12 +1,29 @@
 import Foundation
 
-public enum CursorHookEventName: String, Codable, Sendable {
+public enum CursorHookEventName: OpenHookValue {
     case beforeSubmitPrompt
     case beforeShellExecution
     case beforeMCPExecution
     case beforeReadFile
     case afterFileEdit
     case stop
+    case unknown(String)
+
+    public static let knownCases: [Self] = [
+        .beforeSubmitPrompt, .beforeShellExecution, .beforeMCPExecution, .beforeReadFile, .afterFileEdit, .stop,
+    ]
+
+    public var rawValue: String {
+        switch self {
+        case .beforeSubmitPrompt: "beforeSubmitPrompt"
+        case .beforeShellExecution: "beforeShellExecution"
+        case .beforeMCPExecution: "beforeMCPExecution"
+        case .beforeReadFile: "beforeReadFile"
+        case .afterFileEdit: "afterFileEdit"
+        case .stop: "stop"
+        case let .unknown(rawValue): rawValue
+        }
+    }
 }
 
 public struct CursorFileEdit: Equatable, Codable, Sendable {
@@ -132,7 +149,7 @@ public struct CursorHookPayload: Equatable, Codable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.hookEventName = try container.decode(CursorHookEventName.self, forKey: .hookEventName)
         self.conversationId = try container.decode(String.self, forKey: .conversationId)
-        self.generationId = try container.decode(String.self, forKey: .generationId)
+        self.generationId = container.lenient(String.self, forKey: .generationId) ?? ""
         self.workspaceRoots = (try? container.decodeIfPresent([String].self, forKey: .workspaceRoots)) ?? []
         self.prompt = try? container.decodeIfPresent(String.self, forKey: .prompt)
         self.command = try? container.decodeIfPresent(String.self, forKey: .command)
@@ -288,6 +305,8 @@ public extension CursorHookPayload {
             return "Cursor edited \(filePath ?? "a file") in \(workspaceName)."
         case .stop:
             return "Cursor completed a turn in \(workspaceName)."
+        case .unknown:
+            return "Cursor is active in \(workspaceName)."
         }
     }
 

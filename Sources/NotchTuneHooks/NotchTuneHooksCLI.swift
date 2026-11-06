@@ -31,6 +31,16 @@ struct NotchTuneHooksCLI {
     }
 
     static func main() {
+        let arguments = Array(CommandLine.arguments.dropFirst())
+        // Before the skip check and the stdin read: the doctor has no payload
+        // to send and needs an answer even from a wrapped environment.
+        if let nonce = value(of: "--doctor-ping", in: arguments) {
+            exit(doctorPing(nonce: nonce))
+        }
+
+        var input = Data()
+        var sourceString: String?
+
         do {
             // Allow wrappers to delegate one child process away from NotchTune without changing global hook installation.
             // Lets an external controller skip NotchTune hooks for this child process only, without touching the global install.
@@ -38,13 +48,12 @@ struct NotchTuneHooksCLI {
                 return
             }
 
-            let input = FileHandle.standardInput.readDataToEndOfFile()
+            input = FileHandle.standardInput.readDataToEndOfFile()
             guard !input.isEmpty else {
                 return
             }
 
-            let arguments = Array(CommandLine.arguments.dropFirst())
-            let sourceString = rawSourceString(arguments: arguments)
+            sourceString = rawSourceString(arguments: arguments)
             guard let source = hookSource(arguments: arguments) else {
                 logStderr("unsupported hook source: \(sourceString ?? "nil")")
                 return
@@ -68,7 +77,7 @@ struct NotchTuneHooksCLI {
                 }
 
                 if let output = try CodexHookOutputEncoder.standardOutput(for: response) {
-                    FileHandle.standardOutput.write(output)
+                    writeDirective(output)
                 }
             case .claude, .qoder, .qwen, .factory, .droid, .codebuddy, .kimi:
                 var payload = try decoder
@@ -86,7 +95,7 @@ struct NotchTuneHooksCLI {
                 }
 
                 if let output = try ClaudeHookOutputEncoder.standardOutput(for: response) {
-                    FileHandle.standardOutput.write(output)
+                    writeDirective(output)
                 }
             case .cursor:
                 let payload = try decoder.decode(CursorHookPayload.self, from: input)
@@ -101,9 +110,7 @@ struct NotchTuneHooksCLI {
 
                 if case let .cursorHookDirective(directive) = response {
                     let encoder = JSONEncoder()
-                    let output = try encoder.encode(directive)
-                    FileHandle.standardOutput.write(output)
-                    FileHandle.standardOutput.write(Data("\n".utf8))
+                    writeDirective(try encoder.encode(directive))
                 }
             case .gemini:
                 let payload = try decoder
@@ -133,7 +140,46 @@ struct NotchTuneHooksCLI {
         } catch {
             // Hooks should fail open so the CLI continues working even if the bridge is unavailable.
             logStderr("hook failed: \(error)")
+
+            if error is DecodingError {
+                HookDropLog().record(
+                    source: sourceString ?? "codex",
+                    event: HookDropLog.eventName(in: input),
+                    field: HookDropLog.fieldPath(of: error)
+                )
+            }
         }
+    }
+
+    /// Answers the doctor's Test hook. Exit codes are the contract with
+    /// `HookRoundTripTest`: 0 reached the app, 3 no bridge to talk to, 4 the
+    /// bridge answered something else.
+    private static func doctorPing(nonce: String) -> Int32 {
+        let client = BridgeCommandClient(socketURL: BridgeSocketLocation.currentURL())
+        guard let response = try? client.send(.doctorPing(nonce: nonce), timeout: 2) else {
+            return 3
+        }
+
+        guard case .doctorPong(nonce) = response else {
+            return 4
+        }
+
+        // The echo is the proof: a binary too old to know this flag also
+        // exits 0, having found nothing on stdin.
+        FileHandle.standardOutput.write(Data("\(nonce)\n".utf8))
+        return 0
+    }
+
+    /// Claude Code reports a stdout that looks like JSON and isn't as a hook
+    /// error, so what reaches an agent is valid JSON or nothing.
+    private static func writeDirective(_ output: Data) {
+        guard (try? JSONSerialization.jsonObject(with: output)) != nil else {
+            logStderr("dropped a directive that wasn't valid JSON")
+            return
+        }
+
+        FileHandle.standardOutput.write(output)
+        FileHandle.standardOutput.write(Data("\n".utf8))
     }
 
     private static func writeGeminiUsageCache(_ usage: CodexHookJSONValue) {
@@ -170,9 +216,13 @@ struct NotchTuneHooksCLI {
     }
 
     private static func rawSourceString(arguments: [String]) -> String? {
+        value(of: "--source", in: arguments)
+    }
+
+    private static func value(of flag: String, in arguments: [String]) -> String? {
         var index = 0
         while index < arguments.count {
-            if arguments[index] == "--source", index + 1 < arguments.count {
+            if arguments[index] == flag, index + 1 < arguments.count {
                 return arguments[index + 1]
             }
 
