@@ -1160,6 +1160,9 @@ struct IslandPanelView: View {
             if model.overlay.presentedOpenReason == .drag {
                 fileDragTargetContent
                     .transition(.opacity)
+            } else if model.overlay.presentedSurface == .notice {
+                noticeBanner
+                    .transition(.opacity)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     // Notifications are toasts, not a browsing surface: no
@@ -1169,6 +1172,9 @@ struct IslandPanelView: View {
                             .padding(.horizontal, sessionListSideInset)
                             .padding(.top, Self.openedTabBarTopPadding)
                             .padding(.bottom, Self.openedTabBarBottomPadding)
+
+                        noticeBanner
+                            .padding(.bottom, OverlayPanelController.noticeBannerBottomInset)
                     }
 
                     switch model.islandActiveTab {
@@ -1225,6 +1231,20 @@ struct IslandPanelView: View {
         }
         .animation(.easeInOut(duration: 0.18), value: model.overlay.presentedOpenReason)
         .animation(.smooth(duration: 0.35, extraBounce: 0.1), value: model.islandActiveTab)
+    }
+
+    /// The notice, while there is one (nothing, padding included, otherwise).
+    @ViewBuilder
+    private var noticeBanner: some View {
+        if let notice = model.overlay.presentedNotice {
+            NoticeBanner(
+                notice: notice,
+                onAction: { model.performNoticeAction() },
+                onDismiss: { model.dismissNotice() }
+            )
+            .padding(.horizontal, sessionListSideInset)
+            .transition(.opacity)
+        }
     }
 
     private var fileDragTargetContent: some View {

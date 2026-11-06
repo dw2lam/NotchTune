@@ -12,6 +12,9 @@ final class OverlayUICoordinator {
     /// the next unseen one). Settable so tests needn't wait the full time.
     @ObservationIgnored
     var notificationSurfaceAutoCollapseDelay: TimeInterval = NotificationSurfaceMetrics.completionToastDuration
+    /// How long a notice stays up. Settable for the same reason.
+    @ObservationIgnored
+    var noticeDisplayDuration: TimeInterval = AppNotice.displayDuration
     private static let musicTrackNotificationDuration: TimeInterval = 2.5
     private static let pointerExitCollapseDelay: Duration = .milliseconds(160)
 
@@ -72,6 +75,13 @@ final class OverlayUICoordinator {
 
     @ObservationIgnored
     private var pointerExitCollapseTask: Task<Void, Never>?
+
+    /// The notice that hasn't reached the screen yet (`deliverNotice`).
+    @ObservationIgnored
+    private var undeliveredNoticeID: UUID?
+
+    @ObservationIgnored
+    private var noticeExpiryTask: Task<Void, Never>?
 
     @ObservationIgnored
     private var musicTrackNotificationTask: Task<Void, Never>?
@@ -234,6 +244,7 @@ final class OverlayUICoordinator {
         var surface: IslandSurface
         var openReason: NotchOpenReason?
         var contentWidth: CGFloat?
+        var notice: AppNotice?
     }
 
     private var closingPresentation: ClosingPresentation?
@@ -246,6 +257,12 @@ final class OverlayUICoordinator {
 
     var presentedOpenReason: NotchOpenReason? {
         closingPresentation.map(\.openReason) ?? notchOpenReason
+    }
+
+    /// The notice the open panel draws. A close keeps it on the panel, since
+    /// closing is often what clears it.
+    var presentedNotice: AppNotice? {
+        closingPresentation.map(\.notice) ?? appModel?.notice
     }
 
     /// The width a close morphs from, when the window has since widened.
@@ -274,7 +291,8 @@ final class OverlayUICoordinator {
         closingPresentation = ClosingPresentation(
             surface: islandSurface,
             openReason: notchOpenReason,
-            contentWidth: overlayPanelController.currentContentWidth
+            contentWidth: overlayPanelController.currentContentWidth,
+            notice: appModel?.notice
         )
         overlayPanelController.isHoldingFrameForClose = true
         DispatchQueue.main.asyncAfter(deadline: .now() + CloseMorph.settled) { [weak self] in
@@ -283,6 +301,7 @@ final class OverlayUICoordinator {
             self.overlayPanelController.isHoldingFrameForClose = false
             self.leaveMirrorOnClose()
             self.refreshOverlayPlacementIfVisible()
+            self.deliverNotice()
         }
     }
 
@@ -333,6 +352,7 @@ final class OverlayUICoordinator {
 
         let wasOpened = notchStatus == .opened
         let previousSurfaceSessionID = islandSurface.sessionID
+        let leavesNoticeSurface = islandSurface == .notice && surface != .notice
         updateCloseMorph(wasOpened: wasOpened, status: status)
         islandSurface = surface
         notchOpenReason = reason
@@ -354,11 +374,9 @@ final class OverlayUICoordinator {
             appModel.islandActiveTab = .music
         }
 
-        if status == .opened, reason == .notification, surface.isNotificationCard {
+        if status == .opened, reason == .notification, let sessionID = surface.sessionID {
             appModel?.islandActiveTab = .agents
-            if let sessionID = surface.sessionID {
-                onNotificationSurfaceShown?(sessionID)
-            }
+            onNotificationSurfaceShown?(sessionID)
         }
 
         if status == .opened, let appModel {
@@ -388,6 +406,13 @@ final class OverlayUICoordinator {
         // pill now (the height holds until the close settles).
         if wasOpened, status != .opened {
             refreshOverlayPlacement()
+        }
+
+        if leavesNoticeSurface || (wasOpened && status != .opened) {
+            clearNoticeIfSeen()
+        }
+        if status == .opened {
+            deliverNotice()
         }
     }
 
@@ -502,6 +527,7 @@ final class OverlayUICoordinator {
         guard appModel.isOverlayDisplayFullscreen != fullscreen else { return }
         appModel.isOverlayDisplayFullscreen = fullscreen
         reconcileOverlayVisibility()
+        deliverNotice()
     }
 
     private func reconcileOverlayVisibility() {
@@ -558,6 +584,7 @@ final class OverlayUICoordinator {
         notchOpenReason = .click
         notificationAutoCollapseTask?.cancel()
         notificationAutoCollapseTask = nil
+        deliverNotice()
         refreshOverlayPlacementIfVisible()
     }
 
@@ -711,6 +738,85 @@ final class OverlayUICoordinator {
         pointerExitCollapseTask = nil
     }
 
+    // MARK: - Notices
+
+    /// `AppModel.notice` changed: put the new one in front of the user. A
+    /// failure is most often the answer to something the user just did, and
+    /// by then the notch has usually closed, so a banner alone would go
+    /// unseen.
+    func noticeDidChange() {
+        noticeExpiryTask?.cancel()
+        noticeExpiryTask = nil
+        undeliveredNoticeID = appModel?.notice?.id
+        deliverNotice()
+    }
+
+    /// Delivers the waiting notice if the notch is free. Runs again whenever
+    /// that can have changed: a close settling, a reopen, leaving full screen.
+    private func deliverNotice() {
+        guard let appModel, let notice = appModel.notice, notice.id == undeliveredNoticeID else { return }
+
+        let delivery = AppNoticeDelivery.resolve(
+            status: notchStatus,
+            openReason: notchOpenReason,
+            surface: islandSurface,
+            isClosing: closingPresentation != nil,
+            isFullscreen: appModel.isOverlayDisplayFullscreen
+        )
+        switch delivery {
+        case .wait:
+            return
+        case .banner:
+            undeliveredNoticeID = nil
+            if islandSurface == .notice {
+                // A new notice over a toast: it gets a toast's full time.
+                updateNotificationAutoCollapse()
+            } else {
+                scheduleNoticeExpiry()
+            }
+        case .toast:
+            undeliveredNoticeID = nil
+            // No sound: nothing an agent did, and a beep on every failed
+            // click would be its own annoyance.
+            notchOpen(reason: .notification, surface: .notice)
+        }
+    }
+
+    /// Closes the toast before the notice goes, so it stays on the panel
+    /// through the morph (`presentedNotice`).
+    func closeNoticeSurface() {
+        guard notchStatus == .opened, islandSurface == .notice else { return }
+        notchClose()
+    }
+
+    private func clearNoticeIfSeen() {
+        guard let notice = appModel?.notice, notice.clearsOnceSeen, undeliveredNoticeID == nil else { return }
+        appModel?.dismissNotice()
+    }
+
+    private func scheduleNoticeExpiry() {
+        noticeExpiryTask?.cancel()
+        noticeExpiryTask = nil
+        guard let notice = appModel?.notice, notice.clearsOnceSeen else { return }
+
+        let delay = noticeDisplayDuration
+        noticeExpiryTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(delay))
+            } catch {
+                return
+            }
+
+            guard let self, !Task.isCancelled, self.appModel?.notice?.id == notice.id else { return }
+            // Still being read: the same rule as a toast's timer.
+            if self.shouldDeferTimedNotificationAutoCollapse {
+                self.scheduleNoticeExpiry()
+            } else {
+                self.appModel?.dismissNotice()
+            }
+        }
+    }
+
     // MARK: - Notification surfaces
 
     func presentNotificationSurface(_ surface: IslandSurface) {
@@ -742,10 +848,11 @@ final class OverlayUICoordinator {
     }
 
     func shouldPreserveCurrentNotificationSurface(against candidate: IslandSurface) -> Bool {
+        // A notice never holds an agent's card back, even under the pointer.
         guard candidate.isNotificationCard,
               notchStatus == .opened,
               notchOpenReason == .notification,
-              islandSurface.isNotificationCard,
+              islandSurface.sessionID != nil,
               islandSurface != candidate else {
             return false
         }
@@ -818,7 +925,7 @@ final class OverlayUICoordinator {
             return
         }
 
-        let delay = notificationSurfaceAutoCollapseDelay
+        let delay = islandSurface == .notice ? noticeDisplayDuration : notificationSurfaceAutoCollapseDelay
         notificationAutoCollapseTask = Task { @MainActor [weak self] in
             do {
                 try await Task.sleep(for: .seconds(delay))
@@ -865,10 +972,14 @@ final class OverlayUICoordinator {
         }
 
         appModel?.measuredNotificationContentHeight = 0
+        let leavesNoticeSurface = islandSurface == .notice
         islandSurface = .sessionList(actionableSessionID: sessionID)
         onNotificationSurfaceShown?(sessionID)
         refreshOverlayPlacementIfVisible()
         updateNotificationAutoCollapse()
+        if leavesNoticeSurface {
+            clearNoticeIfSeen()
+        }
     }
 
     var shouldDeferTimedNotificationAutoCollapse: Bool {

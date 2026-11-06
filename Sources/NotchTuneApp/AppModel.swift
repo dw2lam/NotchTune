@@ -255,16 +255,42 @@ final class AppModel {
         }
     }
     var isBridgeReady = false
+    /// The bridge never came up (a dropped connection reconnects by itself).
+    private(set) var bridgeStartFailed = false
     /// The failure on screen, if any (see `AppNotice`).
     private(set) var notice: AppNotice?
 
     func post(_ notice: AppNotice) {
         if let current = self.notice, current.isSameProblem(as: notice) { return }
         self.notice = notice
+        overlay.noticeDidChange()
     }
 
     func dismissNotice() {
+        overlay.closeNoticeSurface()
         notice = nil
+        overlay.noticeDidChange()
+    }
+
+    /// The banner's button: the notice has done its job once it's pressed.
+    func performNoticeAction() {
+        guard let action = notice?.action else { return }
+        dismissNotice()
+        switch action {
+        case let .openPrivacyPane(pane):
+            pane.settingsURL.map { _ = NSWorkspace.shared.open($0) }
+        case .openNotificationSettings:
+            MyspaceReminderService.openSystemSettings()
+        case .openSetup:
+            showSettings()
+            // `showSettings` may be what first mounts SettingsView, and the
+            // tab selection is only heard once it has.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                NotificationCenter.default.post(name: .notchTuneSelectSetupTab, object: nil)
+            }
+        case .retryBridge:
+            startBridgeServer()
+        }
     }
 
     var lastActionMessage = "Waiting for agent hook events..." {
@@ -845,6 +871,9 @@ final class AppModel {
 
     @ObservationIgnored
     private let bridgeServer = BridgeServer()
+    /// Test seam: what starting the bridge does.
+    @ObservationIgnored
+    lazy var bridgeStarter: () throws -> Void = { [bridgeServer] in try bridgeServer.start() }
 
     @ObservationIgnored
     private var bridgeClient = LocalBridgeClient()
@@ -1904,13 +1933,27 @@ final class AppModel {
             return
         }
 
+        startBridgeServer()
+    }
+
+    /// Without the bridge no hook reaches the app: agents keep running but
+    /// the notch sees none of it, so this is one failure that stays on
+    /// screen (`bridgeStartFailed`, shown in the Agents tab) until it's fixed.
+    private func startBridgeServer() {
         do {
-            try bridgeServer.start()
+            try bridgeStarter()
+            bridgeStartFailed = false
             connectBridgeObserver()
         } catch {
             isBridgeReady = false
+            bridgeStartFailed = true
             lastActionMessage = "Failed to start local bridge: \(error.localizedDescription)"
             harnessRuntimeMonitor?.recordMilestone("bridgeStartFailed", message: lastActionMessage)
+            post(AppNotice(
+                message: "NotchTune can't hear your agents: its local bridge didn't start.",
+                actionTitle: "Try Again",
+                action: .retryBridge
+            ))
         }
     }
 

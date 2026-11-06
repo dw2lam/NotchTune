@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 @preconcurrency import UserNotifications
@@ -390,6 +391,15 @@ enum MyspaceReminderService {
             )
             center.add(request)
         }
+    }
+
+    /// System Settings → Notifications.
+    @MainActor
+    static func openSystemSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     static func cancel(thoughtID: UUID) {
