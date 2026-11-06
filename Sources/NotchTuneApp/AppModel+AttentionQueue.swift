@@ -20,7 +20,7 @@ extension AppModel {
     /// tour's demo session runs its own script.
     var attentionQueue: [AgentSession] {
         state.sessions
-            .filter { $0.hasPendingRequest && !$0.isDemoSession }
+            .filter { $0.hasPendingRequest && $0.id != OnboardingTourController.demoSessionID }
             .sorted { lhs, rhs in
                 let (lhsStart, rhsStart) = (waitStart(of: lhs), waitStart(of: rhs))
                 return lhsStart == rhsStart ? lhs.id < rhs.id : lhsStart < rhsStart

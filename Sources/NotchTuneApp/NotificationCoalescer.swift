@@ -174,9 +174,10 @@ struct NotificationCoalescer: Sendable {
     // MARK: Approvals / questions
 
     /// Decide an approval or question request.
-    /// - `isRepeatOfPendingRequest`: the session was already waiting in the
-    ///   same phase before this event (e.g. the Codex app-server re-emitting
-    ///   `waitingOnApproval` on every status change).
+    /// - `isRepeatOfPendingRequest`: the session was already waiting on this
+    ///   same request before this event (e.g. the Codex app-server
+    ///   re-emitting `waitingOnApproval` on every status change). A different
+    ///   request in the same phase is not a repeat.
     /// - `isAlreadyPresented`: the session is the current notification card.
     /// A first request is never downgraded; a `.present` decision records
     /// the bump for cooldown / rate-limit purposes.

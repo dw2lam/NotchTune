@@ -22,6 +22,8 @@ enum IslandDebugScenario: String, CaseIterable, Identifiable {
     case closedFinished
     case sessionList
     case approvalCard
+    /// A truncated command, a narrow Always Allow and a second agent in line.
+    case approvalQueueCard
     case questionCard
     case completionCard
     case longCompletionCard
@@ -42,6 +44,8 @@ enum IslandDebugScenario: String, CaseIterable, Identifiable {
             "Session List"
         case .approvalCard:
             "Approval Card"
+        case .approvalQueueCard:
+            "Approval Card · Queue"
         case .questionCard:
             "Question Card"
         case .completionCard:
@@ -65,6 +69,8 @@ enum IslandDebugScenario: String, CaseIterable, Identifiable {
             "Manual expanded list with running, active, and inactive session rows."
         case .approvalCard:
             "Auto-expanded permission surface with approve and deny actions."
+        case .approvalQueueCard:
+            "Permission surface for a long command, with another session waiting."
         case .questionCard:
             "Auto-expanded question surface with selectable answer buttons."
         case .completionCard:
@@ -153,6 +159,19 @@ enum IslandDebugScenario: String, CaseIterable, Identifiable {
                 notchOpenReason: .notification,
                 islandSurface: .sessionList(actionableSessionID: session.id),
                 sessions: DebugSessionFactory.notificationSessions(lead: session, now: now),
+                selectedSessionID: session.id
+            )
+
+        case .approvalQueueCard:
+            let session = DebugSessionFactory.longCommandApprovalSession(now: now)
+            return IslandDebugSnapshot(
+                title: title,
+                summary: summary,
+                previewHeight: 420,
+                notchStatus: .opened,
+                notchOpenReason: .notification,
+                islandSurface: .sessionList(actionableSessionID: session.id),
+                sessions: [session, DebugSessionFactory.approvalSession(now: now)],
                 selectedSessionID: session.id
             )
 
@@ -401,6 +420,49 @@ private enum DebugSessionFactory {
                 lastAssistantMessage: "Ready to rewrite the DEV page; the file changes need approval.",
                 currentTool: "exec_command",
                 currentCommandPreview: "head -5000 /Users/wangruobing/Personal/claude-research/extracts/claude-bun-2.1.81-v3/islands/000_cli.js.txt"
+            )
+        )
+    }
+
+    static func longCommandApprovalSession(now: Date) -> AgentSession {
+        let command = [
+            "set -euo pipefail",
+            "for target in NotchTuneApp NotchTuneHooks NotchTuneSetup; do",
+            "  swift build -c release --product \"$target\"",
+            "done",
+            "codesign --force --sign \"$IDENTITY\" --options runtime .build/release/NotchTuneApp",
+        ].joined(separator: "\n") + "\n" + String(repeating: "rsync -a .build/release/ \"$DEST\"\n", count: 20)
+        return AgentSession(
+            id: "session-approval-long",
+            title: "Claude · notchtune",
+            tool: .claudeCode,
+            origin: .demo,
+            attachmentState: .attached,
+            phase: .waitingForApproval,
+            summary: "Claude wants to run Bash.",
+            updatedAt: now.addingTimeInterval(-40),
+            permissionRequest: PermissionRequest(
+                title: "Allow Bash",
+                summary: "Claude wants to run Bash.",
+                affectedPath: "/Users/dev/notchtune",
+                commandPreview: PermissionCommandPreview(command),
+                primaryActionTitle: "Allow Once",
+                secondaryActionTitle: "Deny",
+                toolName: "Bash",
+                suggestedUpdates: [
+                    .addRules(
+                        destination: .localSettings,
+                        rules: [ClaudePermissionRuleValue(toolName: "Bash", ruleContent: "swift build:*")],
+                        behavior: .allow
+                    ),
+                ]
+            ),
+            jumpTarget: JumpTarget(
+                terminalApp: "Ghostty",
+                workspaceName: "notchtune",
+                paneTitle: "claude ~/notchtune",
+                workingDirectory: "/Users/dev/notchtune",
+                terminalSessionID: "ghostty-approval-long"
             )
         )
     }

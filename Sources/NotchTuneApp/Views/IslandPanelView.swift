@@ -3120,25 +3120,14 @@ private struct IslandSessionRow: View {
                     .fill(Color.white.opacity(0.045))
             )
 
-            // Short grants share the row; a long one gets a row of its own
-            // rather than losing the part that says what it allows.
+            HStack(spacing: 8) {
+                approvalAnswerButtons
+            }
+
+            // A row of its own: the label is what it grants, so it can't be
+            // squeezed down to "Always Al…".
             if let offer = session.alwaysAllowOffer {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) {
-                        approvalAnswerButtons
-                        alwaysAllowButton(offer)
-                    }
-                    VStack(spacing: 8) {
-                        HStack(spacing: 8) {
-                            approvalAnswerButtons
-                        }
-                        alwaysAllowButton(offer)
-                    }
-                }
-            } else {
-                HStack(spacing: 8) {
-                    approvalAnswerButtons
-                }
+                alwaysAllowButton(offer)
             }
         }
     }
