@@ -4,7 +4,7 @@ import NotchTuneCore
 /// Which notification card is on screen, as far as keyboard control cares.
 enum NotificationCardKind: Equatable, Sendable {
     /// Permission request. `supportsAlwaysAllow` mirrors the "Always Allow"
-    /// button, which only exists when the request names a tool.
+    /// button (see `AlwaysAllowOffer`).
     case approval(supportsAlwaysAllow: Bool)
     /// Structured or freeform question.
     case question
@@ -14,7 +14,7 @@ enum NotificationCardKind: Equatable, Sendable {
     init?(session: AgentSession, replyAvailable: Bool) {
         switch session.phase {
         case .waitingForApproval:
-            self = .approval(supportsAlwaysAllow: session.permissionRequest?.toolName != nil)
+            self = .approval(supportsAlwaysAllow: session.alwaysAllowOffer != nil)
         case .waitingForAnswer:
             self = .question
         case .completed:
@@ -52,7 +52,7 @@ struct NotificationCardKeyInput: Equatable, Sendable {
 /// |-------------|----------------------------------------|------------------------|
 /// | approval    | ⌘Y / Return                            | allow once             |
 /// | approval    | ⌘N                                     | deny                   |
-/// | approval    | ⌘⇧Y (tool-scoped requests only)        | always allow           |
+/// | approval    | ⌘⇧Y (when `AlwaysAllowOffer` exists)   | always allow           |
 /// | question    | ⌘1 … ⌘9                                | pick numbered option   |
 /// | question    | Return                                 | submit (if enabled)    |
 /// | completion  | Return / ⌘J                            | jump                   |
@@ -179,20 +179,6 @@ enum NotificationCardKeyCommand: Equatable, Sendable {
             return Int(scalar.value) - Int(("1" as Unicode.Scalar).value)
         }
         return KeyCode.digits.firstIndex(of: input.keyCode)
-    }
-}
-
-extension ApprovalAction {
-    /// The "Always Allow (<tool>)" action: allow now and add a session-scoped
-    /// allow rule for the tool. Shared by the card button and ⌘⇧Y.
-    static func alwaysAllow(toolName: String) -> ApprovalAction {
-        let rule = ClaudePermissionRuleValue(toolName: toolName)
-        let update = ClaudePermissionUpdate.addRules(
-            destination: .session,
-            rules: [rule],
-            behavior: .allow
-        )
-        return .allowWithUpdates([update])
     }
 }
 

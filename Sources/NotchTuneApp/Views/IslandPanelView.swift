@@ -3093,35 +3093,67 @@ private struct IslandSessionRow: View {
                     .fill(Color.white.opacity(0.045))
             )
 
-            // Key hints only where the shortcuts work: the notification card
-            // (see NotificationCardKeyCommand).
-            let showsKeyHints = presentation == .notification
-            HStack(spacing: 8) {
-                Button { onApprove?(.deny) } label: {
-                    NotificationKeyHintedTitle(
-                        session.permissionRequest?.secondaryActionTitle ?? lang.t("approval.deny"),
-                        keys: showsKeyHints ? "⌘N" : nil
-                    )
-                }
-                .buttonStyle(IslandActionButtonStyle(kind: .secondary, expands: true, haptic: .decline))
-                Button { onApprove?(.allowOnce) } label: {
-                    NotificationKeyHintedTitle(
-                        session.permissionRequest?.primaryActionTitle ?? lang.t("approval.allowOnce"),
-                        keys: showsKeyHints ? "⌘Y" : nil
-                    )
-                }
-                .buttonStyle(IslandActionButtonStyle(kind: .warning, expands: true))
-                if let toolName = session.permissionRequest?.toolName {
-                    Button { onApprove?(.alwaysAllow(toolName: toolName)) } label: {
-                        NotificationKeyHintedTitle(
-                            lang.t("approval.alwaysAllow", toolName),
-                            keys: showsKeyHints ? "⇧⌘Y" : nil
-                        )
+            // Short grants share the row; a long one gets a row of its own
+            // rather than losing the part that says what it allows.
+            if let offer = session.alwaysAllowOffer {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        approvalAnswerButtons
+                        alwaysAllowButton(offer)
                     }
-                    .buttonStyle(IslandActionButtonStyle(kind: .primary, expands: true))
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            approvalAnswerButtons
+                        }
+                        alwaysAllowButton(offer)
+                    }
+                }
+            } else {
+                HStack(spacing: 8) {
+                    approvalAnswerButtons
                 }
             }
         }
+    }
+
+    /// Key hints only where the shortcuts work: the notification card
+    /// (see NotificationCardKeyCommand).
+    private var showsApprovalKeyHints: Bool {
+        presentation == .notification
+    }
+
+    @ViewBuilder
+    private var approvalAnswerButtons: some View {
+        Button { onApprove?(.deny) } label: {
+            NotificationKeyHintedTitle(
+                session.permissionRequest?.secondaryActionTitle ?? lang.t("approval.deny"),
+                keys: showsApprovalKeyHints ? "⌘N" : nil
+            )
+        }
+        .buttonStyle(IslandActionButtonStyle(kind: .secondary, expands: true, haptic: .decline))
+        Button { onApprove?(.allowOnce) } label: {
+            NotificationKeyHintedTitle(
+                session.permissionRequest?.primaryActionTitle ?? lang.t("approval.allowOnce"),
+                keys: showsApprovalKeyHints ? "⌘Y" : nil
+            )
+        }
+        .buttonStyle(IslandActionButtonStyle(kind: .warning, expands: true))
+    }
+
+    private func alwaysAllowButton(_ offer: AlwaysAllowOffer) -> some View {
+        let title = switch offer.grant {
+        case let .scope(scope):
+            lang.t("approval.alwaysAllow", scope)
+        case .allEdits:
+            lang.t("approval.alwaysAllowEdits")
+        }
+        return Button { onApprove?(offer.action) } label: {
+            NotificationKeyHintedTitle(keys: showsApprovalKeyHints ? "⇧⌘Y" : nil) {
+                Text(title).truncationMode(.middle)
+            }
+        }
+        .buttonStyle(IslandActionButtonStyle(kind: .primary, expands: true))
+        .help(title)
     }
 
     // MARK: - Question action area

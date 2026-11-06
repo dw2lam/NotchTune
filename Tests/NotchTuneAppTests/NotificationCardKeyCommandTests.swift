@@ -171,11 +171,11 @@ struct NotificationCardKeyCommandTests {
         var session = AgentSession(
             id: "s",
             title: "Codex · s",
-            tool: .codex,
+            tool: .claudeCode,
             phase: .waitingForApproval,
             summary: "",
             updatedAt: Date(timeIntervalSince1970: 0),
-            permissionRequest: PermissionRequest(title: "Bash", summary: "ls", affectedPath: "", toolName: "Bash")
+            permissionRequest: PermissionRequest(title: "Read", summary: "ls", affectedPath: "", toolName: "Read")
         )
         #expect(NotificationCardKind(session: session, replyAvailable: false) == .approval(supportsAlwaysAllow: true))
 
@@ -208,16 +208,5 @@ struct NotificationCardKeyCommandTests {
             keyCode: Code.y, characters: "y", modifierFlags: [.command, .option], isRepeat: false
         )
         #expect(option.modifiers == [.command, .option])
-    }
-
-    @Test
-    func alwaysAllowActionAddsSessionRuleForTool() {
-        guard case let .allowWithUpdates(updates) = ApprovalAction.alwaysAllow(toolName: "Bash") else {
-            Issue.record("expected allowWithUpdates")
-            return
-        }
-        #expect(updates == [
-            .addRules(destination: .session, rules: [ClaudePermissionRuleValue(toolName: "Bash")], behavior: .allow),
-        ])
     }
 }

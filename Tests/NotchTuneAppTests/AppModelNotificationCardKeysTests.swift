@@ -141,7 +141,7 @@ struct AppModelNotificationCardKeysTests {
         start(model, id: "s1")
         requestApproval(model, id: "s1")
         try await waitUntilOpened(model)
-        #expect(model.keyboardNotificationCard?.kind == .approval(supportsAlwaysAllow: true))
+        #expect(model.keyboardNotificationCard?.kind == .approval(supportsAlwaysAllow: false))
 
         #expect(model.performNotificationCardKeyCommand(.deny))
         #expect(model.state.session(id: "s1")?.phase != .waitingForApproval)

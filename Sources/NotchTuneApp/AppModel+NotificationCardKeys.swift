@@ -46,8 +46,8 @@ extension AppModel {
         case (.deny, .approval):
             approvePermission(for: session.id, action: .deny)
         case (.alwaysAllow, .approval(supportsAlwaysAllow: true)):
-            guard let toolName = session.permissionRequest?.toolName else { return false }
-            approvePermission(for: session.id, action: .alwaysAllow(toolName: toolName))
+            guard let offer = session.alwaysAllowOffer else { return false }
+            approvePermission(for: session.id, action: offer.action)
 
         case (.pickOption, .question), (.submit, .question):
             // Selections live in the question view; it applies the pick (or

@@ -266,6 +266,7 @@
 "approval.deny" = "No";
 "approval.allowOnce" = "Yes";
 "approval.alwaysAllow" = "Always Allow (%@)";
+"approval.alwaysAllowEdits" = "Allow All Edits This Session";
 "notice.replyNotSent" = "Your reply to %@ wasn't sent: its terminal is gone. The text is still in the reply field.";
 
 

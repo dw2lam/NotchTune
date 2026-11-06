@@ -13,6 +13,17 @@ public enum AgentTool: String, CaseIterable, Codable, Sendable {
     case kimiCLI
     case antigravity
 
+    /// Whether the agent acts on `updatedPermissions` in a hook reply: the
+    /// agents on the Claude hook format. The rest ignore it.
+    public var appliesPermissionUpdates: Bool {
+        switch self {
+        case .claudeCode, .qoder, .qwenCode, .factory, .codebuddy, .kimiCLI:
+            true
+        case .codex, .geminiCLI, .openCode, .cursor, .antigravity:
+            false
+        }
+    }
+
     public var displayName: String {
         switch self {
         case .claudeCode:
