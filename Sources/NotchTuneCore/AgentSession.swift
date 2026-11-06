@@ -536,6 +536,31 @@ public extension AgentSession {
         attachmentState.isLive
     }
 
+    /// In an attention phase with something to act on. An attention phase
+    /// with no request is a ghost: the phase survives a relaunch, the request
+    /// (and the hook process holding it) doesn't.
+    var hasPendingRequest: Bool {
+        switch phase {
+        case .waitingForApproval:
+            permissionRequest != nil
+        case .waitingForAnswer:
+            questionPrompt != nil
+        case .running, .completed:
+            false
+        }
+    }
+
+    /// The session as it comes back from a registry. Requests aren't
+    /// persisted and their hooks ended with the app, so the agent has gone
+    /// back to its own prompt: nothing here can be answered any more.
+    var withoutOrphanedAttention: AgentSession {
+        guard phase.requiresAttention, !hasPendingRequest else { return self }
+        var session = self
+        session.phase = .completed
+        session.summary = "This request ended when NotchTune closed."
+        return session
+    }
+
     /// Visibility rule for the island UI.
     /// Hook-managed sessions (Claude Code via hooks) rely on hook lifecycle
     /// signals; non-hook sessions use process polling.

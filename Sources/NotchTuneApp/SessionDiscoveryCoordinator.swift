@@ -134,7 +134,8 @@ final class SessionDiscoveryCoordinator {
 
         // Restore persisted Codex sessions.
         if !payload.codexRecords.isEmpty {
-            state = SessionState(sessions: payload.codexRecords.map(\.restorableSession))
+            let restoredSessions = payload.codexRecords.map(\.restorableSession)
+            state = SessionState(sessions: mergeDiscoveredSessions(restoredSessions))
             onStatusMessage?("Restored \(payload.codexRecords.count) recent Codex session(s) from local cache.")
         }
 
@@ -161,7 +162,7 @@ final class SessionDiscoveryCoordinator {
 
         // Merge discovered Codex sessions.
         if !payload.discoveredCodexRecords.isEmpty {
-            let mergedSessions = mergeDiscoveredSessions(payload.discoveredCodexRecords.map(\.session))
+            let mergedSessions = mergeDiscoveredSessions(payload.discoveredCodexRecords.map(\.session.withoutOrphanedAttention))
             state = SessionState(sessions: mergedSessions)
             scheduleCodexSessionPersistence()
             onStatusMessage?("Discovered \(payload.discoveredCodexRecords.count) recent Codex session(s) from local rollouts.")
@@ -215,7 +216,9 @@ final class SessionDiscoveryCoordinator {
         var merged = existing
         let discoveredIsNewer = discovered.updatedAt >= existing.updatedAt
 
-        if discoveredIsNewer {
+        // Files on disk can't answer for a live request: a transcript that
+        // happens to be newer must not wipe the card a hook is blocked on.
+        if discoveredIsNewer, !existing.hasPendingRequest {
             merged.title = discovered.title
             merged.phase = discovered.phase
             merged.summary = discovered.summary

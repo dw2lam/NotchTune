@@ -152,7 +152,7 @@ public struct CodexTrackedSessionRecord: Equatable, Codable, Sendable {
 
 public extension CodexTrackedSessionRecord {
     var restorableSession: AgentSession {
-        var session = session
+        var session = session.withoutOrphanedAttention
         session.attachmentState = .stale
         return session
     }

@@ -63,7 +63,7 @@ public struct OpenCodeTrackedSessionRecord: Equatable, Codable, Sendable {
     }
 
     public var restorableSession: AgentSession {
-        var session = session
+        var session = session.withoutOrphanedAttention
         session.attachmentState = .stale
         return session
     }

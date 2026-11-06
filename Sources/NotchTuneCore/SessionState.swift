@@ -419,6 +419,14 @@ public struct SessionState: Equatable, Sendable {
                     continue
                 }
 
+                // An agent blocked on the user can't be judged by polling:
+                // IDE-extension agents have no tty, so discovery never sees
+                // them. Its hook process holds the request, and a dead agent
+                // drops that connection, which resolves the request.
+                if session.hasPendingRequest {
+                    continue
+                }
+
                 if aliveSessionIDs.contains(id) {
                     session.processNotSeenCount = 0
                 } else {
