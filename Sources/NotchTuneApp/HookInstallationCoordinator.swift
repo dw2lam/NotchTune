@@ -44,6 +44,22 @@ final class HookInstallationCoordinator {
     @ObservationIgnored
     var onStatusMessage: ((String) -> Void)?
 
+    /// One plain sentence for the user; `AppModel` posts it as a notice.
+    @ObservationIgnored
+    var onFailure: ((String) -> Void)?
+
+    /// The last install or uninstall failure per agent, shown on its Setup row
+    /// until the next attempt.
+    var setupFailures: [AgentIdentifier: String] = [:]
+
+    /// Shared with `BridgeServer`, which records into it.
+    nonisolated static let activityStore = HookActivityStore()
+
+    /// Only a real launch may spawn an agent's own CLI; a harness capture
+    /// never gets past `.notRun` on this.
+    @ObservationIgnored
+    var allowsAgentProbes = false
+
     @ObservationIgnored
     private let codexHookInstallationManager = CodexHookInstallationManager()
 
@@ -88,8 +104,10 @@ final class HookInstallationCoordinator {
     @ObservationIgnored
     private let antigravityHookInstallationManager = AntigravityHookInstallationManager()
 
-    @ObservationIgnored
-    private let kimiHookInstallationManager = KimiHookInstallationManager()
+    /// Computed: installing Kimi Code later moves its config directory.
+    private var kimiHookInstallationManager: KimiHookInstallationManager {
+        KimiHookInstallationManager()
+    }
 
     /// Computed so it always reflects the latest `ClaudeConfigDirectory` setting.
     private var claudeStatusLineInstallationManager: ClaudeStatusLineInstallationManager {
@@ -311,10 +329,6 @@ final class HookInstallationCoordinator {
             return "managed plugin present in \(status.pluginsDirectory.path)"
         }
 
-        if status.pluginFilePresent && !status.pluginRegistered {
-            return "plugin file present but not registered in config.json"
-        }
-
         return "no managed OpenCode plugin"
     }
 
@@ -377,7 +391,7 @@ final class HookInstallationCoordinator {
 
     var kimiHookStatusSummary: String {
         guard kimiHookStatus != nil else {
-            return "Reading ~/.kimi/config.toml."
+            return "Reading Kimi's config.toml."
         }
 
         if kimiHooksInstalled {
@@ -451,12 +465,15 @@ final class HookInstallationCoordinator {
     func updateHooksBinaryIfNeeded() {
         guard let sourceURL = hooksBinaryURL else { return }
 
+        // Restore a deleted binary only if some agent's hooks point at it.
+        let restoreIfMissing = !intentStore.installedAgents().isEmpty
+
         Task { @MainActor [weak self] in
             guard let self else { return }
             do {
                 let source = sourceURL
                 let updated = try await Task.detached(priority: .utility) {
-                    try ManagedHooksBinary.updateIfNeeded(from: source)
+                    try ManagedHooksBinary.updateIfNeeded(from: source, restoreIfMissing: restoreIfMissing)
                 }.value
                 if updated {
                     self.onStatusMessage?("Hooks binary updated to match the current app version.")
@@ -474,102 +491,205 @@ final class HookInstallationCoordinator {
 
     // MARK: - Health check & auto-repair
 
-    var codexHealthReport: HookHealthReport?
-    var claudeHealthReport: HookHealthReport?
-    var openCodeHealthReport: HookHealthReport?
-    var cursorHealthReport: HookHealthReport?
-    var geminiHealthReport: HookHealthReport?
+    var healthReports: [AgentIdentifier: HookHealthReport] = [:]
+    var doctorReports: [IntegrationDiagnosis] = []
+    var hookTestResults: [AgentIdentifier: HookRoundTripResult] = [:]
+    var hookTestsRunning: Set<AgentIdentifier> = []
 
+    /// Captures show a fixed doctor instead of this Mac's real one.
+    @ObservationIgnored
+    private var isShowingSampleDoctor = false
 
-    /// Runs health checks for Claude, Codex and OpenCode hooks.
+    /// Refreshes every agent's report. Reads only: nothing here repairs.
     func runHealthChecks() {
         Task { @MainActor [weak self] in
-            guard let self else { return }
-
-            let binaryURL = self.hooksBinaryURL
-            let (claudeReport, codexReport, openCodeReport) = await Task.detached(priority: .utility) {
-                let claude = HookHealthCheck.checkClaude(hooksBinaryURL: binaryURL)
-                let codex = HookHealthCheck.checkCodex(hooksBinaryURL: binaryURL)
-                let openCode = HookHealthCheck.checkOpenCode()
-                return (claude, codex, openCode)
-            }.value
-
-            self.claudeHealthReport = claudeReport
-            self.codexHealthReport = codexReport
-            self.openCodeHealthReport = openCodeReport
-
-            if !claudeReport.isHealthy || !codexReport.isHealthy || !openCodeReport.isHealthy {
-                let claudeIssueCount = claudeReport.errors.count
-                let codexIssueCount = codexReport.errors.count
-                let openCodeIssueCount = openCodeReport.errors.count
-                self.onStatusMessage?("Hook health check: \(claudeIssueCount) Claude, \(codexIssueCount) Codex, \(openCodeIssueCount) OpenCode issue(s).")
-            }
+            await self?.examineHooks()
         }
     }
 
-    /// Attempts to auto-repair repairable issues by re-installing hooks.
-    /// Returns true if any repairs were attempted.
-    @discardableResult
-    func repairHooksIfNeeded() async -> Bool {
-        var repaired = false
+    private func examineHooks() async {
+        guard !isShowingSampleDoctor else { return }
 
-        // Re-run health checks first
         let binaryURL = hooksBinaryURL
-        let (claudeReport, codexReport, openCodeReport) = await Task.detached(priority: .utility) {
-            let claude = HookHealthCheck.checkClaude(hooksBinaryURL: binaryURL)
-            let codex = HookHealthCheck.checkCodex(hooksBinaryURL: binaryURL)
-            let openCode = HookHealthCheck.checkOpenCode()
-            return (claude, codex, openCode)
+        let probesCodexTrust = allowsAgentProbes
+        let intents = Dictionary(uniqueKeysWithValues: AgentIdentifier.hookAgents.map { ($0, intentStore.intent(for: $0)) })
+        let present = Dictionary(uniqueKeysWithValues: AgentIdentifier.hookAgents.map { ($0, isHookInstalled($0)) })
+        let lastEvents = Dictionary(uniqueKeysWithValues: AgentIdentifier.hookAgents.compactMap { agent in
+            Self.activityStore.lastEvent(for: agent).map { (agent, $0) }
+        })
+
+        let result = await Task.detached(priority: .utility) {
+            IntegrationDoctor.examine(
+                hooksBinaryURL: binaryURL,
+                hooksPresent: present,
+                intents: intents,
+                lastEvents: lastEvents,
+                drops: HookDropLog().read(),
+                probesCodexTrust: probesCodexTrust
+            )
         }.value
 
-        claudeHealthReport = claudeReport
-        codexHealthReport = codexReport
-        openCodeHealthReport = openCodeReport
-
-        // Repair Claude hooks if there are repairable issues
-        if !claudeReport.repairableIssues.isEmpty, hooksBinaryURL != nil {
-            onStatusMessage?("Repairing Claude hooks: \(claudeReport.repairableIssues.map(\.description).joined(separator: "; "))")
-            installClaudeHooks()
-            repaired = true
-        }
-
-        // Repair Codex hooks if there are repairable issues
-        if !codexReport.repairableIssues.isEmpty, hooksBinaryURL != nil {
-            onStatusMessage?("Repairing Codex hooks: \(codexReport.repairableIssues.map(\.description).joined(separator: "; "))")
-            installCodexHooks()
-            repaired = true
-        }
-
-        // Repair OpenCode plugin if there are repairable issues
-        if !openCodeReport.repairableIssues.isEmpty {
-            onStatusMessage?("Repairing OpenCode plugin: \(openCodeReport.repairableIssues.map(\.description).joined(separator: "; "))")
-            installOpenCodePlugin()
-            repaired = true
-        }
-
-        // Refresh health reports after repair
-        if repaired {
-            try? await Task.sleep(for: .milliseconds(500))
-            let (updatedClaude, updatedCodex, updatedOpenCode) = await Task.detached(priority: .utility) {
-                let claude = HookHealthCheck.checkClaude(hooksBinaryURL: binaryURL)
-                let codex = HookHealthCheck.checkCodex(hooksBinaryURL: binaryURL)
-                let openCode = HookHealthCheck.checkOpenCode()
-                return (claude, codex, openCode)
-            }.value
-            claudeHealthReport = updatedClaude
-            codexHealthReport = updatedCodex
-            openCodeHealthReport = updatedOpenCode
-
-            if updatedClaude.isHealthy && updatedCodex.isHealthy && updatedOpenCode.isHealthy {
-                onStatusMessage?("Hook repair completed successfully.")
-            } else {
-                let remaining = updatedClaude.errors.count + updatedCodex.errors.count + updatedOpenCode.errors.count
-                onStatusMessage?("Hook repair finished with \(remaining) remaining issue(s).")
-            }
-        }
-
-        return repaired
+        healthReports = result.reports
+        doctorReports = result.diagnoses
     }
+
+    func isHookInstalled(_ agent: AgentIdentifier) -> Bool {
+        switch agent {
+        case .claudeCode: claudeHooksInstalled
+        case .codex: codexHooksInstalled
+        case .cursor: cursorHooksInstalled
+        case .qoder: qoderHooksInstalled
+        case .qwenCode: qwenCodeHooksInstalled
+        case .factory: factoryHooksInstalled
+        case .codebuddy: codebuddyHooksInstalled
+        case .openCode: openCodePluginInstalled
+        case .gemini: geminiHooksInstalled
+        case .kimi: kimiHooksInstalled
+        case .antigravity: antigravityHooksInstalled
+        case .claudeUsageBridge: claudeUsageInstalled
+        }
+    }
+
+    func installHooks(for agent: AgentIdentifier) {
+        switch agent {
+        case .claudeCode: installClaudeHooks()
+        case .codex: installCodexHooks()
+        case .cursor: installCursorHooks()
+        case .qoder: installQoderHooks()
+        case .qwenCode: installQwenCodeHooks()
+        case .factory: installFactoryHooks()
+        case .codebuddy: installCodebuddyHooks()
+        case .openCode: installOpenCodePlugin()
+        case .gemini: installGeminiHooks()
+        case .kimi: installKimiHooks()
+        case .antigravity: installAntigravityHooks()
+        case .claudeUsageBridge: installClaudeUsageBridge()
+        }
+    }
+
+    /// Agents "Install All" may touch: the ones whose tool is on this Mac.
+    /// Installing means creating config, and a folder for a tool the user
+    /// doesn't have is clutter and a false "detected" later.
+    var installAllAgents: [AgentIdentifier] {
+        let detected = HookAgentCatalog.descriptors()
+            .filter { HookAgentCatalog.isToolPresent($0) }
+            .map(\.agent)
+        return detected.contains(.claudeCode) ? detected + [.claudeUsageBridge] : detected
+    }
+
+    func installAllDetectedHooks() {
+        for agent in installAllAgents where !isHookInstalled(agent) {
+            installHooks(for: agent)
+        }
+    }
+
+    /// The doctor's Test hook, off the main actor: it spawns the binary.
+    func testHook(for agent: AgentIdentifier) {
+        guard !hookTestsRunning.contains(agent),
+              let descriptor = HookAgentCatalog.descriptors().first(where: { $0.agent == agent }) else {
+            return
+        }
+
+        hookTestsRunning.insert(agent)
+        hookTestResults[agent] = nil
+
+        Task { @MainActor [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                HookRoundTripTest.run(descriptor)
+            }.value
+
+            self?.hookTestsRunning.remove(agent)
+            self?.hookTestResults[agent] = result
+        }
+    }
+
+    /// Fixed reports for harness captures (`NOTCHTUNE_HARNESS_SAMPLE_DOCTOR=1`).
+    func loadSampleDoctorReports() {
+        isShowingSampleDoctor = true
+        let now = Date.now
+
+        func sample(
+            _ agent: AgentIdentifier,
+            _ name: String,
+            _ status: IntegrationDiagnosis.Status,
+            findings: [IntegrationDiagnosis.Finding] = [],
+            fix: IntegrationDiagnosis.Fix? = nil,
+            lastEvent: TimeInterval? = nil,
+            dropped: Int = 0
+        ) -> IntegrationDiagnosis {
+            IntegrationDiagnosis(
+                agent: agent,
+                displayName: name,
+                status: status,
+                findings: findings,
+                fix: fix,
+                lastEventAt: lastEvent.map { now.addingTimeInterval(-$0) },
+                droppedEvents: dropped,
+                lastDroppedEvent: dropped > 0 ? "PostCompact" : nil,
+                toolPresent: true
+            )
+        }
+
+        doctorReports = [
+            sample(.claudeCode, "Claude Code", .working, lastEvent: 90, dropped: 3),
+            sample(.codex, "Codex", .needsRepair, findings: [.codexHooksNeedReview(count: 4)]),
+            sample(.openCode, "OpenCode", .needsRepair, findings: [.pluginOutdated], fix: .reinstall, lastEvent: 86_400 * 3),
+            sample(.cursor, "Cursor", .noEventsYet),
+            sample(.gemini, "Gemini CLI", .notInstalled),
+        ]
+        hookTestResults[.claudeCode] = .passed
+        hookTestResults[.cursor] = HookRoundTripResult(failedStep: .bridge, failure: .bridgeUnreachable)
+        setupFailures[.kimi] = "NotchTune couldn't install Kimi CLI hooks. config.toml is not UTF-8 text, so it was left untouched."
+    }
+
+    /// Re-installs what's broken, for the agents the user asked NotchTune to
+    /// manage and no others. Returns true if any repairs were attempted.
+    @discardableResult
+    func repairHooksIfNeeded() async -> Bool {
+        await examineHooks()
+
+        let agents = HookRepairPolicy.agentsToRepair(
+            reports: healthReports,
+            intent: intentStore.intent(for:),
+            hooksBinaryAvailable: hooksBinaryURL != nil
+        )
+
+        guard !agents.isEmpty else {
+            return false
+        }
+
+        for agent in agents {
+            let issues = healthReports[agent]?.repairableIssues.map(\.description).joined(separator: "; ") ?? ""
+            onStatusMessage?("Repairing \(agent.rawValue) hooks: \(issues)")
+            installHooks(for: agent)
+        }
+
+        try? await Task.sleep(for: .milliseconds(500))
+        await examineHooks()
+
+        let remaining = agents.reduce(0) { $0 + (healthReports[$1]?.errors.count ?? 0) }
+        onStatusMessage?(remaining == 0
+            ? "Hook repair completed successfully."
+            : "Hook repair finished with \(remaining) remaining issue(s).")
+        return true
+    }
+
+    // MARK: - Failures
+
+    /// A failed setup reaches the user twice: a notice now, and a line on the
+    /// agent's row for whoever opens Setup later.
+    private func reportSetupFailure(_ agent: AgentIdentifier, _ message: String) {
+        setupFailures[agent] = message
+        onStatusMessage?(message)
+        onFailure?(message)
+    }
+
+    private func failureMessage(_ name: String, removing: Bool, _ error: any Error) -> String {
+        let action = removing ? "remove" : "install"
+        return "NotchTune couldn't \(action) \(name) hooks. \(error.localizedDescription)"
+    }
+
+    private static let missingBinaryMessage = "The NotchTuneHooks helper is missing, so hooks can't be installed. Reinstall NotchTune to restore it."
 
     // MARK: - Refresh
 
@@ -659,7 +779,9 @@ final class HookInstallationCoordinator {
             group.addTask { @MainActor [weak self] in
                 guard let self else { return }
                 do {
-                    let usageState = try self.readClaudeUsageState(repairManagedBridgeIfNeeded: true)
+                    let usageState = try self.readClaudeUsageState(
+                        repairManagedBridgeIfNeeded: self.intentStore.intent(for: .claudeUsageBridge) == .installed
+                    )
                     self.claudeStatusLineStatus = usageState.status
                     self.claudeUsageSnapshot = usageState.snapshot
                 } catch {
@@ -789,6 +911,7 @@ final class HookInstallationCoordinator {
 
     func refreshClaudeUsageState() {
         let manager = claudeStatusLineInstallationManager
+        let mayRepairBridge = intentStore.intent(for: .claudeUsageBridge) == .installed
         Task { [weak self] in
             guard let self else { return }
 
@@ -796,7 +919,7 @@ final class HookInstallationCoordinator {
                 let usageState = try await Task.detached(priority: .utility) {
                     var status = try manager.status()
                     var repairedManagedBridge = false
-                    if status.managedStatusLineNeedsRepair {
+                    if status.managedStatusLineNeedsRepair, mayRepairBridge {
                         status = try manager.install()
                         repairedManagedBridge = true
                     }
@@ -917,7 +1040,7 @@ final class HookInstallationCoordinator {
 
     func installCodexHooks() {
         guard let hooksBinaryURL else {
-            onStatusMessage?("Could not find a local NotchTuneHooks binary. Build the package first.")
+            reportSetupFailure(.codex, Self.missingBinaryMessage)
             return
         }
 
@@ -934,7 +1057,7 @@ final class HookInstallationCoordinator {
 
     func installClaudeHooks() {
         guard let hooksBinaryURL else {
-            onStatusMessage?("Could not find a local NotchTuneHooks binary. Build the package first.")
+            reportSetupFailure(.claudeCode, Self.missingBinaryMessage)
             return
         }
 
@@ -989,12 +1112,14 @@ final class HookInstallationCoordinator {
         statusSetter: @MainActor @escaping (ClaudeHookInstallationStatus) -> Void,
         install: Bool
     ) {
-        guard let hooksBinaryURL else {
-            onStatusMessage?("Could not find a local NotchTuneHooks binary. Build the package first.")
+        let binaryURL = hooksBinaryURL
+        guard !install || binaryURL != nil else {
+            reportSetupFailure(agent, Self.missingBinaryMessage)
             return
         }
 
         isBusySetter(true)
+        setupFailures[agent] = nil
         onStatusMessage?(install ? "Installing \(name) hooks." : "Removing \(name) hooks.")
 
         Task { [weak self] in
@@ -1003,9 +1128,11 @@ final class HookInstallationCoordinator {
             defer { isBusySetter(false) }
 
             do {
-                let status = install
-                    ? try manager.install(hooksBinaryURL: hooksBinaryURL)
-                    : try manager.uninstall()
+                let status = if let binaryURL, install {
+                    try manager.install(hooksBinaryURL: binaryURL)
+                } else {
+                    try manager.uninstall()
+                }
                 statusSetter(status)
                 self.intentStore.setIntent(install ? .installed : .uninstalled, for: agent)
                 if status.managedHooksPresent {
@@ -1014,18 +1141,19 @@ final class HookInstallationCoordinator {
                     self.onStatusMessage?("\(name) hooks are not installed.")
                 }
             } catch {
-                self.onStatusMessage?("\(name) hook update failed: \(error.localizedDescription)")
+                self.reportSetupFailure(agent, self.failureMessage(name, removing: !install, error))
             }
         }
     }
 
     func installOpenCodePlugin() {
         guard let pluginData = loadBundledOpenCodePlugin() else {
-            onStatusMessage?("Could not find the bundled OpenCode plugin resource.")
+            reportSetupFailure(.openCode, "The OpenCode plugin is missing from this copy of NotchTune. Reinstall NotchTune to restore it.")
             return
         }
 
         isOpenCodeSetupBusy = true
+        setupFailures[.openCode] = nil
         onStatusMessage?("Installing OpenCode plugin.")
 
         Task { [weak self] in
@@ -1043,13 +1171,14 @@ final class HookInstallationCoordinator {
                     self.onStatusMessage?("OpenCode plugin installation incomplete.")
                 }
             } catch {
-                self.onStatusMessage?("OpenCode plugin install failed: \(error.localizedDescription)")
+                self.reportSetupFailure(.openCode, self.failureMessage("OpenCode", removing: false, error))
             }
         }
     }
 
     func uninstallOpenCodePlugin() {
         isOpenCodeSetupBusy = true
+        setupFailures[.openCode] = nil
         onStatusMessage?("Removing OpenCode plugin.")
 
         Task { [weak self] in
@@ -1061,16 +1190,20 @@ final class HookInstallationCoordinator {
                 let status = try self.openCodePluginInstallationManager.uninstall()
                 self.openCodePluginStatus = status
                 self.intentStore.setIntent(.uninstalled, for: .openCode)
-                self.onStatusMessage?("OpenCode plugin removed.")
+                if let problem = status.configCleanupProblem {
+                    self.reportSetupFailure(.openCode, "The OpenCode plugin was removed, but one step needs you. \(problem)")
+                } else {
+                    self.onStatusMessage?("OpenCode plugin removed.")
+                }
             } catch {
-                self.onStatusMessage?("OpenCode plugin removal failed: \(error.localizedDescription)")
+                self.reportSetupFailure(.openCode, self.failureMessage("OpenCode", removing: true, error))
             }
         }
     }
 
     func installCursorHooks() {
         guard let hooksBinaryURL else {
-            onStatusMessage?("Could not find a local NotchTuneHooks binary. Build the package first.")
+            reportSetupFailure(.cursor, Self.missingBinaryMessage)
             return
         }
 
@@ -1087,7 +1220,7 @@ final class HookInstallationCoordinator {
 
     func installGeminiHooks() {
         guard let hooksBinaryURL else {
-            onStatusMessage?("Could not find a local NotchTuneHooks binary. Build the package first.")
+            reportSetupFailure(.gemini, Self.missingBinaryMessage)
             return
         }
 
@@ -1104,7 +1237,7 @@ final class HookInstallationCoordinator {
 
     func installAntigravityHooks() {
         guard let hooksBinaryURL else {
-            onStatusMessage?("Could not find a local NotchTuneHooks binary. Build the package first.")
+            reportSetupFailure(.antigravity, Self.missingBinaryMessage)
             return
         }
 
@@ -1121,7 +1254,7 @@ final class HookInstallationCoordinator {
 
     func installKimiHooks() {
         guard let hooksBinaryURL else {
-            onStatusMessage?("Could not find a local NotchTuneHooks binary. Build the package first.")
+            reportSetupFailure(.kimi, Self.missingBinaryMessage)
             return
         }
 
@@ -1224,9 +1357,10 @@ final class HookInstallationCoordinator {
     private func updateCodexHooks(
         userMessage: String,
         intent: AgentHookIntent,
-        operation: @escaping (CodexHookInstallationManager) throws -> CodexHookInstallationStatus
+        operation: @escaping @Sendable (CodexHookInstallationManager) throws -> CodexHookInstallationStatus
     ) {
         isCodexSetupBusy = true
+        setupFailures[.codex] = nil
         onStatusMessage?(userMessage)
 
         Task { [weak self] in
@@ -1235,7 +1369,12 @@ final class HookInstallationCoordinator {
             defer { self.isCodexSetupBusy = false }
 
             do {
-                let status = try operation(self.codexHookInstallationManager)
+                // Off the main actor: installing asks the `codex` CLI which
+                // feature flag it wants, and that can take seconds.
+                let manager = self.codexHookInstallationManager
+                let status = try await Task.detached(priority: .userInitiated) {
+                    try operation(manager)
+                }.value
                 self.codexHookStatus = status
                 self.intentStore.setIntent(intent, for: .codex)
                 if status.managedHooksPresent {
@@ -1244,7 +1383,7 @@ final class HookInstallationCoordinator {
                     self.onStatusMessage?("Codex hooks are not installed.")
                 }
             } catch {
-                self.onStatusMessage?("Codex hook update failed: \(error.localizedDescription)")
+                self.reportSetupFailure(.codex, self.failureMessage("Codex", removing: intent == .uninstalled, error))
             }
         }
     }
@@ -1255,6 +1394,7 @@ final class HookInstallationCoordinator {
         operation: @escaping (ClaudeHookInstallationManager) throws -> ClaudeHookInstallationStatus
     ) {
         isClaudeHookSetupBusy = true
+        setupFailures[.claudeCode] = nil
         onStatusMessage?(userMessage)
 
         Task { [weak self] in
@@ -1274,7 +1414,7 @@ final class HookInstallationCoordinator {
                     self.onStatusMessage?("Claude hooks are not installed.")
                 }
             } catch {
-                self.onStatusMessage?("Claude hook update failed: \(error.localizedDescription)")
+                self.reportSetupFailure(.claudeCode, self.failureMessage("Claude Code", removing: intent == .uninstalled, error))
             }
         }
     }
@@ -1285,6 +1425,7 @@ final class HookInstallationCoordinator {
         operation: @escaping (CursorHookInstallationManager) throws -> CursorHookInstallationStatus
     ) {
         isCursorHookSetupBusy = true
+        setupFailures[.cursor] = nil
         onStatusMessage?(userMessage)
 
         Task { [weak self] in
@@ -1302,7 +1443,7 @@ final class HookInstallationCoordinator {
                     self.onStatusMessage?("Cursor hooks are not installed.")
                 }
             } catch {
-                self.onStatusMessage?("Cursor hook update failed: \(error.localizedDescription)")
+                self.reportSetupFailure(.cursor, self.failureMessage("Cursor", removing: intent == .uninstalled, error))
             }
         }
     }
@@ -1313,6 +1454,7 @@ final class HookInstallationCoordinator {
         action: @escaping (GeminiHookInstallationManager) throws -> GeminiHookInstallationStatus
     ) {
         isGeminiHookSetupBusy = true
+        setupFailures[.gemini] = nil
         onStatusMessage?(userMessage)
 
         let manager = geminiHookInstallationManager
@@ -1331,7 +1473,7 @@ final class HookInstallationCoordinator {
                     self.onStatusMessage?("Gemini hooks are not installed.")
                 }
             } catch {
-                self.onStatusMessage?("Gemini hook update failed: \(error.localizedDescription)")
+                self.reportSetupFailure(.gemini, self.failureMessage("Gemini", removing: intent == .uninstalled, error))
             }
         }
     }
@@ -1342,6 +1484,7 @@ final class HookInstallationCoordinator {
         action: @escaping (AntigravityHookInstallationManager) throws -> AntigravityHookInstallationStatus
     ) {
         isAntigravityHookSetupBusy = true
+        setupFailures[.antigravity] = nil
         onStatusMessage?(userMessage)
 
         let manager = antigravityHookInstallationManager
@@ -1360,7 +1503,7 @@ final class HookInstallationCoordinator {
                     self.onStatusMessage?("Antigravity hooks are not installed.")
                 }
             } catch {
-                self.onStatusMessage?("Antigravity hook update failed: \(error.localizedDescription)")
+                self.reportSetupFailure(.antigravity, self.failureMessage("Antigravity", removing: intent == .uninstalled, error))
             }
         }
     }
@@ -1371,6 +1514,7 @@ final class HookInstallationCoordinator {
         operation: @escaping (KimiHookInstallationManager) throws -> KimiHookInstallationStatus
     ) {
         isKimiHookSetupBusy = true
+        setupFailures[.kimi] = nil
         onStatusMessage?(userMessage)
 
         Task { [weak self] in
@@ -1388,7 +1532,7 @@ final class HookInstallationCoordinator {
                     self.onStatusMessage?("Kimi hooks are not installed.")
                 }
             } catch {
-                self.onStatusMessage?("Kimi hook update failed: \(error.localizedDescription)")
+                self.reportSetupFailure(.kimi, self.failureMessage("Kimi", removing: intent == .uninstalled, error))
             }
         }
     }
@@ -1399,6 +1543,7 @@ final class HookInstallationCoordinator {
         operation: @escaping (ClaudeStatusLineInstallationManager) throws -> ClaudeStatusLineInstallationStatus
     ) {
         isClaudeUsageSetupBusy = true
+        setupFailures[.claudeUsageBridge] = nil
         onStatusMessage?(userMessage)
 
         Task { [weak self] in
@@ -1421,7 +1566,8 @@ final class HookInstallationCoordinator {
                     self.onStatusMessage?("Claude usage bridge is not installed.")
                 }
             } catch {
-                self.onStatusMessage?("Claude usage bridge update failed: \(error.localizedDescription)")
+                let action = intent == .uninstalled ? "remove" : "install"
+                self.reportSetupFailure(.claudeUsageBridge, "NotchTune couldn't \(action) the Claude usage bridge. \(error.localizedDescription)")
             }
         }
     }

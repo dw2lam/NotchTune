@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public enum ManagedHooksBinary {
@@ -34,26 +35,37 @@ public enum ManagedHooksBinary {
         )
 
         if resolvedSourceURL != resolvedDestinationURL {
-            if fileManager.fileExists(atPath: resolvedDestinationURL.path) {
-                try fileManager.removeItem(at: resolvedDestinationURL)
-            }
-            try fileManager.copyItem(at: resolvedSourceURL, to: resolvedDestinationURL)
+            try replaceAtomically(resolvedDestinationURL, with: resolvedSourceURL, fileManager: fileManager)
+        } else {
+            try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: resolvedDestinationURL.path)
         }
 
-        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: resolvedDestinationURL.path)
         return resolvedDestinationURL
     }
 
     /// Overwrites the installed hooks binary if the bundle source differs.
+    /// A missing binary is put back when `restoreIfMissing` is set, because
+    /// every installed hook points at this exact path; callers pass false
+    /// when no agent uses it, so a fresh install stays empty.
     /// Returns `true` if the binary was updated.
     @discardableResult
     public static func updateIfNeeded(
         from sourceURL: URL,
+        to destinationURL: URL? = nil,
+        restoreIfMissing: Bool = true,
         fileManager: FileManager = .default
     ) throws -> Bool {
-        let installedURL = defaultURL(fileManager: fileManager)
-        guard fileManager.fileExists(atPath: installedURL.path) else {
+        let installedURL = (destinationURL ?? defaultURL(fileManager: fileManager)).standardizedFileURL
+        guard sourceURL.standardizedFileURL != installedURL else {
             return false
+        }
+
+        guard fileManager.fileExists(atPath: installedURL.path) else {
+            guard restoreIfMissing else {
+                return false
+            }
+            try install(from: sourceURL, to: installedURL, fileManager: fileManager)
+            return true
         }
 
         let sourceData = try Data(contentsOf: sourceURL)
@@ -62,10 +74,29 @@ public enum ManagedHooksBinary {
             return false
         }
 
-        try fileManager.removeItem(at: installedURL)
-        try fileManager.copyItem(at: sourceURL, to: installedURL)
-        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: installedURL.path)
+        try replaceAtomically(installedURL, with: sourceURL, fileManager: fileManager)
         return true
+    }
+
+    /// Copies beside the destination, then renames over it. Agents run this
+    /// path on every event, so it must never be missing or half written, and
+    /// a failed copy has to leave the old binary working.
+    private static func replaceAtomically(
+        _ destinationURL: URL,
+        with sourceURL: URL,
+        fileManager: FileManager
+    ) throws {
+        let stagingURL = destinationURL
+            .deletingLastPathComponent()
+            .appendingPathComponent(".\(destinationURL.lastPathComponent).\(UUID().uuidString)")
+        defer { try? fileManager.removeItem(at: stagingURL) }
+
+        try fileManager.copyItem(at: sourceURL, to: stagingURL)
+        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stagingURL.path)
+
+        guard rename(stagingURL.path, destinationURL.path) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
     }
 
     private static func installDirectory(fileManager: FileManager) -> URL {

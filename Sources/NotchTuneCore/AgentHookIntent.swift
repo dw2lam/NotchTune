@@ -30,3 +30,28 @@ public enum AgentIdentifier: String, Codable, Sendable, CaseIterable {
     case antigravity
     case claudeUsageBridge
 }
+
+public extension AgentIdentifier {
+    /// The agent behind a hook CLI `--source` value.
+    init?(hookSource: String) {
+        switch hookSource {
+        case "claude": self = .claudeCode
+        case "codex": self = .codex
+        case "cursor": self = .cursor
+        case "qoder": self = .qoder
+        case "qwen": self = .qwenCode
+        case "factory", "droid": self = .factory
+        case "codebuddy": self = .codebuddy
+        case "opencode": self = .openCode
+        case "gemini": self = .gemini
+        case "kimi": self = .kimi
+        case "antigravity": self = .antigravity
+        default: return nil
+        }
+    }
+
+    /// Every agent with hooks of its own; the usage bridge rides on Claude.
+    static var hookAgents: [AgentIdentifier] {
+        allCases.filter { $0 != .claudeUsageBridge }
+    }
+}

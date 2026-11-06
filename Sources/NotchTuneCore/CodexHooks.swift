@@ -1,20 +1,53 @@
 import Foundation
 
-public enum CodexHookEventName: String, Codable, Sendable {
-    case sessionStart = "SessionStart"
-    case preToolUse = "PreToolUse"
-    case permissionRequest = "PermissionRequest"
-    case postToolUse = "PostToolUse"
-    case userPromptSubmit = "UserPromptSubmit"
-    case stop = "Stop"
+public enum CodexHookEventName: OpenHookValue {
+    case sessionStart
+    case preToolUse
+    case permissionRequest
+    case postToolUse
+    case userPromptSubmit
+    case stop
+    case unknown(String)
+
+    public static let knownCases: [Self] = [
+        .sessionStart, .preToolUse, .permissionRequest, .postToolUse, .userPromptSubmit, .stop,
+    ]
+
+    public var rawValue: String {
+        switch self {
+        case .sessionStart: "SessionStart"
+        case .preToolUse: "PreToolUse"
+        case .permissionRequest: "PermissionRequest"
+        case .postToolUse: "PostToolUse"
+        case .userPromptSubmit: "UserPromptSubmit"
+        case .stop: "Stop"
+        case let .unknown(rawValue): rawValue
+        }
+    }
 }
 
-public enum CodexPermissionMode: String, Codable, Sendable {
+public enum CodexPermissionMode: OpenHookValue {
     case `default`
     case acceptEdits
     case plan
     case dontAsk
     case bypassPermissions
+    case unknown(String)
+
+    public static let knownCases: [Self] = [
+        .default, .acceptEdits, .plan, .dontAsk, .bypassPermissions,
+    ]
+
+    public var rawValue: String {
+        switch self {
+        case .default: "default"
+        case .acceptEdits: "acceptEdits"
+        case .plan: "plan"
+        case .dontAsk: "dontAsk"
+        case .bypassPermissions: "bypassPermissions"
+        case let .unknown(rawValue): rawValue
+        }
+    }
 }
 
 
@@ -122,8 +155,8 @@ private extension CodexHookJSONValue {
 public struct CodexHookPayload: Equatable, Codable, Sendable {
     public var cwd: String
     public var hookEventName: CodexHookEventName
-    public var model: String
-    public var permissionMode: CodexPermissionMode
+    public var model: String?
+    public var permissionMode: CodexPermissionMode?
     public var sessionID: String
     public var terminalApp: String?
     public var terminalSessionID: String?
@@ -170,8 +203,8 @@ public struct CodexHookPayload: Equatable, Codable, Sendable {
     public init(
         cwd: String,
         hookEventName: CodexHookEventName,
-        model: String,
-        permissionMode: CodexPermissionMode,
+        model: String? = nil,
+        permissionMode: CodexPermissionMode? = nil,
         sessionID: String,
         terminalApp: String? = nil,
         terminalSessionID: String? = nil,
@@ -213,26 +246,26 @@ public struct CodexHookPayload: Equatable, Codable, Sendable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        cwd = try container.decode(String.self, forKey: .cwd)
+        cwd = container.lenient(String.self, forKey: .cwd) ?? ""
         hookEventName = try container.decode(CodexHookEventName.self, forKey: .hookEventName)
-        model = try container.decode(String.self, forKey: .model)
-        permissionMode = try container.decodeIfPresent(CodexPermissionMode.self, forKey: .permissionMode) ?? .default
+        model = container.lenient(String.self, forKey: .model)
+        permissionMode = container.lenient(CodexPermissionMode.self, forKey: .permissionMode)
         sessionID = try container.decode(String.self, forKey: .sessionID)
-        terminalApp = try container.decodeIfPresent(String.self, forKey: .terminalApp)
-        terminalSessionID = try container.decodeIfPresent(String.self, forKey: .terminalSessionID)
-        terminalTTY = try container.decodeIfPresent(String.self, forKey: .terminalTTY)
-        terminalTitle = try container.decodeIfPresent(String.self, forKey: .terminalTitle)
-        warpPaneUUID = try container.decodeIfPresent(String.self, forKey: .warpPaneUUID)
-        transcriptPath = try container.decodeIfPresent(String.self, forKey: .transcriptPath)
-        source = try container.decodeIfPresent(String.self, forKey: .source)
-        turnID = try container.decodeIfPresent(String.self, forKey: .turnID)
-        toolName = try container.decodeIfPresent(String.self, forKey: .toolName)
-        toolUseID = try container.decodeIfPresent(String.self, forKey: .toolUseID)
-        toolInput = try container.decodeIfPresent(CodexHookToolInput.self, forKey: .toolInput)
-        toolResponse = try container.decodeIfPresent(CodexHookJSONValue.self, forKey: .toolResponse)
-        prompt = try container.decodeIfPresent(String.self, forKey: .prompt)
-        stopHookActive = try container.decodeIfPresent(Bool.self, forKey: .stopHookActive)
-        lastAssistantMessage = try container.decodeIfPresent(String.self, forKey: .lastAssistantMessage)
+        terminalApp = container.lenient(String.self, forKey: .terminalApp)
+        terminalSessionID = container.lenient(String.self, forKey: .terminalSessionID)
+        terminalTTY = container.lenient(String.self, forKey: .terminalTTY)
+        terminalTitle = container.lenient(String.self, forKey: .terminalTitle)
+        warpPaneUUID = container.lenient(String.self, forKey: .warpPaneUUID)
+        transcriptPath = container.lenient(String.self, forKey: .transcriptPath)
+        source = container.lenient(String.self, forKey: .source)
+        turnID = container.lenient(String.self, forKey: .turnID)
+        toolName = container.lenient(String.self, forKey: .toolName)
+        toolUseID = container.lenient(String.self, forKey: .toolUseID)
+        toolInput = container.lenient(CodexHookToolInput.self, forKey: .toolInput)
+        toolResponse = container.lenient(CodexHookJSONValue.self, forKey: .toolResponse)
+        prompt = container.lenient(String.self, forKey: .prompt)
+        stopHookActive = container.lenient(Bool.self, forKey: .stopHookActive)
+        lastAssistantMessage = container.lenient(String.self, forKey: .lastAssistantMessage)
     }
 }
 
@@ -342,7 +375,7 @@ public enum CodexHookOutputEncoder {
         encoder.outputFormatting = [.sortedKeys]
 
         switch response {
-        case .acknowledged:
+        case .acknowledged, .doctorPong:
             return nil
         case let .codexHookDirective(directive):
             let data: Data
@@ -428,6 +461,8 @@ public extension CodexHookPayload {
             return "Codex received a new prompt in \(workspaceName)."
         case .stop:
             return "Codex completed a turn in \(workspaceName)."
+        case .unknown:
+            return "Codex is active in \(workspaceName)."
         }
     }
 
@@ -546,7 +581,7 @@ public extension CodexHookPayload {
     func withRuntimeContext(environment: [String: String]) -> CodexHookPayload {
         withRuntimeContext(
             environment: environment,
-            currentTTYProvider: { currentTTY() },
+            currentTTYProvider: { HookTerminalProbe.currentTTY() },
             terminalLocatorProvider: { terminalLocator(for: $0) },
             warpPaneResolver: Self.defaultWarpPaneResolver
         )
@@ -620,7 +655,11 @@ public extension CodexHookPayload {
                 useLocator = false
             }
         } else {
-            useLocator = shouldUseFocusedTerminalLocator(for: payload.terminalApp ?? "")
+            // The same rule as Ghostty above: only these two events are sure
+            // to find the user in this terminal, and asking later would
+            // stall a tool call to return some other tab.
+            useLocator = (payload.hookEventName == .sessionStart || payload.hookEventName == .userPromptSubmit)
+                && shouldUseFocusedTerminalLocator(for: payload.terminalApp ?? "")
         }
 
         if useLocator, let terminalApp = payload.terminalApp {
@@ -759,29 +798,6 @@ public extension CodexHookPayload {
         return nil
     }
 
-    private func currentTTY() -> String? {
-        if let tty = commandOutput(executablePath: "/usr/bin/tty", arguments: []),
-           !tty.contains("not a tty") {
-            return tty
-        }
-
-        return parentProcessTTY()
-    }
-
-    private func parentProcessTTY() -> String? {
-        let ppid = getppid()
-        guard let raw = commandOutput(executablePath: "/bin/ps", arguments: ["-p", "\(ppid)", "-o", "tty="]) else {
-            return nil
-        }
-
-        let tty = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !tty.isEmpty, tty != "??", tty != "-" else {
-            return nil
-        }
-
-        return tty.hasPrefix("/dev/") ? tty : "/dev/\(tty)"
-    }
-
     private func terminalLocator(for terminalApp: String) -> (sessionID: String?, tty: String?, title: String?) {
         let normalized = terminalApp.lowercased()
 
@@ -842,7 +858,7 @@ public extension CodexHookPayload {
     }
 
     private func osascriptValues(script: String) -> [String] {
-        guard let raw = commandOutput(executablePath: "/usr/bin/osascript", arguments: ["-e", script]) else {
+        guard let raw = HookTerminalProbe.osascript(script) else {
             return []
         }
 
@@ -850,36 +866,6 @@ public extension CodexHookPayload {
         return raw
             .components(separatedBy: separator)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-    }
-
-    private func commandOutput(executablePath: String, arguments: [String]) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executablePath)
-        process.arguments = arguments
-
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            return nil
-        }
-
-        guard process.terminationStatus == 0 else {
-            return nil
-        }
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        guard let output = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-              !output.isEmpty else {
-            return nil
-        }
-
-        return output
     }
 }
 

@@ -68,13 +68,11 @@ struct OnboardingAgentsStep: View {
     var model: AppModel
     @State private var showsMoreAgents = false
 
+    /// "Install All" covers what's on this Mac, not every tool we know of.
     private var allReady: Bool {
-        model.claudeHooksInstalled && model.codexHooksInstalled
-            && model.cursorHooksInstalled && model.openCodePluginInstalled
-            && model.geminiHooksInstalled && model.kimiHooksInstalled
-            && model.antigravityHooksInstalled && model.qoderHooksInstalled
-            && model.qwenCodeHooksInstalled && model.factoryHooksInstalled
-            && model.codebuddyHooksInstalled
+        model.hooks.installAllAgents
+            .filter { $0 != .claudeUsageBridge }
+            .allSatisfy(model.hooks.isHookInstalled)
     }
 
     var body: some View {
@@ -146,17 +144,10 @@ struct OnboardingAgentsStep: View {
     }
 
     private func installAll() {
-        if !model.claudeHooksInstalled { model.installClaudeHooks() }
-        if !model.codexHooksInstalled { model.installCodexHooks() }
-        if !model.cursorHooksInstalled { model.installCursorHooks() }
-        if !model.openCodePluginInstalled { model.installOpenCodePlugin() }
-        if !model.geminiHooksInstalled { model.installGeminiHooks() }
-        if !model.kimiHooksInstalled { model.installKimiHooks() }
-        if !model.antigravityHooksInstalled { model.installAntigravityHooks() }
-        if !model.qoderHooksInstalled { model.installQoderHooks() }
-        if !model.qwenCodeHooksInstalled { model.installQwenCodeHooks() }
-        if !model.factoryHooksInstalled { model.installFactoryHooks() }
-        if !model.codebuddyHooksInstalled { model.installCodebuddyHooks() }
+        for agent in model.hooks.installAllAgents
+        where agent != .claudeUsageBridge && !model.hooks.isHookInstalled(agent) {
+            model.hooks.installHooks(for: agent)
+        }
     }
 
     private func agentRow(

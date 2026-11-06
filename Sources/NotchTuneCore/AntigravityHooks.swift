@@ -1,11 +1,27 @@
 import Foundation
 
-public enum AntigravityHookEventName: String, Codable, Sendable {
-    case sessionStart = "SessionStart"
-    case sessionEnd = "SessionEnd"
-    case beforeAgent = "BeforeAgent"
-    case afterAgent = "AfterAgent"
-    case notification = "Notification"
+public enum AntigravityHookEventName: OpenHookValue {
+    case sessionStart
+    case sessionEnd
+    case beforeAgent
+    case afterAgent
+    case notification
+    case unknown(String)
+
+    public static let knownCases: [Self] = [
+        .sessionStart, .sessionEnd, .beforeAgent, .afterAgent, .notification,
+    ]
+
+    public var rawValue: String {
+        switch self {
+        case .sessionStart: "SessionStart"
+        case .sessionEnd: "SessionEnd"
+        case .beforeAgent: "BeforeAgent"
+        case .afterAgent: "AfterAgent"
+        case .notification: "Notification"
+        case let .unknown(rawValue): rawValue
+        }
+    }
 }
 
 public struct AntigravityHookPayload: Equatable, Codable, Sendable {
@@ -304,6 +320,8 @@ public extension AntigravityHookPayload {
             return promptResponsePreview ?? "Antigravity completed a turn in \(workspaceName)."
         case .notification:
             return notificationSummary
+        case .unknown:
+            return "Antigravity is active in \(workspaceName)."
         }
     }
 
@@ -330,7 +348,7 @@ public extension AntigravityHookPayload {
     func withRuntimeContext(environment: [String: String]) -> AntigravityHookPayload {
         withRuntimeContext(
             environment: environment,
-            currentTTYProvider: { currentTTY() },
+            currentTTYProvider: { HookTerminalProbe.currentTTY() },
             terminalLocatorProvider: { terminalLocator(for: $0) }
         )
     }
@@ -357,13 +375,17 @@ public extension AntigravityHookPayload {
             switch payload.hookEventName {
             case .sessionStart, .beforeAgent, .notification:
                 useLocator = true
-            case .sessionEnd, .afterAgent:
+            case .sessionEnd, .afterAgent, .unknown:
                 payload.terminalSessionID = nil
                 payload.terminalTitle = nil
                 useLocator = false
             }
         } else {
-            useLocator = shouldUseFocusedTerminalLocator(for: payload.terminalApp ?? "")
+            // `BeforeAgent` stands in for every tool call here (see
+            // `AntigravityHookInstaller`), so the locator's deadline is what
+            // keeps this cheap, not the event.
+            useLocator = (payload.hookEventName == .sessionStart || payload.hookEventName == .beforeAgent)
+                && shouldUseFocusedTerminalLocator(for: payload.terminalApp ?? "")
         }
 
         if useLocator, let terminalApp = payload.terminalApp {
@@ -520,29 +542,6 @@ public extension AntigravityHookPayload {
         return nil
     }
 
-    private func currentTTY() -> String? {
-        if let tty = commandOutput(executablePath: "/usr/bin/tty", arguments: []),
-           !tty.contains("not a tty") {
-            return tty
-        }
-
-        return parentProcessTTY()
-    }
-
-    private func parentProcessTTY() -> String? {
-        let ppid = getppid()
-        guard let raw = commandOutput(executablePath: "/bin/ps", arguments: ["-p", "\(ppid)", "-o", "tty="]) else {
-            return nil
-        }
-
-        let tty = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !tty.isEmpty, tty != "??", tty != "-" else {
-            return nil
-        }
-
-        return tty.hasPrefix("/dev/") ? tty : "/dev/\(tty)"
-    }
-
     private func terminalLocator(for terminalApp: String) -> (sessionID: String?, tty: String?, title: String?) {
         let normalized = terminalApp.lowercased()
 
@@ -615,7 +614,7 @@ public extension AntigravityHookPayload {
     }
 
     private func osascriptValues(script: String) -> [String] {
-        guard let raw = commandOutput(executablePath: "/usr/bin/osascript", arguments: ["-e", script]) else {
+        guard let raw = HookTerminalProbe.osascript(script) else {
             return []
         }
 
@@ -623,31 +622,6 @@ public extension AntigravityHookPayload {
         return raw
             .components(separatedBy: separator)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-    }
-
-    private func commandOutput(executablePath: String, arguments: [String]) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executablePath)
-        process.arguments = arguments
-
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            return nil
-        }
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        guard !data.isEmpty else {
-            return nil
-        }
-
-        return String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

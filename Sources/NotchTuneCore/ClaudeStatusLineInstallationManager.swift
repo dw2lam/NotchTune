@@ -155,7 +155,7 @@ public final class ClaudeStatusLineInstallationManager: @unchecked Sendable {
         }
 
         let scriptContents = Self.managedScript(cacheURL: currentStatus.cacheURL)
-        try settingsData.write(to: settingsURL, options: .atomic)
+        try HookConfigFile.write(settingsData, to: settingsURL)
         try scriptContents.write(to: scriptURL, atomically: true, encoding: .utf8)
         try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
         let legacyScriptURL = legacyScriptDirectoryURL.appendingPathComponent(Self.legacyManagedScriptName)
@@ -204,7 +204,7 @@ public final class ClaudeStatusLineInstallationManager: @unchecked Sendable {
         )
         let delegateContents = Self.wrappedDelegateScript(originalCommand: originalCommand)
 
-        try settingsData.write(to: settingsURL, options: .atomic)
+        try HookConfigFile.write(settingsData, to: settingsURL)
         try wrapperContents.write(to: scriptURL, atomically: true, encoding: .utf8)
         try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
         try delegateContents.write(to: delegateScriptURL, atomically: true, encoding: .utf8)
@@ -235,7 +235,7 @@ public final class ClaudeStatusLineInstallationManager: @unchecked Sendable {
                 try backupFile(at: settingsURL)
             }
             let settingsData = try serializeSettings(settings)
-            try settingsData.write(to: settingsURL, options: .atomic)
+            try HookConfigFile.write(settingsData, to: settingsURL)
         }
 
         if fileManager.fileExists(atPath: scriptURL.path) {

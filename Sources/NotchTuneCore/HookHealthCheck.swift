@@ -1,6 +1,6 @@
 import Foundation
 
-/// Structured diagnostic result for a single hook integration (Claude or Codex).
+/// Structured diagnostic result for a single hook integration.
 public struct HookHealthReport: Equatable, Sendable {
     public enum Severity: Equatable, Sendable {
         /// A real problem that may prevent hooks from working.
@@ -16,6 +16,8 @@ public struct HookHealthReport: Equatable, Sendable {
         case binaryNotExecutable(path: String)
         /// The config file (settings.json / hooks.json) contains invalid JSON.
         case configMalformedJSON(path: String)
+        /// The config file exists but couldn't be read at all.
+        case configUnreadable(path: String)
         /// The command path recorded in the config doesn't point to an existing binary.
         case staleCommandPath(recorded: String, configPath: String)
         /// Other hooks detected alongside NotchTune hooks (informational).
@@ -24,6 +26,8 @@ public struct HookHealthReport: Equatable, Sendable {
         case manifestMissing(expectedPath: String)
         /// The OpenCode plugin file is missing even though it should be installed.
         case pluginMissing(expectedPath: String)
+        /// The installed OpenCode plugin predates the current plugin API.
+        case pluginOutdated(path: String)
 
         public var description: String {
             switch self {
@@ -33,6 +37,8 @@ public struct HookHealthReport: Equatable, Sendable {
                 "Hook binary exists but is not executable: \(path)"
             case .configMalformedJSON(let path):
                 "Config file is not valid JSON: \(path)"
+            case .configUnreadable(let path):
+                "Config file could not be read: \(path)"
             case .staleCommandPath(let recorded, let configPath):
                 "Command path in \(configPath) points to missing binary: \(recorded)"
             case .otherHooksDetected(let names):
@@ -41,6 +47,8 @@ public struct HookHealthReport: Equatable, Sendable {
                 "Installation manifest missing: \(expectedPath)"
             case .pluginMissing(let expectedPath):
                 "OpenCode plugin file is missing: \(expectedPath)"
+            case .pluginOutdated(let path):
+                "OpenCode plugin is out of date: \(path)"
             }
         }
 
@@ -55,7 +63,7 @@ public struct HookHealthReport: Equatable, Sendable {
 
         public var isAutoRepairable: Bool {
             switch self {
-            case .staleCommandPath, .binaryNotExecutable, .manifestMissing, .pluginMissing:
+            case .staleCommandPath, .binaryNotExecutable, .manifestMissing, .pluginMissing, .pluginOutdated:
                 true
             default:
                 false
@@ -63,7 +71,7 @@ public struct HookHealthReport: Equatable, Sendable {
         }
     }
 
-    public var agent: String  // "claude" or "codex"
+    public var agent: String  // an AgentIdentifier raw value, or the legacy "claude" / "codex" / "opencode"
     public var issues: [Issue]
     public var binaryPath: String?
     public var configPath: String?
@@ -148,6 +156,8 @@ public enum HookHealthCheck {
                         issues.append(.otherHooksDetected(names: otherNames.sorted()))
                     }
                 }
+            } else {
+                issues.append(.configUnreadable(path: settingsPath))
             }
         }
 
@@ -211,6 +221,8 @@ public enum HookHealthCheck {
                         issues.append(.otherHooksDetected(names: otherNames.sorted()))
                     }
                 }
+            } else {
+                issues.append(.configUnreadable(path: hooksPath))
             }
         }
 
@@ -246,6 +258,9 @@ public enum HookHealthCheck {
             if fileManager.fileExists(atPath: opencodeDirectory.path) {
                 issues.append(.pluginMissing(expectedPath: pluginFileURL.path))
             }
+        } else if OpenCodePluginInstallationManager.pluginRevision(in: try? Data(contentsOf: pluginFileURL))
+                    < OpenCodePluginInstallationManager.currentPluginRevision {
+            issues.append(.pluginOutdated(path: pluginFileURL.path))
         }
 
         return HookHealthReport(
@@ -256,7 +271,156 @@ public enum HookHealthCheck {
         )
     }
 
+    /// Health of any agent, from its catalog entry.
+    public static func check(
+        _ descriptor: HookAgentDescriptor,
+        hooksBinaryURL: URL? = nil,
+        managedHooksBinaryURL: URL = ManagedHooksBinary.defaultURL(),
+        fileManager: FileManager = .default
+    ) -> HookHealthReport {
+        var report: HookHealthReport
+        switch descriptor.agent {
+        case .claudeCode, .qoder, .qwenCode, .factory, .codebuddy:
+            report = checkClaude(
+                claudeDirectory: descriptor.directory,
+                hooksBinaryURL: hooksBinaryURL,
+                managedHooksBinaryURL: managedHooksBinaryURL,
+                fileManager: fileManager
+            )
+        case .codex:
+            report = checkCodex(
+                codexDirectory: descriptor.directory,
+                hooksBinaryURL: hooksBinaryURL,
+                managedHooksBinaryURL: managedHooksBinaryURL,
+                fileManager: fileManager
+            )
+        case .openCode:
+            report = checkOpenCode(opencodeDirectory: descriptor.directory, fileManager: fileManager)
+        case .cursor, .gemini, .antigravity, .kimi, .claudeUsageBridge:
+            report = checkConfigFile(
+                descriptor,
+                hooksBinaryURL: hooksBinaryURL,
+                managedHooksBinaryURL: managedHooksBinaryURL,
+                fileManager: fileManager
+            )
+        }
+
+        report.agent = descriptor.agent.rawValue
+        return report
+    }
+
+    /// The commands in an agent's config that run our binary. Works on the
+    /// nested shapes each agent uses, because it only looks for the
+    /// `command` key; Kimi's TOML keeps one per `[[hooks]]` block.
+    public static func installedCommands(in descriptor: HookAgentDescriptor) -> [String] {
+        guard let data = try? Data(contentsOf: descriptor.configURL) else {
+            return []
+        }
+
+        let commands: [String]
+        if descriptor.configURL.pathExtension == "toml" {
+            commands = String(decoding: data, as: UTF8.self)
+                .components(separatedBy: .newlines)
+                .compactMap(tomlCommand(in:))
+        } else {
+            commands = (try? JSONSerialization.jsonObject(with: data)).map(allCommands(in:)) ?? []
+        }
+
+        return commands.filter(isOurCommand)
+    }
+
+    /// The executable a hook command launches, unquoted.
+    public static func binaryPath(ofCommand command: String) -> String {
+        extractBinaryPath(from: command)
+    }
+
     // MARK: - Private helpers
+
+    private static func checkConfigFile(
+        _ descriptor: HookAgentDescriptor,
+        hooksBinaryURL: URL?,
+        managedHooksBinaryURL: URL,
+        fileManager: FileManager
+    ) -> HookHealthReport {
+        var issues: [HookHealthReport.Issue] = []
+        let resolvedBinaryPath = resolveBinaryPath(
+            explicit: hooksBinaryURL,
+            managed: managedHooksBinaryURL,
+            fileManager: fileManager
+        )
+
+        if let path = resolvedBinaryPath {
+            if !fileManager.isExecutableFile(atPath: path) {
+                issues.append(.binaryNotExecutable(path: path))
+            }
+        } else {
+            issues.append(.binaryNotFound)
+        }
+
+        let configPath = descriptor.configURL.path
+        if fileManager.fileExists(atPath: configPath) {
+            if let data = try? Data(contentsOf: descriptor.configURL) {
+                if descriptor.configURL.pathExtension != "toml",
+                   (try? JSONSerialization.jsonObject(with: data)) == nil {
+                    issues.append(.configMalformedJSON(path: configPath))
+                }
+
+                let paths = Set(installedCommands(in: descriptor).map(extractBinaryPath(from:)))
+                for path in paths.sorted() where !fileManager.fileExists(atPath: path) {
+                    issues.append(.staleCommandPath(recorded: path, configPath: configPath))
+                }
+            } else {
+                issues.append(.configUnreadable(path: configPath))
+            }
+        }
+
+        return HookHealthReport(
+            agent: descriptor.agent.rawValue,
+            issues: issues,
+            binaryPath: resolvedBinaryPath,
+            configPath: configPath
+        )
+    }
+
+    private static func allCommands(in value: Any) -> [String] {
+        if let object = value as? [String: Any] {
+            return object.flatMap { key, nested -> [String] in
+                if key == "command", let command = nested as? String {
+                    return [command]
+                }
+                return allCommands(in: nested)
+            }
+        }
+
+        if let list = value as? [Any] {
+            return list.flatMap(allCommands(in:))
+        }
+
+        return []
+    }
+
+    private static func tomlCommand(in line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("command"),
+              let equals = trimmed.firstIndex(of: "=") else {
+            return nil
+        }
+
+        let value = trimmed[trimmed.index(after: equals)...].trimmingCharacters(in: .whitespaces)
+        guard value.count >= 2, let quote = value.first, quote == "\"" || quote == "'", value.last == quote else {
+            return nil
+        }
+
+        let body = String(value.dropFirst().dropLast())
+        return quote == "'"
+            ? body
+            : body.replacingOccurrences(of: "\\\"", with: "\"").replacingOccurrences(of: "\\\\", with: "\\")
+    }
+
+    private static func isOurCommand(_ command: String) -> Bool {
+        let normalized = command.lowercased()
+        return normalized.contains("notchtunehooks") || normalized.contains("openislandhooks")
+    }
 
     private static func resolveBinaryPath(
         explicit: URL?,

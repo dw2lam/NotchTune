@@ -67,7 +67,7 @@ public final class AntigravityHookInstallationManager: @unchecked Sendable {
     public func install(hooksBinaryURL: URL) throws -> AntigravityHookInstallationStatus {
         try fileManager.createDirectory(at: configDirectory, withIntermediateDirectories: true)
 
-        let existing = try? Data(contentsOf: hooksURL)
+        let existing = try HookConfigFile.read(hooksURL)
         let installedBinaryURL = try ManagedHooksBinary.install(
             from: hooksBinaryURL,
             to: managedHooksBinaryURL,
@@ -83,7 +83,7 @@ public final class AntigravityHookInstallationManager: @unchecked Sendable {
         }
 
         if let contents = mutation.contents {
-            try contents.write(to: hooksURL, options: .atomic)
+            try HookConfigFile.write(contents, to: hooksURL)
         }
 
         let manifest = AntigravityHookInstallerManifest(
@@ -99,7 +99,7 @@ public final class AntigravityHookInstallationManager: @unchecked Sendable {
 
     @discardableResult
     public func uninstall() throws -> AntigravityHookInstallationStatus {
-        let existing = try? Data(contentsOf: hooksURL)
+        let existing = try HookConfigFile.read(hooksURL)
         let mutation = try AntigravityHookInstaller.uninstallHooksJSON(existingData: existing)
 
         if mutation.changed, fileManager.fileExists(atPath: hooksURL.path) {
@@ -107,9 +107,10 @@ public final class AntigravityHookInstallationManager: @unchecked Sendable {
         }
 
         if let contents = mutation.contents {
-            try contents.write(to: hooksURL, options: .atomic)
-        } else if fileManager.fileExists(atPath: hooksURL.path) {
-            try fileManager.removeItem(at: hooksURL)
+            try HookConfigFile.write(contents, to: hooksURL)
+        } else if mutation.changed {
+            // Our hooks were all it held. The file is still the user's.
+            try HookConfigFile.write("{}\n", to: hooksURL)
         }
 
         if fileManager.fileExists(atPath: manifestURL.path) {

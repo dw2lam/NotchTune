@@ -78,7 +78,7 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
         let settingsURL = claudeDirectory.appendingPathComponent("settings.json")
         let manifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.fileName)
         let legacyManifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.legacyFileName)
-        let existingSettings = try? Data(contentsOf: settingsURL)
+        let existingSettings = try HookConfigFile.read(settingsURL)
         let installedHooksBinaryURL = try ManagedHooksBinary.install(
             from: hooksBinaryURL,
             to: managedHooksBinaryURL,
@@ -95,7 +95,7 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
         }
 
         if let contents = mutation.contents {
-            try contents.write(to: settingsURL, options: .atomic)
+            try HookConfigFile.write(contents, to: settingsURL)
         }
 
         let manifest = ClaudeHookInstallerManifest(hookCommand: command)
@@ -117,7 +117,7 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
         let primaryManifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.fileName)
         let legacyManifestURL = claudeDirectory.appendingPathComponent(ClaudeHookInstallerManifest.legacyFileName)
         let manifest = try loadManifest(at: manifestURL)
-        let existingSettings = try? Data(contentsOf: settingsURL)
+        let existingSettings = try HookConfigFile.read(settingsURL)
         let mutation = try ClaudeHookInstaller.uninstallSettingsJSON(
             existingData: existingSettings,
             managedCommand: manifest?.hookCommand
@@ -128,9 +128,10 @@ public final class ClaudeHookInstallationManager: @unchecked Sendable {
         }
 
         if let contents = mutation.contents {
-            try contents.write(to: settingsURL, options: .atomic)
-        } else if fileManager.fileExists(atPath: settingsURL.path) {
-            try fileManager.removeItem(at: settingsURL)
+            try HookConfigFile.write(contents, to: settingsURL)
+        } else if mutation.changed {
+            // Our hooks were all it held. The file is still the user's.
+            try HookConfigFile.write("{}\n", to: settingsURL)
         }
 
         for candidate in [primaryManifestURL, legacyManifestURL] where fileManager.fileExists(atPath: candidate.path) {

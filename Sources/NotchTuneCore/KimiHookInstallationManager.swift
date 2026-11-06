@@ -30,8 +30,23 @@ public final class KimiHookInstallationManager: @unchecked Sendable {
     public let managedHooksBinaryURL: URL
     private let fileManager: FileManager
 
+    /// Kimi Code reads `~/.kimi-code/config.toml`; the older Kimi CLI read
+    /// `~/.kimi`. Whichever exists is the one in use, the new one winning
+    /// when both do, and a machine with neither gets the new one.
+    public static func resolvedDirectory(
+        home: URL = FileManager.default.homeDirectoryForCurrentUser,
+        fileManager: FileManager = .default
+    ) -> URL {
+        let current = home.appendingPathComponent(".kimi-code", isDirectory: true)
+        let legacy = home.appendingPathComponent(".kimi", isDirectory: true)
+        if !fileManager.fileExists(atPath: current.path), fileManager.fileExists(atPath: legacy.path) {
+            return legacy
+        }
+        return current
+    }
+
     public init(
-        kimiDirectory: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".kimi", isDirectory: true),
+        kimiDirectory: URL = KimiHookInstallationManager.resolvedDirectory(),
         managedHooksBinaryURL: URL = ManagedHooksBinary.defaultURL(),
         fileManager: FileManager = .default
     ) {
@@ -72,7 +87,7 @@ public final class KimiHookInstallationManager: @unchecked Sendable {
 
         let configURL = kimiDirectory.appendingPathComponent("config.toml")
         let manifestURL = kimiDirectory.appendingPathComponent(KimiHookInstallerManifest.fileName)
-        let existingContents = try? String(contentsOf: configURL, encoding: .utf8)
+        let existingContents = try HookConfigFile.readText(configURL)
         let installedBinaryURL = try ManagedHooksBinary.install(
             from: hooksBinaryURL,
             to: managedHooksBinaryURL,
@@ -89,7 +104,7 @@ public final class KimiHookInstallationManager: @unchecked Sendable {
         }
 
         if let contents = mutation.contents {
-            try contents.write(to: configURL, atomically: true, encoding: .utf8)
+            try HookConfigFile.write(contents, to: configURL)
         }
 
         let manifest = KimiHookInstallerManifest(hookCommand: command)
@@ -106,7 +121,7 @@ public final class KimiHookInstallationManager: @unchecked Sendable {
         let configURL = kimiDirectory.appendingPathComponent("config.toml")
         let manifestURL = kimiDirectory.appendingPathComponent(KimiHookInstallerManifest.fileName)
         let manifest = try loadManifest(at: manifestURL)
-        let existingContents = try? String(contentsOf: configURL, encoding: .utf8)
+        let existingContents = try HookConfigFile.readText(configURL)
 
         let mutation = KimiHookInstaller.uninstallConfigTOML(
             existingContents: existingContents,
@@ -118,9 +133,10 @@ public final class KimiHookInstallationManager: @unchecked Sendable {
         }
 
         if let contents = mutation.contents {
-            try contents.write(to: configURL, atomically: true, encoding: .utf8)
-        } else if fileManager.fileExists(atPath: configURL.path) {
-            try fileManager.removeItem(at: configURL)
+            try HookConfigFile.write(contents, to: configURL)
+        } else if mutation.changed {
+            // Our hooks were all it held. The file is still the user's.
+            try HookConfigFile.write("", to: configURL)
         }
 
         if fileManager.fileExists(atPath: manifestURL.path) {

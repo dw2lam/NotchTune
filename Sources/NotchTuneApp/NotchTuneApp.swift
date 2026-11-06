@@ -61,6 +61,9 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
             )
             harnessRuntimeMonitor.recordMilestone("modelStarted")
 
+            if harnessLaunchConfiguration.seedsSampleDoctor {
+                model.hooks.loadSampleDoctorReports()
+            }
             if harnessLaunchConfiguration.seedsSampleUsage {
                 model.seedHarnessSampleUsage()
             }

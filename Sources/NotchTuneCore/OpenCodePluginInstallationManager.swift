@@ -7,11 +7,23 @@ public struct OpenCodePluginInstallationStatus: Equatable, Sendable {
     public var pluginFileURL: URL
     public var manifestURL: URL
     public var pluginFilePresent: Bool
+    /// A leftover reference from older installs. Nothing needs it: OpenCode
+    /// loads the plugins directory by itself on both V1 and V2.
     public var pluginRegistered: Bool
+    /// The revision marker in the installed file; 0 for files older than it.
+    public var pluginRevision: Int
     public var manifest: OpenCodePluginInstallerManifest?
+    /// Why a stale reference in config.json couldn't be removed, when it
+    /// couldn't. The plugin itself is already gone; the user has to finish.
+    public var configCleanupProblem: String?
 
     public var isInstalled: Bool {
-        pluginFilePresent && pluginRegistered
+        pluginFilePresent
+    }
+
+    /// Older files are V1 only and silently don't load on OpenCode 2.
+    public var pluginIsCurrent: Bool {
+        pluginRevision >= OpenCodePluginInstallationManager.currentPluginRevision
     }
 
     public init(
@@ -22,7 +34,9 @@ public struct OpenCodePluginInstallationStatus: Equatable, Sendable {
         manifestURL: URL,
         pluginFilePresent: Bool,
         pluginRegistered: Bool,
-        manifest: OpenCodePluginInstallerManifest?
+        pluginRevision: Int = 0,
+        manifest: OpenCodePluginInstallerManifest?,
+        configCleanupProblem: String? = nil
     ) {
         self.openCodeConfigDirectory = openCodeConfigDirectory
         self.pluginsDirectory = pluginsDirectory
@@ -31,7 +45,9 @@ public struct OpenCodePluginInstallationStatus: Equatable, Sendable {
         self.manifestURL = manifestURL
         self.pluginFilePresent = pluginFilePresent
         self.pluginRegistered = pluginRegistered
+        self.pluginRevision = pluginRevision
         self.manifest = manifest
+        self.configCleanupProblem = configCleanupProblem
     }
 }
 
@@ -47,8 +63,21 @@ public struct OpenCodePluginInstallerManifest: Equatable, Codable, Sendable {
     }
 }
 
+public enum OpenCodePluginInstallationError: Error, LocalizedError, Equatable {
+    case configNotEditable(path: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case let .configNotEditable(path):
+            "\(path) still mentions the plugin, but it isn't plain JSON, so NotchTune left it for you to edit."
+        }
+    }
+}
+
 public final class OpenCodePluginInstallationManager: @unchecked Sendable {
     public static let pluginFileName = "open-island.js"
+    /// Keep in step with `notchtune-plugin-revision` in notchtune-opencode.js.
+    public static let currentPluginRevision = 2
 
     public let openCodeConfigDirectory: URL
     private let fileManager: FileManager
@@ -91,8 +120,20 @@ public final class OpenCodePluginInstallationManager: @unchecked Sendable {
             manifestURL: manifestURL,
             pluginFilePresent: pluginPresent,
             pluginRegistered: registered,
+            pluginRevision: Self.pluginRevision(in: try? Data(contentsOf: pluginFileURL)),
             manifest: manifest
         )
+    }
+
+    /// Reads the revision comment from a plugin file's first line.
+    public static func pluginRevision(in data: Data?) -> Int {
+        guard let data,
+              let firstLine = String(decoding: data.prefix(120), as: UTF8.self).split(separator: "\n").first,
+              let marker = firstLine.range(of: "notchtune-plugin-revision:") else {
+            return 0
+        }
+
+        return Int(firstLine[marker.upperBound...].trimmingCharacters(in: .whitespaces)) ?? 0
     }
 
     @discardableResult
@@ -102,8 +143,10 @@ public final class OpenCodePluginInstallationManager: @unchecked Sendable {
         // Write the JS plugin file
         try pluginSourceData.write(to: pluginFileURL, options: .atomic)
 
-        // Register in config.json
-        try registerPluginInConfig()
+        // Older installs registered the file in config.json, which only makes
+        // V1 load it twice. A config we can't parse keeps its entry: it's
+        // harmless here and not ours to rewrite.
+        _ = try? removeConfigReference()
 
         // Write manifest
         let manifest = OpenCodePluginInstallerManifest(pluginPath: pluginFileURL.path)
@@ -122,82 +165,67 @@ public final class OpenCodePluginInstallationManager: @unchecked Sendable {
             try fileManager.removeItem(at: pluginFileURL)
         }
 
-        // Remove from config.json
-        try unregisterPluginFromConfig()
+        // Remove from config.json. Failing here must not undo the uninstall,
+        // but a reference to a deleted file is the user's to know about.
+        var cleanupProblem: String?
+        do {
+            try removeConfigReference()
+        } catch {
+            cleanupProblem = error.localizedDescription
+        }
 
         // Remove manifest
         if fileManager.fileExists(atPath: manifestURL.path) {
             try fileManager.removeItem(at: manifestURL)
         }
 
-        return try status()
+        var result = try status()
+        result.configCleanupProblem = cleanupProblem
+        return result
     }
 
     // MARK: - Config.json manipulation
 
-    private func pluginFileReference() -> String {
-        "file://\(pluginFileURL.path)"
+    private func isOurReference(_ entry: Any) -> Bool {
+        guard let entry = entry as? String else {
+            return false
+        }
+
+        return entry == "file://\(pluginFileURL.path)" || entry.hasSuffix("/\(Self.pluginFileName)")
     }
 
     private func isPluginRegistered() -> Bool {
         guard let data = try? Data(contentsOf: configURL),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let plugins = json["plugin"] as? [String] else {
+              let plugins = json["plugin"] as? [Any] else {
             return false
         }
 
-        let ref = pluginFileReference()
-        return plugins.contains { $0 == ref || $0.hasSuffix("/\(Self.pluginFileName)") }
+        return plugins.contains(where: isOurReference)
     }
 
-    private func registerPluginInConfig() throws {
-        let ref = pluginFileReference()
-
-        var json: [String: Any]
-        if let data = try? Data(contentsOf: configURL),
-           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            json = existing
-        } else {
-            json = [:]
-        }
-
-        var plugins = (json["plugin"] as? [String]) ?? []
-
-        // Remove any existing Open Island plugin references
-        plugins.removeAll { $0 == ref || $0.hasSuffix("/\(Self.pluginFileName)") }
-        plugins.append(ref)
-
-        json["plugin"] = plugins
-
-        if fileManager.fileExists(atPath: configURL.path) {
-            try backupFile(at: configURL)
-        }
-
-        let outputData = try JSONSerialization.data(
-            withJSONObject: json,
-            options: [.prettyPrinted, .sortedKeys]
-        )
-        try outputData.write(to: configURL, options: .atomic)
-    }
-
-    private func unregisterPluginFromConfig() throws {
-        guard let data = try? Data(contentsOf: configURL),
-              var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              var plugins = json["plugin"] as? [String] else {
+    /// Drops our entry and leaves everything else in the list alone, including
+    /// the `[name, options]` tuples OpenCode accepts alongside strings.
+    private func removeConfigReference() throws {
+        guard let data = try HookConfigFile.read(configURL) else {
             return
         }
 
-        let ref = pluginFileReference()
-        let before = plugins.count
-        plugins.removeAll { $0 == ref || $0.hasSuffix("/\(Self.pluginFileName)") }
+        // OpenCode accepts JSONC, which JSONSerialization doesn't. Rewriting
+        // that from a failed parse would wipe it, so it stays as it is.
+        guard var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            guard String(decoding: data, as: UTF8.self).contains(Self.pluginFileName) else {
+                return
+            }
+            throw OpenCodePluginInstallationError.configNotEditable(path: configURL.path)
+        }
 
-        guard plugins.count != before else {
+        guard var plugins = json["plugin"] as? [Any], plugins.contains(where: isOurReference) else {
             return
         }
 
-        if fileManager.fileExists(atPath: configURL.path) {
-            try backupFile(at: configURL)
-        }
+        plugins.removeAll(where: isOurReference)
+        try backupFile(at: configURL)
 
         if plugins.isEmpty {
             json.removeValue(forKey: "plugin")
@@ -209,7 +237,7 @@ public final class OpenCodePluginInstallationManager: @unchecked Sendable {
             withJSONObject: json,
             options: [.prettyPrinted, .sortedKeys]
         )
-        try outputData.write(to: configURL, options: .atomic)
+        try HookConfigFile.write(outputData, to: configURL)
     }
 
     // MARK: - Helpers

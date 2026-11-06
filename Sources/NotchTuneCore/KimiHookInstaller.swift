@@ -24,8 +24,11 @@ public struct KimiHookFileMutation: Equatable, Sendable, Codable {
     }
 }
 
-/// Installs/uninstalls NotchTune's managed `[[hooks]]` entries in
-/// `~/.kimi/config.toml`.
+/// Installs/uninstalls NotchTune's managed `[[hooks]]` entries in Kimi's
+/// `config.toml` (`KimiHookInstallationManager.resolvedDirectory`).
+///
+/// `PermissionRequest` is deliberately absent: Kimi fires it for observers
+/// only, so a card shown for it couldn't approve anything.
 ///
 /// Kimi CLI's hook protocol is byte-compatible with Claude Code (same stdin
 /// JSON fields, same exit-code semantics), so the runtime side reuses
@@ -147,7 +150,7 @@ public enum KimiHookInstaller {
     }
 
     private static func isHooksHeader(_ line: String) -> Bool {
-        line.trimmingCharacters(in: .whitespaces) == "[[hooks]]"
+        line.trimmingCharacters(in: .whitespacesAndNewlines) == "[[hooks]]"
     }
 
     private static func endOfTomlBlock(startingAt start: Int, in lines: [String]) -> Int {
