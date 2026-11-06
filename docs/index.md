@@ -36,11 +36,6 @@ This index is the repository map for humans and coding agents. Read these files 
 
 - [docs/session-state-refactor.md](./session-state-refactor.md) for the session state management refactoring plan (process discovery as source of truth)
 
-## Watch / iOS
-
-- [docs/watch-notification-design.md](./watch-notification-design.md) for the Apple Watch notification design document
-- [docs/watch-notification-impl-plan.md](./watch-notification-impl-plan.md) for the Watch notification implementation plan
-
 ## Remote / SSH
 
 - [docs/ssh-setup.md](./ssh-setup.md) for connecting Open Island to Claude Code running on remote servers via SSH socket forwarding

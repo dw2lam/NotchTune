@@ -43,7 +43,6 @@ AppModel
 ├── playerManager: MusicPlayerManager    // Spotify/Apple Music via ScriptingBridge
 ├── myspaceStore: MyspaceStore           // thoughts/attachments/reminders (local JSON)
 ├── updateChecker: UpdateChecker         // Sparkle
-├── watchRelay: WatchNotificationRelay?  // Watch/phone HTTP+SSE companion
 └── bridgeServer/bridgeClient (private)  // socket server + observer stream
 ```
 
@@ -60,7 +59,6 @@ get `stateAccessor` closures instead of holding state.
 | Finished-task summary | `TaskSummary.swift` (`TaskTurnActivity`: one turn's files/commands/tests; `TaskActivityTracker`: per-session turns from Claude-format hooks + Codex's opt-in PostToolUse, owned by BridgeServer, reset on UserPromptSubmit, read at Stop into `SessionCompleted.taskSummary` → `AgentSession.taskSummary`; Codex's standard install is summarised from its rollout in `CodexRolloutReducer` (`exec_command_end` / `patch_apply_end`), delivered by the rollout watcher's completion; `TaskActivityClassifier` + `ShellCommandLine`: tool names per agent, segment-anchored test runners and whether the exit status is the runner's (pipes/`;`/`||` → just "ran"), exit codes). Persisted in the Claude/Codex registry records. UI: `Views/TaskSummaryLine.swift` (`TaskSummaryParts`) on `CompletionToastView`, done list rows, and the finished peek in `IslandLiveActivity` |
 | Per-agent integrations (pattern: `XHooks` payload + `XHookInstaller` + `XHookInstallationManager`) | Claude (`ClaudeHooks/…/ClaudeUsage/ClaudeSessionRegistry/ClaudeTranscriptDiscovery/ClaudeStatusLineInstallationManager`), Codex (`CodexHooks/CodexSessionTracking/CodexAppServer/CodexUsage`), Gemini, Cursor (+registry/transcript), Antigravity, Kimi (reuses Claude shape), OpenCode (plugin-based), Warp (`WarpProcessResolver/WarpSQLiteReader`). CC-forks Qoder/Qwen/Factory/CodeBuddy reuse the Claude installer with a different home dir |
 | Install/health shared | `HookHealthCheck.swift`, `HooksBinaryLocator.swift`, `HookSkipConfiguration.swift`, `LegacyInstallMigration.swift` (OpenIsland→NotchTune data migration; runs first in `NotchTuneMain.main`) |
-| Watch companion | `WatchHTTPEndpoint.swift`, `WatchNotificationRelay.swift` |
 
 ### NotchTuneApp
 | Subsystem | Files |
