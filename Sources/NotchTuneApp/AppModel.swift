@@ -267,6 +267,15 @@ final class AppModel {
         notice = nil
     }
 
+    /// Replies that couldn't be delivered, by session, for the reply field
+    /// to take back.
+    var unsentReplies: [String: String] = [:]
+
+    @ObservationIgnored
+    var replySender: @Sendable (String, AgentSession) -> Bool = { text, session in
+        TerminalTextSender.send(text, to: session)
+    }
+
     var lastActionMessage = "Waiting for agent hook events..." {
         didSet {
             guard lastActionMessage != oldValue else {
@@ -2480,21 +2489,29 @@ final class AppModel {
         )
     }
 
+    /// The card stays up until the reply has landed: a failed send puts the
+    /// text back in the field (`unsentReplies`) instead of losing it.
     func replyToSession(_ session: AgentSession, text: String) {
-        dismissNotificationSurfaceIfPresent(for: session.id)
-        synchronizeSelection()
-        refreshOverlayPlacementIfVisible()
-
+        unsentReplies[session.id] = nil
         lastActionMessage = "Sending reply to \(session.title)…"
 
-        Task { [weak self] in
+        Task { [weak self, replySender] in
             let success = await Task.detached(priority: .userInitiated) {
-                TerminalTextSender.send(text, to: session)
+                replySender(text, session)
             }.value
 
-            self?.lastActionMessage = success
-                ? "Sent reply to \(session.title)."
-                : "Failed to send reply to \(session.title)."
+            guard let self else { return }
+            guard success else {
+                self.unsentReplies[session.id] = text
+                self.lastActionMessage = "Failed to send reply to \(session.title)."
+                self.post(AppNotice(message: self.lang.t("notice.replyNotSent", session.completionReplyRecipientName)))
+                return
+            }
+
+            self.lastActionMessage = "Sent reply to \(session.title)."
+            self.dismissNotificationSurfaceIfPresent(for: session.id)
+            self.synchronizeSelection()
+            self.refreshOverlayPlacementIfVisible()
         }
     }
 

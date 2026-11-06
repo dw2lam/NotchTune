@@ -1614,6 +1614,7 @@ struct IslandPanelView: View {
                     onJump: { model.jumpToSession(session) },
                     onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
                         ? { model.replyToSession(session, text: $0) } : nil,
+                    unsentReply: model.unsentReplies[session.id],
                     onRotate: { model.rotateCompletionToast(forward: $0) },
                     onShowAll: { model.expandNotificationToSessionList(clearExpansion: true) }
                 )
@@ -1636,6 +1637,7 @@ struct IslandPanelView: View {
                     onAnswer: { model.answerQuestion(for: session.id, answer: $0) },
                     onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
                         ? { model.replyToSession(session, text: $0) } : nil,
+                    unsentReply: model.unsentReplies[session.id],
                     onJump: { model.jumpToSession(session) }
                 )
                 .id(notificationCardIdentity(for: session))
@@ -1679,6 +1681,7 @@ struct IslandPanelView: View {
                                 onAnswer: { model.answerQuestion(for: session.id, answer: $0) },
                                 onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
                                     ? { model.replyToSession(session, text: $0) } : nil,
+                                unsentReply: model.unsentReplies[session.id],
                                 onJump: { model.jumpToSession(session) },
                                 onDismiss: session.isRemote ? { model.dismissSession(session.id) } : nil
                             )
@@ -1731,6 +1734,7 @@ struct IslandPanelView: View {
                         onAnswer: { model.answerQuestion(for: session.id, answer: $0) },
                         onReply: TerminalTextSender.canReply(to: session, enabled: model.completionReplyEnabled)
                             ? { model.replyToSession(session, text: $0) } : nil,
+                        unsentReply: model.unsentReplies[session.id],
                         onJump: { model.jumpToSession(session) },
                         onDismiss: session.isRemote ? { model.dismissSession(session.id) } : nil
                     )
@@ -2429,6 +2433,8 @@ private struct IslandSessionRow: View {
     var onApprove: ((ApprovalAction) -> Void)?
     var onAnswer: ((QuestionPromptResponse) -> Void)?
     var onReply: ((String) -> Void)?
+    /// A reply that failed to send, back for the field.
+    var unsentReply: String?
     let onJump: () -> Void
     var onDismiss: (() -> Void)?
 
@@ -3215,6 +3221,9 @@ private struct IslandSessionRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .onChange(of: unsentReply, initial: true) { _, unsent in
+            if let unsent { replyText = unsent }
+        }
     }
 
     private func submitReply() {
