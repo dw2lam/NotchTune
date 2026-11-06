@@ -55,6 +55,13 @@ final class FakeMusicLibraryBackend: MusicLibraryBackend, @unchecked Sendable {
 
     func isPlayerRunning() -> Bool { running }
 
+    private var _automationAccess = MusicAutomationAccess.unknown
+    var access: MusicAutomationAccess {
+        get { locked { _automationAccess } }
+        set { locked { _automationAccess = newValue } }
+    }
+    func automationAccess() async -> MusicAutomationAccess { access }
+
     func fetchLibrary() async -> MusicLibrarySnapshot? {
         locked {
             guard _running, canReadLibrary else { return nil }
@@ -209,6 +216,74 @@ struct MusicLibraryBrowserTests {
         #expect(backend.played.map(\.id) == ["P1"])
         #expect(browser.isPlayerRunning)
         #expect(browser.statusMessage == nil)
+    }
+
+    @Test
+    func deniedAutomationIsNoticedAndItsFixClearsItOnItsOwn() async {
+        let backend = FakeMusicLibraryBackend(kind: .spotify, running: true)
+        backend.access = .denied
+        let browser = makeBrowser(player: .spotify, backend: backend)
+        var restored = 0
+        browser.onAutomationRestored = { restored += 1 }
+
+        await browser.refreshAutomationAccess()
+        #expect(browser.isAutomationDenied)
+        #expect(restored == 0)
+
+        // Still refused: nothing to re-read.
+        await browser.refreshAutomationAccess()
+        #expect(restored == 0)
+
+        backend.access = .allowed
+        await browser.refreshAutomationAccess()
+        #expect(browser.isAutomationDenied == false)
+        #expect(restored == 1)
+    }
+
+    @Test
+    func aRefusedPlayIsNotDeliveredAndUncoversTheDenial() async {
+        let backend = FakeMusicLibraryBackend(kind: .spotify, running: true)
+        backend.playSucceeds = false
+        backend.access = .denied
+        let browser = makeBrowser(player: .spotify, backend: backend)
+
+        browser.play(MusicLibraryItem(id: "spotify:track:1", kind: .song, title: "Song", subtitle: "Artist"))
+        await waitUntil { browser.isAutomationDenied }
+
+        #expect(browser.isAutomationDenied)
+        #expect(browser.deliveredPlayCount == 0)
+    }
+
+    @Test
+    func switchingPlayersForgetsTheDenial() async {
+        let backend = FakeMusicLibraryBackend(kind: .spotify, running: true)
+        backend.access = .denied
+        let browser = makeBrowser(player: .spotify, backend: backend)
+        await browser.refreshAutomationAccess()
+
+        browser.setPlayer(.appleMusic)
+
+        #expect(browser.isAutomationDenied == false)
+    }
+
+    @Test
+    func automationStatusesMapToAccess() {
+        #expect(MusicAutomationPermission.access(forStatus: noErr) == .allowed)
+        #expect(MusicAutomationPermission.access(forStatus: OSStatus(errAEEventNotPermitted)) == .denied)
+        // Not asked yet, or not running: not a refusal.
+        #expect(MusicAutomationPermission.access(forStatus: OSStatus(errAEEventWouldRequireUserConsent)) == .unknown)
+        #expect(MusicAutomationPermission.access(forStatus: OSStatus(procNotFound)) == .unknown)
+    }
+
+    @Test
+    func aFailedEventIsRememberedForCommandsWithNoReply() {
+        let recorder = MusicScriptingFailureRecorder()
+        #expect(recorder.didFail == false)
+
+        var event = AppleEvent()
+        _ = recorder.eventDidFail(&event, withError: CocoaError(.featureUnsupported))
+
+        #expect(recorder.didFail)
     }
 
     @Test

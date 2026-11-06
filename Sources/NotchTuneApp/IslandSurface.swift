@@ -3,19 +3,24 @@ import NotchTuneCore
 
 enum IslandSurface: Equatable {
     case sessionList(actionableSessionID: String? = nil)
+    /// `AppModel.notice` on its own: a toast that opened the closed notch.
+    case notice
 
     var sessionID: String? {
         switch self {
         case let .sessionList(actionableSessionID):
             actionableSessionID
+        case .notice:
+            nil
         }
     }
 
     var isNotificationCard: Bool {
-        sessionID != nil
+        sessionID != nil || self == .notice
     }
 
     func autoDismissesWhenPresentedAsNotification(session: AgentSession?) -> Bool {
+        if self == .notice { return true }
         guard sessionID != nil else { return false }
         return session?.phase == .completed
     }

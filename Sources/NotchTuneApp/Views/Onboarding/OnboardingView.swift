@@ -80,11 +80,12 @@ struct OnboardingView: View {
             await refreshNotificationAuthorization()
         }
         .task(id: step) {
-            // Live AX status while the permissions step is visible — the grant
+            // Live AX and notification status while the permissions step is visible — the grant
             // happens in System Settings, so poll to reflect it immediately.
             guard step == .permissions else { return }
             while !Task.isCancelled {
                 axTrusted = AXIsProcessTrusted()
+                await refreshNotificationAuthorization()
                 try? await Task.sleep(for: .seconds(1))
             }
         }

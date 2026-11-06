@@ -10,6 +10,8 @@ struct AppNotice: Equatable, Identifiable, Sendable {
         case openPrivacyPane(PrivacyPane)
         /// Opens NotchTune's Settings on the Setup tab.
         case openSetup
+        /// Starts the local bridge again.
+        case retryBridge
     }
 
     /// The anchors of `x-apple.systempreferences:com.apple.preference.security`.
@@ -18,7 +20,16 @@ struct AppNotice: Equatable, Identifiable, Sendable {
         case automation = "Privacy_Automation"
         case calendars = "Privacy_Calendars"
         case camera = "Privacy_Camera"
+
+        var settingsURL: URL? {
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?\(rawValue)")
+        }
     }
+
+    /// How long a notice stays on screen. One with an action outlives this:
+    /// its toast still folds away, but the banner waits in the open panel
+    /// until the user acts on it or dismisses it.
+    static let displayDuration: TimeInterval = 8
 
     let id: UUID
     /// One plain sentence: what went wrong, for this user, right now.
@@ -33,8 +44,50 @@ struct AppNotice: Equatable, Identifiable, Sendable {
         self.action = action
     }
 
+    /// macOS is refusing NotchTune's Apple Events for `appName`.
+    static func automationDenied(appName: String) -> AppNotice {
+        AppNotice(
+            message: "Allow NotchTune to control \(appName) to jump to the right tab.",
+            actionTitle: "Open Settings",
+            action: .openPrivacyPane(.automation)
+        )
+    }
+
     /// The same message posted again shouldn't restart the banner.
     func isSameProblem(as other: AppNotice) -> Bool {
         message == other.message && action == other.action
+    }
+
+    /// A notice with nothing to do about it goes away once it has been seen.
+    var clearsOnceSeen: Bool {
+        action == nil
+    }
+}
+
+/// How a notice reaches the user, given what the notch is doing.
+enum AppNoticeDelivery: Equatable, Sendable {
+    /// Not now: it follows when the notch is free (see `resolve`).
+    case wait
+    /// The panel is open, so the banner in it is enough.
+    case banner
+    /// The notch is closed: open it passively, as a toast of just the notice.
+    case toast
+
+    static func resolve(
+        status: NotchStatus,
+        openReason: NotchOpenReason?,
+        surface: IslandSurface,
+        isClosing: Bool,
+        isFullscreen: Bool
+    ) -> AppNoticeDelivery {
+        // Hidden for a full-screen app there is nothing to show it on, and
+        // opening under a close would pull the morph back open halfway.
+        if isFullscreen || isClosing { return .wait }
+        guard status == .opened else { return .toast }
+        // An agent's card, a file drag and the boot flourish keep the notch
+        // to themselves.
+        if openReason == .drag || openReason == .boot { return .wait }
+        if openReason == .notification, surface.sessionID != nil { return .wait }
+        return .banner
     }
 }

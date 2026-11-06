@@ -58,6 +58,11 @@ final class MusicLibraryBrowser {
     /// it was left. Written as the list scrolls; not observed (no re-render
     /// per scroll step).
     @ObservationIgnored var scrollAnchors: [Section: String] = [:]
+    /// macOS is refusing the running player's Apple Events, so the tab must
+    /// not claim "Nothing playing" while it may well be playing.
+    private(set) var isAutomationDenied = false
+    /// The player was just allowed: what it's playing can be read now.
+    @ObservationIgnored var onAutomationRestored: (() -> Void)?
     /// Short, transient feedback ("Couldn't start …", "Pinned …").
     private(set) var statusMessage: String?
     private(set) var artwork: [String: NSImage] = [:]
@@ -170,6 +175,7 @@ final class MusicLibraryBrowser {
         artwork = [:]
         artworkRequested = []
         scrollAnchors = [:]
+        isAutomationDenied = false
         isPlayerRunning = backend?.isPlayerRunning() ?? false
     }
 
@@ -248,6 +254,24 @@ final class MusicLibraryBrowser {
         if running { retryMissingArtwork() }
     }
 
+    // MARK: Automation permission
+
+    /// How often the open Music tab re-checks: the fix happens in System
+    /// Settings, so the tab should notice it without being reopened.
+    static let automationCheckInterval: Duration = .seconds(5)
+
+    func refreshAutomationAccess() async {
+        guard let backend else { return }
+        let kind = backend.kind
+        let access = await backend.automationAccess()
+        guard player == kind else { return }
+
+        let denied = access == .denied
+        guard denied != isAutomationDenied else { return }
+        isAutomationDenied = denied
+        if !denied { onAutomationRestored?() }
+    }
+
     // MARK: Search
 
     func beginSearch() {
@@ -301,6 +325,7 @@ final class MusicLibraryBrowser {
                 self.notePlayed(item)
             } else {
                 self.flash("Couldn't play \u{201C}\(item.title)\u{201D}")
+                await self.refreshAutomationAccess()
             }
             // A cold start, or a cached item that has gone missing: re-read.
             if (!wasRunning || !delivered), self.isPlayerRunning {

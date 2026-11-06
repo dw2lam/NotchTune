@@ -191,6 +191,13 @@ struct TerminalJumpService {
     /// derived from `knownApps` so it stays in sync automatically.
     private static let zellijParentTerminals = knownApps.map(\.bundleIdentifier)
 
+    /// Budget for a jump's helper CLIs (`open`, tmux, WezTerm, zellij…).
+    private static let commandTimeout: TimeInterval = 10
+    /// Budget for a jump's AppleScript. Far above the monitor's 3 s: the first
+    /// jump to a terminal holds osascript on macOS's Automation prompt until
+    /// the user answers it.
+    private static let scriptTimeout: TimeInterval = 20
+
     private static let ghosttyFocusSettleDelay = 0.08
     private static let ghosttyWindowActivationDelay = 0.04
     private static let ghosttyFocusAttempts = 3
@@ -257,6 +264,37 @@ struct TerminalJumpService {
     }
 
     func jump(to target: JumpTarget) throws -> String {
+        try jumpResult(to: target).message
+    }
+
+    func jumpResult(to target: JumpTarget) throws -> TerminalJumpResult {
+        var automationDeniedApp: String?
+        let message = try performJump(to: target) { automationDeniedApp = $0 }
+        return TerminalJumpResult(message: message, automationDeniedApp: automationDeniedApp)
+    }
+
+    /// A scripted jump is only the precise path. When it fails (Automation
+    /// denied, the app not answering) the caller still activates the app, so
+    /// the user at least lands in the right terminal.
+    private func scriptedJump(
+        in appName: String,
+        onAutomationDenied: (String) -> Void,
+        _ jump: () throws -> Bool
+    ) -> Bool {
+        do {
+            return try jump()
+        } catch {
+            if (error as? TerminalJumpError)?.isAutomationDenied == true {
+                onAutomationDenied(appName)
+            }
+            return false
+        }
+    }
+
+    private func performJump(
+        to target: JumpTarget,
+        onAutomationDenied: (String) -> Void
+    ) throws -> String {
         // tmux sessions: switch pane first, then use the terminal-specific
         // jump to focus the correct window/tab (not just activate the app).
         if let tmuxTarget = target.tmuxTarget, !tmuxTarget.isEmpty {
@@ -269,15 +307,15 @@ struct TerminalJumpService {
             if let descriptor {
                 switch descriptor.bundleIdentifier {
                 case "com.mitchellh.ghostty":
-                    if try jumpToGhosttyTerminal(target) {
+                    if scriptedJump(in: "Ghostty", onAutomationDenied: onAutomationDenied, { try jumpToGhosttyTerminal(target) }) {
                         return "Focused the matching tmux pane in Ghostty."
                     }
                 case "com.googlecode.iterm2":
-                    if try jumpToITermSession(target) {
+                    if scriptedJump(in: "iTerm", onAutomationDenied: onAutomationDenied, { try jumpToITermSession(target) }) {
                         return "Focused the matching tmux pane in iTerm."
                     }
                 case "com.apple.Terminal":
-                    if try jumpToTerminalTab(target) {
+                    if scriptedJump(in: "Terminal", onAutomationDenied: onAutomationDenied, { try jumpToTerminalTab(target) }) {
                         return "Focused the matching tmux pane in Terminal."
                     }
                 default:
@@ -353,7 +391,7 @@ struct TerminalJumpService {
                 try openAction(["-b", "com.openai.codex"])
                 return "Activated Codex.app."
             case "com.googlecode.iterm2":
-                if try jumpToITermSession(target) {
+                if scriptedJump(in: "iTerm", onAutomationDenied: onAutomationDenied, { try jumpToITermSession(target) }) {
                     return "Focused the matching iTerm session."
                 }
             case "com.cmuxterm.app":
@@ -361,11 +399,11 @@ struct TerminalJumpService {
                     return "Focused the matching cmux terminal."
                 }
             case "com.mitchellh.ghostty":
-                if try jumpToGhosttyTerminal(target) {
+                if scriptedJump(in: "Ghostty", onAutomationDenied: onAutomationDenied, { try jumpToGhosttyTerminal(target) }) {
                     return "Focused the matching Ghostty terminal."
                 }
             case "com.apple.Terminal":
-                if try jumpToTerminalTab(target) {
+                if scriptedJump(in: "Terminal", onAutomationDenied: onAutomationDenied, { try jumpToTerminalTab(target) }) {
                     return "Focused the matching Terminal tab."
                 }
             case "dev.warp.Warp-Stable":
@@ -636,25 +674,7 @@ struct TerminalJumpService {
     /// Run a tmux command and return its stdout (nil on failure).
     /// Uses the same direct-exec pattern as ActiveAgentProcessDiscovery.commandOutput.
     private func runTmuxCommand(tmuxPath: String, socketArgs: [String], args: [String]) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: tmuxPath)
-        process.arguments = socketArgs + args
-
-        let outPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = FileHandle.nullDevice
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-
-            guard process.terminationStatus == 0 else { return nil }
-
-            return String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        } catch {
-            return nil
-        }
+        Self.commandOutput(tmuxPath, arguments: socketArgs + args)?.text
     }
 
     private func resolveTmuxPath() -> String? {
@@ -669,17 +689,7 @@ struct TerminalJumpService {
         }
 
         // Fallback to 'which'
-        let whichTask = Process()
-        whichTask.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        whichTask.arguments = ["tmux"]
-        let pipe = Pipe()
-        whichTask.standardOutput = pipe
-        whichTask.standardError = FileHandle.nullDevice
-        guard (try? whichTask.run()) != nil else { return nil }
-        whichTask.waitUntilExit()
-        guard whichTask.terminationStatus == 0 else { return nil }
-        let path = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let path = Self.commandOutput("/usr/bin/which", arguments: ["tmux"])?.text ?? ""
         return path.isEmpty ? nil : path
     }
 
@@ -714,24 +724,18 @@ struct TerminalJumpService {
         }
 
         // Switch to the tab (1-indexed).
-        let goToTab = Process()
-        goToTab.executableURL = URL(fileURLWithPath: zellijPath)
+        var arguments = ["action", "go-to-tab", "\(tabPosition + 1)"]
         if let sessionName, !sessionName.isEmpty {
-            goToTab.arguments = ["--session", sessionName, "action", "go-to-tab", "\(tabPosition + 1)"]
-        } else {
-            goToTab.arguments = ["action", "go-to-tab", "\(tabPosition + 1)"]
+            arguments = ["--session", sessionName] + arguments
         }
-        goToTab.standardOutput = FileHandle.nullDevice
-        goToTab.standardError = FileHandle.nullDevice
-        guard (try? goToTab.run()) != nil else { return false }
-        goToTab.waitUntilExit()
+        let switched = Self.commandOutput(zellijPath, arguments: arguments) != nil
 
         // Activate the parent terminal app window.
         if let parentBundleID = Self.zellijParentTerminals.first(where: { appRunningChecker($0) }) {
             try? openAction(["-b", parentBundleID])
         }
 
-        return goToTab.terminationStatus == 0
+        return switched
     }
 
     private func resolveZellijPath() -> String? {
@@ -745,17 +749,7 @@ struct TerminalJumpService {
         }
 
         // Fallback: which.
-        let whichTask = Process()
-        whichTask.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        whichTask.arguments = ["zellij"]
-        let pipe = Pipe()
-        whichTask.standardOutput = pipe
-        whichTask.standardError = FileHandle.nullDevice
-        guard (try? whichTask.run()) != nil else { return nil }
-        whichTask.waitUntilExit()
-        guard whichTask.terminationStatus == 0 else { return nil }
-        let path = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let path = Self.commandOutput("/usr/bin/which", arguments: ["zellij"])?.text ?? ""
         return path.isEmpty ? nil : path
     }
 
@@ -775,24 +769,14 @@ struct TerminalJumpService {
         sessionName: String?,
         paneID: Int
     ) -> Int? {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: zellijPath)
         var args: [String] = []
         if let sessionName, !sessionName.isEmpty {
             args += ["--session", sessionName]
         }
         args += ["action", "list-panes", "--json", "--tab"]
-        task.arguments = args
 
-        let outputPipe = Pipe()
-        task.standardOutput = outputPipe
-        task.standardError = FileHandle.nullDevice
-        guard (try? task.run()) != nil else { return nil }
-        task.waitUntilExit()
-        guard task.terminationStatus == 0 else { return nil }
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        guard let panes = try? JSONDecoder().decode([ZellijPaneInfo].self, from: data) else {
+        guard let output = Self.commandOutput(zellijPath, arguments: args),
+              let panes = try? JSONDecoder().decode([ZellijPaneInfo].self, from: output.standardOutput) else {
             return nil
         }
 
@@ -979,22 +963,8 @@ struct TerminalJumpService {
         }
 
         // Fallback: try PATH via /usr/bin/which.
-        let whichTask = Process()
-        whichTask.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        whichTask.arguments = [cliName]
-        let pipe = Pipe()
-        whichTask.standardOutput = pipe
-        whichTask.standardError = FileHandle.nullDevice
-        if let _ = try? whichTask.run() {
-            whichTask.waitUntilExit()
-            if whichTask.terminationStatus == 0 {
-                let path = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                if !path.isEmpty { return path }
-            }
-        }
-
-        return nil
+        let path = Self.commandOutput("/usr/bin/which", arguments: [cliName])?.text ?? ""
+        return path.isEmpty ? nil : path
     }
 
     /// Strip `file://` scheme and percent-encoding from a WezTerm/Kaku cwd URL.
@@ -1082,41 +1052,14 @@ struct TerminalJumpService {
     }
 
     private func weztermFamilyListPanes(cliPath: String) -> [WeztermFamilyPane]? {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: cliPath)
-        task.arguments = ["cli", "list", "--format", "json"]
-
-        let outputPipe = Pipe()
-        task.standardOutput = outputPipe
-        task.standardError = FileHandle.nullDevice
-
-        do {
-            try task.run()
-            task.waitUntilExit()
-        } catch {
+        guard let output = Self.commandOutput(cliPath, arguments: ["cli", "list", "--format", "json"]) else {
             return nil
         }
-
-        guard task.terminationStatus == 0 else { return nil }
-
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        return try? JSONDecoder().decode([WeztermFamilyPane].self, from: data)
+        return try? JSONDecoder().decode([WeztermFamilyPane].self, from: output.standardOutput)
     }
 
     private func weztermFamilyActivatePane(cliPath: String, paneID: Int) -> Bool {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: cliPath)
-        task.arguments = ["cli", "activate-pane", "--pane-id", "\(paneID)"]
-        task.standardOutput = FileHandle.nullDevice
-        task.standardError = FileHandle.nullDevice
-
-        do {
-            try task.run()
-            task.waitUntilExit()
-            return task.terminationStatus == 0
-        } catch {
-            return false
-        }
+        Self.commandOutput(cliPath, arguments: ["cli", "activate-pane", "--pane-id", "\(paneID)"]) != nil
     }
 
     private func jumpToWarpPane(_ target: JumpTarget) throws -> String {
@@ -1247,57 +1190,35 @@ struct TerminalJumpService {
     }
 
     private static func defaultOpenAction(arguments: [String]) throws {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        task.arguments = arguments
+        let output = try TimedProcess.run("/usr/bin/open", arguments: arguments, timeout: commandTimeout)
 
-        try task.run()
-        task.waitUntilExit()
-
-        guard task.terminationStatus == 0 else {
+        guard output.status == 0 else {
             throw TerminalJumpError.openFailed(arguments)
         }
     }
 
     private static func defaultAppleScriptRunner(script: String) throws -> String {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        task.arguments = ["-e", script]
+        let output = try TimedProcess.run("/usr/bin/osascript", arguments: ["-e", script], timeout: scriptTimeout)
 
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        task.standardOutput = outputPipe
-        task.standardError = errorPipe
-
-        try task.run()
-        task.waitUntilExit()
-
-        let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        guard task.terminationStatus == 0 else {
-            let stderr = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard output.status == 0 else {
+            let stderr = output.errorText
             throw TerminalJumpError.appleScriptFailed(stderr.isEmpty ? script : stderr)
         }
 
-        return output
+        return output.text
     }
 
     private static func defaultProcessRunner(executable: String, arguments: [String]) -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [executable] + arguments
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        commandOutput("/usr/bin/env", arguments: [executable] + arguments) != nil
+    }
 
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch {
-            return false
+    /// What a helper CLI printed, if it ran and exited cleanly in time.
+    private static func commandOutput(_ executable: String, arguments: [String]) -> TimedProcess.Output? {
+        guard let output = try? TimedProcess.run(executable, arguments: arguments, timeout: commandTimeout),
+              output.status == 0 else {
+            return nil
         }
+        return output
     }
 
     private func escapeAppleScript(_ value: String?) -> String {
@@ -1311,10 +1232,25 @@ struct TerminalJumpService {
     }
 }
 
+/// What a jump did, for the log and for the user.
+struct TerminalJumpResult: Equatable, Sendable {
+    var message: String
+    /// The app macOS wouldn't let NotchTune script. The jump still fell back
+    /// to bringing it forward, but can't reach the right tab until allowed.
+    var automationDeniedApp: String?
+}
+
 enum TerminalJumpError: Error, LocalizedError {
     case unsupportedTerminal(String)
     case openFailed([String])
     case appleScriptFailed(String)
+
+    /// osascript's report of errAEEventNotPermitted (the user said no in
+    /// System Settings) or errAEEventWouldRequireUserConsent.
+    var isAutomationDenied: Bool {
+        guard case let .appleScriptFailed(message) = self else { return false }
+        return message.contains("-1743") || message.contains("-1744")
+    }
 
     var errorDescription: String? {
         switch self {

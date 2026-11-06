@@ -67,6 +67,13 @@ struct MusicPanelView: View {
             .onReceive(NotificationCenter.default.publisher(for: .notchTuneHarnessToggleMusicLibrary)) { _ in
                 setBrowsingLibrary(!isBrowsingLibrary)
             }
+            // Only while the tab is on screen, and off the player's 1s poll.
+            .task(id: playerManager.playerKind) {
+                while !Task.isCancelled {
+                    await playerManager.library.refreshAutomationAccess()
+                    try? await Task.sleep(for: MusicLibraryBrowser.automationCheckInterval)
+                }
+            }
         } else {
             musicDisabledPlaceholder
         }
@@ -93,7 +100,9 @@ struct MusicPanelView: View {
     /// "Nothing playing" chooser. Reading the library's (observable) running
     /// flag re-evaluates this when the player quits or launches.
     private var showsNowPlaying: Bool {
-        playerManager.hasNowPlaying && playerManager.library.isPlayerRunning
+        playerManager.hasNowPlaying
+            && playerManager.library.isPlayerRunning
+            && !playerManager.library.isAutomationDenied
     }
 
     private var musicControls: some View {

@@ -363,7 +363,7 @@ struct AppModelSessionListTests {
         let now = Date(timeIntervalSince1970: 2_000)
         let model = AppModel { _ in
             Thread.sleep(forTimeInterval: 0.25)
-            return "Focused the matching Ghostty terminal."
+            return TerminalJumpResult(message: "Focused the matching Ghostty terminal.")
         }
         model.notchStatus = .opened
         model.notchOpenReason = .click

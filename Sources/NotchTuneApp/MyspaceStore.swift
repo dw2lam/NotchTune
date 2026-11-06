@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 @preconcurrency import UserNotifications
@@ -58,6 +59,43 @@ struct MyspaceThought: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// A delete the user can still take back. The entry has left the list and the
+/// index already; its files wait in `Trash/` until the undo window closes,
+/// and a launch clears anything a quit or crash left there.
+struct MyspacePendingDeletion: Equatable, Identifiable, Sendable {
+    enum Item: Equatable, Sendable {
+        case thought(MyspaceThought)
+        case attachment(MyspaceAttachment, thoughtID: UUID, index: Int)
+    }
+
+    let id: UUID
+    let item: Item
+
+    /// How the undo bar names what went.
+    var title: String {
+        switch item {
+        case let .thought(thought):
+            if !thought.text.isEmpty { return thought.text }
+            return thought.attachments.count == 1
+                ? thought.attachments[0].originalFilename
+                : "\(thought.attachments.count) files"
+        case let .attachment(attachment, _, _):
+            return attachment.originalFilename
+        }
+    }
+}
+
+/// Whether a timed reminder can reach the user.
+enum MyspaceNotificationStatus: Equatable, Sendable {
+    case allowed
+    /// Refused in System Settings: reminders stay in the list but never alert.
+    case off
+    /// macOS will ask the first time a reminder is scheduled.
+    case notDetermined
+    /// No bundle to ask about (`swift run`, tests).
+    case unavailable
+}
+
 struct MyspaceDayGroup: Equatable, Identifiable, Sendable {
     let day: Date
     let thoughts: [MyspaceThought]
@@ -67,11 +105,14 @@ struct MyspaceDayGroup: Equatable, Identifiable, Sendable {
 
 enum MyspaceStoreError: LocalizedError {
     case emptyThought
+    case reminderTimeHasPassed
 
     var errorDescription: String? {
         switch self {
         case .emptyThought:
             "Add a thought or at least one attachment."
+        case .reminderTimeHasPassed:
+            "That time has passed."
         }
     }
 }
@@ -81,24 +122,46 @@ enum MyspaceStoreError: LocalizedError {
 final class MyspaceStore {
     private(set) var thoughts: [MyspaceThought] = []
     private(set) var lastErrorMessage: String?
+    /// The last delete, while it can still be undone.
+    private(set) var pendingDeletion: MyspacePendingDeletion?
+    private(set) var notificationStatus: MyspaceNotificationStatus = .unavailable
+    /// Set when launch found the index damaged, for `AppModel` to tell the user.
+    private(set) var loadProblem: String?
 
     @ObservationIgnored private let fileManager: FileManager
     @ObservationIgnored private let rootURL: URL
-    @ObservationIgnored private let indexURL: URL
+    @ObservationIgnored private let index: RecoverableJSONFile
     @ObservationIgnored private let attachmentsURL: URL
+    @ObservationIgnored private let trashURL: URL
     @ObservationIgnored private let notificationsEnabled: Bool
+    @ObservationIgnored private let undoWindow: Duration
+    @ObservationIgnored private let notificationStatusProvider: @Sendable () async -> MyspaceNotificationStatus
+    @ObservationIgnored private var undoTask: Task<Void, Never>?
 
     init(
         rootURL: URL = MyspaceStore.defaultRootURL(),
         fileManager: FileManager = .default,
-        notificationsEnabled: Bool = true
+        notificationsEnabled: Bool = true,
+        undoWindow: Duration = .seconds(10),
+        notificationStatusProvider: @escaping @Sendable () async -> MyspaceNotificationStatus = {
+            await MyspaceReminderService.notificationStatus()
+        }
     ) {
         self.fileManager = fileManager
         self.rootURL = rootURL
-        self.indexURL = rootURL.appendingPathComponent("thoughts.json")
+        self.index = RecoverableJSONFile(
+            url: rootURL.appendingPathComponent("thoughts.json"),
+            fileManager: fileManager
+        )
         self.attachmentsURL = rootURL.appendingPathComponent("Attachments", isDirectory: true)
+        self.trashURL = rootURL.appendingPathComponent("Trash", isDirectory: true)
         self.notificationsEnabled = notificationsEnabled
+        self.undoWindow = undoWindow
+        self.notificationStatusProvider = notificationStatusProvider
         load()
+        // Pending when the app quit or crashed: the index no longer lists any
+        // of it, so this was the user's delete taking effect.
+        try? fileManager.removeItem(at: trashURL)
     }
 
     var activeReminders: [MyspaceThought] {
@@ -148,17 +211,57 @@ final class MyspaceStore {
         guard !trimmedText.isEmpty || !attachmentURLs.isEmpty else {
             throw MyspaceStoreError.emptyThought
         }
+        // A trigger in the past never fires: better to say so now than to
+        // list a reminder that will stay quiet.
+        if let reminderAt, reminderAt <= .now {
+            throw MyspaceStoreError.reminderTimeHasPassed
+        }
 
         let thoughtID = UUID()
         let importedAttachments = try importAttachments(attachmentURLs, thoughtID: thoughtID)
-        let thought = MyspaceThought(
+        return try insertThought(
             id: thoughtID,
             text: trimmedText,
+            attachments: importedAttachments,
+            reminderAt: reminderAt,
+            isReminder: isReminder ?? (reminderAt != nil)
+        )
+    }
+
+    /// Off the main thread: a drop can be gigabytes, and the copy held the
+    /// notch and every other surface until it finished.
+    @discardableResult
+    func holdFiles(_ urls: [URL]) async throws -> MyspaceThought {
+        guard !urls.isEmpty else { throw MyspaceStoreError.emptyThought }
+
+        let thoughtID = UUID()
+        let directory = attachmentDirectory(for: thoughtID)
+        do {
+            let attachments = try await Task.detached(priority: .userInitiated) {
+                try Self.copyAttachments(urls, into: directory)
+            }.value
+            return try insertThought(id: thoughtID, text: "", attachments: attachments, reminderAt: nil, isReminder: false)
+        } catch {
+            lastErrorMessage = error.localizedDescription
+            throw error
+        }
+    }
+
+    private func insertThought(
+        id: UUID,
+        text: String,
+        attachments: [MyspaceAttachment],
+        reminderAt: Date?,
+        isReminder: Bool
+    ) throws -> MyspaceThought {
+        let thought = MyspaceThought(
+            id: id,
+            text: text,
             createdAt: .now,
-            isReminder: isReminder ?? (reminderAt != nil),
+            isReminder: isReminder,
             reminderAt: reminderAt,
             isReminderCompleted: false,
-            attachments: importedAttachments
+            attachments: attachments
         )
 
         thoughts.insert(thought, at: 0)
@@ -170,32 +273,167 @@ final class MyspaceStore {
             }
             return thought
         } catch {
-            thoughts.removeAll { $0.id == thoughtID }
-            try? fileManager.removeItem(at: attachmentDirectory(for: thoughtID))
+            thoughts.removeAll { $0.id == id }
+            try? fileManager.removeItem(at: attachmentDirectory(for: id))
             lastErrorMessage = error.localizedDescription
             throw error
         }
     }
 
-    @discardableResult
-    func holdFiles(_ urls: [URL]) throws -> MyspaceThought {
-        try addThought(text: "", attachmentURLs: urls)
-    }
+    // MARK: Deleting
 
+    /// Takes the thought out now; its attachments go for good once the undo
+    /// window closes.
     func deleteThought(id: UUID) {
         guard let index = thoughts.firstIndex(where: { $0.id == id }) else { return }
         let removed = thoughts.remove(at: index)
         do {
             try persist()
-            try? fileManager.removeItem(at: attachmentDirectory(for: id))
-            if notificationsEnabled {
-                MyspaceReminderService.cancel(thoughtID: id)
-            }
             lastErrorMessage = nil
         } catch {
             thoughts.insert(removed, at: index)
             lastErrorMessage = error.localizedDescription
+            return
         }
+
+        if notificationsEnabled {
+            MyspaceReminderService.cancel(thoughtID: id)
+        }
+        beginUndoWindow(for: .thought(removed), files: attachmentDirectory(for: id))
+    }
+
+    /// Removes one file from a thought. A thought with nothing left in it
+    /// would be invisible (text-less thoughts only show their files), so
+    /// taking its last file takes the thought.
+    func deleteAttachment(id attachmentID: UUID, fromThought thoughtID: UUID) {
+        guard let thoughtIndex = thoughts.firstIndex(where: { $0.id == thoughtID }),
+              let index = thoughts[thoughtIndex].attachments.firstIndex(where: { $0.id == attachmentID }) else {
+            return
+        }
+
+        let thought = thoughts[thoughtIndex]
+        if thought.text.isEmpty, thought.attachments.count == 1, !thought.isReminder {
+            deleteThought(id: thoughtID)
+            return
+        }
+
+        let removed = thoughts[thoughtIndex].attachments.remove(at: index)
+        do {
+            try persist()
+            lastErrorMessage = nil
+        } catch {
+            thoughts[thoughtIndex].attachments.insert(removed, at: index)
+            lastErrorMessage = error.localizedDescription
+            return
+        }
+
+        beginUndoWindow(
+            for: .attachment(removed, thoughtID: thoughtID, index: index),
+            files: attachmentURL(for: removed, thoughtID: thoughtID)
+        )
+    }
+
+    /// Puts the last delete back, files and reminder included.
+    func undoDeletion() {
+        guard let deletion = pendingDeletion else { return }
+        undoTask?.cancel()
+        undoTask = nil
+        pendingDeletion = nil
+
+        let trashed = trashFolder(for: deletion.id)
+        switch deletion.item {
+        case let .thought(thought):
+            restore(from: trashed, to: attachmentDirectory(for: thought.id))
+            let position = thoughts.firstIndex { $0.createdAt < thought.createdAt } ?? thoughts.count
+            thoughts.insert(thought, at: position)
+            persistRestoring { self.thoughts.removeAll { $0.id == thought.id } }
+            if notificationsEnabled, !thought.isReminderCompleted,
+               let reminderAt = thought.reminderAt, reminderAt > .now {
+                MyspaceReminderService.schedule(thought: thought, at: reminderAt)
+            }
+        case let .attachment(attachment, thoughtID, index):
+            guard let thoughtIndex = thoughts.firstIndex(where: { $0.id == thoughtID }) else { break }
+            restore(from: trashed, to: attachmentURL(for: attachment, thoughtID: thoughtID))
+            let position = min(index, thoughts[thoughtIndex].attachments.count)
+            thoughts[thoughtIndex].attachments.insert(attachment, at: position)
+            persistRestoring { self.thoughts[thoughtIndex].attachments.removeAll { $0.id == attachment.id } }
+        }
+        try? fileManager.removeItem(at: trashed)
+    }
+
+    private func persistRestoring(rollback: () -> Void) {
+        do {
+            try persist()
+            lastErrorMessage = nil
+        } catch {
+            rollback()
+            lastErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// Only one delete is undoable at a time: the one before it goes for
+    /// good now, as it would have a few seconds later.
+    private func beginUndoWindow(for item: MyspacePendingDeletion.Item, files: URL) {
+        finishPendingDeletion()
+
+        let deletion = MyspacePendingDeletion(id: UUID(), item: item)
+        if fileManager.fileExists(atPath: files.path) {
+            let folder = trashFolder(for: deletion.id)
+            try? fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+            try? fileManager.moveItem(at: files, to: folder.appendingPathComponent(Self.trashedItemName))
+        }
+
+        pendingDeletion = deletion
+        let window = undoWindow
+        undoTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: window)
+            } catch {
+                return
+            }
+            self?.finishPendingDeletion()
+        }
+    }
+
+    /// The undo window closed: the delete becomes permanent.
+    func finishPendingDeletion() {
+        undoTask?.cancel()
+        undoTask = nil
+        guard let deletion = pendingDeletion else { return }
+        pendingDeletion = nil
+        try? fileManager.removeItem(at: trashFolder(for: deletion.id))
+    }
+
+    private static let trashedItemName = "item"
+
+    private func restore(from folder: URL, to destination: URL) {
+        let trashed = folder.appendingPathComponent(Self.trashedItemName)
+        guard fileManager.fileExists(atPath: trashed.path) else { return }
+        try? fileManager.createDirectory(
+            at: destination.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try? fileManager.moveItem(at: trashed, to: destination)
+    }
+
+    private func trashFolder(for deletionID: UUID) -> URL {
+        trashURL.appendingPathComponent(deletionID.uuidString, isDirectory: true)
+    }
+
+    // MARK: Notifications
+
+    /// Read fresh each time: it's changed in System Settings, behind our back.
+    func refreshNotificationStatus() async {
+        let status = await notificationStatusProvider()
+        if status != notificationStatus {
+            notificationStatus = status
+        }
+    }
+
+    /// Timed reminders are waiting on a notification that can't arrive.
+    var hasRemindersThatCantAlert: Bool {
+        notificationStatus == .off
+            && activeReminders.contains { ($0.reminderAt ?? .distantPast) > .now }
     }
 
     func toggleReminderCompleted(id: UUID) {
@@ -246,41 +484,79 @@ final class MyspaceStore {
                 at: attachmentsURL,
                 withIntermediateDirectories: true
             )
-            guard fileManager.fileExists(atPath: indexURL.path) else { return }
-            let data = try Data(contentsOf: indexURL)
-            thoughts = try JSONDecoder.myspace.decode([MyspaceThought].self, from: data)
-                .sorted { $0.createdAt > $1.createdAt }
         } catch {
             lastErrorMessage = error.localizedDescription
         }
+
+        let outcome = index.load(
+            decode: { data in
+                RecoverableJSONFile.survivors(
+                    of: try JSONDecoder.myspace.decode([LossyElement<MyspaceThought>].self, from: data)
+                )
+            },
+            merge: { survivors, backup in
+                let kept = Set(survivors.map(\.id))
+                return survivors + backup.filter { !kept.contains($0.id) }
+            }
+        )
+
+        switch outcome {
+        case .missing:
+            break
+        case let .intact(loaded):
+            thoughts = loaded.sorted { $0.createdAt > $1.createdAt }
+        case let .recovered(loaded):
+            thoughts = loaded.sorted { $0.createdAt > $1.createdAt }
+            // The damaged file is gone from its place: without this the next
+            // launch would find no index at all.
+            try? persist()
+            reportLoadProblem("Some of your Myspace notes were damaged. NotchTune saved what it could and kept the old file.")
+        case .lost:
+            reportLoadProblem("Your Myspace notes couldn't be read. NotchTune kept the damaged file beside them.")
+        }
+    }
+
+    private func reportLoadProblem(_ message: String) {
+        loadProblem = message
+        lastErrorMessage = message
     }
 
     private func persist() throws {
         try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
-        let data = try JSONEncoder.myspace.encode(thoughts)
-        try data.write(to: indexURL, options: .atomic)
+        try index.write(JSONEncoder.myspace.encode(thoughts))
     }
 
     private func importAttachments(_ urls: [URL], thoughtID: UUID) throws -> [MyspaceAttachment] {
         guard !urls.isEmpty else { return [] }
-        let destinationDirectory = attachmentDirectory(for: thoughtID)
-        try fileManager.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
+        return try Self.copyAttachments(urls, into: attachmentDirectory(for: thoughtID))
+    }
 
-        return try urls.map { sourceURL in
-            let accessed = sourceURL.startAccessingSecurityScopedResource()
-            defer {
-                if accessed { sourceURL.stopAccessingSecurityScopedResource() }
+    /// All or nothing: a failure partway leaves no copied files behind, since
+    /// no thought will ever point at them.
+    private nonisolated static func copyAttachments(_ urls: [URL], into directory: URL) throws -> [MyspaceAttachment] {
+        let fileManager = FileManager()
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        do {
+            return try urls.map { sourceURL in
+                let accessed = sourceURL.startAccessingSecurityScopedResource()
+                defer {
+                    if accessed { sourceURL.stopAccessingSecurityScopedResource() }
+                }
+
+                let originalFilename = sourceURL.lastPathComponent
+                let storedFilename = "\(UUID().uuidString)-\(originalFilename)"
+                let destinationURL = directory.appendingPathComponent(storedFilename)
+                try fileManager.copyItem(at: sourceURL, to: destinationURL)
+                return MyspaceAttachment(
+                    id: UUID(),
+                    originalFilename: originalFilename,
+                    storedFilename: storedFilename
+                )
             }
-
-            let originalFilename = sourceURL.lastPathComponent
-            let storedFilename = "\(UUID().uuidString)-\(originalFilename)"
-            let destinationURL = destinationDirectory.appendingPathComponent(storedFilename)
-            try fileManager.copyItem(at: sourceURL, to: destinationURL)
-            return MyspaceAttachment(
-                id: UUID(),
-                originalFilename: originalFilename,
-                storedFilename: storedFilename
-            )
+        } catch {
+            try? fileManager.removeItem(at: directory)
+            throw error
         }
     }
 
@@ -297,16 +573,28 @@ extension MyspaceStore {
     /// schedules no notifications, and a marketing capture
     /// (`NOTCHTUNE_HARNESS_SHOWCASE=1`) a few made-up thoughts and reminders,
     /// plus the files in `NOTCHTUNE_HARNESS_MYSPACE_FILES=<path>:<path>`.
+    /// `NOTCHTUNE_HARNESS_NOTIFICATIONS=off` reports notifications as refused;
+    /// `NOTCHTUNE_HARNESS_MYSPACE_UNDO=1` starts with a delete to take back.
     static func forLaunch(environment: [String: String] = ProcessInfo.processInfo.environment) -> MyspaceStore {
         guard environment["NOTCHTUNE_HARNESS_SCENARIO"] != nil else { return MyspaceStore() }
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("notchtune-harness-myspace-\(UUID().uuidString)", isDirectory: true)
-        let store = MyspaceStore(rootURL: root, notificationsEnabled: false)
+        let notifications: MyspaceNotificationStatus =
+            environment["NOTCHTUNE_HARNESS_NOTIFICATIONS"] == "off" ? .off : .unavailable
+        let store = MyspaceStore(
+            rootURL: root,
+            notificationsEnabled: false,
+            notificationStatusProvider: { notifications }
+        )
         if environment["NOTCHTUNE_HARNESS_SHOWCASE"] == "1" {
             let files = (environment["NOTCHTUNE_HARNESS_MYSPACE_FILES"] ?? "")
                 .split(separator: ":")
                 .map { URL(fileURLWithPath: String($0)) }
             store.seedShowcase(files: files)
+            if environment["NOTCHTUNE_HARNESS_MYSPACE_UNDO"] == "1",
+               let thought = store.thoughts.first(where: { !$0.isReminder }) {
+                store.deleteThought(id: thought.id)
+            }
         }
         return store
     }
@@ -369,6 +657,8 @@ enum MyspaceReminderService {
         guard date > .now, Bundle.main.bundleIdentifier != nil else { return }
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            // Refused: nothing to schedule, and the Reminders tab says so
+            // (`MyspaceStore.hasRemindersThatCantAlert`).
             guard granted else { return }
 
             let content = UNMutableNotificationContent()
@@ -379,17 +669,42 @@ enum MyspaceReminderService {
             content.sound = .default
             content.userInfo = ["thoughtID": thought.id.uuidString]
 
-            let components = Calendar.current.dateComponents(
-                [.year, .month, .day, .hour, .minute, .second],
-                from: date
-            )
             let request = UNNotificationRequest(
                 identifier: notificationPrefix + thought.id.uuidString,
                 content: content,
-                trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+                trigger: UNCalendarNotificationTrigger(dateMatching: triggerComponents(for: date), repeats: false)
             )
             center.add(request)
         }
+    }
+
+    /// Pinned to a time zone: floating components fire at that wall-clock
+    /// time wherever the Mac is by then, not the moment the list shows.
+    static func triggerComponents(for date: Date, calendar: Calendar = .current) -> DateComponents {
+        var components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        components.timeZone = calendar.timeZone
+        return components
+    }
+
+    /// `UNUserNotificationCenter` raises instead of answering in a process
+    /// with no bundle (`swift run`, tests).
+    static func notificationStatus() async -> MyspaceNotificationStatus {
+        guard Bundle.main.bundleIdentifier != nil else { return .unavailable }
+        switch await UNUserNotificationCenter.current().notificationSettings().authorizationStatus {
+        case .denied: return .off
+        case .notDetermined: return .notDetermined
+        case .authorized, .provisional, .ephemeral: return .allowed
+        @unknown default: return .allowed
+        }
+    }
+
+    /// System Settings → Notifications.
+    @MainActor
+    static func openSystemSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     static func cancel(thoughtID: UUID) {

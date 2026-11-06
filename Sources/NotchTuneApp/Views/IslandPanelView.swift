@@ -1160,6 +1160,9 @@ struct IslandPanelView: View {
             if model.overlay.presentedOpenReason == .drag {
                 fileDragTargetContent
                     .transition(.opacity)
+            } else if model.overlay.presentedSurface == .notice {
+                noticeBanner
+                    .transition(.opacity)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     // Notifications are toasts, not a browsing surface: no
@@ -1169,6 +1172,9 @@ struct IslandPanelView: View {
                             .padding(.horizontal, sessionListSideInset)
                             .padding(.top, Self.openedTabBarTopPadding)
                             .padding(.bottom, Self.openedTabBarBottomPadding)
+
+                        noticeBanner
+                            .padding(.bottom, OverlayPanelController.noticeBannerBottomInset)
                     }
 
                     switch model.islandActiveTab {
@@ -1225,6 +1231,20 @@ struct IslandPanelView: View {
         }
         .animation(.easeInOut(duration: 0.18), value: model.overlay.presentedOpenReason)
         .animation(.smooth(duration: 0.35, extraBounce: 0.1), value: model.islandActiveTab)
+    }
+
+    /// The notice, while there is one (nothing, padding included, otherwise).
+    @ViewBuilder
+    private var noticeBanner: some View {
+        if let notice = model.overlay.presentedNotice {
+            NoticeBanner(
+                notice: notice,
+                onAction: { model.performNoticeAction() },
+                onDismiss: { model.dismissNotice() }
+            )
+            .padding(.horizontal, sessionListSideInset)
+            .transition(.opacity)
+        }
     }
 
     private var fileDragTargetContent: some View {
@@ -1335,6 +1355,12 @@ struct IslandPanelView: View {
         !model.hasAnyInstalledAgent && !isNotificationMode && !HarnessHeadless.isShowcase
     }
 
+    /// The bridge didn't start, once its notice has been waved off (the
+    /// notice says the same thing, with the same button).
+    private var showsBridgeDownHint: Bool {
+        model.bridgeStartFailed && model.notice?.action != .retryBridge && !isNotificationMode
+    }
+
     /// The populated list renders the hint itself (see `sessionList`) so the
     /// measured height that sizes the panel includes it.
     private var showsSessionRows: Bool {
@@ -1347,7 +1373,11 @@ struct IslandPanelView: View {
                 meetingBanner(top: 8, bottom: 0)
             }
 
-            if showsInstallHooksHint, !showsSessionRows {
+            if showsBridgeDownHint, !showsSessionRows {
+                bridgeDownHint
+                    .padding(.horizontal, sessionListSideInset)
+                    .padding(.top, 8)
+            } else if showsInstallHooksHint, !showsSessionRows {
                 installHooksHint
                     .padding(.horizontal, sessionListSideInset)
                     .padding(.top, 8)
@@ -1397,6 +1427,38 @@ struct IslandPanelView: View {
     /// discovery routinely surfaces sessions even on a freshly cleaned
     /// install, so the empty-state branch alone never reaches users who
     /// already run an agent.
+    private var bridgeDownHint: some View {
+        Button {
+            model.retryBridgeStart()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "bolt.horizontal.circle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(IslandDesignPalette.Status.waitingAggregate)
+                Text("NotchTune can't hear your agents: its local bridge is down. Tap to try again.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
+                    .fill(.white.opacity(0.055))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: IslandRadius.inner, style: .continuous)
+                            .stroke(.white.opacity(0.08), lineWidth: 0.5)
+                    )
+            )
+        }
+        .buttonStyle(NotchPlainButtonStyle())
+    }
+
     private var installHooksHint: some View {
         Button {
             model.showOnboarding()
@@ -1549,7 +1611,12 @@ struct IslandPanelView: View {
                    // sized without the hint and the last rows were clipped.
                    meetingBanner(top: 8, bottom: 4)
 
-                   if showsInstallHooksHint {
+                   if showsBridgeDownHint {
+                       bridgeDownHint
+                           .padding(.horizontal, sessionListSideInset)
+                           .padding(.top, 8)
+                           .padding(.bottom, 8)
+                   } else if showsInstallHooksHint {
                        installHooksHint
                            .padding(.horizontal, sessionListSideInset)
                            .padding(.top, 8)

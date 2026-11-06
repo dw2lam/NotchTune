@@ -40,6 +40,11 @@ final class SpotifyLibraryBackend: MusicLibraryBackend, @unchecked Sendable {
         return false
     }
 
+    func automationAccess() async -> MusicAutomationAccess {
+        guard isPlayerRunning() else { return .unknown }
+        return await MusicAutomationPermission.access(bundleID: kind.bundleID)
+    }
+
     private func send(uri: String) async -> Bool {
         await withCheckedContinuation { continuation in
             queue.async {
@@ -48,8 +53,10 @@ final class SpotifyLibraryBackend: MusicLibraryBackend, @unchecked Sendable {
                     continuation.resume(returning: false)
                     return
                 }
+                let failures = MusicScriptingFailureRecorder()
+                app.delegate = failures
                 (app as SpotifyApplication).playTrack?(uri, inContext: nil)
-                continuation.resume(returning: true)
+                continuation.resume(returning: !failures.didFail)
             }
         }
     }

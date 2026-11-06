@@ -165,6 +165,15 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                 if scenario == .closedFinished, let id = model.selectedSessionID {
                     model.beginFinishedPeek(for: id)
                 }
+                if let sample = harnessLaunchConfiguration.noticeSample {
+                    model.post(sample == "action"
+                        ? AppNotice(
+                            message: "Allow NotchTune to control Ghostty, or jumping can't find your tab.",
+                            actionTitle: "Open Settings",
+                            action: .openPrivacyPane(.automation)
+                        )
+                        : AppNotice(message: "Couldn't jump to that session: its terminal is unknown."))
+                }
             }
 
             // Hide all windows on launch — settings opens on demand only.

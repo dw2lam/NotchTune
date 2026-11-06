@@ -67,10 +67,11 @@ get `stateAccessor` closures instead of holding state.
 | Overlay windowing | `OverlayPanelController.swift` (panel widths live here), `OverlayUICoordinator.swift`, `OverlayDisplayConfiguration.swift`, `FullscreenDisplayDetection.swift`, `CGSSpacePrivate.swift`, `IslandChromeMetrics.swift`, `IslandSurface.swift` |
 | Island UI | `Views/IslandPanelView.swift` (largest file; panel composition, header lanes, glass wiring, tour coach mount), `Views/V6NotchContent.swift` (closed pill + music surfaces + `IslandPreviewPill`), `Views/UnifiedBars.swift` (glyph; idle 8fps), `Views/LiquidGlass.swift` (settings + `IslandSurfaceBackground`), shapes (`NotchShape.swift` = `GrowingNotchShape`+clip modifier, `OpenedIslandSurfaceShape.swift`, `V6ClosedPillShape.swift` w/ `V6Palette`), `IslandDesignPalette.swift` (status tints) |
 | Music | `Music/MusicPlayerManager.swift` (facade; 1s timer only while panel visible; paused-skip for Apple Events), backends `MusicSpotifyManager/MusicAppleMusicManager/MusicNoneManager` (: `MusicPlayerProtocol`), SB glue `MusicApplication/SpotifyApplication`, `Views/Music/*` panel views |
-| Myspace | `MyspaceStore.swift` (thoughts/reminders/attachments; UserNotifications), `Views/MyspacePanelView.swift` (+Reminders) |
+| Myspace | `MyspaceStore.swift` (thoughts/reminders/attachments; UserNotifications; soft delete: `pendingDeletion` + `Trash/`, cleared on launch), `Views/MyspacePanelView.swift` (+Reminders, undo bar), `RecoverableJSONFile.swift` (`.bak` + `.corrupt-<date>`, per-element decode; also the music library) |
+| Failures | `AppNotice.swift` (`AppModel.post`; `AppNoticeDelivery` decides banner / toast / wait), `Views/NoticeBanner.swift`. `lastActionMessage` is only a log line: anything that fails after the user asked for it posts a notice |
 | Onboarding | `OnboardingTourController.swift` (phase machine; demo session id `onboarding-tour-demo`), `Views/Onboarding/` (wizard `OnboardingView`+`OnboardingSteps`, `OnboardingTheme`, `TourCoachView`) |
 | Hooks (app side) | `HookInstallationCoordinator.swift` (install/uninstall + busy flags + usage monitors: Claude 20s / Gemini 60s / Codex 120s, diff-guarded writes) |
-| Session tracking / jump-back | `ProcessMonitoringCoordinator.swift` (adaptive 2s/5s loop, woken by bridge events + agent-exit kqueue watchers; AppleScript probes SKIPPED when no live sessions + no agent processes), `ActiveAgentProcessDiscovery.swift` + `NativeProcessInspector.swift` (sysctl/libproc; ps/lsof only as fallback), `TerminalSnapshotRound.swift` (one terminal query shared by probe + resolver), `ForegroundTerminalSessionProbe.swift`, `TerminalSessionAttachmentProbe.swift`, `TerminalJumpService.swift`, `TerminalJumpTargetResolver.swift`, `TerminalTextSender.swift`, `KeystrokeInjector.swift` (AX) |
+| Session tracking / jump-back | `ProcessMonitoringCoordinator.swift` (adaptive 2s/5s loop, woken by bridge events + agent-exit kqueue watchers; AppleScript probes SKIPPED when no live sessions + no agent processes), `ActiveAgentProcessDiscovery.swift` + `NativeProcessInspector.swift` (sysctl/libproc; ps/lsof only as fallback), `TerminalSnapshotRound.swift` (one terminal query shared by probe + resolver), `ForegroundTerminalSessionProbe.swift`, `TerminalSessionAttachmentProbe.swift`, `TerminalJumpService.swift`, `TerminalJumpTargetResolver.swift`, `TerminalTextSender.swift`, `KeystrokeInjector.swift` (AX), `TimedProcess.swift` (subprocess with a deadline, for jumps and the probe) |
 | Settings | `Views/SettingsView.swift` (tabs incl. Setup + Onboarding entries), `Views/AppearanceSettingsPane.swift`, `NudgeSettings.swift`, `NotificationSoundService.swift`, `LaunchAtLoginService.swift`, `UpdateChecker.swift` + `AppModel+Updates.swift`, `Localization/LanguageManager.swift`, `ResourceBundle.swift` |
 | Harness/debug | `HarnessLaunchConfiguration/HarnessRuntimeMonitor/HarnessArtifactRecorder.swift`, `IslandDebugScenario.swift` (`loadDebugSnapshot` REPLACES SessionState — never use it for additive injection; use `SessionState.insertSession`) |
 
@@ -78,6 +79,7 @@ get `stateAccessor` closures instead of holding state.
 
 - `ClosedNotchState` is the one place that decides what the closed notch shows (`musicNotification`, `compactMusic`, `hidden`, `liveActivity`, `pill`, in that order of precedence). Size, position and the close target read it; add a new closed state there first.
 - A close runs as one motion, and nothing under it may move: the shape morphs straight to the resting state (`closesIntoHardwareNotch` only for `hidden`), and `OverlayUICoordinator.updateCloseMorph` owns the phase: `presentedSurface` / `presentedOpenReason` keep the panel's content, Mirror's tab reset waits, and the window holds its frame (`isHoldingFrameForClose`), all ending together at `CloseMorph.settled`. The timeline's order lives in `CloseMorph`.
+- A notice never opens under a close, an agent's card, a file drag, boot or a full-screen app: it waits (`AppNoticeDelivery`) and `OverlayUICoordinator.deliverNotice` retries when any of those ends. With the notch closed it opens passively as `IslandSurface.notice` (no sound, no key focus, no tab change); `presentedNotice` keeps it on the panel through the close.
 - The closed surface must be solid before the opened surface unmounts, or the notch blinks empty. `NOTCHTUNE_HARNESS_FILMSTRIP=1` or `close` records a close frame by frame to check it.
 
 ## Size outliers (organization candidates)
@@ -108,7 +110,9 @@ stay out of sight through the gentle-reminder delegate and show in Settings.
   `TerminalSessionAttachmentProbe` and `TerminalJumpTargetResolver`; a round
   is reused until processes/sessions/running terminals change, it failed, or
   it is 10s old; never for terminals that aren't running; nothing at all with
-  no tracked live sessions and no agent processes.
+  no tracked live sessions and no agent processes. A terminal that keeps
+  failing (denied Automation) is held back on its own by
+  `TerminalQueryBackoff`: 15s doubling to 60s after three failures.
   `NOTCHTUNE_MONITOR_BENCH=1 swift test --filter ProcessMonitorBenchmarkTests`
   measures per-tick and per-minute cost.
 - Closed-pill glyph: idle 8fps / waiting 15fps / running display-rate;
@@ -117,6 +121,8 @@ stay out of sight through the gentle-reminder delegate and show in Settings.
   diff-guarded (no-op refresh must not invalidate views).
 - Music: 1s timer only while the music panel is visible; while paused only
   `pollForTrackChanges` talks to the player (no volume/seek/settings events).
+  The Automation check runs every 5s, off the main thread, only while the tab
+  is on screen.
 - Glass: backdrop renders OUTSIDE the morph clip; after an opened-window
   resize settles, `glassResolveTick` re-renders it (blur-fallback fix).
 - Registry persistence: debounced 250ms, off-main, filters `.demo` origin.

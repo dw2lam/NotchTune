@@ -95,6 +95,11 @@ final class AppleMusicLibraryBackend: MusicLibraryBackend, @unchecked Sendable {
         return false
     }
 
+    func automationAccess() async -> MusicAutomationAccess {
+        guard isPlayerRunning() else { return .unknown }
+        return await MusicAutomationPermission.access(bundleID: kind.bundleID)
+    }
+
     // MARK: Queue plumbing
 
     private func withRunningMusic<T: Sendable>(_ body: @escaping @Sendable (MusicApplication) -> T?) async -> T? {

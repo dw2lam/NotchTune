@@ -10,15 +10,58 @@ struct MusicEmptyStateView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
-            MusicPlayerIdentityTile(player: player, size: tileSize) {
+            MusicPlayerIdentityTile(
+                player: player,
+                size: tileSize,
+                isBlocked: playerManager.library.isAutomationDenied
+            ) {
                 playerManager.library.openPlayerApp()
             }
 
-            MusicLibraryChooserView(library: playerManager.library, player: player)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            Group {
+                if playerManager.library.isAutomationDenied {
+                    MusicAutomationDeniedView(player: player)
+                } else {
+                    MusicLibraryChooserView(library: playerManager.library, player: player)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(height: tileSize)
         .onAppear { playerManager.library.activate() }
+    }
+}
+
+/// In place of the chooser while macOS refuses the player: nothing in the
+/// tab can work until it's allowed, and "Nothing playing" would be a guess.
+struct MusicAutomationDeniedView: View {
+    let player: MusicPlayerKind
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Allow NotchTune to control \(player.displayName)")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.88))
+            Text("macOS is blocking it, so the Music tab can't see what's playing or start anything.")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.5))
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                if let url = AppNotice.PrivacyPane.automation.settingsURL {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                Text("Open Automation Settings")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.88))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(.white.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(NotchPlainButtonStyle(haptic: .jump))
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }
 
@@ -26,6 +69,8 @@ struct MusicEmptyStateView: View {
 struct MusicPlayerIdentityTile: View {
     let player: MusicPlayerKind
     var size: CGFloat
+    /// macOS is refusing the player, so what it's doing isn't known.
+    var isBlocked = false
     var action: () -> Void
 
     @State private var isHovering = false
@@ -40,7 +85,7 @@ struct MusicPlayerIdentityTile: View {
             )
             .overlay(alignment: .bottom) {
                 VStack(spacing: 2) {
-                    Text("Nothing playing")
+                    Text(isBlocked ? "Can't see player" : "Nothing playing")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.88))
                     HStack(spacing: 3) {
@@ -66,7 +111,7 @@ struct MusicPlayerIdentityTile: View {
             withAnimation(.easeOut(duration: 0.15)) { isHovering = hovering }
         }
         .help("Open \(player.displayName)")
-        .accessibilityLabel("Nothing playing. Open \(player.displayName)")
+        .accessibilityLabel("\(isBlocked ? "Can't see player" : "Nothing playing"). Open \(player.displayName)")
     }
 }
 

@@ -21,6 +21,9 @@ struct HarnessLaunchConfiguration {
     /// Paints a sample album cover behind the Music tab so captures show the
     /// album-art tint without a real player (`NOTCHTUNE_HARNESS_SAMPLE_TRACK=1`).
     let seedsSampleTrack: Bool
+    /// Posts a sample notice once the scenario is up
+    /// (`NOTCHTUNE_HARNESS_NOTICE=plain|action`).
+    let noticeSample: String?
 
     init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         scenario = Self.scenarioValue(from: environment["NOTCHTUNE_HARNESS_SCENARIO"])
@@ -30,6 +33,7 @@ struct HarnessLaunchConfiguration {
             environment["NOTCHTUNE_HARNESS_SAMPLE_TRACK"],
             default: false
         )
+        noticeSample = environment["NOTCHTUNE_HARNESS_NOTICE"]
         seedsSampleUsage = Self.boolValue(
             environment["NOTCHTUNE_HARNESS_SAMPLE_USAGE"],
             default: false

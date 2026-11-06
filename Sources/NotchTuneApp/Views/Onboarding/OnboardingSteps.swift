@@ -220,7 +220,7 @@ struct OnboardingPermissionsStep: View {
                     icon: "bell.badge.fill",
                     tint: .rose,
                     title: "Notifications",
-                    detail: "Tell you when an agent finishes and deliver timed reminders."
+                    detail: "Deliver your timed reminders. Agents show up in the notch, not here."
                 ) {
                     notificationAccessory
                 }

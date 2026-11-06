@@ -89,6 +89,11 @@ final class MusicPlayerManager {
     private func setupMusicApp() {
         musicApp = playerAppProvider.getPlayerApp()
         setupObservers()
+        // The player sends nothing when it's allowed in System Settings, so
+        // what it's playing would stay unread until the next track change.
+        library.onAutomationRestored = { [weak self] in
+            self?.playStateOrTrackDidChange(nil)
+        }
     }
 
     func setupObservers() {

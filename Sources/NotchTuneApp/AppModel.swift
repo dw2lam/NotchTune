@@ -256,16 +256,44 @@ final class AppModel {
         }
     }
     var isBridgeReady = false
+    /// The bridge never came up (a dropped connection reconnects by itself).
+    private(set) var bridgeStartFailed = false
     /// The failure on screen, if any (see `AppNotice`).
     private(set) var notice: AppNotice?
 
     func post(_ notice: AppNotice) {
         if let current = self.notice, current.isSameProblem(as: notice) { return }
         self.notice = notice
+        overlay.noticeDidChange()
     }
 
     func dismissNotice() {
+        overlay.closeNoticeSurface()
         notice = nil
+        overlay.noticeDidChange()
+    }
+
+    func retryBridgeStart() {
+        startBridgeServer()
+    }
+
+    /// The banner's button: the notice has done its job once it's pressed.
+    func performNoticeAction() {
+        guard let action = notice?.action else { return }
+        dismissNotice()
+        switch action {
+        case let .openPrivacyPane(pane):
+            pane.settingsURL.map { _ = NSWorkspace.shared.open($0) }
+        case .openSetup:
+            showSettings()
+            // `showSettings` may be what first mounts SettingsView, and the
+            // tab selection is only heard once it has.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                NotificationCenter.default.post(name: .notchTuneSelectSetupTab, object: nil)
+            }
+        case .retryBridge:
+            retryBridgeStart()
+        }
     }
 
     var lastActionMessage = "Waiting for agent hook events..." {
@@ -784,12 +812,15 @@ final class AppModel {
 
     @ObservationIgnored
     private let bridgeServer = BridgeServer()
+    /// Test seam: what starting the bridge does.
+    @ObservationIgnored
+    lazy var bridgeStarter: () throws -> Void = { [bridgeServer] in try bridgeServer.start() }
 
     @ObservationIgnored
     private var bridgeClient = LocalBridgeClient()
 
     @ObservationIgnored
-    private let terminalJumpAction: @Sendable (JumpTarget) throws -> String
+    private let terminalJumpAction: @Sendable (JumpTarget) throws -> TerminalJumpResult
 
     @ObservationIgnored
     private let isNotificationSessionAlreadyFrontmost: @Sendable (AgentSession) async -> Bool
@@ -1070,8 +1101,8 @@ final class AppModel {
     }
 
     init(
-        terminalJumpAction: @escaping @Sendable (JumpTarget) throws -> String = { target in
-            try TerminalJumpService().jump(to: target)
+        terminalJumpAction: @escaping @Sendable (JumpTarget) throws -> TerminalJumpResult = { target in
+            try TerminalJumpService().jumpResult(to: target)
         },
         isNotificationSessionAlreadyFrontmost: @escaping @Sendable (AgentSession) async -> Bool = { session in
             await ForegroundTerminalSessionProbe().matches(session: session)
@@ -1833,6 +1864,9 @@ final class AppModel {
         if shouldPerformBootAnimation {
             performBootAnimation()
         }
+        if let problem = myspaceStore.loadProblem {
+            post(AppNotice(message: problem))
+        }
 
         guard startBridge else {
             isBridgeReady = false
@@ -1843,13 +1877,27 @@ final class AppModel {
             return
         }
 
+        startBridgeServer()
+    }
+
+    /// Without the bridge no hook reaches the app: agents keep running but
+    /// the notch sees none of it, so this is one failure that stays on
+    /// screen (`bridgeStartFailed`, shown in the Agents tab) until it's fixed.
+    private func startBridgeServer() {
         do {
-            try bridgeServer.start()
+            try bridgeStarter()
+            bridgeStartFailed = false
             connectBridgeObserver()
         } catch {
             isBridgeReady = false
+            bridgeStartFailed = true
             lastActionMessage = "Failed to start local bridge: \(error.localizedDescription)"
             harnessRuntimeMonitor?.recordMilestone("bridgeStartFailed", message: lastActionMessage)
+            post(AppNotice(
+                message: "NotchTune can't hear your agents: its local bridge didn't start.",
+                actionTitle: "Try Again",
+                action: .retryBridge
+            ))
         }
     }
 
@@ -2293,6 +2341,7 @@ final class AppModel {
         guard let jumpTarget = session.jumpTarget,
               jumpTarget.terminalApp.lowercased() != "unknown" else {
             lastActionMessage = "Cannot jump: terminal app is unknown."
+            post(AppNotice(message: "Couldn't jump: NotchTune doesn't know which terminal this session is in."))
             return
         }
         jump(to: jumpTarget)
@@ -2301,6 +2350,7 @@ final class AppModel {
     private func jump(to jumpTarget: JumpTarget?) {
         guard let jumpTarget else {
             lastActionMessage = "No jump target is available yet."
+            post(AppNotice(message: "Nothing to jump to yet: this session hasn't reported its terminal."))
             return
         }
 
@@ -2308,10 +2358,19 @@ final class AppModel {
         let jumpAction = terminalJumpAction
 
         dismissOverlayForJump()
-        jumpTask?.cancel()
+        // Cancelling doesn't stop detached work already underway, and two
+        // jumps at once race for the same terminal. So each waits out the
+        // one before it, and a jump replaced while waiting never runs.
+        let previousJump = jumpTask
+        previousJump?.cancel()
         jumpTask = Task { [weak self] in
             if shouldDelayForDismissAnimation {
                 try? await Task.sleep(for: Self.jumpOverlayDismissLeadTime)
+            }
+
+            await previousJump?.value
+            guard !Task.isCancelled else {
+                return
             }
 
             do {
@@ -2323,7 +2382,10 @@ final class AppModel {
                     return
                 }
 
-                self?.lastActionMessage = result
+                self?.lastActionMessage = result.message
+                if let app = result.automationDeniedApp {
+                    self?.post(.automationDenied(appName: app))
+                }
             } catch is CancellationError {
                 return
             } catch {
@@ -2332,6 +2394,7 @@ final class AppModel {
                 }
 
                 self?.lastActionMessage = "Jump failed: \(error.localizedDescription)"
+                self?.post(AppNotice(message: "Couldn't open \(jumpTarget.terminalApp) for that session."))
             }
         }
     }
