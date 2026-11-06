@@ -18,6 +18,9 @@ struct HarnessLaunchConfiguration {
     let seedsSampleUsage: Bool
     /// Opens on this tab (`NOTCHTUNE_HARNESS_TAB=agents|music|myspace|reminders`).
     let tab: IslandTab?
+    /// Shows fixed doctor reports in Setup, so captures don't depend on this
+    /// Mac's real configs (`NOTCHTUNE_HARNESS_SAMPLE_DOCTOR=1`).
+    let seedsSampleDoctor: Bool
     /// Paints a sample album cover behind the Music tab so captures show the
     /// album-art tint without a real player (`NOTCHTUNE_HARNESS_SAMPLE_TRACK=1`).
     let seedsSampleTrack: Bool
@@ -28,6 +31,10 @@ struct HarnessLaunchConfiguration {
         tab = environment["NOTCHTUNE_HARNESS_TAB"].flatMap { IslandTab(rawValue: $0.lowercased()) }
         seedsSampleTrack = Self.boolValue(
             environment["NOTCHTUNE_HARNESS_SAMPLE_TRACK"],
+            default: false
+        )
+        seedsSampleDoctor = Self.boolValue(
+            environment["NOTCHTUNE_HARNESS_SAMPLE_DOCTOR"],
             default: false
         )
         seedsSampleUsage = Self.boolValue(

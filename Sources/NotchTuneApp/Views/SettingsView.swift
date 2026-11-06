@@ -774,6 +774,8 @@ struct SetupSettingsPane: View {
 
             hooksCard
 
+            IntegrationDoctorCard(model: model)
+
             usageCard
 
             claudeConfigDirectoryCard
@@ -791,8 +793,6 @@ struct SetupSettingsPane: View {
                 }
             }
 
-            hookDiagnosticsCard
-
             RemoteConnectionSection(model: model)
         }
     }
@@ -805,11 +805,10 @@ struct SetupSettingsPane: View {
             footer: lang.t("setup.section.hooks.footer")
         ) {
             Button(lang.t("setup.installAll")) {
-                for step in installAllSteps where !step.installed {
-                    step.install()
-                }
+                model.hooks.installAllDetectedHooks()
             }
             .disabled(model.hooksBinaryURL == nil || allReady)
+            .help(lang.t("setup.installAll.help"))
         } content: {
             hookRow(
                 name: "Claude Code",
@@ -1039,7 +1038,7 @@ struct SetupSettingsPane: View {
                 }
                 Button(lang.t("settings.general.cancel"), role: .cancel) {}
             } message: {
-                Text("This will remove NotchTune hooks from ~/.kimi/config.toml.")
+                Text("This will remove NotchTune hooks from Kimi's config.toml.")
             }
         }
     }
@@ -1053,7 +1052,7 @@ struct SetupSettingsPane: View {
         ) {
             SettingsRow(
                 lang.t("setup.usageBridge"),
-                subtitle: lang.t("setup.usageBridgeDesc")
+                subtitle: model.hooks.setupFailures[.claudeUsageBridge] ?? lang.t("setup.usageBridgeDesc")
             ) {
                 if model.claudeUsageInstalled {
                     HStack(spacing: 10) {
@@ -1130,29 +1129,10 @@ struct SetupSettingsPane: View {
         }
     }
 
-    /// Everything "Install All" installs. Its action and its enabled state
-    /// both read this one list, so they can't drift apart (Antigravity was
-    /// installed by the button but missing from its "all ready" check, which
-    /// greyed the button out while Antigravity still needed installing).
-    private var installAllSteps: [(installed: Bool, install: () -> Void)] {
-        [
-            (model.claudeHooksInstalled, model.installClaudeHooks),
-            (model.codexHooksInstalled, model.installCodexHooks),
-            (model.openCodePluginInstalled, model.installOpenCodePlugin),
-            (model.qoderHooksInstalled, model.installQoderHooks),
-            (model.qwenCodeHooksInstalled, model.installQwenCodeHooks),
-            (model.factoryHooksInstalled, model.installFactoryHooks),
-            (model.codebuddyHooksInstalled, model.installCodebuddyHooks),
-            (model.cursorHooksInstalled, model.installCursorHooks),
-            (model.geminiHooksInstalled, model.installGeminiHooks),
-            (model.antigravityHooksInstalled, model.installAntigravityHooks),
-            (model.kimiHooksInstalled, model.installKimiHooks),
-            (model.claudeUsageInstalled, model.installClaudeUsageBridge),
-        ]
-    }
-
+    /// "Install All" covers what's on this Mac; its action and this check
+    /// read the same list, so they can't drift apart.
     private var allReady: Bool {
-        installAllSteps.allSatisfy(\.installed)
+        model.hooks.installAllAgents.allSatisfy(model.hooks.isHookInstalled)
     }
 
     /// First-run welcome: a card washed in the sky accent above the hooks
@@ -1204,138 +1184,6 @@ struct SetupSettingsPane: View {
             .appendingPathComponent(".gemini/config/hooks.json")
     }
 
-    private var hasErrors: Bool {
-        let claudeErrors = model.claudeHealthReport?.errors.count ?? 0
-        let codexErrors = model.codexHealthReport?.errors.count ?? 0
-        return claudeErrors + codexErrors > 0
-    }
-
-    private var hasRepairableIssues: Bool {
-        let claude = model.claudeHealthReport?.repairableIssues.isEmpty == false
-        let codex = model.codexHealthReport?.repairableIssues.isEmpty == false
-        return claude || codex
-    }
-
-    private var hasNotices: Bool {
-        let claude = model.claudeHealthReport?.notices.isEmpty == false
-        let codex = model.codexHealthReport?.notices.isEmpty == false
-        return claude || codex
-    }
-
-    // MARK: Diagnostics
-
-    private var hookDiagnosticsCard: some View {
-        SettingsCard(title: lang.t("setup.section.diagnostics")) {
-            if let claudeReport = model.claudeHealthReport, !claudeReport.issues.isEmpty {
-                issueList(report: claudeReport)
-                SettingsRowDivider()
-            }
-            if let codexReport = model.codexHealthReport, !codexReport.issues.isEmpty {
-                issueList(report: codexReport)
-                SettingsRowDivider()
-            }
-
-            if model.claudeHealthReport == nil && model.codexHealthReport == nil {
-                SettingsRow {
-                    diagnosticsStatusLabel(
-                        lang.t("setup.diagnostics.notRun"),
-                        systemImage: "stethoscope",
-                        color: .secondary
-                    )
-                } accessory: {
-                    Button(lang.t("setup.diagnostics.runCheck")) {
-                        model.runHealthChecks()
-                    }
-                }
-            } else if !hasErrors {
-                SettingsRow {
-                    diagnosticsStatusLabel(
-                        lang.t("setup.diagnostics.allHealthy"),
-                        systemImage: "checkmark.circle.fill",
-                        color: SettingsTheme.positive
-                    )
-                } accessory: {
-                    Button(lang.t("setup.diagnostics.recheck")) {
-                        model.runHealthChecks()
-                    }
-                }
-            } else {
-                SettingsRow {
-                    diagnosticsStatusLabel(
-                        lang.t("setup.diagnostics.issuesFound"),
-                        systemImage: "exclamationmark.triangle.fill",
-                        color: SettingsTheme.caution
-                    )
-                } accessory: {
-                    HStack(spacing: 8) {
-                        Button(lang.t("setup.diagnostics.recheck")) {
-                            model.runHealthChecks()
-                        }
-                        if hasRepairableIssues {
-                            Button(lang.t("setup.diagnostics.repair")) {
-                                model.repairHooks()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func diagnosticsStatusLabel(_ text: String, systemImage: String, color: Color) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(color)
-            Text(text)
-                .font(SettingsMetrics.rowTitleFont)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private func issueList(report: HookHealthReport) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(report.agent == "claude" ? "Claude Code" : "Codex")
-                .font(.system(size: 14, weight: .semibold))
-
-            ForEach(Array(report.issues.enumerated()), id: \.offset) { _, issue in
-                Label {
-                    Text(issue.description)
-                        .font(.system(size: 13))
-                        .foregroundStyle(issue.severity == .info ? .secondary : .primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: issueIcon(for: issue))
-                        .foregroundStyle(issueColor(for: issue))
-                }
-            }
-
-            if let binaryPath = report.binaryPath {
-                Text("Binary: \(binaryPath)")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 16)
-    }
-
-    private func issueIcon(for issue: HookHealthReport.Issue) -> String {
-        switch issue.severity {
-        case .info: "info.circle.fill"
-        case .error: issue.isAutoRepairable ? "wrench.fill" : "exclamationmark.triangle.fill"
-        }
-    }
-
-    private func issueColor(for issue: HookHealthReport.Issue) -> Color {
-        switch issue.severity {
-        case .info: SettingsTheme.informative
-        case .error: issue.isAutoRepairable ? SettingsTheme.caution : SettingsTheme.critical
-        }
-    }
-
     /// One agent: its logo, name and install state; reveal / uninstall when
     /// installed, install otherwise.
     @ViewBuilder
@@ -1365,6 +1213,12 @@ struct SetupSettingsPane: View {
                             .font(SettingsMetrics.rowSubtitleFont)
                             .foregroundStyle(.secondary)
                     }
+                    if let failure = setupFailure(for: tool) {
+                        Text(failure)
+                            .font(SettingsMetrics.rowSubtitleFont)
+                            .foregroundStyle(SettingsTheme.critical)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1393,6 +1247,25 @@ struct SetupSettingsPane: View {
                 .disabled(requiresBinary && model.hooksBinaryURL == nil)
             }
         }
+    }
+
+    private func setupFailure(for tool: AgentTool) -> String? {
+        let agent: AgentIdentifier
+        switch tool {
+        case .claudeCode: agent = .claudeCode
+        case .codex: agent = .codex
+        case .geminiCLI: agent = .gemini
+        case .openCode: agent = .openCode
+        case .qoder: agent = .qoder
+        case .qwenCode: agent = .qwenCode
+        case .factory: agent = .factory
+        case .codebuddy: agent = .codebuddy
+        case .cursor: agent = .cursor
+        case .kimiCLI: agent = .kimi
+        case .antigravity: agent = .antigravity
+        }
+
+        return model.hooks.setupFailures[agent]
     }
 
     private func revealInFinder(_ url: URL) {
