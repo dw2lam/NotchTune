@@ -22,8 +22,8 @@ const LAYERS: { id: LayerId; src: string; w: number; h: number; top?: number; dx
   { id: 'myspace', src: 'myspace-220', w: 650, h: 430, alt: 'The island on its Myspace tab: a box to drop a thought, filters for text, images and files, today\'s three images, and a note about lazy-loading the product grid.' },
   { id: 'reminders', src: 'reminders-220', w: 650, h: 374, alt: 'The island on its Reminders tab: three active reminders, from checking the staging deploy at 10:00 to booking the onboarding design review, and one in the archive.' },
   { id: 'mirror', src: 'mirror-photo-220', w: 650, h: 476, alt: 'The island on its Mirror tab: a black-and-white picture across the full width, flipped like a mirror, of a woman with windswept curly hair in front of a city skyline, with a FaceTime HD Camera drop-down and zoom, flip and expand buttons underneath.' },
-  { id: 'pill-meeting', src: 'pill-meeting', w: 464, h: 38, dx: -29, alt: 'The closed notch four minutes before Design review, 09:53 to 10:23.' },
-  { id: 'banner', src: 'meeting-220', w: 650, h: 416, alt: 'The island with the Design review banner above the agent list: in 4 minutes, 13:25 to 13:55, with Join.' },
+  { id: 'pill-meeting', src: 'pill-meeting-230', w: 464, h: 38, dx: -29, alt: 'The closed notch four minutes before Design review, 09:56 to 10:26.' },
+  { id: 'banner', src: 'meeting-230', w: 650, h: 416, alt: 'The island with the Design review banner above the agent list: in 4 minutes, 09:56 to 10:26, with Join.' },
   { id: 'settings', src: 'settings-pill', w: 906, h: 766, top: 52, alt: 'NotchTune Settings on Personalization, its sections in one pill across the title bar: previews of the MacBook notch and an external display linked with Sync, and the first row of twenty pixel characters.' },
 ];
 
