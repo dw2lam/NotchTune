@@ -786,6 +786,7 @@ struct SetupSettingsPane: View {
             hooksCard
 
             IntegrationDoctorCard(model: model)
+                .id("doctor")
 
             usageCard
 
