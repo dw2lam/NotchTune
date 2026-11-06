@@ -42,7 +42,7 @@ AppModel
 ├── codexAppServer: CodexAppServerCoordinator  // Codex.app thread events
 ├── playerManager: MusicPlayerManager    // Spotify/Apple Music via ScriptingBridge
 ├── myspaceStore: MyspaceStore           // thoughts/attachments/reminders (local JSON)
-├── updateChecker: UpdateChecker         // Sparkle
+├── updateChecker: UpdateChecker         // Sparkle; wired in AppModel+Updates
 └── bridgeServer/bridgeClient (private)  // socket server + observer stream
 ```
 
@@ -71,7 +71,7 @@ get `stateAccessor` closures instead of holding state.
 | Onboarding | `OnboardingTourController.swift` (phase machine; demo session id `onboarding-tour-demo`), `Views/Onboarding/` (wizard `OnboardingView`+`OnboardingSteps`, `OnboardingTheme`, `TourCoachView`) |
 | Hooks (app side) | `HookInstallationCoordinator.swift` (install/uninstall + busy flags + usage monitors: Claude 20s / Gemini 60s / Codex 120s, diff-guarded writes) |
 | Session tracking / jump-back | `ProcessMonitoringCoordinator.swift` (adaptive 2s/5s loop, woken by bridge events + agent-exit kqueue watchers; AppleScript probes SKIPPED when no live sessions + no agent processes), `ActiveAgentProcessDiscovery.swift` + `NativeProcessInspector.swift` (sysctl/libproc; ps/lsof only as fallback), `TerminalSnapshotRound.swift` (one terminal query shared by probe + resolver), `ForegroundTerminalSessionProbe.swift`, `TerminalSessionAttachmentProbe.swift`, `TerminalJumpService.swift`, `TerminalJumpTargetResolver.swift`, `TerminalTextSender.swift`, `KeystrokeInjector.swift` (AX) |
-| Settings | `Views/SettingsView.swift` (tabs incl. Setup + Onboarding entries), `Views/AppearanceSettingsPane.swift`, `NudgeSettings.swift`, `NotificationSoundService.swift`, `LaunchAtLoginService.swift`, `UpdateChecker.swift`, `Localization/LanguageManager.swift`, `ResourceBundle.swift` |
+| Settings | `Views/SettingsView.swift` (tabs incl. Setup + Onboarding entries), `Views/AppearanceSettingsPane.swift`, `NudgeSettings.swift`, `NotificationSoundService.swift`, `LaunchAtLoginService.swift`, `UpdateChecker.swift` + `AppModel+Updates.swift`, `Localization/LanguageManager.swift`, `ResourceBundle.swift` |
 | Harness/debug | `HarnessLaunchConfiguration/HarnessRuntimeMonitor/HarnessArtifactRecorder.swift`, `IslandDebugScenario.swift` (`loadDebugSnapshot` REPLACES SessionState — never use it for additive injection; use `SessionState.insertSession`) |
 
 ## Notch states and the close sequence
@@ -88,6 +88,15 @@ HookInstallationCoordinator, OverlayPanelController, ClaudeHooks,
 TerminalSessionAttachmentProbe, TerminalJumpService (each ~1.3–1.5k).
 These are god-files; prefer extracting cohesive subviews/handlers when touching
 them rather than growing them further.
+
+## Updates
+
+`UpdateChecker` wraps Sparkle. Returning true from `willInstallUpdateOnQuit`
+keeps the update behind our own button but holds Sparkle's session open, so no
+further check runs until it installs; `UpdateAutoInstall` is what guarantees that
+happens (a day old, user idle, no agent waiting, Mirror closed). Its timer exists
+only while an update is prepared. Scheduled updates Sparkle can't take silently
+stay out of sight through the gentle-reminder delegate and show in Settings.
 
 ## Idle-performance contracts (don't regress these)
 
@@ -128,6 +137,8 @@ them rather than growing them further.
 
 - `scripts/clean-user-env.sh` — wipe a user environment of NotchTune (+legacy
   OpenIsland/VibeIsland generations) for fresh-install testing.
+- `scripts/export-signing-backup.sh` — back up the release certificate and
+  Sparkle key; see `docs/release-signing.md`.
 - `scripts/replay-bridge-scenarios.py` — manual UI verification via replayed
   bridge traffic.
 - `scripts/verify-ghostty-jumps.sh` — drives the env-gated

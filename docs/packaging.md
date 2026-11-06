@@ -1,64 +1,60 @@
 # Packaging
 
-This repository can now produce a local macOS app bundle from the Swift package without requiring an Xcode project archive.
+`zsh scripts/package-app.sh` turns the Swift package into a signed macOS app with
+no Xcode project. For publishing one, see [releasing.md](releasing.md).
 
-## Current Shape
+## What it does
 
-- `zsh scripts/package-app.sh` builds `NotchTuneApp`, `NotchTuneHooks`, and `NotchTuneSetup` in release mode.
-- The script creates `output/package/Open Island.app`.
-- The bundle embeds helper binaries inside `Contents/Helpers/` so the app can still locate `NotchTuneHooks` after it leaves the repository checkout.
-- The script also creates `output/package/Open Island.zip` for local sharing or later notarization.
+1. Builds `NotchTuneApp`, `NotchTuneHooks` and `NotchTuneSetup` in release mode.
+2. Assembles `output/package/NotchTune.app`, with the helpers in
+   `Contents/Helpers/` so the app can find `NotchTuneHooks` once it leaves the
+   checkout, and Sparkle.framework in `Contents/Frameworks/`.
+3. Verifies the bundle, then smoke-tests a copy outside the repo.
+4. Signs inside-out, then writes `NotchTune.zip` and `NotchTune.dmg`.
 
-## Unsigned First
+`NOTCHTUNE_EDDSA_PUBLIC_KEY` is required. For a real package, use the key from
+`generate_keys --account NotchTune -p`. CI passes an all-zero key, which is
+valid to package with and can't verify any update.
 
-If the machine does not yet have a `Developer ID Application` certificate, the script still works. It produces an unsigned `.app` bundle and `.zip` archive for local inspection.
+Builds target the host architecture: Apple Silicon, for what gets released.
+`NOTCHTUNE_UNIVERSAL=true` adds `x86_64`, but Intel isn't a supported release.
 
-Check whether signing identities are available with:
+## The smoke test
 
-```bash
-security find-identity -v -p codesigning
-```
+It catches an app that only works because SPM's resource accessor can fall back
+to `.build/`. It runs the real binary, possibly on a Mac running the real app, so
+it's kept away from everything of the user's: a harness scenario (no hook
+installs, session discovery or Sparkle, and windows stay off screen), the bridge
+off, a temp `HOME`, and a copy with its own bundle ID, `app.notchtune.smoke`.
+The bundle ID matters because `cfprefsd` ignores `HOME` and `CFFIXED_USER_HOME`.
 
-If that command reports `0 valid identities found`, packaging is limited to unsigned output until the certificate is created in the Apple Developer account and imported into the login keychain.
+## Signing
 
-### "Open Island is damaged and can't be opened"
+The script picks the first of these it finds:
 
-This Gatekeeper error appears when macOS quarantines an unsigned or un-notarized download. There are two workarounds:
+| Identity | Result |
+|----------|--------|
+| `NOTCHTUNE_SIGN_IDENTITY` | Developer ID: hardened runtime, plus notarization with `NOTCHTUNE_NOTARY_PROFILE` |
+| `NOTCHTUNE_STABLE_SIGN_IDENTITY`, or `Open Island Dev Local` in the login keychain | Stable self-signed certificate, how releases are signed today |
+| Nothing | Ad-hoc, with a warning. `NOTCHTUNE_REQUIRE_STABLE_SIGNING=1` makes this an error |
 
-**Option 1 — remove quarantine (internal/dev use only):**
+See [release-signing.md](release-signing.md). Entitlements are in
+`config/packaging/NotchTuneApp.entitlements`.
 
-```bash
-xattr -dr com.apple.quarantine "/Applications/Open Island.app"
-```
+## Gatekeeper
 
-Or right-click the app → **Open** → click **Open** to bypass the block once.
+Builds aren't notarized, so macOS blocks the first launch of a download. On macOS
+15 and later, right-click → **Open** no longer gets past this. Either:
 
-**Option 2 — sign and notarize (required for external distribution):** follow the section below.
+- Try to open the app, then choose **Open Anyway** in System Settings → Privacy &
+  Security; or
+- Remove the quarantine flag, which also clears **"NotchTune is damaged"**:
 
-## Signing And Notarization
+  ```bash
+  xattr -dr com.apple.quarantine "/Applications/NotchTune.app"
+  ```
 
-When a signing identity is available, pass it in with environment variables:
-
-```bash
-NOTCHTUNE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-zsh scripts/package-app.sh
-```
-
-The script signs the helper binaries and app bundle, then also signs the DMG itself (required for notarization). Entitlements are declared in `config/packaging/NotchTuneApp.entitlements`.
-
-If a `notarytool` keychain profile is already stored, the same script notarizes and staples in the correct order (app bundle first so the stapled bundle is embedded in the DMG, then the DMG):
-
-```bash
-NOTCHTUNE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-NOTCHTUNE_NOTARY_PROFILE="open-island-notary" \
-zsh scripts/package-app.sh
-```
-
-That path expects `xcrun notarytool store-credentials` to have been run ahead of time.
-
-## Optional Overrides
-
-The script accepts these environment variables:
+## Optional overrides
 
 - `NOTCHTUNE_APP_NAME`
 - `NOTCHTUNE_BUNDLE_ID`
@@ -67,5 +63,9 @@ The script accepts these environment variables:
 - `NOTCHTUNE_PACKAGE_ROOT`
 - `NOTCHTUNE_BUNDLE_DIR`
 - `NOTCHTUNE_ZIP_PATH`
+- `NOTCHTUNE_DMG_PATH`
+- `NOTCHTUNE_UNIVERSAL`
 - `NOTCHTUNE_SIGN_IDENTITY`
+- `NOTCHTUNE_STABLE_SIGN_IDENTITY`
+- `NOTCHTUNE_REQUIRE_STABLE_SIGNING`
 - `NOTCHTUNE_NOTARY_PROFILE`

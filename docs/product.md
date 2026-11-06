@@ -30,6 +30,8 @@ CLI coding agents are powerful, but they pull attention away from the editor and
 | **Factory** | Supported | Claude Code fork — same hook format, config at `~/.factory/settings.json` |
 | **CodeBuddy** | Supported | Claude Code fork — same hook format, config at `~/.codebuddy/settings.json` |
 | **Gemini CLI** | Supported | Hook integration (`SessionStart`, `BeforeAgent`, `AfterAgent`, `SessionEnd`, `Notification`), session tracking, terminal jump metadata, completion-card compatibility handling |
+| **Cursor** | Supported | Hook integration via `~/.cursor/hooks.json`, session registry and transcript discovery |
+| **Antigravity** | Supported | Hook integration via `~/.gemini/config/hooks.json` |
 | **Kimi CLI** | Supported | Hook integration via `~/.kimi/config.toml` `[[hooks]]` (Moonshot AI). Kimi's hook payload is byte-compatible with Claude Code, so runtime reuses the Claude decode path; a dedicated TOML installer preserves user-authored hooks |
 
 ## Supported Terminals
@@ -43,19 +45,22 @@ CLI coding agents are powerful, but they pull attention away from the editor and
 | **WezTerm** | Full Support | Jump-back via CLI pane targeting |
 | **iTerm2** | Full Support | Jump-back with session ID / TTY matching |
 | **tmux** (multiplexer) | Full Support | Jump-back with session/window/pane targeting |
-| **Warp** | Planned | Fallback detection only |
+| **Warp** | Supported | Jump-back to the matching tab using Warp's local database; needs Accessibility |
+
+NotchTune also jumps back to Codex.app and to editors with integrated terminals: Cursor, VS Code (and Insiders), Windsurf, Trae and the JetBrains IDEs.
 
 ## Features
 
 - **Notch overlay** — sits in the notch area on notch Macs, falls back to a compact top-center bar on external displays or non-notch Macs
-- **Settings** — hook install/uninstall, usage dashboard, General, Display, Sound, Shortcuts, Lab, About
+- **Settings** — General (with version and updates), Setup (hook install/uninstall), Appearance, Display, Sound, Music
+- **Onboarding** — a setup assistant and guided notch tour on first launch, both reopened from Settings → General
 - **Notification mode** — auto-height panel for permission requests and session events
 - **Notification sounds** — configurable system sounds with mute toggle
 - **i18n** — English only
 - **Session discovery** — auto-discover from local transcripts, persist across launches
 - **Process discovery** — match active agents from the process table (in-process sysctl/libproc, `ps`/`lsof` fallback)
-- **DMG packaging** — signing, notarization, GitHub Actions release workflow
-- **Auto-update** — Sparkle-based automatic updates with appcast
+- **DMG packaging** — stable self-signed builds, released by hand (see `docs/releasing.md`)
+- **Auto-update** — Sparkle background downloads with delta patches, a quiet Update button, and an opt-out
 - **Myspace** — local thoughts, dictated text, copied file/image attachments, and reminders
 
 ## Success Criteria
@@ -67,7 +72,6 @@ CLI coding agents are powerful, but they pull attention away from the editor and
 
 ## Future Directions
 
-- Warp precision jump support
 - Sound packs, themes, and onboarding polish
 - Deeper terminal split targeting
 - Opt-in, privacy-reviewed screen context for AI assistance

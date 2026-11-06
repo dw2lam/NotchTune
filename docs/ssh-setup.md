@@ -1,13 +1,13 @@
 # SSH Remote Claude Code Setup
 
-Connect Open Island to Claude Code running on a remote server over SSH.
+Connect NotchTune to Claude Code running on a remote server over SSH.
 
 ## How it works
 
 ```
 macOS (local)                         Remote server
 ┌──────────────┐    SSH tunnel     ┌────────────────────┐
-│ Open Island  │◀═══════════════▶│ Unix socket (fwd)  │
+│  NotchTune   │◀═══════════════▶│ Unix socket (fwd)  │
 │ BridgeServer │   RemoteForward   │        ▲           │
 │ Unix socket  │                   │        │           │
 └──────────────┘                   │  open-island-      │
@@ -22,7 +22,7 @@ SSH's `RemoteForward` tunnels the Unix socket from your Mac to the remote server
 
 ## Prerequisites
 
-- Open Island running on your Mac
+- NotchTune running on your Mac
 - SSH access to the remote server
 - Python 3.6+ on the remote server
 - Claude Code installed on the remote server
@@ -91,9 +91,9 @@ ssh -R /tmp/open-island-$(id -u).sock:/tmp/open-island-$(id -u).sock user@myserv
 
 ### 4. Verify
 
-1. Make sure Open Island is running on your Mac
+1. Make sure NotchTune is running on your Mac
 2. SSH to the remote with socket forwarding enabled
-3. Run Claude Code on the remote — sessions should appear in the Open Island overlay
+3. Run Claude Code on the remote — sessions should appear in the NotchTune overlay
 
 ## Important: sshd configuration
 
@@ -144,7 +144,7 @@ export VIBE_ISLAND_SOCKET_PATH=/tmp/open-island-<remote-uid>.sock
 
 - Check the socket exists on remote: `ls -la /tmp/open-island-*.sock`
 - Test connectivity: `python3 -c "import socket; s=socket.socket(socket.AF_UNIX); s.connect('/tmp/open-island-$(id -u).sock'); print('OK')"`
-- Make sure Open Island is running locally before establishing the SSH connection
+- Make sure NotchTune is running locally before establishing the SSH connection
 
 **"Address already in use" on SSH connect?**
 

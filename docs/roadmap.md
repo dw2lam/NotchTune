@@ -1,8 +1,8 @@
 # Roadmap
 
-Open Island is community-driven. The best product experiences are created by deep users of each tool. We welcome contributions of all kinds — pick an area below and start vibing.
+NotchTune is community-driven. The best product experiences are created by deep users of each tool. We welcome contributions of all kinds — pick an area below and start vibing.
 
-Think of Open Island as having done the basics: a macOS island shell + code agent communication layer + fundamental features like notifications and terminal jump-back. Everything else can be defined by you.
+Think of NotchTune as having done the basics: a macOS island shell + code agent communication layer + fundamental features like notifications and terminal jump-back. Everything else can be defined by you.
 
 You can also fork your own version and modify it however you like — but PRing here gives it a chance to reach more people (btw, we use the GPL license).
 

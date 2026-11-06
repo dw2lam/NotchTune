@@ -25,7 +25,7 @@ The repository harness exists to make a round of work mechanically checkable. Th
 
 `scripts/smoke-dev-app.sh` sets harness environment variables before launching `NotchTuneApp`.
 
-The smoke path is intentionally aimed at the repository executable, not `~/Applications/Open Island Dev.app`. The dev bundle remains useful for manual end-to-end OSS verification, but harness automation should target the current branch's `NotchTuneApp` binary so the verification result matches the checked-out code exactly.
+The smoke path is intentionally aimed at the repository executable, not `~/Applications/NotchTune Dev.app`. The dev bundle remains useful for manual end-to-end OSS verification, but harness automation should target the current branch's `NotchTuneApp` binary so the verification result matches the checked-out code exactly.
 
 - `NOTCHTUNE_HARNESS_SCENARIO` selects a case from `IslandDebugScenario`
 - `NOTCHTUNE_HARNESS_PRESENT_OVERLAY` mirrors the scenario onto the real island overlay

@@ -1,195 +1,148 @@
 # Releasing
 
-How to cut a new GitHub release for NotchTune.
+How to cut a NotchTune release. It's a manual flow, run from a Mac that holds
+the signing certificate and the Sparkle key (see
+[release-signing.md](release-signing.md)). No workflow publishes anything: CI
+only builds, tests and packages to check that it all still works.
 
 ## Versioning
 
-Follow [Semantic Versioning](https://semver.org/):
+Follow [Semantic Versioning](https://semver.org/): patch for fixes, minor for
+new features, major for breaking changes. Tags have **no `v` prefix** (`2.2.1`,
+not `v2.2.1`).
 
-- **Patch** (0.1.x): bug fixes, doc updates, small improvements
-- **Minor** (0.x.0): new features, non-breaking changes
-- **Major** (x.0.0): breaking changes
+The build number (`CFBundleVersion`) is `git rev-list --count HEAD`, and Sparkle
+compares builds, not versions. `make-release-deltas.sh` stops if the build isn't
+above the published one, which can happen on a branch with fewer commits. Fix
+that by packaging from the right branch or setting `NOTCHTUNE_BUILD_NUMBER`.
 
-## Checklist
+## Before you start
 
-1. **Confirm target**: ensure all intended changes are merged to `main`.
-2. **Confirm signing secrets**: the repository must have `SPARKLE_PUBLIC_KEY`
-   and `SPARKLE_PRIVATE_KEY` Actions secrets. See **EdDSA Key Setup** below.
-3. **Tag the release**:
-   ```bash
-   git tag v<version>
-   git push origin v<version>
-   ```
-4. **Watch the Release workflow**. It builds the app, signs the update archive,
-   generates `appcast.xml`, and publishes all three release assets.
-5. **Verify**: confirm the DMG, ZIP, and appcast are downloadable and use an
-   older NotchTune build's **Check for Updates…** button.
+- `Open Island Dev Local` in the login keychain, and the Sparkle key under the
+  `NotchTune` account.
+- `gh` signed in, `create-dmg` installed (`brew install create-dmg`), and Pillow
+  for the brand scripts (`pip3 install Pillow`).
+- `swift package resolve` has run, so Sparkle's tools exist in `.build/artifacts`.
 
-For a local package without publishing:
+## Steps
 
-```bash
-public_key="$(
-  .build/artifacts/sparkle/Sparkle/bin/generate_keys \
-    --account NotchTune -p
-)"
-NOTCHTUNE_VERSION=<version> \
-NOTCHTUNE_EDDSA_PUBLIC_KEY="$public_key" \
-zsh scripts/package-app.sh
-```
-
-This produces `output/package/NotchTune.dmg` and
-`output/package/NotchTune.zip`.
-
-### Signing
-
-Until there is a Developer ID, `package-app.sh` signs with a stable local
-certificate (the `Open Island Dev Local` identity from
-`scripts/setup-dev-signing.sh`, or `NOTCHTUNE_STABLE_SIGN_IDENTITY`). Without
-one it falls back to ad-hoc signing and warns: macOS ties permissions to an
-ad-hoc build's own hash, so every update would drop the user's Camera,
-Calendar and Accessibility access. Keep that certificate: a new one means
-users grant those once more. Sparkle allows the identity to change because
-the EdDSA key stays the same.
-
-### Delta updates
-
-Updates download only what changed. After packaging, build patches from the
-last few published builds and the appcast that lists them:
-
-```bash
-zsh scripts/make-release-deltas.sh <tag> [previous-release-count, default 3]
-```
-
-It writes `output/package/deltas/NotchTune-<new>-from-<old>.delta` (Sparkle
-delta format 3, which every Sparkle 2 build reads), checks each one rebuilds
-the new app exactly, signs them, and rewrites `appcast.xml` with the full zip
-plus a `<sparkle:deltas>` entry per patch. Upload the `.delta` files with the
-DMG, ZIP and appcast. A build with no patch downloads the full zip.
-
-The app downloads and prepares updates in the background, then offers
-**Update** in the notch and **Restart to Update** in Settings (or installs on
-quit); see `UpdateChecker`. To inspect its Sparkle signature manually:
-
-```bash
-.build/artifacts/sparkle/Sparkle/bin/sign_update \
-  "output/package/NotchTune.zip"
-```
-
-## Release Notes Format
-
-Release notes are English-only. Use the following template:
-
-```markdown
-## NotchTune v<version> — <Title>
-
-### Changes since v<prev>
-
-- <emoji> **Category**: English description (#PR)
-
----
-
-## Installation
-
-<< See "Installation Section" below >>
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-```
-
-### Change categories
-
-| Emoji | Category | When to use |
-|-------|----------|-------------|
-| ✨ | Feature | New user-facing functionality |
-| 🐛 | Fix | Bug fix |
-| 📸/📋 | Docs | Documentation changes |
-| ♻️ | Refactor | Code restructuring |
-| 🏗️ | Infra | Build, CI, packaging changes |
-
-## Installation Section
-
-**Include in every release** until code signing is in place. Remove once we ship a signed & notarized build.
-
-```markdown
-## Installation
-
-1. Download **NotchTune.dmg**, open it, and drag **NotchTune** to **Applications**.
-
-2. Since this app isn't notarized yet, macOS may show **"NotchTune is damaged"** when you try to open it. Run this command in Terminal to fix it:
+1. **Review what's going out.** Read every commit since the last tag rather than
+   going from memory:
 
    ```bash
-   xattr -dr com.apple.quarantine "/Applications/NotchTune.app"
+   git fetch origin
+   git log <previous-tag>..origin/main --oneline
    ```
 
-3. Requirements: **macOS 14+**, **Apple Silicon** (M1/M2/M3/M4/M5).
+2. **Bump the version** in `scripts/package-app.sh`, `scripts/launch-dev-app.sh`,
+   `website/package.json` and `website/src/hooks/useLatestRelease.ts`, then
+   commit (`chore(release): version X.Y.Z`).
 
-> ⚠️ **Note**: This is an early-access build without a Developer ID. Code signing and notarization will be added once our Apple Developer account is approved.
+3. **Package.** This builds, smoke-tests, signs, and writes the DMG and ZIP to
+   `output/package/`:
+
+   ```bash
+   public_key="$(.build/artifacts/sparkle/Sparkle/bin/generate_keys --account NotchTune -p)"
+   NOTCHTUNE_REQUIRE_STABLE_SIGNING=1 \
+   NOTCHTUNE_EDDSA_PUBLIC_KEY="$public_key" \
+   zsh scripts/package-app.sh
+   ```
+
+   `NOTCHTUNE_REQUIRE_STABLE_SIGNING=1` makes it fail instead of falling back to
+   an ad-hoc signature, which would drop users' permissions on update.
+
+4. **Build the patches and the appcast:**
+
+   ```bash
+   zsh scripts/make-release-deltas.sh X.Y.Z
+   ```
+
+   This checks the build number against the published appcast, builds a delta
+   from each of the last three releases (pass a count as the second argument to
+   change that), proves each one rebuilds the new app exactly, signs them, and
+   rewrites `appcast.xml`.
+
+5. **Commit the appcast and push `main`:**
+
+   ```bash
+   git add appcast.xml
+   git commit -m "chore(release): X.Y.Z appcast, build <build>, with delta patches"
+   git push origin main
+   ```
+
+6. **Tag it**, annotated and with no `v`:
+
+   ```bash
+   git tag -a X.Y.Z -m "NotchTune X.Y.Z"
+   git push origin X.Y.Z
+   ```
+
+7. **Publish.** Sparkle reads `appcast.xml` from the latest release, so this is
+   the step that reaches users:
+
+   ```bash
+   gh release create X.Y.Z \
+     output/package/NotchTune.dmg \
+     output/package/NotchTune.zip \
+     appcast.xml \
+     output/package/deltas/*.delta \
+     --title "NotchTune vX.Y.Z — Short Title" \
+     --notes-file notes.md
+   ```
+
+8. **Verify.** Download the DMG and the appcast from the release, and let an
+   older installed build pick up the update.
+
+### Replacing a release
+
+To ship a newer build under the same version, repeat steps 3 to 5 with the same
+tag, then replace the assets:
+
+```bash
+gh release upload X.Y.Z \
+  output/package/NotchTune.dmg output/package/NotchTune.zip \
+  appcast.xml output/package/deltas/*.delta --clobber
 ```
+
+`make-release-deltas.sh` patches from the build being replaced as well, and the
+build number must still go up. Someone already holding a prepared update stays on
+it until that installs, which `UpdateChecker` makes happen within about a day.
+
+## Release notes
+
+English only, from [.github/RELEASE_TEMPLATE.md](../.github/RELEASE_TEMPLATE.md).
+Write them for the people using the app: what's better for them, not what
+changed in the code.
+
+Keep the template's Installation section in every release until builds are
+notarized.
 
 ## Assets
 
-Every release ships three artifacts:
-
 | File | Purpose |
 |------|---------|
-| `NotchTune.dmg` | Styled disk image with drag-to-Applications |
-| `NotchTune.zip` | Sparkle-signed app archive |
-| `appcast.xml` | Sparkle update feed for the latest release |
+| `NotchTune.dmg` | Disk image with drag-to-Applications, for new installs |
+| `NotchTune.zip` | Sparkle-signed full app, the fallback for any installed build |
+| `NotchTune-<new>-from-<old>.delta` | Signed patches from recent builds |
+| `appcast.xml` | The update feed, also committed at the repo root |
 
-## Sparkle Appcast
-
-The release workflow generates a signed `appcast.xml` asset for every tagged release.
-Sparkle follows GitHub's latest-release redirect at:
+Sparkle follows GitHub's latest-release redirect:
 
 ```
 https://github.com/dw2lam/NotchTune/releases/latest/download/appcast.xml
 ```
 
-Each release needs a new `<item>` entry. Template:
+## How updates reach people
 
-```xml
-<item>
-    <title>Version X.Y.Z</title>
-    <sparkle:version>BUILD_NUMBER</sparkle:version>
-    <sparkle:shortVersionString>X.Y.Z</sparkle:shortVersionString>
-    <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-    <pubDate>Thu, 06 Apr 2026 00:00:00 +0000</pubDate>
-    <enclosure
-        url="https://github.com/dw2lam/NotchTune/releases/download/vX.Y.Z/NotchTune.zip"
-        type="application/octet-stream"
-        sparkle:edSignature="PASTE_SIGNATURE_HERE"
-        length="PASTE_LENGTH_HERE"
-    />
-</item>
-```
+Sparkle checks hourly, downloads in the background (a delta when one exists for
+that build) and prepares the update. NotchTune then shows **Update** in the notch
+and **Restart to Update** in Settings. It also installs on quit.
 
-### EdDSA Key Setup (one-time)
+Holding a prepared update stops Sparkle from running any further check, so an
+update left alone for a day applies itself once the user has been idle for five
+minutes, no agent is waiting and Mirror is closed; the next check follows
+from the new build. See `UpdateChecker` and `UpdateAutoInstall`.
 
-Generate a NotchTune-specific key pair with Sparkle's tool:
-
-```bash
-.build/artifacts/sparkle/Sparkle/bin/generate_keys --account NotchTune
-```
-
-This stores the private key in your macOS Keychain and prints the public key. Keep
-the private key out of the repository. Configure the release workflow once:
-
-```bash
-tools=".build/artifacts/sparkle/Sparkle/bin"
-"$tools/generate_keys" --account NotchTune -p \
-  | gh secret set SPARKLE_PUBLIC_KEY
-"$tools/generate_keys" --account NotchTune -x /tmp/notchtune-sparkle-private-key
-gh secret set SPARKLE_PRIVATE_KEY < /tmp/notchtune-sparkle-private-key
-rm /tmp/notchtune-sparkle-private-key
-```
-
-The public key is embedded as `SUPublicEDKey`; the private key is used only by
-GitHub Actions to sign the update archive.
-
-## Signing (future)
-
-When `NOTCHTUNE_SIGN_IDENTITY` is set, `package-app.sh` handles codesign + notarization automatically. At that point:
-
-1. Remove the "Installation Section" Gatekeeper instructions from future release notes.
-2. Add `--verify` step to the checklist.
-
-See [packaging.md](packaging.md) for signing details.
+With **Download updates automatically** off (Settings → General), Sparkle still
+checks, Settings says what's available, and nothing downloads or restarts until
+the user asks.
