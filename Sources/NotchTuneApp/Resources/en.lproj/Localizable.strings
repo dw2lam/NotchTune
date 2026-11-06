@@ -412,3 +412,11 @@
 "settings.updates.upToDate" = "Up to date · checked %@";
 "settings.updates.failed" = "Couldn't check for updates";
 "settings.updates.automatic" = "Checks for updates automatically";
+"settings.updates.moveToApplications" = "Move NotchTune to Applications to get updates";
+"settings.general.updates" = "Updates";
+"settings.general.autoDownloadUpdates" = "Download updates automatically";
+"settings.general.autoDownloadUpdates.note" = "Updates arrive in the background. One left waiting for a day installs itself while you're away, as long as no agent needs you. Off, NotchTune only tells you here when one is out.";
+"update.restart.confirm.title" = "Agents are waiting for you";
+"update.restart.confirm.message" = "Restarting clears their prompts from the notch, and they'll ask in their own windows instead.";
+"update.restart.confirm.action" = "Restart Anyway";
+"update.restart.confirm.cancel" = "Not Now";

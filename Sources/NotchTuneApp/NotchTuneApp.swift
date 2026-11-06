@@ -308,6 +308,12 @@ struct NotchTuneApp: App {
         .windowToolbarStyle(.unified)
         .defaultSize(width: 860, height: 640)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button(appDelegate.model.lang.t("settings.updates.checkForUpdates")) {
+                    openWindow(id: "settings")
+                    appDelegate.model.checkForUpdatesFromMenu()
+                }
+            }
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {
                     openWindow(id: "settings")

@@ -1290,6 +1290,7 @@ final class AppModel {
         // banner; the panel is placed for a height, so place it again.
         calendar.onHeadsUpChange = { [weak self] in self?.refreshOverlayPlacementIfVisible() }
         calendar.start()
+        connectUpdateChecker()
         hasFinishedInit = true
         reconcileCompactMusicView()
         overlay.refreshFullscreenState()
