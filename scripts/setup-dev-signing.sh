@@ -39,6 +39,10 @@
 # → Accessibility → drag the .app from ~/Applications/ into the
 # list). From that grant onwards, permission persists across rebuilds.
 #
+# Releases are signed with this identity too, and a new certificate would
+# reset every user's permissions, so back it up: see
+# scripts/export-signing-backup.sh and docs/release-signing.md.
+#
 # To undo: `security delete-identity -Z <sha1> ~/Library/Keychains/login.keychain-db`
 # where <sha1> is from `security find-identity -p codesigning -v`. Also
 # `security remove-trusted-cert <cert.pem>` if you want the trust
@@ -68,7 +72,8 @@ cert_pem="$tmp_dir/cert.pem"
 cert_p12="$tmp_dir/cert.p12"
 # The p12 password is ephemeral — it exists for the duration of this
 # script only, used to hand the cert + key from openssl to security and
-# then discarded. It is NOT a persistent secret.
+# then discarded. It is NOT a persistent secret. The keychain is the only
+# copy afterwards, which is why scripts/export-signing-backup.sh exists.
 p12_password=$(openssl rand -hex 16)
 
 echo "• Generating 10-year self-signed code signing certificate…"
