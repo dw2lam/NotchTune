@@ -51,6 +51,19 @@ struct AlwaysAllowOfferTests {
     }
 
     @Test
+    func aModeNeverRidesAlongUnderAnotherLabel() throws {
+        let offer = try #require(AlwaysAllowOffer(session: session(
+            toolName: "Edit",
+            suggestions: [
+                .addDirectories(destination: .session, directories: ["/other/repo"]),
+                .setMode(destination: .session, mode: .acceptEdits),
+            ]
+        )))
+        #expect(offer.grant == .scope("/other/repo"))
+        #expect(offer.updates == [.addDirectories(destination: .session, directories: ["/other/repo"])])
+    }
+
+    @Test
     func bashWithNoNarrowRuleIsNotOffered() {
         #expect(session().alwaysAllowOffer == nil)
         #expect(session(suggestions: [rule(nil)]).alwaysAllowOffer == nil)

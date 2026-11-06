@@ -12,6 +12,17 @@
 import { connect } from "net";
 import { homedir } from "os";
 
+// The approval card shows this as what's being approved, and marks it when
+// it's too long to show. So the command goes as itself and whole: cut here,
+// the card would never know, and JSON around it reads as a broken command.
+const PERMISSION_INPUT_LIMIT = 16384;
+function permissionInputText(toolInput) {
+  const text = typeof toolInput.command === "string"
+    ? toolInput.command
+    : JSON.stringify(toolInput);
+  return text.slice(0, PERMISSION_INPUT_LIMIT);
+}
+
 const SOCKET_PATH =
   process.env.NOTCHTUNE_SOCKET_PATH ||
   `${process.env.HOME || homedir()}/Library/Application Support/NotchTune/bridge.sock`;
@@ -280,7 +291,7 @@ async function serverV1({ client, serverUrl }) {
       }
       return makePayload("PermissionRequest", p.sessionID, sessionCwd.get(p.sessionID), {
         tool_name: toolName,
-        tool_input: JSON.stringify(toolInput).slice(0, 200),
+        tool_input: permissionInputText(toolInput),
         permission_id: p.id,
         permission_title: `Allow ${toolName}`,
         permission_description: patterns.length > 0
@@ -492,7 +503,7 @@ async function setupV2(ctx) {
         }
         return makePayload("PermissionRequest", sid, cwdFor(event, sid), {
           tool_name: toolName,
-          tool_input: JSON.stringify(toolInput).slice(0, 200),
+          tool_input: permissionInputText(toolInput),
           permission_id: d.id,
           permission_title: `Allow ${toolName}`,
           permission_description: d.message || (resources.length > 0

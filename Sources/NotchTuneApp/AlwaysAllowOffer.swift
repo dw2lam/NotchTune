@@ -27,7 +27,7 @@ struct AlwaysAllowOffer: Equatable, Sendable {
             return nil
         }
 
-        let narrow = request.suggestedUpdates.filter(Self.isNarrow)
+        let narrow = Self.offered(request.suggestedUpdates.filter(Self.isNarrow))
         if !narrow.isEmpty {
             updates = narrow
             grant = Self.grant(for: narrow)
@@ -66,6 +66,18 @@ struct AlwaysAllowOffer: Equatable, Sendable {
         case .replaceRules, .removeRules, .removeDirectories:
             false
         }
+    }
+
+    /// A mode can't share a label with a rule or a directory, and it reaches
+    /// further than either: "Always Allow (/other/repo)" that also accepts
+    /// every edit in the session would do more than it says. So a mode is
+    /// only offered alone, where the label names it.
+    private static func offered(_ updates: [ClaudePermissionUpdate]) -> [ClaudePermissionUpdate] {
+        let scoped = updates.filter {
+            if case .setMode = $0 { return false }
+            return true
+        }
+        return scoped.isEmpty ? updates : scoped
     }
 
     private static func isBounded(_ rule: ClaudePermissionRuleValue) -> Bool {

@@ -178,6 +178,8 @@ clean_glob ~/.cursor/'hooks.json.backup.*'
 
 strip_kimi_config ~/.kimi/config.toml
 clean_path ~/.kimi/open-island-kimi-hooks-install.json
+strip_kimi_config ~/.kimi-code/config.toml
+clean_path ~/.kimi-code/open-island-kimi-hooks-install.json
 
 # OpenCode: the bundled plugin file is `open-island.js` (not the install
 # manifest name), and config.json references it.

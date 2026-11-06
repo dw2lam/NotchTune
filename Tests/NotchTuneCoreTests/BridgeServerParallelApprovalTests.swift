@@ -121,6 +121,40 @@ struct BridgeServerParallelApprovalTests {
     }
 
     @Test
+    func denyingOneRequestDoesNotEndTheTurnWhileAnotherWaits() async throws {
+        let harness = try await makeHarness()
+        defer { harness.tearDown() }
+        var iterator = harness.stream.makeAsyncIterator()
+
+        let first = Task { try await harness.hook(permission("first", toolUseID: "t1")) }
+        let firstRequest = try await nextRequest(&iterator)
+        let second = Task { try await harness.hook(permission("second", toolUseID: "t2")) }
+        try await Task.sleep(for: .milliseconds(100))
+
+        try await harness.observer.send(.resolvePermission(
+            sessionID: sessionID,
+            resolution: .deny(),
+            requestID: firstRequest.id
+        ))
+        #expect(isDeny(try await first.value))
+
+        // The next thing anyone hears is the second request, not "completed".
+        while let event = try await iterator.next() {
+            if case .sessionCompleted = event {
+                Issue.record("A session with a request still waiting was reported completed.")
+                break
+            }
+            if case .permissionRequested = event { break }
+        }
+
+        try await harness.observer.send(.resolvePermission(
+            sessionID: sessionID,
+            resolution: .allowOnce()
+        ))
+        #expect(isAllow(try await second.value))
+    }
+
+    @Test
     func anotherToolCallFinishingLeavesThePendingApprovalAlone() async throws {
         let harness = try await makeHarness()
         defer { harness.tearDown() }

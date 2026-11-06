@@ -44,10 +44,12 @@ extension KeyedDecodingContainer {
     }
 }
 
-private struct LossyElement<Value: Decodable>: Decodable {
-    var value: Value?
+/// One array element that may fail to decode, so a single bad entry doesn't
+/// fail the array around it.
+public struct LossyElement<Value: Decodable>: Decodable {
+    public var value: Value?
 
-    init(from decoder: any Decoder) throws {
+    public init(from decoder: any Decoder) throws {
         value = try? Value(from: decoder)
     }
 }

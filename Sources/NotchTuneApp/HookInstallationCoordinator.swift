@@ -40,6 +40,13 @@ final class HookInstallationCoordinator {
     var isAntigravityHookSetupBusy = false
     var isKimiHookSetupBusy = false
     var isClaudeUsageSetupBusy = false
+    /// An install, repair or removal is running for some agent.
+    var isAnyHookSetupBusy: Bool {
+        isCodexSetupBusy || isClaudeHookSetupBusy || isQoderHookSetupBusy || isQwenCodeHookSetupBusy
+            || isFactoryHookSetupBusy || isCodebuddyHookSetupBusy || isOpenCodeSetupBusy
+            || isCursorHookSetupBusy || isGeminiHookSetupBusy || isAntigravityHookSetupBusy
+            || isKimiHookSetupBusy
+    }
 
     @ObservationIgnored
     var onStatusMessage: ((String) -> Void)?

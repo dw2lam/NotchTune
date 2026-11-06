@@ -893,7 +893,7 @@ final class OverlayUICoordinator {
         let session = activeIslandCardSession
         guard islandSurface.matchesCurrentState(of: session) else {
             if notchOpenReason == .notification {
-                closeNotificationCardOrAdvance()
+                closeNotificationCardOrAdvance(thenCompletions: true)
             } else {
                 islandSurface = .sessionList()
             }
@@ -913,7 +913,7 @@ final class OverlayUICoordinator {
             return
         }
 
-        closeNotificationCardOrAdvance()
+        closeNotificationCardOrAdvance(thenCompletions: true)
     }
 
     /// Esc on a notification card: collapse it without acting on it (a
@@ -936,13 +936,18 @@ final class OverlayUICoordinator {
     }
 
     /// A card is done: the next blocked session takes its place in the open
-    /// notch, so the notch only closes when nobody is waiting.
-    private func closeNotificationCardOrAdvance() {
-        guard let next = nextQueuedAttentionAccessor?(), next != islandSurface.sessionID else {
+    /// notch, so the notch only closes when nobody is waiting. A card that
+    /// was answered also lets through the completions it held back; leaving
+    /// one (Esc, the pointer) means the user wants the notch out of the way.
+    private func closeNotificationCardOrAdvance(thenCompletions: Bool = false) {
+        let current = islandSurface.sessionID
+        if let next = nextQueuedAttentionAccessor?(), next != current {
+            rotateNotificationSurface(to: next)
+        } else if thenCompletions, let next = nextUnseenCompletionAccessor?(), next != current {
+            rotateNotificationSurface(to: next)
+        } else {
             notchClose()
-            return
         }
-        rotateNotificationSurface(to: next)
     }
 
     func dismissOverlayForJump() {

@@ -1045,6 +1045,31 @@ struct SessionStateTests {
     }
 
     @Test
+    func codexHookInstallerUninstallKeepsKeysBesideHooks() throws {
+        let existing = """
+        {
+          "version": 3,
+          "hooks": {
+            "Stop": [
+              { "hooks": [ { "type": "command", "command": "'/tmp/NotchTuneHooks'" } ] }
+            ]
+          }
+        }
+        """.data(using: .utf8)
+
+        let mutation = try CodexHookInstaller.uninstallHooksJSON(
+            existingData: existing,
+            managedCommand: "'/tmp/NotchTuneHooks'"
+        )
+
+        #expect(mutation.changed)
+        #expect(!mutation.hasRemainingHooks)
+        let root = try jsonObject(from: mutation.contents)
+        #expect(root["version"] as? Int == 3)
+        #expect(root["hooks"] == nil)
+    }
+
+    @Test
     func codexHookInstallerUninstallRemovesOnlyManagedHooks() throws {
         let existing = """
         {

@@ -12,6 +12,40 @@ struct BoundedProcessTests {
     }
 
     @Test
+    func inputToAChildThatAlreadyExitedDoesNotKillUs() {
+        // Far past the pipe buffer, to a child that never reads it. Without
+        // the guard the write raises SIGPIPE and the test run dies here.
+        let output = BoundedProcess.run(
+            executablePath: "/usr/bin/true",
+            arguments: [],
+            deadline: 5,
+            input: Data(repeating: 0x61, count: 1_000_000)
+        )
+        #expect(output?.status == 0)
+    }
+
+    @Test
+    func aThrowingRunTellsATimeoutFromALaunchFailure() {
+        #expect(throws: BoundedProcess.Failure.timedOut) {
+            try BoundedProcess.runThrowing(executablePath: "/bin/sleep", arguments: ["30"], deadline: 0.1)
+        }
+        #expect(throws: (any Error).self) {
+            try BoundedProcess.runThrowing(executablePath: "/no/such/helper", arguments: [], deadline: 1)
+        }
+    }
+
+    @Test
+    func standardErrorComesBackWhenAskedFor() throws {
+        let output = try BoundedProcess.runThrowing(
+            executablePath: "/bin/sh",
+            arguments: ["-c", "echo oops >&2"],
+            deadline: 5,
+            capturesStandardError: true
+        )
+        #expect(String(decoding: output.stderr, as: UTF8.self) == "oops\n")
+    }
+
+    @Test
     func aFastChildReturnsItsOutput() {
         let output = BoundedProcess.run(executablePath: "/bin/echo", arguments: ["hello"], deadline: 3)
         #expect(output?.status == 0)

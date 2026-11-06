@@ -147,6 +147,31 @@ struct AppModelAttentionQueueTests {
     }
 
     @Test
+    func aCompletionHeldBackByACardIsShownOnceTheCardIsAnswered() async throws {
+        let model = makeModel()
+        model.notificationCoalescingPolicy = NotificationCoalescingPolicy(
+            completionSettleSeconds: 0.01,
+            groupCooldownSeconds: 0,
+            globalMinimumIntervalSeconds: 0
+        )
+        start(model, "a")
+        start(model, "b")
+        request(model, "a")
+        try await settle { cardID(model) == "a" }
+
+        model.applyTrackedEvent(
+            .sessionCompleted(SessionCompleted(sessionID: "b", summary: "Done", timestamp: now.addingTimeInterval(1))),
+            updateLastActionMessage: false,
+            ingress: .bridge
+        )
+        try await Task.sleep(for: .milliseconds(60))
+        model.approvePermission(for: "a", action: .allowOnce)
+
+        try await settle { cardID(model) == "b" }
+        #expect(model.notchStatus == .opened)
+    }
+
+    @Test
     func answeringPresentsTheOldestRemainingThenCloses() async throws {
         let model = makeModel()
         try await threeWaiting(model)

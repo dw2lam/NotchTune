@@ -112,6 +112,7 @@ public enum CodexHookTrustProbe {
             ["method": "initialized", "params": [String: Any]()],
             ["id": 2, "method": "hooks/list", "params": ["cwds": [codexDirectory.path]]],
         ]
+        BoundedProcess.ignoreBrokenPipe(on: stdin.fileHandleForWriting)
         for message in messages {
             guard var line = try? JSONSerialization.data(withJSONObject: message) else {
                 return nil

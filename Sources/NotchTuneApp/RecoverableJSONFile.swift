@@ -1,4 +1,5 @@
 import Foundation
+import NotchTuneCore
 
 /// A JSON file that a bad write or a bad entry can't take everything with it.
 /// A store that decodes to nothing and then saves replaces the user's file
@@ -35,7 +36,14 @@ struct RecoverableJSONFile {
         decode: (Data) throws -> Decoded<Value>,
         merge: (_ survivors: Value, _ backup: Value) -> Value
     ) -> Outcome<Value> {
-        guard fileManager.fileExists(atPath: url.path) else { return .missing }
+        guard fileManager.fileExists(atPath: url.path) else {
+            // Set aside last time and never saved since: the backup still
+            // holds what the store recovered then.
+            guard let backup = (try? Data(contentsOf: backupURL)).flatMap({ try? decode($0) }) else {
+                return .missing
+            }
+            return .recovered(backup.value)
+        }
 
         let decoded = (try? Data(contentsOf: url)).flatMap { try? decode($0) }
         if let decoded, decoded.isComplete {
@@ -69,16 +77,6 @@ struct RecoverableJSONFile {
         let stamp = now.formatted(.iso8601).replacingOccurrences(of: ":", with: "-")
         let destination = url.appendingPathExtension("corrupt-\(stamp)")
         try? fileManager.moveItem(at: url, to: destination)
-    }
-}
-
-/// One array element that may fail to decode, so a single bad entry doesn't
-/// fail the array around it.
-struct LossyElement<Element: Decodable>: Decodable {
-    let value: Element?
-
-    init(from decoder: any Decoder) throws {
-        value = try? Element(from: decoder)
     }
 }
 

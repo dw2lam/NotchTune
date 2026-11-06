@@ -886,3 +886,28 @@ struct MusicPanelModeTests {
         #expect(MusicPanelView.Mode.resolve(showsNowPlaying: false, wantsLibrary: false, player: nil) == .none)
     }
 }
+
+@MainActor
+struct MusicLibraryRecoveryTests {
+    // A write that stopped after moving the file to `.bak` leaves no file at
+    // all, and the next launch must not read that as an empty library.
+    @Test
+    func aLibraryWithOnlyItsBackupLeftIsRestored() throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NotchTuneMusicBackup-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("library.json")
+        let pin = MusicLibraryItem(id: "spotify:playlist:1", kind: .playlist, title: "Kept", subtitle: "Playlist")
+
+        let first = MusicLibraryStore(fileURL: url)
+        first.update { $0.spotifyPins = [pin] }
+        first.update { $0.spotifyPins = [pin, pin] }
+        try FileManager.default.removeItem(at: url)
+
+        let second = MusicLibraryStore(fileURL: url)
+
+        #expect(second.archive.spotifyPins == [pin])
+        #expect(FileManager.default.fileExists(atPath: url.path))
+    }
+}

@@ -60,6 +60,12 @@ struct IntegrationDoctorCard: View {
         .task(id: installedAgents) {
             model.runHealthChecks()
         }
+        // A repair leaves the agent installed, so the task above doesn't rerun.
+        .onChange(of: model.hooks.isAnyHookSetupBusy) { _, isBusy in
+            if !isBusy {
+                model.runHealthChecks()
+            }
+        }
     }
 
     private var summaryRow: some View {

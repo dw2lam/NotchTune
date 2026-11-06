@@ -154,7 +154,13 @@ public enum CodexHookInstaller {
         }
 
         if hooksObject.isEmpty {
-            return CodexHookFileMutation(contents: nil, changed: mutated, hasRemainingHooks: false)
+            rootObject.removeValue(forKey: "hooks")
+            guard !rootObject.isEmpty else {
+                return CodexHookFileMutation(contents: nil, changed: mutated, hasRemainingHooks: false)
+            }
+            // Keys beside `hooks` aren't ours to take with it.
+            let data = try serialize(rootObject)
+            return CodexHookFileMutation(contents: data, changed: mutated || data != existingData, hasRemainingHooks: false)
         }
 
         rootObject["hooks"] = hooksObject

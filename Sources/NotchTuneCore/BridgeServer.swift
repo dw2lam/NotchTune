@@ -3245,8 +3245,10 @@ public final class BridgeServer: @unchecked Sendable {
             phase = .completed
         }
 
+        // One denied call doesn't end a turn with another still waiting.
+        let othersWaiting = pendingClaudeInteractions[sessionID] != nil
         emit(
-            phase == .completed
+            phase == .completed && !othersWaiting
                 ? .sessionCompleted(
                     SessionCompleted(
                         sessionID: sessionID,
@@ -3258,18 +3260,20 @@ public final class BridgeServer: @unchecked Sendable {
                     SessionActivityUpdated(
                         sessionID: sessionID,
                         summary: summary,
-                        phase: phase,
+                        phase: othersWaiting ? .running : phase,
                         timestamp: .now
                     )
                 )
         )
 
         send(.response(.claudeHookDirective(directive)), to: pendingInteraction.clientID)
-        presentNextClaudeInteraction(sessionID: sessionID, afterSettling: index)
+        presentNextClaudeInteraction(sessionID: sessionID)
     }
 
-    private func presentNextClaudeInteraction(sessionID: String, afterSettling index: Int) {
-        guard index == 0, let next = pendingClaudeInteractions[sessionID]?.first else {
+    /// Every settled request updates the session, so the one at the head is
+    /// put back on screen even if a later one was the one that settled.
+    private func presentNextClaudeInteraction(sessionID: String) {
+        guard let next = pendingClaudeInteractions[sessionID]?.first else {
             return
         }
         presentClaudeInteraction(next, sessionID: sessionID)
@@ -3315,7 +3319,7 @@ public final class BridgeServer: @unchecked Sendable {
             ),
             to: pendingInteraction.clientID
         )
-        presentNextClaudeInteraction(sessionID: sessionID, afterSettling: index)
+        presentNextClaudeInteraction(sessionID: sessionID)
     }
 
     private func claudeToolUseID(for payload: ClaudeHookPayload) -> String? {

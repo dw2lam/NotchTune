@@ -1,4 +1,5 @@
 import Foundation
+import NotchTuneCore
 
 /// On-disk memory for the empty Music tab, kept locally in
 /// `~/Library/Application Support/NotchTune/Music/library.json`:
@@ -52,8 +53,12 @@ final class MusicLibraryStore {
             merge: { survivors, _ in survivors }
         )
         switch outcome {
-        case let .intact(decoded), let .recovered(decoded):
+        case let .intact(decoded):
             archive = decoded
+        case let .recovered(decoded):
+            archive = decoded
+            // The damaged file is gone: put what survived back at once.
+            save()
         case .missing, .lost:
             archive = seed
         }

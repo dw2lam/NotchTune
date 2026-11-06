@@ -112,5 +112,7 @@ struct OpenCodePluginInstallationTests {
         )
         #expect(!source.contains("/tmp/"))
         #expect(!source.contains("appendFileSync"))
+        // The approval card marks a long command as cut; cut here, it can't.
+        #expect(!source.contains("JSON.stringify(toolInput).slice(0, 200)"))
     }
 }
