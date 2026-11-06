@@ -255,6 +255,18 @@ final class AppModel {
         }
     }
     var isBridgeReady = false
+    /// The failure on screen, if any (see `AppNotice`).
+    private(set) var notice: AppNotice?
+
+    func post(_ notice: AppNotice) {
+        if let current = self.notice, current.isSameProblem(as: notice) { return }
+        self.notice = notice
+    }
+
+    func dismissNotice() {
+        notice = nil
+    }
+
     var lastActionMessage = "Waiting for agent hook events..." {
         didSet {
             guard lastActionMessage != oldValue else {
