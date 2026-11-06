@@ -481,13 +481,17 @@ public struct SessionState: Equatable, Sendable {
     /// Remove sessions that are no longer visible in the island.
     /// Returns `true` if any sessions were removed.
     @discardableResult
-    /// Manually mark a session as completed and ended.
-    /// Intended for remote sessions whose SSH tunnel dropped without a
-    /// SessionEnd hook.
+    /// Manually mark a session as completed and ended, for what nothing else
+    /// will clear: remote sessions whose SSH tunnel dropped without a
+    /// SessionEnd hook, local ones that are stuck. A process that really is
+    /// alive brings a polled session back on the next tick.
     public mutating func dismissSession(id: String) {
         guard var session = sessionsByID[id] else { return }
         session.isSessionEnded = true
+        session.isProcessAlive = false
         session.phase = .completed
+        session.permissionRequest = nil
+        session.questionPrompt = nil
         session.updatedAt = .now
         upsert(session)
     }

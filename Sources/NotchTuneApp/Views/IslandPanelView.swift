@@ -1685,7 +1685,8 @@ struct IslandPanelView: View {
                                     ? { model.replyToSession(session, text: $0) } : nil,
                                 unsentReply: model.unsentReplies[session.id],
                                 onJump: { model.jumpToSession(session) },
-                                onDismiss: session.isRemote ? { model.dismissSession(session.id) } : nil
+                                onDismiss: session.isRemote ? { model.dismissSession(session.id) } : nil,
+                                onDismissStuck: { model.dismissSession(session.id) }
                             )
                         }
                     }
@@ -1738,7 +1739,8 @@ struct IslandPanelView: View {
                             ? { model.replyToSession(session, text: $0) } : nil,
                         unsentReply: model.unsentReplies[session.id],
                         onJump: { model.jumpToSession(session) },
-                        onDismiss: session.isRemote ? { model.dismissSession(session.id) } : nil
+                        onDismiss: session.isRemote ? { model.dismissSession(session.id) } : nil,
+                        onDismissStuck: { model.dismissSession(session.id) }
                     )
                 }
             }
@@ -2441,6 +2443,8 @@ private struct IslandSessionRow: View {
     var unsentReply: String?
     let onJump: () -> Void
     var onDismiss: (() -> Void)?
+    /// The row's context menu, offered when the session looks stuck.
+    var onDismissStuck: (() -> Void)?
 
     @State private var isHighlighted = false
     @State private var detailOverride: Bool?
@@ -2514,6 +2518,11 @@ private struct IslandSessionRow: View {
         .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.15), value: isHighlighted)
         .onTapGesture(perform: handlePrimaryTap)
+        .contextMenu {
+            if let onDismissStuck, session.isDismissibleLocally(at: referenceDate) {
+                Button(lang.t("island.dismissSession"), action: onDismissStuck)
+            }
+        }
         .onHover { hovering in
             guard isInteractive, allowsRowHoverHighlight else { return }
             isHighlighted = hovering

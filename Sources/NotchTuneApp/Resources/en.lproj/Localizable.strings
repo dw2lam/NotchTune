@@ -258,6 +258,7 @@
 "island.section.justDone" = "Just done";
 "island.section.idle" = "Idle";
 "island.showAll" = "Show all %lld sessions";
+"island.dismissSession" = "Dismiss";
 "island.collapseList" = "Collapse list";
 "island.usageWaiting" = "Usage waiting";
 
