@@ -8,7 +8,6 @@
 
 :root {
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
-  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
 
   --text: #f5f5f7;
   --sub: #a1a1a6;
@@ -44,7 +43,7 @@ body {
 
 a { color: inherit; }
 img { display: block; max-width: none; }
-h1, h2, p, figure { margin: 0; }
+h1, h2, h3, p, figure, dl, dd { margin: 0; }
 
 :focus-visible { outline: 2px solid var(--link); outline-offset: 3px; border-radius: 4px; }
 
@@ -88,7 +87,7 @@ h1, h2, p, figure { margin: 0; }
 .brand img { width: 18px; height: 18px; border-radius: 4px; }
 .nav-links { display: flex; gap: 28px; margin-left: auto; }
 .nav-links a { font-size: 12.5px; letter-spacing: -0.005em; color: rgba(245, 245, 247, 0.8); text-decoration: none; transition: color 0.2s ease; }
-.nav-links a:hover { color: #fff; }
+.nav-links a:hover, .nav-links a[aria-current] { color: #fff; }
 .nav-dl {
   padding: 4px 12px; border-radius: 980px; background: var(--blue); color: #fff;
   font-size: 12px; letter-spacing: -0.005em; text-decoration: none;
@@ -105,7 +104,9 @@ h1, h2, p, figure { margin: 0; }
   padding-top: calc(var(--nav-h) + clamp(24px, 4.5vh, 52px));
 }
 .story-intro { position: relative; z-index: 2; text-align: center; }
-.story-intro .cta { justify-content: center; margin-top: 22px; }
+.story-sub { margin-top: 10px; font-size: clamp(17px, 1.45vw, 21px); line-height: 1.3; color: var(--sub); letter-spacing: -0.012em; text-wrap: balance; }
+.story-intro .cta { justify-content: center; margin-top: 18px; }
+.story-req { margin-top: 8px; font-size: 13px; line-height: 1.3; color: var(--dim); letter-spacing: -0.005em; }
 /* the camera: moved and scaled from script as the page scrolls */
 .story-cam {
   width: 100%; padding-inline: var(--pad); margin-top: clamp(28px, 4vh, 48px);
@@ -116,8 +117,6 @@ h1, h2, p, figure { margin: 0; }
   background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.8) 46%, #000 80%);
   transition: height 0.6s var(--ease);
 }
-/* the Settings window reaches lower, so the shade under its caption is shorter */
-.story-shade.short { height: 30%; }
 .story-captions { position: absolute; left: 0; right: 0; bottom: clamp(28px, 6vh, 64px); }
 .caption {
   position: absolute; left: var(--pad); right: var(--pad); bottom: 0;
@@ -135,7 +134,7 @@ h1, h2, p, figure { margin: 0; }
 
 .mbp {
   position: relative; margin: 0 auto;
-  width: min(1040px, 100%, calc((100svh - var(--nav-h) - 240px) * 1.47));
+  width: min(1040px, 100%, max(300px, calc((100svh - var(--nav-h) - 290px) * 1.47)));
   container-type: inline-size;
   perspective: 2400px; perspective-origin: 50% 96%;
   /* a glossy black floor */
@@ -243,13 +242,18 @@ h1, h2, p, figure { margin: 0; }
   background: #f5f5f7; color: var(--text); color-scheme: light;
 }
 .download { padding: var(--sec) 0 calc(var(--sec) * 0.75); }
-.fine { margin-top: 36px; max-width: 38em; font-size: 14px; line-height: 1.5; color: var(--dim); }
-.install { margin-top: 20px; max-width: 38em; }
-.install p { font-size: 14px; line-height: 1.5; color: var(--dim); }
+.install { margin-top: 36px; max-width: 38em; font-size: 14px; line-height: 1.5; color: var(--dim); }
+.install h3 { font-size: 17px; font-weight: 600; line-height: 1.3; color: var(--text); }
+.install ol { margin: 8px 0 12px; padding-left: 1.4em; }
 .install code {
   display: block; margin-top: 10px; padding: 12px 14px; border-radius: 10px;
-  background: #e8e8ed; color: var(--text); font: 13px/1.5 var(--mono); letter-spacing: 0; overflow-wrap: anywhere;
+  background: #e8e8ed; color: var(--text); font: 14px/1.5 var(--font); letter-spacing: 0; overflow-wrap: anywhere;
 }
+.specs {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 24px;
+  margin-top: 36px; max-width: 46em; font-size: 14px; line-height: 1.5; color: var(--dim);
+}
+.specs dt { color: var(--text); }
 
 /* ---------- Footer ---------- */
 
@@ -258,7 +262,7 @@ h1, h2, p, figure { margin: 0; }
 .footer a { color: var(--text); text-decoration: none; }
 .footer a:hover { text-decoration: underline; }
 .footer-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding-top: 16px; }
-.footer-row nav { display: flex; gap: 20px; }
+.footer-row nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
 
 /* ---------- Motion ---------- */
 
@@ -268,13 +272,17 @@ h1, h2, p, figure { margin: 0; }
 /* arriving: the lid opens and the screen wakes (the notch then plays from script) */
 @media (prefers-reduced-motion: no-preference) {
   .js .story-intro > * { animation: rise 0.9s var(--ease) both; }
-  .js .story-intro .cta { animation-delay: 0.12s; }
+  .js .story-intro .story-sub { animation-delay: 0.06s; }
+  .js .story-intro .cta, .js .story-intro .story-req { animation-delay: 0.12s; }
   .js .mbp-lid { animation: lid-open 1.7s cubic-bezier(0.3, 0.7, 0.2, 1) 0.25s both; }
   .js .mbp-wall, .js .mbp-menubar { animation: wake 0.9s ease 1.25s both; }
   .js .mbp-glow { animation: glow-up 1.6s ease 1.2s both; }
   .js .mbp-lid::after { animation: glint 1.5s cubic-bezier(0.4, 0, 0.3, 1) 1.55s both; }
   /* the wallpaper drifts like an Aerial one */
   .js .mbp-wall { animation: wake 0.9s ease 1.25s both, aerial 48s ease-in-out 2.2s infinite alternate; }
+  /* a deep link lands mid-story, with the MacBook already open */
+  .linked .mbp-lid, .linked .mbp-lid::after, .linked .mbp-menubar, .linked .mbp-glow { animation: none; }
+  .linked .mbp-wall { animation: aerial 48s ease-in-out 2.2s infinite alternate; }
 }
 @keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
 @keyframes lid-open { from { transform: rotateX(-82deg); } to { transform: rotateX(0deg); } }
@@ -316,6 +324,9 @@ h1, h2, p, figure { margin: 0; }
 
 @media (max-width: 719px) {
   .lede { font-size: 16px; }
+  .story-sub { font-size: 16px; }
+  .specs { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .specs dd + dt { margin-top: 10px; }
   .cta .btn { flex: 1 1 100%; justify-content: center; }
   .story-intro .cta { gap: 12px 20px; }
   .story-intro .cta .btn { flex: 0 1 auto; }

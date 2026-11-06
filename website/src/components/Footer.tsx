@@ -1,4 +1,4 @@
-const REPO = 'https://github.com/dw2lam/NotchTune';
+import { REPO_URL } from '../hooks/useLatestRelease';
 
 export default function Footer() {
   return (
@@ -12,9 +12,10 @@ export default function Footer() {
         <div className="footer-row">
           <span>Copyright © 2026 David Lam.</span>
           <nav aria-label="Project">
-            <a href={REPO}>GitHub</a>
-            <a href={`${REPO}/releases`}>Releases</a>
-            <a href={`${REPO}/blob/main/PRIVACY_POLICY.md`}>Privacy</a>
+            <a href={REPO_URL}>GitHub</a>
+            <a href={`${REPO_URL}/releases`}>Changelog</a>
+            <a href={`${REPO_URL}/issues`}>Contact</a>
+            <a href={`${REPO_URL}/blob/main/PRIVACY_POLICY.md`}>Privacy</a>
           </nav>
         </div>
       </div>
