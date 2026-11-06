@@ -96,4 +96,18 @@ struct SettingsWelcomeAppTests {
         #expect(UpdateChecker.isFailedCheck(NSError(domain: SUSparkleErrorDomain, code: 2001)))
         #expect(UpdateChecker.isFailedCheck(NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet)))
     }
+
+    @Test
+    func runningFromTheWrongPlaceSaysHowToFixIt() {
+        let checked = Date(timeIntervalSince1970: 1_000)
+        // Sparkle's codes for a disk image and for a translocated copy.
+        #expect(UpdateChecker.isWrongLocation(NSError(domain: SUSparkleErrorDomain, code: 1003)))
+        #expect(UpdateChecker.isWrongLocation(NSError(domain: SUSparkleErrorDomain, code: 1005)))
+        #expect(!UpdateChecker.isWrongLocation(NSError(domain: SUSparkleErrorDomain, code: 2001)))
+        #expect(!UpdateChecker.isWrongLocation(NSError(domain: NSURLErrorDomain, code: 1003)))
+        #expect(!UpdateChecker.isWrongLocation(nil))
+        #expect(SettingsWelcome.updateStatus(
+            isChecking: false, availableVersion: nil, lastCheck: checked, lastCheckFailed: true, needsMoveToApplications: true
+        ) == .moveToApplications)
+    }
 }

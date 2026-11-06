@@ -369,6 +369,17 @@ struct GeneralSettingsPane: View {
                 )
             }
 
+            SettingsCard(title: lang.t("settings.general.updates")) {
+                SettingsToggleRow(
+                    lang.t("settings.general.autoDownloadUpdates"),
+                    subtitle: lang.t("settings.general.autoDownloadUpdates.note"),
+                    isOn: Binding(
+                        get: { model.updateChecker.automaticDownloadsEnabled },
+                        set: { model.updateChecker.automaticDownloadsEnabled = $0 }
+                    )
+                )
+            }
+
             SettingsCard(title: lang.t("settings.general.gettingStarted")) {
                 SettingsRow(
                     lang.t("settings.general.setupAssistant"),

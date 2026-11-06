@@ -33,6 +33,18 @@ new_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist")"
 new_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")"
 minimum_system="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$plist" 2>/dev/null || echo 14.0)"
 
+# Sparkle only offers a build above the installed one, and CFBundleVersion is
+# a commit count, which a branch can take backwards. Nobody would get a release
+# built like that, so stop here instead of signing it.
+published_appcast="$(gh release download --repo "$repo" --pattern appcast.xml --output -)"
+published_build="$(sed -n 's/.*<sparkle:version>\([0-9][0-9]*\)<.*/\1/p' <<<"$published_appcast" | sort -n | tail -n 1)"
+[[ "$published_build" == <-> ]] || { echo "No build number in the published appcast." >&2; exit 1; }
+if [[ "$new_build" != <-> ]] || (( new_build <= published_build )); then
+    echo "Build $new_build is not above the published build $published_build." >&2
+    echo "Package from a branch with more commits, or set NOTCHTUNE_BUILD_NUMBER." >&2
+    exit 1
+fi
+
 rm -rf "$delta_dir"
 mkdir -p "$delta_dir"
 

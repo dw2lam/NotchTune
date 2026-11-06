@@ -11,6 +11,7 @@ on:
       - 'refactor/**'
       - 'chore/**'
       - 'investigate/**'
+      - 'release/**'
 
 jobs:
   harness:
@@ -35,7 +36,11 @@ jobs:
           brew install create-dmg
           pip3 install --break-system-packages Pillow
 
+      # Packaging needs a key but nothing here verifies an update, so an
+      # all-zero one will do: it can't validate anything if a build ever leaked.
       - name: Build and package
+        env:
+          NOTCHTUNE_EDDSA_PUBLIC_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
         run: zsh scripts/package-app.sh
 
       # Bundle structure is verified inside package-app.sh itself.

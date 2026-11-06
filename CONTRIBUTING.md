@@ -31,7 +31,7 @@ If you run into a problem, copy the prompt below into your code agent (Claude Co
 <summary>Click to expand the prompt</summary>
 
 ```
-I'm having an issue with Open Island (https://github.com/dw2lam/NotchTune).
+I'm having an issue with NotchTune (https://github.com/dw2lam/NotchTune).
 
 Please help me file a GitHub issue. Do the following:
 
@@ -65,7 +65,7 @@ Have an idea? Let your agent draft the proposal for you.
 <summary>Click to expand the prompt</summary>
 
 ```
-I'd like to request a feature for Open Island (https://github.com/dw2lam/NotchTune).
+I'd like to request a feature for NotchTune (https://github.com/dw2lam/NotchTune).
 
 Please help me file a GitHub issue. Do the following:
 

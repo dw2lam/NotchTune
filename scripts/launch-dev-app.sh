@@ -10,6 +10,14 @@ for arg in "$@"; do
   esac
 done
 
+# The dev app shares the release's socket and hooks binary: binding the socket
+# unlinks it from under a running NotchTune, and setup puts this debug build in
+# place of its hooks binary, so agents stop reaching the app that's open.
+if pgrep -x NotchTune >/dev/null && [[ "${NOTCHTUNE_DEV_TAKEOVER:-}" != "1" ]]; then
+  echo "NotchTune is running. Quit it first, or set NOTCHTUNE_DEV_TAKEOVER=1 to let the dev app take over its bridge and hooks." >&2
+  exit 1
+fi
+
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 brand_script="$repo_root/scripts/generate_brand_icons.py"
 brand_icon="$repo_root/Assets/Brand/NotchTune.icns"
@@ -95,7 +103,7 @@ cat > "$plist_path" <<EOF
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>NotchTune needs automation access to focus Terminal and iTerm sessions for jump-back.</string>
+    <string>NotchTune uses automation to jump back to your agents' terminals and editors, to send them keystrokes through System Events, and to show and control what's playing in Spotify and Music. Nothing is sent anywhere.</string>
     <key>NSCameraUsageDescription</key>
     <string>NotchTune's Mirror tab shows your camera while it is open. Nothing is recorded or sent anywhere.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>

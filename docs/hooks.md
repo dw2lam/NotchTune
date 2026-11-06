@@ -24,11 +24,11 @@ Agent
 
 ## Skip Hooks For Delegated Control
 
-Set `NOTCHTUNE_SKIP_HOOKS=1` on a child agent process when another local controller intentionally owns permission handling for that run. The hook CLI exits immediately without reading or forwarding the payload, so the agent continues without Open Island UI intervention.
+Set `NOTCHTUNE_SKIP_HOOKS=1` on a child agent process when another local controller intentionally owns permission handling for that run. The hook CLI exits immediately without reading or forwarding the payload, so the agent continues without NotchTune UI intervention.
 
 `VIBE_ISLAND_SKIP=1` is also recognized as a legacy compatibility alias.
 
-This is meant for per-process launches. Do not set it globally unless you want Open Island hooks disabled for every agent started from that environment.
+This is meant for per-process launches. Do not set it globally unless you want NotchTune hooks disabled for every agent started from that environment.
 
 **Entry point**: [`Sources/NotchTuneHooks/main.swift`](../Sources/NotchTuneHooks/main.swift)
 
@@ -55,7 +55,7 @@ The managed Codex hook installer (`CodexHookInstaller`) installs only `SessionSt
 
 The installer chooses the Codex hook feature flag that the local Codex CLI advertises. Newer Codex builds use `[features].hooks = true`; older builds use the legacy `[features].codex_hooks = true`. Status checks recognize both keys, and managed installs migrate between them when the local Codex version changes.
 
-After hooks are installed or changed, Codex may require a manual trust review before running them. Open `/hooks` inside Codex CLI and approve the expected Open Island hook entries. This approval gate belongs to Codex and is not bypassed by Open Island.
+After hooks are installed or changed, Codex may require a manual trust review before running them. Open `/hooks` inside Codex CLI and approve the expected NotchTune hook entries. This approval gate belongs to Codex and is not bypassed by NotchTune.
 
 The `CodexHookPayload` model and `BridgeServer` can parse richer events (`PreToolUse`, `PostToolUse`) when they are present in the hook payload, and will surface them in the UI if received. However, these richer events are **not** installed by the managed installer and must be configured manually if desired.
 
@@ -89,7 +89,7 @@ The `CodexHookPayload` model and `BridgeServer` can parse richer events (`PreToo
 The app can block a command by writing this to stdout:
 
 ```json
-{"decision": "block", "reason": "Blocked by Open Island"}
+{"decision": "block", "reason": "Blocked by NotchTune"}
 ```
 
 All other events require no stdout response.

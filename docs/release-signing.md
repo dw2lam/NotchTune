@@ -1,60 +1,73 @@
-# Release Signing & Notarization
+# Release Signing
 
-Open Island releases are code-signed and notarized via GitHub Actions. This document explains how to set up the required secrets.
+NotchTune has no Developer ID and isn't notarized. A release depends on two
+secrets that live only in the release Mac's login keychain, and **neither can be
+remade**:
 
-## Required GitHub Secrets
+| Secret | What it does | If it's lost |
+|--------|--------------|--------------|
+| `Open Island Dev Local` certificate | Signs the app, so its designated requirement stays the same from build to build | A new certificate reads as a new app: macOS drops every user's Camera, Calendar and Accessibility grants |
+| Sparkle EdDSA key (Keychain account `NotchTune`) | Signs updates; the public half is `SUPublicEDKey` in every installed app | Installed copies reject anything signed with a new key, so everyone has to reinstall by hand |
 
-Go to **Settings → Secrets and variables → Actions** in the repository and add:
+## The certificate
 
-| Secret | Description |
-|--------|-------------|
-| `APPLE_CERTIFICATE_P12` | Base64-encoded Developer ID Application certificate (.p12) |
-| `APPLE_CERTIFICATE_PASSWORD` | Password for the .p12 file |
-| `APPLE_SIGNING_IDENTITY` | Signing identity string, e.g. `Developer ID Application: Your Name (TEAMID)` |
-| `APPLE_ID` | Apple ID email used for notarization |
-| `APPLE_TEAM_ID` | 10-character Apple Developer Team ID |
-| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password for notarization (generate at appleid.apple.com) |
+`scripts/setup-dev-signing.sh` creates it once: a 10-year self-signed code-signing
+certificate, imported into the login keychain and trusted for code signing only.
+`package-app.sh` finds it by name, or takes a hash in
+`NOTCHTUNE_STABLE_SIGN_IDENTITY`.
 
-## How to export the certificate
+Set `NOTCHTUNE_REQUIRE_STABLE_SIGNING=1` for a release so that a missing identity
+stops the build. Otherwise the script falls back to an ad-hoc signature, whose
+designated requirement is the build's own hash.
 
-1. Open **Keychain Access** → **My Certificates**
-2. Find your **Developer ID Application** certificate
-3. Right-click → **Export** → save as `.p12` with a password
-4. Base64-encode it:
-   ```bash
-   base64 -i Certificates.p12 | pbcopy
-   ```
-5. Paste the result into the `APPLE_CERTIFICATE_P12` secret
+The script signs without the hardened runtime here: its library validation would
+refuse Sparkle.framework, which has no team ID to match.
 
-## How to generate an app-specific password
+Don't run `setup-dev-signing.sh` on a new Mac to get going: it would make a
+different certificate. Restore the backup.
 
-1. Go to [appleid.apple.com](https://appleid.apple.com) → **Sign-In and Security** → **App-Specific Passwords**
-2. Generate a new password, label it `open-island-notary`
-3. Save it as the `APPLE_APP_SPECIFIC_PASSWORD` secret
+## The Sparkle key
 
-## Local signed builds
+Generated once with `generate_keys --account NotchTune`, which stores the private
+key in the Keychain and prints the public one. `package-app.sh` needs the public
+key in `NOTCHTUNE_EDDSA_PUBLIC_KEY`; `make-release-deltas.sh` signs with the
+private key through `sign_update --account NotchTune`.
 
-You can also build signed locally:
+## Backing up
 
 ```bash
-export NOTCHTUNE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
-export NOTCHTUNE_NOTARY_PROFILE="open-island-notary"
-export NOTCHTUNE_VERSION="0.2.0"
-
-# First, store notarization credentials (one-time):
-xcrun notarytool store-credentials "open-island-notary" \
-  --apple-id "you@example.com" \
-  --team-id "TEAMID" \
-  --password "xxxx-xxxx-xxxx-xxxx"
-
-# Then build:
-zsh scripts/package-app.sh
+zsh scripts/export-signing-backup.sh /Volumes/YourEncryptedDisk/notchtune-keys
 ```
 
-## Release flow
+It prompts first, then exports the Sparkle key to `notchtune-sparkle.key`
+(unencrypted, so use encrypted storage) and walks you through exporting the
+certificate from Keychain Access as `notchtune-signing.p12`, with a password you
+choose. Keychain Access does the certificate because `security export` can't pick
+out one identity.
 
-1. Merge all PRs to `main`
-2. Tag the release: `git tag v0.2.0 && git push origin v0.2.0`
-3. The `Release` workflow runs automatically — builds, signs, notarizes, and creates a draft GitHub Release
-4. Review the draft release and publish it
-5. Update `appcast.xml` for Sparkle auto-update
+## Restoring on a new Mac
+
+```bash
+keychain="$HOME/Library/Keychains/login.keychain-db"
+
+# The certificate: codesign needs access, and the trust override makes it valid.
+security import notchtune-signing.p12 -k "$keychain" -T /usr/bin/codesign
+security find-certificate -c "Open Island Dev Local" -p > cert.pem
+security add-trusted-cert -p codeSign -k "$keychain" cert.pem
+rm cert.pem
+
+# The Sparkle key, after `swift package resolve`.
+.build/artifacts/sparkle/Sparkle/bin/generate_keys --account NotchTune -f notchtune-sparkle.key
+```
+
+Check both before releasing: `security find-identity -p codesigning -v` lists the
+identity, and `generate_keys --account NotchTune -p` prints the same public key as
+a shipped build's `SUPublicEDKey`.
+
+## If a Developer ID arrives
+
+`package-app.sh` already handles it: set `NOTCHTUNE_SIGN_IDENTITY` for hardened
+runtime signing, and `NOTCHTUNE_NOTARY_PROFILE` (a `notarytool store-credentials`
+profile) to notarize and staple. Sparkle accepts the change of identity because
+the EdDSA key stays the same, but users grant permissions once more. The
+Installation section can then leave the release notes.

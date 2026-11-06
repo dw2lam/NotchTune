@@ -19,25 +19,31 @@ Monitor your agents and music all in one place.
 - **Meeting heads-up**: Opt in to see your next calendar meeting in the notch a few minutes ahead, with a Join button for video links and an optional quiet mode during meetings. Calendars are read on your Mac only.
 - **Notch-aware layouts**: Runs as a real notch surface on MacBook displays and falls back to a clean top-center bar on external or non-notch screens.
 - **Local, native, and open source**: Built with SwiftUI and AppKit. No Electron shell, no telemetry, and no remote server dependency.
-- **Automatic updates**: NotchTune updates itself quietly in the background, the way Figma does. It downloads only what changed since your version (a small Sparkle delta patch, with the full app as the fallback), prepares it, and shows an **Update** button in the notch and **Restart to Update** in Settings. One click swaps in the new version and relaunches, with no installer or disk image; leave it, and it installs the next time NotchTune quits.
+- **Automatic updates**: NotchTune updates itself quietly in the background, the way Figma does. It downloads only what changed since your version (a small Sparkle delta patch, with the full app as the fallback), prepares it, and shows an **Update** button in the notch and **Restart to Update** in Settings. One click swaps in the new version and relaunches, with no installer or disk image. Leave it, and it installs when NotchTune quits, or after a day once you've stepped away and no agent needs you. You can turn automatic downloads off in Settings.
 
 ## Supported Integrations
 
 NotchTune currently supports Spotify and Apple Music for playback.
 
-For coding agents, it supports Claude Code, Codex, OpenCode, Gemini CLI, Kimi CLI, Qoder, Qwen Code, Factory, and CodeBuddy through local hooks, transcript discovery, and process matching where available.
+For coding agents, it supports Claude Code, Codex, Cursor, OpenCode, Gemini CLI, Antigravity, Kimi CLI, Qoder, Qwen Code, Factory, and CodeBuddy through local hooks, transcript discovery, and process matching where available.
 
-Supported terminal jump-back includes Terminal.app, Ghostty, cmux, Kaku, WezTerm, iTerm2, and tmux. Warp support is planned.
+Jump-back works with Terminal.app, Ghostty, cmux, Kaku, WezTerm, iTerm2, Warp, and tmux, as well as Codex.app and editors with integrated terminals: Cursor, VS Code, Windsurf, Trae, and the JetBrains IDEs.
 
 ## Quick Start
 
 ### Install The App
 
-Download the latest `NotchTune.dmg` from [Releases](https://github.com/dw2lam/NotchTune/releases), open it, and drag `NotchTune.app` into Applications.
+NotchTune needs an Apple Silicon Mac on macOS 14 or later.
 
-This release isn't notarized yet. If macOS blocks the first launch, right-click `NotchTune.app`, choose **Open**, then confirm the Gatekeeper prompt.
+Download the latest `NotchTune.dmg` from [Releases](https://github.com/dw2lam/NotchTune/releases), open it, and drag `NotchTune.app` into Applications. Run it from there: it can't update itself from the disk image or from Downloads.
 
-Open NotchTune, go to **Settings → Setup**, and install hooks for the coding agents you use. Grant Accessibility permission if macOS asks; NotchTune uses it to detect terminal windows and jump back to active sessions.
+This release isn't notarized yet, so macOS blocks the first launch. Right-click → **Open** no longer gets past that on macOS 15 and later. Try to open NotchTune, then go to **System Settings → Privacy & Security** and choose **Open Anyway**. If macOS says NotchTune is damaged, or you'd rather use Terminal, run:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/NotchTune.app"
+```
+
+The first launch opens a short setup assistant and a guided tour of the notch, covering your coding agents, permissions, and the look of the island. Both are in **Settings → General** if you want them again, and **Settings → Setup** manages agent hooks at any time. Grant Accessibility permission if macOS asks; NotchTune uses it to detect terminal windows and jump back to active sessions.
 
 ### Updates
 
@@ -46,7 +52,9 @@ You only install NotchTune once. After that it keeps itself up to date:
 1. It checks for a new version every hour (or right away from **Settings → General → Check for Updates…**).
 2. It downloads the update in the background. Usually that is a small patch with just what changed, often under 1 MB; if there's no patch for your version, it downloads the full app instead.
 3. When the update is ready, an **Update** button appears in the notch and **Restart to Update** in Settings. Click either one and NotchTune swaps in the new version and relaunches in a second or two, with no disk image or installer.
-4. If you never click it, the update installs the next time NotchTune quits.
+4. If you don't click it, the update installs when NotchTune quits. If it's still waiting a day later, it installs by itself once you've been away from the Mac for a few minutes, as long as no agent is waiting for you and Mirror is closed.
+
+To decide for yourself, turn off **Settings → General → Download updates automatically**. NotchTune still checks, tells you in Settings when a version is out, and leaves the rest to you.
 
 Permissions you grant (camera for Mirror, calendars, Accessibility) are remembered between launches and across updates: releases are signed with one stable certificate, so macOS sees each update as the same app. Coming from 2.2.0 or earlier, macOS asks once more after that first update.
 

@@ -103,6 +103,8 @@ enum SettingsWelcome {
         case downloading(String)
         case available(String)
         case checking
+        /// Sparkle won't run from a disk image or a translocated copy.
+        case moveToApplications
         /// The last check didn't get an answer (offline, feed unreachable).
         case couldNotCheck
         case upToDate(checkedAt: Date)
@@ -124,12 +126,14 @@ enum SettingsWelcome {
         lastCheck: Date?,
         lastCheckFailed: Bool = false,
         downloadingVersion: String? = nil,
-        readyVersion: String? = nil
+        readyVersion: String? = nil,
+        needsMoveToApplications: Bool = false
     ) -> UpdateStatus {
         if let readyVersion { return .ready(readyVersion) }
         if let downloadingVersion { return .downloading(downloadingVersion) }
         if let availableVersion { return .available(availableVersion) }
         if isChecking { return .checking }
+        if needsMoveToApplications { return .moveToApplications }
         if lastCheckFailed { return .couldNotCheck }
         if let lastCheck { return .upToDate(checkedAt: lastCheck) }
         return .automatic
@@ -394,7 +398,8 @@ private struct WelcomeUpdateRow: View {
                 lastCheck: checker.lastCheckDate,
                 lastCheckFailed: checker.lastCheckFailed,
                 downloadingVersion: checker.downloadingVersion,
-                readyVersion: checker.readyVersion
+                readyVersion: checker.readyVersion,
+                needsMoveToApplications: checker.needsMoveToApplications
             )
             : .automatic
         HStack(spacing: 12) {
@@ -446,6 +451,10 @@ private struct WelcomeUpdateRow: View {
                 Image(systemName: "arrow.down.circle.fill")
                     .foregroundStyle(SettingsTheme.informative)
                 Text(lang.t("settings.updates.available", version))
+            case .moveToApplications:
+                Image(systemName: "exclamationmark.circle")
+                    .foregroundStyle(SettingsTheme.paper.opacity(0.5))
+                Text(lang.t("settings.updates.moveToApplications"))
             case .couldNotCheck:
                 Image(systemName: "exclamationmark.circle")
                     .foregroundStyle(SettingsTheme.paper.opacity(0.5))

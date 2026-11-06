@@ -1,29 +1,26 @@
-## Open Island vX.Y.Z — Title Here
+## NotchTune vX.Y.Z — Title Here
 
-Brief English summary of this release.
+One or two sentences on what's better in this release.
 
-### Changes since vPREV
+### ✨ The headline change
 
-- **Category**: English description (#PR) — Thanks @contributor
+What it does for the person using NotchTune.
+
+### 🐛 Fixes
+
+- 🐛 **Short name**: what was wrong and what happens now. — Thanks @contributor
 
 > Add `— Thanks @contributor` to entries from external contributors.
-
-### Contributors
-
-- @contributor
 
 ---
 
 ## Installation
 
-1. Download **Open Island.dmg**, open it, and drag **Open Island** to **Applications**.
+1. Download **NotchTune.dmg**, open it, and drag **NotchTune** to **Applications**. Existing installs will be offered this update automatically.
+2. This app isn't notarized yet, so macOS blocks the first launch. Try to open it, then choose **Open Anyway** in **System Settings → Privacy & Security**. If macOS says **"NotchTune is damaged"**, run this in Terminal instead:
 
-2. Requires **macOS 14+**. Supports both **Apple Silicon** and **Intel** Macs.
+   ```bash
+   xattr -dr com.apple.quarantine "/Applications/NotchTune.app"
+   ```
 
-**Or via Homebrew**:
-
-```bash
-brew install --cask octane0411/tap/notchtune
-```
-
-> This build is signed and notarized with Apple Developer ID. You can open it directly without any security workaround.
+3. Requirements: **macOS 14+**, **Apple Silicon**.

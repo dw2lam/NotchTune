@@ -9,10 +9,11 @@ This index is the repository map for humans and coding agents. Read these files 
 - [docs/roadmap.md](./roadmap.md) for the project roadmap and contribution focus areas
 - [docs/product.md](./product.md) for the product scope, supported agents, and terminals
 - [docs/architecture.md](./architecture.md) for the runtime shape and transport boundaries
+- [docs/code-graph.md](./code-graph.md) for a navigation map of the subsystems, files and contracts
 - [docs/quality.md](./quality.md) for the current harness contract and verification expectations
 - [docs/worktree-workflow.md](./worktree-workflow.md) for the parallel worktree lifecycle
-- [docs/packaging.md](./packaging.md) for the current local app packaging, signing, and notarization path
-- [docs/releasing.md](./releasing.md) for the GitHub release workflow, notes template, and checklist
+- [docs/packaging.md](./packaging.md) for how the app bundle, ZIP and DMG are built and signed
+- [docs/releasing.md](./releasing.md) for the manual release flow, step by step
 
 ## Hooks
 
@@ -36,18 +37,13 @@ This index is the repository map for humans and coding agents. Read these files 
 
 - [docs/session-state-refactor.md](./session-state-refactor.md) for the session state management refactoring plan (process discovery as source of truth)
 
-## Watch / iOS
-
-- [docs/watch-notification-design.md](./watch-notification-design.md) for the Apple Watch notification design document
-- [docs/watch-notification-impl-plan.md](./watch-notification-impl-plan.md) for the Watch notification implementation plan
-
 ## Remote / SSH
 
-- [docs/ssh-setup.md](./ssh-setup.md) for connecting Open Island to Claude Code running on remote servers via SSH socket forwarding
+- [docs/ssh-setup.md](./ssh-setup.md) for connecting NotchTune to Claude Code running on remote servers via SSH socket forwarding
 
 ## Release
 
-- [docs/release-signing.md](./release-signing.md) for code signing and notarization details
+- [docs/release-signing.md](./release-signing.md) for the signing certificate and Sparkle key, and how to back them up
 
 ## Investigations
 

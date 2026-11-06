@@ -770,75 +770,6 @@ final class AppModel {
         defaults.set(preferences.completedStaleThreshold.rawValue, forKey: Self.appearanceDefaultsKey(profile, "completedStaleThreshold"))
     }
 
-    // MARK: - Watch Notification
-
-    private static let watchNotificationEnabledKey = "watch.notification.enabled"
-
-    var watchNotificationEnabled: Bool = false {
-        didSet {
-            guard watchNotificationEnabled != oldValue else { return }
-            UserDefaults.standard.set(watchNotificationEnabled, forKey: Self.watchNotificationEnabledKey)
-            if watchNotificationEnabled {
-                startWatchRelay()
-            } else {
-                stopWatchRelay()
-            }
-        }
-    }
-
-    @ObservationIgnored
-    private(set) var watchRelay: WatchNotificationRelay?
-
-    /// Current pairing code for display in the settings UI.
-    var watchPairingCode: String {
-        watchRelay?.endpoint.currentCode() ?? "----"
-    }
-
-    /// Number of currently connected iPhone SSE clients.
-    var watchConnectedDevices: Int {
-        // Placeholder — endpoint doesn't expose count yet
-        0
-    }
-
-    private func startWatchRelay() {
-        guard watchRelay == nil else { return }
-        let relay = WatchNotificationRelay()
-        setupWatchRelayCallbacks(relay)
-        relay.start()
-        self.watchRelay = relay
-    }
-
-    /// Wire up resolution callbacks so Watch/iPhone actions flow back to the bridge.
-    private func setupWatchRelayCallbacks(_ relay: WatchNotificationRelay) {
-        relay.onResolvePermission = { [weak self] sessionID, approved in
-            Task { @MainActor [weak self] in
-                self?.approvePermission(for: sessionID, approved: approved)
-            }
-        }
-
-        relay.onAnswerQuestion = { [weak self] sessionID, answer in
-            Task { @MainActor [weak self] in
-                self?.answerQuestion(
-                    for: sessionID,
-                    answer: QuestionPromptResponse(answer: answer)
-                )
-            }
-        }
-
-        relay.endpoint.activeSessionCountProvider = { [weak self] in
-            // Safe to call from any queue — reads a snapshot count.
-            guard let self else { return 0 }
-            return MainActor.assumeIsolated {
-                self.state.sessions.count
-            }
-        }
-    }
-
-    private func stopWatchRelay() {
-        watchRelay?.stop()
-        watchRelay = nil
-    }
-
     var ignoresPointerExitDuringHarness = false
     var disablesOverlayEventMonitoringDuringHarness = false
 
@@ -1194,10 +1125,6 @@ final class AppModel {
         glassSettings = Self.loadGlassSettings()
         nudgeSettings = Self.loadNudgeSettings()
         selectedNudgeSoundName = NotificationSoundService.selectedSoundName(for: .nudge)
-        watchNotificationEnabled = UserDefaults.standard.bool(forKey: Self.watchNotificationEnabledKey)
-        if watchNotificationEnabled {
-            startWatchRelay()
-        }
 
         playerManager.onTrackChange = { [weak self] track in
             guard let self else { return }
@@ -1301,6 +1228,7 @@ final class AppModel {
         // banner; the panel is placed for a height, so place it again.
         calendar.onHeadsUpChange = { [weak self] in self?.refreshOverlayPlacementIfVisible() }
         calendar.start()
+        connectUpdateChecker()
         hasFinishedInit = true
         reconcileCompactMusicView()
         overlay.refreshFullscreenState()
@@ -2625,13 +2553,6 @@ final class AppModel {
         discovery.scheduleOpenCodeSessionPersistence()
         discovery.scheduleCursorSessionPersistence()
 
-        // Push events to the Watch/iPhone via the relay. Bump-worthy events
-        // (approvals, questions, completions) go through the coalescer
-        // instead so the watch doesn't buzz once per Codex sub-turn either.
-        if let relay = watchRelay, !event.isCoalescedNotificationEvent(wasAlreadyCompleted: wasAlreadyCompleted) {
-            relay.notifyEvent(event, session: event.sessionID.flatMap { state.session(id: $0) })
-        }
-
         if updateLastActionMessage {
             lastActionMessage = describe(event)
         }
@@ -2651,8 +2572,8 @@ final class AppModel {
 
     /// Routes a freshly applied event through `NotificationCoalescer` and acts
     /// on its decision: `.present` opens the notification surface (via the
-    /// single, frontmost-aware presentation path) and pushes to the watch
-    /// relay; `.subtle` leaves only the pill flash; `.suppress` does nothing.
+    /// single, frontmost-aware presentation path); `.subtle` leaves only the
+    /// pill flash; `.suppress` does nothing.
     /// Completions are held for the settle window first; any running or
     /// attention signal in the same group cancels the hold.
     private func coalesceNotification(
@@ -2696,7 +2617,6 @@ final class AppModel {
                 now: now
             )
             guard decision == .present else { return }
-            watchRelay?.notifyEvent(event, session: session)
             scheduleNotificationSurfacePresentationIfNeeded(surface, ingress: ingress)
 
         default:
@@ -2745,7 +2665,6 @@ final class AppModel {
 
         switch settled.decision {
         case .present:
-            watchRelay?.notifyEvent(.sessionCompleted(settled.payload), session: session)
             scheduleNotificationSurfacePresentationIfNeeded(surface, ingress: ingress)
         case .subtle:
             // The pill flash already ran when the completion arrived. Re-arm
@@ -3152,20 +3071,6 @@ private extension AgentEvent {
         case let .cursorSessionMetadataUpdated(p): p.sessionID
         case let .jumpTargetSynchronized(p): p.sessionID
         case let .actionableStateResolved(p): p.sessionID
-        }
-    }
-
-    /// Events whose watch-relay push is gated by the coalescer's decision
-    /// rather than sent straight through: approvals, questions, and fresh
-    /// (non-interrupt, non-session-end) completions.
-    func isCoalescedNotificationEvent(wasAlreadyCompleted: Bool) -> Bool {
-        switch self {
-        case .permissionRequested, .questionAsked:
-            true
-        case let .sessionCompleted(p):
-            !wasAlreadyCompleted && p.isInterrupt != true && p.isSessionEnd != true
-        default:
-            false
         }
     }
 }
