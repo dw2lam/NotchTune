@@ -1258,11 +1258,9 @@ struct IslandPanelView: View {
 
     private var islandTabBar: some View {
         HStack(spacing: 4) {
-            tabButton(label: "Agents", systemImage: "terminal", tab: .agents)
-            tabButton(label: "Music", systemImage: "music.note", tab: .music)
-            tabButton(label: "Myspace", systemImage: "square.grid.2x2", tab: .myspace)
-            tabButton(label: "Reminders", systemImage: "bell", tab: .reminders)
-            tabButton(label: "Mirror", systemImage: "camera", tab: .mirror)
+            ForEach(model.islandTabOrder) { tab in
+                tabButton(label: tab.title, systemImage: tab.systemImage, tab: tab)
+            }
 
             Spacer()
         }

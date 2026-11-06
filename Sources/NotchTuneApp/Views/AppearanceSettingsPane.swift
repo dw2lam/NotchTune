@@ -48,6 +48,8 @@ struct AppearanceSettingsPane: View {
             characterCard
                 .id("character")
             notchCard
+            notchTabsCard
+                .id("tabs")
             liquidGlassCard
             hapticsCard
                 .id("haptics")
@@ -460,6 +462,34 @@ struct AppearanceSettingsPane: View {
 
             }
             .disabled(glassControlsDisabled)
+        }
+    }
+
+    // MARK: - Tab order
+
+    private var notchTabsCard: some View {
+        SettingsCard(title: lang.t("settings.appearance.tabs.title")) {
+            SettingsStackedRow(
+                lang.t("settings.appearance.tabs.row"),
+                subtitle: lang.t("settings.appearance.tabs.note")
+            ) {
+                HStack(spacing: 12) {
+                    NotchTabOrderRow(
+                        order: Binding(
+                            get: { model.islandTabOrder },
+                            set: { model.islandTabOrder = $0 }
+                        ),
+                        lang: lang
+                    )
+                    if model.islandTabOrder != IslandTab.allCases {
+                        Button(lang.t("settings.appearance.tabs.reset")) {
+                            withAnimation(.smooth(duration: 0.25)) {
+                                model.islandTabOrder = IslandTab.allCases
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

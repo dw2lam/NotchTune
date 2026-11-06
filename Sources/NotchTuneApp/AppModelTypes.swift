@@ -222,6 +222,52 @@ enum IslandTab: String, CaseIterable, Identifiable, Sendable {
     case mirror
 
     var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .agents: "Agents"
+        case .music: "Music"
+        case .myspace: "Myspace"
+        case .reminders: "Reminders"
+        case .mirror: "Mirror"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .agents: "terminal"
+        case .music: "music.note"
+        case .myspace: "square.grid.2x2"
+        case .reminders: "bell"
+        case .mirror: "camera"
+        }
+    }
+
+    /// The saved tab order, made whole: unknown names are dropped, repeats
+    /// keep their first place, and a tab added since it was saved goes last.
+    static func order(stored: [String]) -> [IslandTab] {
+        var order: [IslandTab] = []
+        for tab in stored.compactMap(IslandTab.init(rawValue:)) where !order.contains(tab) {
+            order.append(tab)
+        }
+        return order + allCases.filter { !order.contains($0) }
+    }
+
+    /// `tab` takes `target`'s place, the way a dragged item does.
+    static func order(_ order: [IslandTab], moving tab: IslandTab, onto target: IslandTab) -> [IslandTab] {
+        guard let from = order.firstIndex(of: tab), let to = order.firstIndex(of: target) else { return order }
+        var result = order
+        result.remove(at: from)
+        result.insert(tab, at: to)
+        return result
+    }
+
+    /// `tab` moved by `offset` places, stopping at the ends.
+    static func order(_ order: [IslandTab], moving tab: IslandTab, by offset: Int) -> [IslandTab] {
+        guard let from = order.firstIndex(of: tab) else { return order }
+        let to = min(max(from + offset, 0), order.count - 1)
+        return Self.order(order, moving: tab, onto: order[to])
+    }
 }
 
 enum IslandSessionStateIndicator: String, CaseIterable, Identifiable, Sendable {

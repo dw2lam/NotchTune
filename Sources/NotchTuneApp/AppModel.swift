@@ -25,6 +25,7 @@ final class AppModel {
     private static let showDockIconDefaultsKey = "app.showDockIcon"
     private static let hapticFeedbackEnabledDefaultsKey = "app.hapticFeedbackEnabled"
     private static let hapticFeelsDefaultsKey = "app.hapticFeels"
+    private static let islandTabOrderDefaultsKey = "island.tabOrder"
     private static let islandRightSlotDefaultsKey = "appearance.island.v6.rightSlot"
     private static let islandCenterLabelDefaultsKey = "appearance.island.v6.centerLabel"
     private static let showCodexUsageDefaultsKey = "app.showCodexUsage"
@@ -320,6 +321,13 @@ final class AppModel {
             NotchHaptics.isEnabled = hapticFeedbackEnabled
             guard hasFinishedInit, hapticFeedbackEnabled != oldValue else { return }
             UserDefaults.standard.set(hapticFeedbackEnabled, forKey: Self.hapticFeedbackEnabledDefaultsKey)
+        }
+    }
+    /// The notch's tabs, left to right (Settings → Personalization).
+    var islandTabOrder: [IslandTab] = IslandTab.allCases {
+        didSet {
+            guard hasFinishedInit, islandTabOrder != oldValue else { return }
+            UserDefaults.standard.set(islandTabOrder.map(\.rawValue), forKey: Self.islandTabOrderDefaultsKey)
         }
     }
     /// The feel of each haptic (Settings → Personalization → Haptics).
@@ -1156,6 +1164,9 @@ final class AppModel {
         hapticFeedbackEnabled = UserDefaults.standard.bool(forKey: Self.hapticFeedbackEnabledDefaultsKey)
         hapticSettings = HapticSettings(
             stored: UserDefaults.standard.dictionary(forKey: Self.hapticFeelsDefaultsKey) as? [String: String] ?? [:]
+        )
+        islandTabOrder = IslandTab.order(
+            stored: UserDefaults.standard.stringArray(forKey: Self.islandTabOrderDefaultsKey) ?? []
         )
         hoverOpenMode = HoverOpenMode(
             rawValue: UserDefaults.standard.string(forKey: Self.hoverOpenModeDefaultsKey) ?? ""
