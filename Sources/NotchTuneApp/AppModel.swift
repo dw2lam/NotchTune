@@ -155,8 +155,6 @@ final class AppModel {
     var isOpenCodeSetupBusy: Bool { hooks.isOpenCodeSetupBusy }
     var openCodePluginStatusTitle: String { hooks.openCodePluginStatusTitle }
     var openCodePluginStatusSummary: String { hooks.openCodePluginStatusSummary }
-    var claudeHealthReport: HookHealthReport? { hooks.claudeHealthReport }
-    var codexHealthReport: HookHealthReport? { hooks.codexHealthReport }
     var cursorHooksInstalled: Bool { hooks.cursorHooksInstalled }
     var isCursorHookSetupBusy: Bool { hooks.isCursorHookSetupBusy }
     var cursorHookStatus: CursorHookInstallationStatus? { hooks.cursorHookStatus }
@@ -844,7 +842,7 @@ final class AppModel {
     private var hasStarted = false
 
     @ObservationIgnored
-    private let bridgeServer = BridgeServer()
+    private let bridgeServer = BridgeServer(activityStore: HookInstallationCoordinator.activityStore)
 
     @ObservationIgnored
     private var bridgeClient = LocalBridgeClient()
@@ -1229,6 +1227,9 @@ final class AppModel {
 
         hooks.onStatusMessage = { [weak self] message in
             self?.lastActionMessage = message
+        }
+        hooks.onFailure = { [weak self] message in
+            self?.post(AppNotice(message: message, actionTitle: "Open Setup", action: .openSetup))
         }
 
         discovery.syntheticClaudeSessionPrefix = Self.syntheticClaudeSessionPrefix
@@ -2878,6 +2879,7 @@ final class AppModel {
 
         // Apply hooks binary URL and update the installed copy if the app ships a newer version.
         hooks.hooksBinaryURL = payload.hooksBinaryURL
+        hooks.allowsAgentProbes = true
         hooks.updateHooksBinaryIfNeeded()
 
         // Auto-install missing hooks and usage bridge, then run health checks.

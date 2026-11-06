@@ -217,6 +217,24 @@ struct IntegrationDoctorTests {
         #expect(CodexHookTrustProbe.trust(fromHooksList: try hooksList([managed])) == .trusted)
     }
 
+    /// Env-gated: spawns the real `codex` against a throwaway CODEX_HOME.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["NOTCHTUNE_CODEX_INTEGRATION"] == "1"))
+    func realCodexReportsFreshHooksAsNeedingReview() throws {
+        let home = try scratchDirectory()
+        defer { try? fileManager.removeItem(at: home) }
+
+        let manager = CodexHookInstallationManager(
+            codexDirectory: home,
+            managedHooksBinaryURL: home.appendingPathComponent("managed/NotchTuneHooks"),
+            featureKeyProvider: { .current }
+        )
+        let binary = home.appendingPathComponent("NotchTuneHooks")
+        try Data("#!/bin/sh\n".utf8).write(to: binary)
+        try manager.install(hooksBinaryURL: binary)
+
+        #expect(CodexHookTrustProbe.check(codexDirectory: home) == .needsReview(count: 4))
+    }
+
     // MARK: Repair
 
     @Test

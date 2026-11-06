@@ -47,7 +47,7 @@ private struct SetupCommand {
         var hooksBinary: URL?
         var codexDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex", isDirectory: true)
         var claudeDirectory = ClaudeConfigDirectory.resolved()
-        var kimiDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".kimi", isDirectory: true)
+        var kimiDirectory = KimiHookInstallationManager.resolvedDirectory()
 
         var index = 1
         while index < arguments.count {

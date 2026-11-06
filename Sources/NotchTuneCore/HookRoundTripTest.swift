@@ -22,6 +22,11 @@ public struct HookRoundTripResult: Equatable, Sendable {
     public var failedStep: Step?
     public var failure: Failure?
 
+    public init(failedStep: Step?, failure: Failure?) {
+        self.failedStep = failedStep
+        self.failure = failure
+    }
+
     public static let passed = HookRoundTripResult(failedStep: nil, failure: nil)
 
     public var didPass: Bool {

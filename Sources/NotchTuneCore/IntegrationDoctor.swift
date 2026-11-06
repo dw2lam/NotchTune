@@ -43,6 +43,28 @@ public struct IntegrationDiagnosis: Equatable, Identifiable, Sendable {
     public var toolPresent: Bool
 
     public var id: AgentIdentifier { agent }
+
+    public init(
+        agent: AgentIdentifier,
+        displayName: String,
+        status: Status,
+        findings: [Finding],
+        fix: Fix?,
+        lastEventAt: Date?,
+        droppedEvents: Int,
+        lastDroppedEvent: String?,
+        toolPresent: Bool
+    ) {
+        self.agent = agent
+        self.displayName = displayName
+        self.status = status
+        self.findings = findings
+        self.fix = fix
+        self.lastEventAt = lastEventAt
+        self.droppedEvents = droppedEvents
+        self.lastDroppedEvent = lastDroppedEvent
+        self.toolPresent = toolPresent
+    }
 }
 
 public enum IntegrationDoctor {
@@ -81,6 +103,73 @@ public enum IntegrationDoctor {
             self.codexHooksDisabledInConfig = codexHooksDisabledInConfig
             self.codexTrust = codexTrust
         }
+    }
+
+    /// Everything the doctor reads for one pass, off the main actor. The
+    /// Codex probe runs only when asked for and only if hooks are there.
+    public static func examine(
+        hooksBinaryURL: URL?,
+        hooksPresent: [AgentIdentifier: Bool],
+        intents: [AgentIdentifier: AgentHookIntent],
+        lastEvents: [AgentIdentifier: Date],
+        drops: [String: HookDropLog.Entry],
+        probesCodexTrust: Bool,
+        descriptors: [HookAgentDescriptor] = HookAgentCatalog.descriptors()
+    ) -> (reports: [AgentIdentifier: HookHealthReport], diagnoses: [IntegrationDiagnosis]) {
+        var reports: [AgentIdentifier: HookHealthReport] = [:]
+
+        let diagnoses = descriptors.map { descriptor -> IntegrationDiagnosis in
+            let agent = descriptor.agent
+            let report = HookHealthCheck.check(descriptor, hooksBinaryURL: hooksBinaryURL)
+            reports[agent] = report
+            let present = hooksPresent[agent] == true
+
+            var input = Input(
+                descriptor: descriptor,
+                intent: intents[agent] ?? .untouched,
+                hooksPresent: present,
+                toolPresent: HookAgentCatalog.isToolPresent(descriptor),
+                health: report,
+                lastEventAt: lastEvents[agent],
+                drops: mergedDrops(drops, for: agent)
+            )
+
+            if agent == .claudeCode {
+                input.claudePolicy = ClaudeHookPolicy.read(claudeDirectory: descriptor.directory)
+            }
+
+            if agent == .codex {
+                let config = descriptor.directory.appendingPathComponent("config.toml")
+                input.codexHooksDisabledInConfig = (try? HookConfigFile.readText(config))
+                    .flatMap { $0 }
+                    .map(CodexHookInstaller.isCodexHooksFeatureExplicitlyDisabled(in:)) ?? false
+                if present, probesCodexTrust {
+                    input.codexTrust = CodexHookTrustProbe.check(codexDirectory: descriptor.directory)
+                }
+            }
+
+            return diagnose(input)
+        }
+
+        return (reports, diagnoses)
+    }
+
+    /// Factory runs as both `factory` and `droid`.
+    private static func mergedDrops(
+        _ drops: [String: HookDropLog.Entry],
+        for agent: AgentIdentifier
+    ) -> HookDropLog.Entry? {
+        let entries = drops
+            .filter { AgentIdentifier(hookSource: $0.key) == agent }
+            .map(\.value)
+            .sorted { $0.lastDroppedAt < $1.lastDroppedAt }
+
+        guard var latest = entries.last else {
+            return nil
+        }
+
+        latest.count = entries.reduce(0) { $0 + $1.count }
+        return latest
     }
 
     public static func diagnose(_ input: Input) -> IntegrationDiagnosis {
