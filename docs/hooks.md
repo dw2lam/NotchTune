@@ -20,7 +20,13 @@ NotchTuneHooks CLI
 Agent
 ```
 
-**Fail-open principle**: if the bridge is unavailable the hook process exits silently without writing to stdout, so the agent continues running unaffected.
+**Fail-open principle**: if the bridge is unavailable the hook process exits silently without writing to stdout, so the agent continues running unaffected. What reaches stdout is valid JSON or nothing: Claude Code reports `{...}` that doesn't parse as a hook error.
+
+**Payloads are open**: event names, modes and sources decode to `.unknown(String)` (`OpenHookValue`) and a field that changes type is dropped, so agents can ship new values between our releases. Only an event with no `hook_event_name` or `session_id` is lost; those drops are counted, without the payload, in `~/Library/Application Support/NotchTune/hook-drops.json` (`HookDropLog`) for the doctor.
+
+**Integration doctor** (Settings → Setup): `IntegrationDoctor` reports status, last event (`HookActivityStore`) and drops for all agents in `HookAgentCatalog`. Test hook runs the binary named in the agent's config with `--source x --doctor-ping <nonce>`; `BridgeCommand.doctorPing` is answered at the bridge and creates no event, session, sound or "last event" time. The binary echoes the nonce because a build too old to know the flag also exits 0.
+
+**Repair** (`HookRepairPolicy`) only runs for agents whose intent is `.installed`.
 
 ## Skip Hooks For Delegated Control
 
@@ -55,7 +61,7 @@ The managed Codex hook installer (`CodexHookInstaller`) installs only `SessionSt
 
 The installer chooses the Codex hook feature flag that the local Codex CLI advertises. Newer Codex builds use `[features].hooks = true`; older builds use the legacy `[features].codex_hooks = true`. Status checks recognize both keys, and managed installs migrate between them when the local Codex version changes.
 
-After hooks are installed or changed, Codex may require a manual trust review before running them. Open `/hooks` inside Codex CLI and approve the expected Open Island hook entries. This approval gate belongs to Codex and is not bypassed by Open Island.
+After hooks are installed or changed, Codex skips them until they're trusted: trust is per hook hash, in `[hooks.state."<hooks.json path>:<event>:<group>:<handler>"] trusted_hash` in `config.toml`. Open `/hooks` inside Codex CLI and approve the NotchTune entries. This approval gate belongs to Codex; NotchTune never writes that table. `CodexHookTrustProbe` reads the answer from the app-server's `hooks/list` so the doctor can say when hooks are being skipped.
 
 The `CodexHookPayload` model and `BridgeServer` can parse richer events (`PreToolUse`, `PostToolUse`) when they are present in the hook payload, and will surface them in the UI if received. However, these richer events are **not** installed by the managed installer and must be configured manually if desired.
 
@@ -323,7 +329,9 @@ The hook process infers the terminal type from environment variables at runtime:
 | `TERM_PROGRAM=Apple_Terminal` | `Terminal` |
 | `TERM_PROGRAM=WezTerm` | `WezTerm` |
 
-For iTerm, Terminal, and Ghostty the process additionally runs an AppleScript query to obtain the session ID, TTY, and window title — used to power the "jump back to terminal" feature. The `cmux` terminal uses `CMUX_SURFACE_ID` instead of AppleScript.
+For iTerm, Terminal, and Ghostty the process additionally runs an AppleScript query to obtain the session ID, TTY, and window title — used to power the "jump back to terminal" feature. It runs only on the events that find the user in that terminal (`SessionStart`, `UserPromptSubmit`) and is killed after 300 ms, because a pending Automation prompt would otherwise stall the agent. The `cmux` terminal uses `CMUX_SURFACE_ID` instead of AppleScript.
+
+Claude Code runs hooks in a session with no controlling terminal, so the TTY comes from the nearest ancestor process that has one (`HookTerminalProbe`).
 
 ---
 
@@ -337,3 +345,13 @@ For iTerm, Terminal, and Ghostty the process additionally runs an AppleScript qu
 | [`Sources/NotchTuneCore/GeminiHooks.swift`](../Sources/NotchTuneCore/GeminiHooks.swift) | Gemini CLI payload model, terminal detection, metadata helpers |
 | [`Sources/NotchTuneCore/BridgeServer.swift`](../Sources/NotchTuneCore/BridgeServer.swift) | Unix socket server — handles incoming hook payloads |
 | [`Sources/NotchTuneCore/BridgeTransport.swift`](../Sources/NotchTuneCore/BridgeTransport.swift) | Protocol codec and envelope types |
+
+---
+
+## Kimi (`--source kimi`)
+
+Kimi Code reads `[[hooks]]` from `~/.kimi-code/config.toml`; the older Kimi CLI read `~/.kimi/config.toml`. `KimiHookInstallationManager.resolvedDirectory` uses whichever exists, preferring the new one. Extra keys in `[[hooks]]` stop Kimi loading its config. `PermissionRequest` is observe-only there, so it isn't installed and the bridge acknowledges it without a card.
+
+## OpenCode (plugin)
+
+`notchtune-opencode.js` carries both plugin APIs because V1 plugins don't run on OpenCode 2. V2 requires a default object with `id` and `setup` and rejects a function; V1 before 1.18.29 only takes a function. V2 resolves `@opencode/plugin` for its plugins, so the file picks its export at load time. V2 events are `{ type, data }` with new names (`session.tool.called`, `session.execution.*`, `form.created`). Both versions auto-load `~/.config/opencode/plugins/`, so the installer doesn't touch OpenCode's config, which may be JSONC. Bump `notchtune-plugin-revision` (a comment: older V1 loaders call every named export) and `OpenCodePluginInstallationManager.currentPluginRevision` together.
