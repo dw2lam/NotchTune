@@ -311,12 +311,12 @@ struct AppNoticeTests {
         model.jumpToSession(session(id: "second"))
         model.jumpToSession(session(id: "third"))
 
-        try await waitUntil { log.order.contains("third") }
+        // The message lands on the main actor just after the jump returns.
+        try await waitUntil { model.lastActionMessage == "third" }
 
         #expect(log.didOverlap == false)
         // The second was replaced before it started, so it never ran.
         #expect(log.order == ["first", "third"])
-        #expect(model.lastActionMessage == "third")
     }
 
     // MARK: - Actions
