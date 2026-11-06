@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { useLatestRelease } from '../hooks/useLatestRelease';
+import { DOWNLOAD_URL, REPO_URL } from '../hooks/useLatestRelease';
 import MacBook from '../components/MacBook';
 
 /* The page's one big moment: a MacBook that opens as you arrive, then, as
@@ -23,7 +23,7 @@ const LAYERS: { id: LayerId; src: string; w: number; h: number; top?: number; dx
   { id: 'reminders', src: 'reminders-220', w: 650, h: 374, alt: 'The island on its Reminders tab: three active reminders, from checking the staging deploy at 10:00 to booking the onboarding design review, and one in the archive.' },
   { id: 'mirror', src: 'mirror-photo-220', w: 650, h: 476, alt: 'The island on its Mirror tab: a black-and-white picture across the full width, flipped like a mirror, of a woman with windswept curly hair in front of a city skyline, with a FaceTime HD Camera drop-down and zoom, flip and expand buttons underneath.' },
   { id: 'pill-meeting', src: 'pill-meeting', w: 464, h: 38, dx: -29, alt: 'The closed notch four minutes before Design review, 09:53 to 10:23.' },
-  { id: 'banner', src: 'meeting-220', w: 650, h: 416, alt: 'The island with the Design review banner above the agent list: in 4 minutes, 09:54 to 10:24, with Join.' },
+  { id: 'banner', src: 'meeting-220', w: 650, h: 416, alt: 'The island with the Design review banner above the agent list: in 4 minutes, 13:25 to 13:55, with Join.' },
   { id: 'settings', src: 'settings-pill', w: 906, h: 766, top: 52, alt: 'NotchTune Settings on Personalization, its sections in one pill across the title bar: previews of the MacBook notch and an external display linked with Sync, and the first row of twenty pixel characters.' },
 ];
 
@@ -36,7 +36,7 @@ const FRAMES: { id?: string; cam: CamId; layer: LayerId; tint: string; title?: s
   {
     id: 'agents', cam: 'notch', layer: 'island', tint: MOON,
     title: 'All your agents, at a glance.',
-    line: 'Claude Code, Codex, Gemini CLI and six more, one line each: what it’s doing, in which terminal, and for how long.',
+    line: 'Claude Code, Codex, Cursor, Antigravity and seven more, one line each: what it’s doing, in which terminal, and for how long.',
   },
   {
     cam: 'pill', layer: 'pill-working', tint: 'rgb(110 150 255)',
@@ -64,7 +64,7 @@ const FRAMES: { id?: string; cam: CamId; layer: LayerId; tint: string; title?: s
     line: 'Jot a note or drop a file on the notch. Images, screenshots and files wait for you there, on your Mac.',
   },
   {
-    cam: 'notch', layer: 'reminders', tint: 'rgb(255 196 110)',
+    id: 'reminders', cam: 'notch', layer: 'reminders', tint: 'rgb(255 196 110)',
     title: 'Reminders, right up top.',
     line: 'Add one with or without a time, get a nudge when it’s due, and tick it off into the archive.',
   },
@@ -81,21 +81,25 @@ const FRAMES: { id?: string; cam: CamId; layer: LayerId; tint: string; title?: s
   {
     id: 'personalize', cam: 'window', layer: 'settings', tint: 'rgb(160 110 255)',
     title: 'Make it yours.',
-    line: 'Twenty characters, how lively they are, and how every tap feels. Style the notch and an external display apart, or Sync both.',
+    line: 'Twenty characters, trackpad haptics you can tune, and tabs in the order you like. Style the notch and an external display apart, or Sync both.',
   },
 ];
 
 const LAST = FRAMES.length - 1;
 const HOLD = 0.6; // frames of scroll the last step stays pinned for
 const SPAN = 0.72; // viewport heights of scroll per step
+// The shade stops short of the picture on short windows, so that the bottom of
+// a tall capture only ever sits in this first part of its gradient.
+const SHADE_CLEAR = 0.7;
+// the section each step belongs to, for the nav
+const SECTIONS = FRAMES.map((_, i) => FRAMES.slice(0, i + 1).reverse().find((f) => f.id)?.id ?? null);
 
 type Cam = { z: number; x: number; y: number };
 
 const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-export default function Story() {
-  const { downloadUrl } = useLatestRelease();
+export default function Story({ onSection }: { onSection: (id: string | null) => void }) {
   const storyRef = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const introRef = useRef<HTMLDivElement>(null);
@@ -129,7 +133,8 @@ export default function Story() {
     const intro = introRef.current!, shade = shadeRef.current!, captions = captionsRef.current!;
     const reduce = matchMedia('(prefers-reduced-motion: reduce)');
     let cams: Record<CamId, Cam> = { full: { z: 1, x: 0, y: 0 }, notch: { z: 1, x: 0, y: 0 }, pill: { z: 1, x: 0, y: 0 }, window: { z: 1, x: 0, y: 0 } };
-    let span = 1, current = -1, raf = 0;
+    let shades = FRAMES.map(() => 0);
+    let span = 1, current = -1, section: string | null = null, raf = 0;
 
     const measure = () => {
       const screen = cam.querySelector<HTMLElement>('.mbp-screen')!;
@@ -155,6 +160,14 @@ export default function Story() {
         pill: aim(756, 0, Math.min(1.2, wide * 1.18)),
         window: aim(756, 0, Math.min(1, (vw - pad * 2) / 880, (vh - top - room) / 826)),
       };
+      // the Settings window reaches lower, so the shade under its caption is shorter
+      shades = FRAMES.map((f) => {
+        const reach = vh * (f.cam === 'window' ? 0.3 : 0.5);
+        if (f.cam === 'full') return reach;
+        const l = LAYERS.find((x) => x.id === f.layer)!;
+        const bottom = top + ((l.top ?? 0) + l.h) * cams[f.cam].z * pt;
+        return Math.min(reach, (vh - bottom) / SHADE_CLEAR);
+      });
       span = (story.offsetHeight - stage.offsetHeight) / (LAST + HOLD);
     };
 
@@ -174,7 +187,11 @@ export default function Story() {
       intro.style.visibility = away >= 1 ? 'hidden' : '';
       shade.style.opacity = String(clamp(s / 0.6));
       const step = Math.min(LAST, Math.round(s));
+      shade.style.height = `${shades[step]}px`;
       if (step !== current) { current = step; setActive(step); }
+      const inView = story.getBoundingClientRect().bottom > stage.clientHeight / 2;
+      const nextSection = inView ? SECTIONS[step] : null;
+      if (nextSection !== section) { section = nextSection; onSection(nextSection); }
     };
     const queue = () => { if (!raf) raf = requestAnimationFrame(update); };
     const relayout = () => { measure(); update(); };
@@ -190,7 +207,7 @@ export default function Story() {
       reduce.removeEventListener('change', queue);
       cancelAnimationFrame(raf);
     };
-  }, []);
+  }, [onSection]);
 
   let shown: LayerId | null = FRAMES[active].layer;
   if (active === 0) shown = boot === 0 ? null : boot === 1 ? 'pill-working' : 'island';
@@ -204,10 +221,12 @@ export default function Story() {
       <div ref={stageRef} className="story-stage">
         <div ref={introRef} className="story-intro frame">
           <h1 id="hero-title" className="h1">The calm at the top of your screen.</h1>
+          <p className="story-sub">A free, open-source notch companion for your AI coding agents and music.</p>
           <p className="cta">
-            <a className="btn" href={downloadUrl}>Download for Mac</a>
-            <a className="more" href="https://github.com/dw2lam/NotchTune">View on GitHub</a>
+            <a className="btn" href={DOWNLOAD_URL}>Download for Mac</a>
+            <a className="more" href={REPO_URL}>View on GitHub</a>
           </p>
+          <p className="story-req">macOS 14+ · Apple Silicon</p>
         </div>
         <div ref={camRef} className="story-cam">
           <MacBook label="A MacBook Pro with NotchTune under the notch." tint={FRAMES[active].tint}>
@@ -227,10 +246,10 @@ export default function Story() {
             ))}
           </MacBook>
         </div>
-        <div ref={shadeRef} className={`story-shade${FRAMES[active].cam === 'window' ? ' short' : ''}`} />
-        <div ref={captionsRef} className="story-captions frame" aria-live="polite">
+        <div ref={shadeRef} className="story-shade" />
+        <div ref={captionsRef} className="story-captions frame">
           {FRAMES.map((f, i) => f.title && (
-            <div key={i} className={`caption${active === i ? ' on' : ''}`} aria-hidden={active === i ? undefined : true}>
+            <div key={i} className={`caption${active === i ? ' on' : ''}`}>
               <h2 className="h2">{f.title}</h2>
               <p className="lede">{f.line}</p>
             </div>
