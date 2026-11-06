@@ -272,6 +272,10 @@ final class AppModel {
         overlay.noticeDidChange()
     }
 
+    func retryBridgeStart() {
+        startBridgeServer()
+    }
+
     /// The banner's button: the notice has done its job once it's pressed.
     func performNoticeAction() {
         guard let action = notice?.action else { return }
@@ -289,7 +293,7 @@ final class AppModel {
                 NotificationCenter.default.post(name: .notchTuneSelectSetupTab, object: nil)
             }
         case .retryBridge:
-            startBridgeServer()
+            retryBridgeStart()
         }
     }
 
@@ -879,7 +883,7 @@ final class AppModel {
     private var bridgeClient = LocalBridgeClient()
 
     @ObservationIgnored
-    private let terminalJumpAction: @Sendable (JumpTarget) throws -> String
+    private let terminalJumpAction: @Sendable (JumpTarget) throws -> TerminalJumpResult
 
     @ObservationIgnored
     private let isNotificationSessionAlreadyFrontmost: @Sendable (AgentSession) async -> Bool
@@ -1160,8 +1164,8 @@ final class AppModel {
     }
 
     init(
-        terminalJumpAction: @escaping @Sendable (JumpTarget) throws -> String = { target in
-            try TerminalJumpService().jump(to: target)
+        terminalJumpAction: @escaping @Sendable (JumpTarget) throws -> TerminalJumpResult = { target in
+            try TerminalJumpService().jumpResult(to: target)
         },
         isNotificationSessionAlreadyFrontmost: @escaping @Sendable (AgentSession) async -> Bool = { session in
             await ForegroundTerminalSessionProbe().matches(session: session)
@@ -2397,6 +2401,7 @@ final class AppModel {
         guard let jumpTarget = session.jumpTarget,
               jumpTarget.terminalApp.lowercased() != "unknown" else {
             lastActionMessage = "Cannot jump: terminal app is unknown."
+            post(AppNotice(message: "Couldn't jump: NotchTune doesn't know which terminal this session is in."))
             return
         }
         jump(to: jumpTarget)
@@ -2405,6 +2410,7 @@ final class AppModel {
     private func jump(to jumpTarget: JumpTarget?) {
         guard let jumpTarget else {
             lastActionMessage = "No jump target is available yet."
+            post(AppNotice(message: "Nothing to jump to yet: this session hasn't reported its terminal."))
             return
         }
 
@@ -2412,10 +2418,19 @@ final class AppModel {
         let jumpAction = terminalJumpAction
 
         dismissOverlayForJump()
-        jumpTask?.cancel()
+        // Cancelling doesn't stop detached work already underway, and two
+        // jumps at once race for the same terminal. So each waits out the
+        // one before it, and a jump replaced while waiting never runs.
+        let previousJump = jumpTask
+        previousJump?.cancel()
         jumpTask = Task { [weak self] in
             if shouldDelayForDismissAnimation {
                 try? await Task.sleep(for: Self.jumpOverlayDismissLeadTime)
+            }
+
+            await previousJump?.value
+            guard !Task.isCancelled else {
+                return
             }
 
             do {
@@ -2427,7 +2442,10 @@ final class AppModel {
                     return
                 }
 
-                self?.lastActionMessage = result
+                self?.lastActionMessage = result.message
+                if let app = result.automationDeniedApp {
+                    self?.post(.automationDenied(appName: app))
+                }
             } catch is CancellationError {
                 return
             } catch {
@@ -2436,6 +2454,7 @@ final class AppModel {
                 }
 
                 self?.lastActionMessage = "Jump failed: \(error.localizedDescription)"
+                self?.post(AppNotice(message: "Couldn't open \(jumpTarget.terminalApp) for that session."))
             }
         }
     }

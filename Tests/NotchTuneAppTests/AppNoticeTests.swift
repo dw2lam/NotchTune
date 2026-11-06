@@ -210,6 +210,101 @@ struct AppNoticeTests {
         #expect(model.notice == nil)
     }
 
+    // MARK: - Jumps
+
+    private final class JumpLog: @unchecked Sendable {
+        private let lock = NSLock()
+        private var running = 0
+        private var overlapped = false
+        private var finished: [String] = []
+
+        func run(_ target: JumpTarget, for duration: TimeInterval = 0.08) {
+            lock.withLock {
+                running += 1
+                overlapped = overlapped || running > 1
+            }
+            Thread.sleep(forTimeInterval: duration)
+            lock.withLock {
+                running -= 1
+                finished.append(target.workspaceName)
+            }
+        }
+
+        var didOverlap: Bool { lock.withLock { overlapped } }
+        var order: [String] { lock.withLock { finished } }
+    }
+
+    private func session(id: String, terminal: String = "Ghostty") -> AgentSession {
+        AgentSession(
+            id: id,
+            title: id,
+            tool: .claudeCode,
+            origin: .live,
+            attachmentState: .attached,
+            phase: .running,
+            summary: "",
+            updatedAt: .now,
+            jumpTarget: JumpTarget(terminalApp: terminal, workspaceName: id, paneTitle: "claude")
+        )
+    }
+
+    private func waitUntil(_ condition: @MainActor () -> Bool) async throws {
+        for _ in 0..<100 where !condition() {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    @Test
+    func aDeniedJumpAsksForAutomationWithTheAppsName() async throws {
+        let model = AppModel(terminalJumpAction: { _ in
+            TerminalJumpResult(message: "Activated Ghostty.", automationDeniedApp: "Ghostty")
+        })
+        model.overlay.noticeDisplayDuration = 60
+
+        model.jumpToSession(session(id: "denied"))
+        try await waitUntil { model.notice != nil }
+
+        #expect(model.notice?.message.contains("Allow NotchTune to control Ghostty") == true)
+        #expect(model.notice?.action == .openPrivacyPane(.automation))
+    }
+
+    @Test
+    func aFailedJumpAndAnUnknownTerminalBothSaySo() async throws {
+        struct Failed: Error {}
+        let model = AppModel(terminalJumpAction: { _ in throw Failed() })
+        model.overlay.noticeDisplayDuration = 60
+
+        model.jumpToSession(session(id: "unknown", terminal: "Unknown"))
+        #expect(model.notice?.message.contains("doesn't know which terminal") == true)
+        model.dismissNotice()
+
+        model.jumpToSession(session(id: "failed"))
+        try await waitUntil { model.notice != nil }
+        #expect(model.notice?.message.contains("Ghostty") == true)
+    }
+
+    @Test
+    func quickJumpsNeverRunAtOnceAndTheLastOneWins() async throws {
+        let log = JumpLog()
+        let model = AppModel(terminalJumpAction: { target in
+            log.run(target)
+            return TerminalJumpResult(message: target.workspaceName)
+        })
+
+        model.jumpToSession(session(id: "first"))
+        // Past the lead time, so the first is underway when the rest arrive.
+        try await Task.sleep(for: .milliseconds(40))
+        model.jumpToSession(session(id: "second"))
+        model.jumpToSession(session(id: "third"))
+
+        try await waitUntil { log.order.contains("third") }
+
+        #expect(log.didOverlap == false)
+        // The second was replaced before it started, so it never ran.
+        #expect(log.order == ["first", "third"])
+        #expect(model.lastActionMessage == "third")
+    }
+
     // MARK: - Actions
 
     @Test

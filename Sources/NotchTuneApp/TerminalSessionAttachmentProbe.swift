@@ -1340,43 +1340,25 @@ struct TerminalSessionAttachmentProbe {
     }
 
     private func runAppleScript(_ script: String, timeout: TimeInterval = Self.appleScriptTimeout) throws -> String {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        task.arguments = ["-e", script]
-
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        task.standardOutput = outputPipe
-        task.standardError = errorPipe
-        let completionGroup = DispatchGroup()
-        completionGroup.enter()
-        task.terminationHandler = { _ in
-            completionGroup.leave()
-        }
-
-        try task.run()
         MonitorInstrumentation.recordSpawn(executablePath: "/usr/bin/osascript")
         MonitorInstrumentation.recordAppleScript(target: Self.appleScriptTarget(of: script))
-        let waitResult = completionGroup.wait(timeout: .now() + timeout)
-        if waitResult == .timedOut {
-            task.terminate()
-            _ = completionGroup.wait(timeout: .now() + 0.2)
+
+        let output: TimedProcess.Output
+        do {
+            output = try TimedProcess.run("/usr/bin/osascript", arguments: ["-e", script], timeout: timeout)
+        } catch TimedProcess.Failure.timedOut {
             throw NSError(domain: "TerminalSessionAttachmentProbe", code: 408, userInfo: [
                 NSLocalizedDescriptionKey: "AppleScript probe timed out.",
             ])
         }
 
-        let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        guard task.terminationStatus == 0 else {
-            let stderr = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            throw NSError(domain: "TerminalSessionAttachmentProbe", code: Int(task.terminationStatus), userInfo: [
+        guard output.status == 0 else {
+            let stderr = output.errorText
+            throw NSError(domain: "TerminalSessionAttachmentProbe", code: Int(output.status), userInfo: [
                 NSLocalizedDescriptionKey: stderr.isEmpty ? "AppleScript probe failed." : stderr,
             ])
         }
 
-        return output
+        return output.text
     }
 }

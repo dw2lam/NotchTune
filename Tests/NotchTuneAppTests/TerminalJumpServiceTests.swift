@@ -12,6 +12,114 @@ final class TerminalJumpServiceTests: XCTestCase {
         var values: [(String, [String])] = []
     }
 
+    private static let notAuthorized = "execution error: Not authorized to send Apple events to Ghostty. (-1743)"
+
+    private func serviceWithFailingScript(
+        _ error: Error,
+        bundleIdentifier: String,
+        opened: OpenedArgumentsBox
+    ) -> TerminalJumpService {
+        TerminalJumpService(
+            applicationResolver: { $0 == bundleIdentifier ? URL(fileURLWithPath: "/Applications/Stub.app") : nil },
+            appRunningChecker: { $0 == bundleIdentifier },
+            openAction: { opened.values.append($0) },
+            appleScriptRunner: { _ in throw error }
+        )
+    }
+
+    func testDeniedAutomationStillActivatesTheTerminalAndSaysWhich() throws {
+        let terminals: [(name: String, bundleIdentifier: String)] = [
+            ("Ghostty", "com.mitchellh.ghostty"),
+            ("iTerm", "com.googlecode.iterm2"),
+            ("Terminal", "com.apple.Terminal"),
+        ]
+
+        for terminal in terminals {
+            let opened = OpenedArgumentsBox()
+            let service = serviceWithFailingScript(
+                TerminalJumpError.appleScriptFailed(Self.notAuthorized),
+                bundleIdentifier: terminal.bundleIdentifier,
+                opened: opened
+            )
+
+            let result = try service.jumpResult(to: JumpTarget(
+                terminalApp: terminal.name,
+                workspaceName: "project",
+                paneTitle: "claude",
+                terminalSessionID: "session-1"
+            ))
+
+            XCTAssertEqual(result.automationDeniedApp, terminal.name)
+            XCTAssertEqual(opened.values, [["-b", terminal.bundleIdentifier]])
+        }
+    }
+
+    func testDeniedAutomationInsideTmuxStillActivatesTheTerminal() throws {
+        let opened = OpenedArgumentsBox()
+        let service = serviceWithFailingScript(
+            TerminalJumpError.appleScriptFailed(Self.notAuthorized),
+            bundleIdentifier: "com.mitchellh.ghostty",
+            opened: opened
+        )
+
+        let result = try service.jumpResult(to: JumpTarget(
+            terminalApp: "Ghostty",
+            workspaceName: "project",
+            paneTitle: "claude",
+            tmuxTarget: "main:1.0"
+        ))
+
+        XCTAssertEqual(result.automationDeniedApp, "Ghostty")
+        XCTAssertEqual(opened.values, [["-b", "com.mitchellh.ghostty"]])
+    }
+
+    func testAnyOtherScriptFailureFallsBackWithoutBlamingPermissions() throws {
+        let opened = OpenedArgumentsBox()
+        let service = serviceWithFailingScript(
+            TimedProcess.Failure.timedOut,
+            bundleIdentifier: "com.mitchellh.ghostty",
+            opened: opened
+        )
+
+        let result = try service.jumpResult(to: JumpTarget(
+            terminalApp: "Ghostty",
+            workspaceName: "project",
+            paneTitle: "claude",
+            terminalSessionID: "session-1"
+        ))
+
+        XCTAssertNil(result.automationDeniedApp)
+        XCTAssertEqual(opened.values, [["-b", "com.mitchellh.ghostty"]])
+    }
+
+    func testOnlyAppleEventRefusalsCountAsDeniedAutomation() {
+        XCTAssertTrue(TerminalJumpError.appleScriptFailed(Self.notAuthorized).isAutomationDenied)
+        XCTAssertFalse(TerminalJumpError.appleScriptFailed("Ghostty got an error: (-1728)").isAutomationDenied)
+        XCTAssertFalse(TerminalJumpError.openFailed(["-b", "x"]).isAutomationDenied)
+    }
+
+    func testTimedProcessStopsAProcessThatOverrunsItsBudget() {
+        let start = Date()
+        XCTAssertThrowsError(try TimedProcess.run("/bin/sleep", arguments: ["30"], timeout: 0.2)) { error in
+            guard case TimedProcess.Failure.timedOut = error else {
+                return XCTFail("Expected a timeout, got \(error)")
+            }
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(start), 2)
+    }
+
+    func testTimedProcessCollectsMoreOutputThanAPipeHolds() throws {
+        let output = try TimedProcess.run(
+            "/bin/sh",
+            arguments: ["-c", "head -c 300000 /dev/zero; echo oops >&2; exit 3"],
+            timeout: 5
+        )
+
+        XCTAssertEqual(output.status, 3)
+        XCTAssertEqual(output.standardOutput.count, 300_000)
+        XCTAssertEqual(output.errorText, "oops")
+    }
+
     func testGhosttyJumpScriptActivatesWindowAndRetriesFocusUntilItSticks() {
         let target = JumpTarget(
             terminalApp: "Ghostty",

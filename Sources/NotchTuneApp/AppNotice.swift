@@ -46,6 +46,15 @@ struct AppNotice: Equatable, Identifiable, Sendable {
         self.action = action
     }
 
+    /// macOS is refusing NotchTune's Apple Events for `appName`.
+    static func automationDenied(appName: String) -> AppNotice {
+        AppNotice(
+            message: "Allow NotchTune to control \(appName) to jump to the right tab.",
+            actionTitle: "Open Settings",
+            action: .openPrivacyPane(.automation)
+        )
+    }
+
     /// The same message posted again shouldn't restart the banner.
     func isSameProblem(as other: AppNotice) -> Bool {
         message == other.message && action == other.action
