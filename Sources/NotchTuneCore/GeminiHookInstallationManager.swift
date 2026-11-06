@@ -68,7 +68,7 @@ public final class GeminiHookInstallationManager: @unchecked Sendable {
 
         let settingsURL = geminiDirectory.appendingPathComponent("settings.json")
         let manifestURL = geminiDirectory.appendingPathComponent(GeminiHookInstallerManifest.fileName)
-        let existingSettings = try? Data(contentsOf: settingsURL)
+        let existingSettings = try HookConfigFile.read(settingsURL)
         let installedBinaryURL = try ManagedHooksBinary.install(
             from: hooksBinaryURL,
             to: managedHooksBinaryURL,
@@ -85,7 +85,7 @@ public final class GeminiHookInstallationManager: @unchecked Sendable {
         }
 
         if let contents = mutation.contents {
-            try contents.write(to: settingsURL, options: .atomic)
+            try HookConfigFile.write(contents, to: settingsURL)
         }
 
         let manifest = GeminiHookInstallerManifest(hookCommand: command)
@@ -102,7 +102,7 @@ public final class GeminiHookInstallationManager: @unchecked Sendable {
         let settingsURL = geminiDirectory.appendingPathComponent("settings.json")
         let manifestURL = geminiDirectory.appendingPathComponent(GeminiHookInstallerManifest.fileName)
         let manifest = try loadManifest(at: manifestURL)
-        let existingSettings = try? Data(contentsOf: settingsURL)
+        let existingSettings = try HookConfigFile.read(settingsURL)
         let mutation = try GeminiHookInstaller.uninstallSettingsJSON(
             existingData: existingSettings,
             managedCommand: manifest?.hookCommand
@@ -113,9 +113,10 @@ public final class GeminiHookInstallationManager: @unchecked Sendable {
         }
 
         if let contents = mutation.contents {
-            try contents.write(to: settingsURL, options: .atomic)
-        } else if fileManager.fileExists(atPath: settingsURL.path) {
-            try fileManager.removeItem(at: settingsURL)
+            try HookConfigFile.write(contents, to: settingsURL)
+        } else if mutation.changed {
+            // Our hooks were all it held. The file is still the user's.
+            try HookConfigFile.write("{}\n", to: settingsURL)
         }
 
         if fileManager.fileExists(atPath: manifestURL.path) {

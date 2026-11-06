@@ -69,7 +69,7 @@ public final class CursorHookInstallationManager: @unchecked Sendable {
 
         let hooksURL = cursorDirectory.appendingPathComponent("hooks.json")
         let manifestURL = cursorDirectory.appendingPathComponent(CursorHookInstallerManifest.fileName)
-        let existingHooks = try? Data(contentsOf: hooksURL)
+        let existingHooks = try HookConfigFile.read(hooksURL)
         let installedBinaryURL = try ManagedHooksBinary.install(
             from: hooksBinaryURL,
             to: managedHooksBinaryURL,
@@ -86,7 +86,7 @@ public final class CursorHookInstallationManager: @unchecked Sendable {
         }
 
         if let contents = mutation.contents {
-            try contents.write(to: hooksURL, options: .atomic)
+            try HookConfigFile.write(contents, to: hooksURL)
         }
 
         let manifest = CursorHookInstallerManifest(hookCommand: command)
@@ -103,7 +103,7 @@ public final class CursorHookInstallationManager: @unchecked Sendable {
         let hooksURL = cursorDirectory.appendingPathComponent("hooks.json")
         let manifestURL = cursorDirectory.appendingPathComponent(CursorHookInstallerManifest.fileName)
         let manifest = try loadManifest(at: manifestURL)
-        let existingHooks = try? Data(contentsOf: hooksURL)
+        let existingHooks = try HookConfigFile.read(hooksURL)
         let mutation = try CursorHookInstaller.uninstallHooksJSON(
             existingData: existingHooks,
             managedCommand: manifest?.hookCommand
@@ -114,9 +114,10 @@ public final class CursorHookInstallationManager: @unchecked Sendable {
         }
 
         if let contents = mutation.contents {
-            try contents.write(to: hooksURL, options: .atomic)
-        } else if fileManager.fileExists(atPath: hooksURL.path) {
-            try fileManager.removeItem(at: hooksURL)
+            try HookConfigFile.write(contents, to: hooksURL)
+        } else if mutation.changed {
+            // Our hooks were all it held. The file is still the user's.
+            try HookConfigFile.write("{}\n", to: hooksURL)
         }
 
         if fileManager.fileExists(atPath: manifestURL.path) {

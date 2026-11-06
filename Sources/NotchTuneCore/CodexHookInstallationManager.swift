@@ -85,8 +85,8 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         let manifestURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.fileName)
         let legacyManifestURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.legacyFileName)
 
-        let existingConfig = (try? String(contentsOf: configURL, encoding: .utf8)) ?? ""
-        let existingHooks = try? Data(contentsOf: hooksURL)
+        let existingConfig = try HookConfigFile.readText(configURL) ?? ""
+        let existingHooks = try HookConfigFile.read(hooksURL)
         let installedHooksBinaryURL = try ManagedHooksBinary.install(
             from: hooksBinaryURL,
             to: managedHooksBinaryURL,
@@ -94,9 +94,15 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         )
 
         let command = CodexHookInstaller.hookCommand(for: installedHooksBinaryURL.path)
+        let featureKey = featureKeyProvider()
         let featureMutation = CodexHookInstaller.enableCodexHooksFeature(
             in: existingConfig,
-            preferredKey: featureKeyProvider()
+            preferredKey: featureKey
+        )
+        try CodexHookInstaller.verifyFeatureMutation(
+            featureMutation,
+            original: existingConfig,
+            preferredKey: featureKey
         )
         let hooksMutation = try CodexHookInstaller.installHooksJSON(existingData: existingHooks, hookCommand: command)
 
@@ -107,9 +113,11 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
             try backupFile(at: hooksURL)
         }
 
-        try featureMutation.contents.write(to: configURL, atomically: true, encoding: .utf8)
+        if featureMutation.changed {
+            try HookConfigFile.write(featureMutation.contents, to: configURL)
+        }
         if let hooksData = hooksMutation.contents {
-            try hooksData.write(to: hooksURL, options: .atomic)
+            try HookConfigFile.write(hooksData, to: hooksURL)
         }
 
         let manifest = CodexHookInstallerManifest(
@@ -136,7 +144,7 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         let legacyManifestURL = codexDirectory.appendingPathComponent(CodexHookInstallerManifest.legacyFileName)
 
         let manifest = try loadManifest(at: manifestURL)
-        let existingHooks = try? Data(contentsOf: hooksURL)
+        let existingHooks = try HookConfigFile.read(hooksURL)
         let hooksMutation = try CodexHookInstaller.uninstallHooksJSON(
             existingData: existingHooks,
             managedCommand: manifest?.hookCommand
@@ -147,20 +155,21 @@ public final class CodexHookInstallationManager: @unchecked Sendable {
         }
 
         if let hooksData = hooksMutation.contents {
-            try hooksData.write(to: hooksURL, options: .atomic)
-        } else if fileManager.fileExists(atPath: hooksURL.path) {
-            try fileManager.removeItem(at: hooksURL)
+            try HookConfigFile.write(hooksData, to: hooksURL)
+        } else if hooksMutation.changed {
+            // Our hooks were all it held. The file is still the user's.
+            try HookConfigFile.write("{}\n", to: hooksURL)
         }
 
         if let manifest, manifest.enabledCodexHooksFeature, !hooksMutation.hasRemainingHooks {
-            let existingConfig = (try? String(contentsOf: configURL, encoding: .utf8)) ?? ""
+            let existingConfig = try HookConfigFile.readText(configURL) ?? ""
             let featureMutation = CodexHookInstaller.disableCodexHooksFeatureIfManaged(in: existingConfig)
 
             if featureMutation.changed {
                 if fileManager.fileExists(atPath: configURL.path) {
                     try backupFile(at: configURL)
                 }
-                try featureMutation.contents.write(to: configURL, atomically: true, encoding: .utf8)
+                try HookConfigFile.write(featureMutation.contents, to: configURL)
             }
         }
 
