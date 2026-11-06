@@ -18,6 +18,9 @@ final class TerminalSnapshotRound: Sendable {
     enum Fetch<Value: Sendable>: Sendable {
         case notRunning
         case failed
+        /// Not asked, because it has kept failing (`TerminalQueryBackoff`).
+        /// To its consumers this is `failed`: no answer, the app is running.
+        case backingOff
         case fetched(Value, elapsed: TimeInterval)
 
         var isAppRunning: Bool {
@@ -29,7 +32,16 @@ final class TerminalSnapshotRound: Sendable {
         }
 
         var isFailure: Bool {
-            if case .failed = self {
+            switch self {
+            case .failed, .backingOff:
+                return true
+            case .notRunning, .fetched:
+                return false
+            }
+        }
+
+        var isBackingOff: Bool {
+            if case .backingOff = self {
                 return true
             }
 
@@ -68,12 +80,16 @@ final class TerminalSnapshotRound: Sendable {
     }
 
     /// Queries every running terminal once (apps that are not running are
-    /// never sent AppleScript).
-    static func fetch(using probe: TerminalSessionAttachmentProbe) -> TerminalSnapshotRound {
+    /// never sent AppleScript, nor are those `held` back for now).
+    static func fetch(
+        using probe: TerminalSessionAttachmentProbe,
+        held: TerminalQueryBackoff.Held = .init()
+    ) -> TerminalSnapshotRound {
         let timeout = TerminalJumpTargetResolver.appleScriptTimeout
+        let running = currentRunningApps()
         return TerminalSnapshotRound(
-            ghostty: probe.fetchGhosttySnapshots(timeout: timeout),
-            terminal: probe.fetchTerminalSnapshots(timeout: timeout)
+            ghostty: held.ghostty && running.ghostty ? .backingOff : probe.fetchGhosttySnapshots(timeout: timeout),
+            terminal: held.terminal && running.terminal ? .backingOff : probe.fetchTerminalSnapshots(timeout: timeout)
         )
     }
 
@@ -92,8 +108,11 @@ final class TerminalSnapshotRound: Sendable {
 
     /// A round whose probe-facing answers include a failure or a too-slow
     /// reply is not reused: the next tick queries again, as every tick did.
+    /// A terminal being held back counts as settled, or one denied terminal
+    /// would keep a healthy one re-queried on every tick.
     var isReusable: Bool {
-        ghosttyAvailability.isAuthoritative && terminalAvailability.isAuthoritative
+        (ghostty.isBackingOff || ghosttyAvailability.isAuthoritative)
+            && (terminal.isBackingOff || terminalAvailability.isAuthoritative)
     }
 
     /// Same tab lists as `other` (ignoring query timing).
@@ -125,7 +144,7 @@ final class TerminalSnapshotRound: Sendable {
         switch fetch {
         case .notRunning:
             return .available([], appIsRunning: false)
-        case .failed:
+        case .failed, .backingOff:
             return .unavailable(appIsRunning: true)
         case let .fetched(snapshots, elapsed):
             guard elapsed <= TerminalSessionAttachmentProbe.appleScriptTimeout else {
@@ -198,10 +217,67 @@ final class TerminalSnapshotRound: Sendable {
         switch fetch {
         case .notRunning:
             return []
-        case .failed:
+        case .failed, .backingOff:
             return nil
         case let .fetched(snapshots, _):
             return snapshots
         }
+    }
+}
+
+/// Stops asking a terminal that keeps refusing. With Automation denied every
+/// query fails the same way, and failed rounds aren't reused, so the monitor
+/// ran osascript every 2–5 s for as long as the app was open. Each terminal
+/// backs off on its own: Ghostty being denied says nothing about Terminal.app.
+struct TerminalQueryBackoff: Sendable {
+    struct Held: Equatable, Sendable {
+        var ghostty = false
+        var terminal = false
+    }
+
+    private struct Track: Sendable {
+        var failures = 0
+        var nextAttempt: ContinuousClock.Instant?
+
+        func isHeld(at now: ContinuousClock.Instant) -> Bool {
+            nextAttempt.map { now < $0 } ?? false
+        }
+
+        mutating func record<Value>(_ fetch: TerminalSnapshotRound.Fetch<Value>, at now: ContinuousClock.Instant) {
+            switch fetch {
+            case .backingOff:
+                break
+            case .failed:
+                failures += 1
+                nextAttempt = TerminalQueryBackoff.delay(afterFailures: failures).map { now + $0 }
+            case .notRunning, .fetched:
+                self = Track()
+            }
+        }
+    }
+
+    /// One bad answer is a terminal being busy, not a refusal.
+    private static let toleratedFailures = 3
+    private static let firstDelay: Duration = .seconds(15)
+    /// Also how long a grant in System Settings can take to be noticed.
+    private static let maxDelay: Duration = .seconds(60)
+
+    private var ghostty = Track()
+    private var terminal = Track()
+
+    /// How long to hold off after `failures` in a row; `nil` to keep asking.
+    static func delay(afterFailures failures: Int) -> Duration? {
+        guard failures >= toleratedFailures else { return nil }
+        let doublings = min(failures - toleratedFailures, 8)
+        return min(firstDelay * (1 << doublings), maxDelay)
+    }
+
+    func held(at now: ContinuousClock.Instant = .now) -> Held {
+        Held(ghostty: ghostty.isHeld(at: now), terminal: terminal.isHeld(at: now))
+    }
+
+    mutating func record(_ round: TerminalSnapshotRound, at now: ContinuousClock.Instant = .now) {
+        ghostty.record(round.ghostty, at: now)
+        terminal.record(round.terminal, at: now)
     }
 }

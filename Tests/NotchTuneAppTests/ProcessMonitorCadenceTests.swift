@@ -38,6 +38,58 @@ struct TerminalSnapshotRoundTests {
         #expect(failed.ghosttyAvailability.isAuthoritative == false)
         #expect(failed.resolverSources(live: Self.failingLiveSources(), isTmuxRunning: false).ghostty() == nil)
         #expect(failed.isReusable == false)
+
+        // Held back after repeated failures: no answer for either consumer,
+        // but it no longer keeps a healthy terminal re-queried on every tick.
+        let held = TerminalSnapshotRound(ghostty: .backingOff, terminal: .fetched([], elapsed: 0.1))
+        #expect(held.ghosttyAvailability.isAuthoritative == false)
+        #expect(held.ghosttyAvailability.appIsRunning)
+        #expect(held.resolverSources(live: Self.failingLiveSources(), isTmuxRunning: false).ghostty() == nil)
+        #expect(held.isReusable)
+        #expect(held.hasSameTerminalState(as: failed) == false)
+        #expect(
+            TerminalSnapshotRound(ghostty: .backingOff, terminal: .notRunning)
+                .hasSameTerminalState(as: failed)
+        )
+    }
+
+    @Test
+    func aTerminalThatKeepsFailingIsAskedLessAndLessUntilItAnswers() {
+        #expect(TerminalQueryBackoff.delay(afterFailures: 2) == nil)
+        #expect(TerminalQueryBackoff.delay(afterFailures: 3) == .seconds(15))
+        #expect(TerminalQueryBackoff.delay(afterFailures: 4) == .seconds(30))
+        #expect(TerminalQueryBackoff.delay(afterFailures: 5) == .seconds(60))
+        #expect(TerminalQueryBackoff.delay(afterFailures: 500) == .seconds(60))
+
+        let start = ContinuousClock.now
+        let denied = TerminalSnapshotRound(ghostty: .failed, terminal: .fetched([], elapsed: 0.1))
+        var backoff = TerminalQueryBackoff()
+
+        // A couple of bad answers are just a busy terminal.
+        backoff.record(denied, at: start)
+        backoff.record(denied, at: start)
+        #expect(backoff.held(at: start) == .init())
+
+        backoff.record(denied, at: start)
+        #expect(backoff.held(at: start) == .init(ghostty: true, terminal: false))
+        #expect(backoff.held(at: start + .seconds(14)).ghostty)
+        #expect(backoff.held(at: start + .seconds(15)).ghostty == false)
+
+        // Rounds that skipped it don't count against it, or extend the hold.
+        backoff.record(
+            TerminalSnapshotRound(ghostty: .backingOff, terminal: .fetched([], elapsed: 0.1)),
+            at: start + .seconds(5)
+        )
+        #expect(backoff.held(at: start + .seconds(15)).ghostty == false)
+
+        // Granted in System Settings: the next real answer clears it.
+        backoff.record(
+            TerminalSnapshotRound(ghostty: .fetched([], elapsed: 0.1), terminal: .fetched([], elapsed: 0.1)),
+            at: start + .seconds(15)
+        )
+        #expect(backoff.held(at: start + .seconds(15)) == .init())
+        backoff.record(denied, at: start + .seconds(16))
+        #expect(backoff.held(at: start + .seconds(16)) == .init())
     }
 
     @Test
@@ -225,7 +277,7 @@ struct ProcessMonitorCadenceTests {
             activeAgentProcessDiscovery: ActiveAgentProcessDiscovery { executable, arguments in
                 processes.run(executable, arguments)
             },
-            terminalRoundFetcher: { _ in counter.fetch() }
+            terminalRoundFetcher: { _, _ in counter.fetch() }
         )
         coordinator.syntheticClaudeSessionPrefix = "claude-process:"
         coordinator.stateAccessor = { box.state }
@@ -276,6 +328,38 @@ struct ProcessMonitorCadenceTests {
         coordinator.invalidateTerminalSnapshots()
         await coordinator.runMonitorTick()
         #expect(counter.value == 5)
+    }
+
+    @Test
+    func aDeniedTerminalIsHeldBackInsteadOfQueriedOnEveryTick() async {
+        let processes = FakeProcesses()
+        processes.set(Self.oneAgent)
+        let holds = OSAllocatedUnfairLock(initialState: [Bool]())
+        let coordinator = ProcessMonitoringCoordinator(
+            activeAgentProcessDiscovery: ActiveAgentProcessDiscovery { executable, arguments in
+                processes.run(executable, arguments)
+            },
+            terminalRoundFetcher: { _, held in
+                holds.withLock { $0.append(held.ghostty) }
+                let running = TerminalSnapshotRound.currentRunningApps()
+                return TerminalSnapshotRound(
+                    ghostty: held.ghostty ? .backingOff : .failed,
+                    terminal: running.terminal ? .fetched([], elapsed: 0.01) : .notRunning
+                )
+            }
+        )
+        let box = StateBox()
+        coordinator.stateAccessor = { box.state }
+        coordinator.stateUpdater = { box.state = $0 }
+
+        for _ in 0..<5 {
+            await coordinator.runMonitorTick()
+        }
+
+        // Asked on the first three ticks; held from then on, and a held
+        // round is then reused rather than rebuilt.
+        #expect(holds.withLock { $0 }.prefix(3) == [false, false, false])
+        #expect(holds.withLock { $0 }.dropFirst(3).allSatisfy { $0 })
     }
 
     @Test

@@ -34,7 +34,7 @@ final class ProcessMonitoringCoordinator {
 
     /// Queries the terminals for a new snapshot round (injectable for tests).
     @ObservationIgnored
-    private let terminalRoundFetcher: @Sendable (TerminalSessionAttachmentProbe) -> TerminalSnapshotRound
+    private let terminalRoundFetcher: @Sendable (TerminalSessionAttachmentProbe, TerminalQueryBackoff.Held) -> TerminalSnapshotRound
 
     @ObservationIgnored
     private let terminalSessionAttachmentProbe = TerminalSessionAttachmentProbe()
@@ -55,6 +55,7 @@ final class ProcessMonitoringCoordinator {
     /// terminals' answer has changed; "full" ticks query the terminals again.
     @ObservationIgnored
     private var terminalRound: TerminalSnapshotRound?
+    private var terminalBackoff = TerminalQueryBackoff()
 
     @ObservationIgnored
     private var lastProcessSnapshots: [ActiveProcessSnapshot]?
@@ -136,8 +137,8 @@ final class ProcessMonitoringCoordinator {
 
     init(
         activeAgentProcessDiscovery: ActiveAgentProcessDiscovery = ActiveAgentProcessDiscovery(),
-        terminalRoundFetcher: @escaping @Sendable (TerminalSessionAttachmentProbe) -> TerminalSnapshotRound = {
-            TerminalSnapshotRound.fetch(using: $0)
+        terminalRoundFetcher: @escaping @Sendable (TerminalSessionAttachmentProbe, TerminalQueryBackoff.Held) -> TerminalSnapshotRound = {
+            TerminalSnapshotRound.fetch(using: $0, held: $1)
         }
     ) {
         self.activeAgentProcessDiscovery = activeAgentProcessDiscovery
@@ -256,6 +257,7 @@ final class ProcessMonitoringCoordinator {
         let probe = self.terminalSessionAttachmentProbe
         let resolver = self.terminalJumpTargetResolver
         let fetchTerminalRound = self.terminalRoundFetcher
+        let heldTerminals = terminalBackoff.held(at: tickStart)
         let liveSessions = self.state.sessions.filter(\.isTrackedLiveSession)
 
         let sessionFingerprint = Self.sessionFingerprint(of: liveSessions)
@@ -285,7 +287,7 @@ final class ProcessMonitoringCoordinator {
                reusableRound.runningApps == TerminalSnapshotRound.currentRunningApps() {
                 round = reusableRound
             } else {
-                round = fetchTerminalRound(probe)
+                round = fetchTerminalRound(probe, heldTerminals)
             }
 
             let jumpTargets = resolver.resolveJumpTargets(
@@ -306,6 +308,9 @@ final class ProcessMonitoringCoordinator {
         lastProcessSnapshots = processes
         let previousRound = terminalRound
         terminalRound = outcome.round
+        if outcome.isFreshRound, let round = outcome.round {
+            terminalBackoff.record(round)
+        }
         updateAgentExitWatchers(for: outcome.discovery.agentProcessIDs)
         MonitorInstrumentation.recordTick(full: outcome.isFreshRound)
 
