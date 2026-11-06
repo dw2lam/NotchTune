@@ -498,7 +498,8 @@ final class OverlayUICoordinator {
 
     func performBootAnimation() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self else { return }
+            // A launch failure already has the notch: it matters more.
+            guard let self, self.appModel?.notice == nil else { return }
             self.notchOpen(reason: .boot, surface: .sessionList())
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 guard self?.notchOpenReason == .boot else { return }

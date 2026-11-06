@@ -64,6 +64,7 @@ struct AppNoticeTests {
         #expect(delivery(.closed, closing: true) == .wait)
         #expect(delivery(.opened, .notification, .sessionList(actionableSessionID: "s")) == .wait)
         #expect(delivery(.opened, .drag) == .wait)
+        #expect(delivery(.opened, .boot) == .wait)
         #expect(delivery(.closed, fullscreen: true) == .wait)
     }
 
@@ -121,6 +122,19 @@ struct AppNoticeTests {
         model.notchClose()
         try await Task.sleep(for: .seconds(CloseMorph.settled + 0.15))
         #expect(model.islandSurface == .notice)
+    }
+
+    @Test
+    func theBootFlourishGivesWayToALaunchFailure() async throws {
+        let model = makeModel()
+        model.post(AppNotice(message: "Your Myspace notes couldn't be read."))
+
+        model.performBootAnimation()
+        try await Task.sleep(for: .milliseconds(650))
+
+        #expect(model.notchOpenReason == .notification)
+        #expect(model.islandSurface == .notice)
+        #expect(model.notice != nil)
     }
 
     // MARK: - How long it stays

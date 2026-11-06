@@ -10,8 +10,6 @@ struct AppNotice: Equatable, Identifiable, Sendable {
         case openPrivacyPane(PrivacyPane)
         /// Opens NotchTune's Settings on the Setup tab.
         case openSetup
-        /// Opens System Settings → Notifications.
-        case openNotificationSettings
         /// Starts the local bridge again.
         case retryBridge
     }
@@ -86,8 +84,9 @@ enum AppNoticeDelivery: Equatable, Sendable {
         // opening under a close would pull the morph back open halfway.
         if isFullscreen || isClosing { return .wait }
         guard status == .opened else { return .toast }
-        // An agent's card and a file drag keep the notch to themselves.
-        if openReason == .drag { return .wait }
+        // An agent's card, a file drag and the boot flourish keep the notch
+        // to themselves.
+        if openReason == .drag || openReason == .boot { return .wait }
         if openReason == .notification, surface.sessionID != nil { return .wait }
         return .banner
     }
