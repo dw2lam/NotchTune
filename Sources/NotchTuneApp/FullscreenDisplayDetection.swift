@@ -46,7 +46,7 @@ enum FullscreenDisplayDetection {
         return screen.localizedName
     }
 
-    private static func displayUUID(for screen: NSScreen) -> String? {
+    static func displayUUID(for screen: NSScreen) -> String? {
         let key = NSDeviceDescriptionKey("NSScreenNumber")
         guard let number = screen.deviceDescription[key] as? NSNumber else {
             return nil

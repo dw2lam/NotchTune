@@ -5,6 +5,21 @@ import NotchTuneCore
 
 struct OverlayPanelControllerTests {
     @Test
+    func missingSpacesListsDesktopsThePanelWasDroppedFrom() {
+        #expect(CGSSpaceQuery.missingSpaces(windowSpaces: [1, 3], displaySpaces: [1, 2, 3, 4]) == [2, 4])
+        #expect(CGSSpaceQuery.missingSpaces(windowSpaces: [1, 2, 3], displaySpaces: [1, 2, 3]).isEmpty)
+        // Spaces on other displays don't count.
+        #expect(CGSSpaceQuery.missingSpaces(windowSpaces: [1, 9], displaySpaces: [1]).isEmpty)
+    }
+
+    @Test
+    func missingSpacesIsEmptyWhenTheWindowListIsUnknown() {
+        // An SPI failure (or an ordered-out window) reports no Spaces: don't
+        // treat that as "dropped from all of them".
+        #expect(CGSSpaceQuery.missingSpaces(windowSpaces: [], displaySpaces: [1, 2]).isEmpty)
+    }
+
+    @Test
     func closedSurfaceRectCentersOnNotch() {
         let notchRect = NSRect(x: 200, y: 900, width: 200, height: 38)
         let closedWidth: CGFloat = 320

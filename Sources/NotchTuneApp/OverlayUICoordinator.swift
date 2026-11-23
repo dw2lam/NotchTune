@@ -160,11 +160,44 @@ final class OverlayUICoordinator {
             name: NSWorkspace.didActivateApplicationNotification,
             object: nil
         )
+        for (name, selector) in [
+            ("com.apple.screenIsLocked", #selector(handleScreenLocked)),
+            ("com.apple.screenIsUnlocked", #selector(handleScreenUnlocked)),
+        ] {
+            DistributedNotificationCenter.default().addObserver(
+                self, selector: selector, name: Notification.Name(name), object: nil
+            )
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleScreenLocked),
+            name: NSWorkspace.sessionDidResignActiveNotification,
+            object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleScreenUnlocked),
+            name: NSWorkspace.sessionDidBecomeActiveNotification,
+            object: nil
+        )
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+        DistributedNotificationCenter.default().removeObserver(self)
+    }
+
+    private var isScreenLocked = false
+
+    @objc private func handleScreenLocked() {
+        isScreenLocked = true
+        refreshFullscreenState()
+    }
+
+    @objc private func handleScreenUnlocked() {
+        isScreenLocked = false
+        refreshFullscreenState()
     }
 
     @objc private func handleScreenParametersChanged() {
@@ -536,17 +569,23 @@ final class OverlayUICoordinator {
         // Harness scenarios and unit tests behave the same whatever the user
         // has full-screen on that display (it blanked captures, and failed
         // tests that open the notch while a full-screen app was up).
+        // The notch sits above the lock screen's desktop layer
+        // (`NotchWindowLayer`), so it hides while locked, like for a
+        // fullscreen app: agent sessions must never show there.
         let fullscreen = !appModel.disablesOverlayEventMonitoringDuringHarness
             && !HarnessHeadless.isRunningTests
-            && FullscreenDisplayDetection.isOverlayScreenInFullscreen(
+            && (isScreenLocked || FullscreenDisplayDetection.isOverlayScreenInFullscreen(
                 preferredScreenID: preferredOverlayScreenID
-            )
+            ))
         // Only write when it actually changed — assigning an @Observable
         // property re-notifies SwiftUI every time, even with the same value.
-        guard appModel.isOverlayDisplayFullscreen != fullscreen else { return }
-        appModel.isOverlayDisplayFullscreen = fullscreen
-        reconcileOverlayVisibility()
-        deliverNotice()
+        if appModel.isOverlayDisplayFullscreen != fullscreen {
+            appModel.isOverlayDisplayFullscreen = fullscreen
+            reconcileOverlayVisibility()
+            deliverNotice()
+        }
+        // Runs on every desktop switch and its deferred re-checks.
+        overlayPanelController.keepPanelOffDesktops()
     }
 
     private func reconcileOverlayVisibility() {

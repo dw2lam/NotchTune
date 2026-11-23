@@ -194,6 +194,35 @@ final class OverlayPanelController {
         setPanelHiddenForFullscreen(true)
     }
 
+    /// Keeps the panel where swipes between desktops can't move it.
+    ///
+    /// On the desktops, macOS slid the notch along with every swipe, left an
+    /// open notch behind on the desktop the user swiped away from, and
+    /// dropped it from desktops after a Mission Control edit without ever
+    /// putting it back (re-showing or resetting `collectionBehavior` doesn't
+    /// undo that). So the panel lives in `NotchWindowLayer`, above every
+    /// desktop. With the layer off, it re-adds the panel to any desktops of
+    /// its display it was dropped from. Runs on every desktop switch; a
+    /// no-op when nothing changed or the panel is ordered out.
+    func keepPanelOffDesktops() {
+        guard let panel, panel.isVisible, !HarnessHeadless.isActive else { return }
+        if NotchWindowLayer.isEnabled {
+            // Back on a desktop (macOS re-adds it on some transitions).
+            if !CGSSpaceQuery.spaceIDs(forWindow: panel.windowNumber).isEmpty {
+                NotchWindowLayer.attach(windowNumber: panel.windowNumber)
+            }
+            return
+        }
+        guard let screen = panel.screen ?? NSScreen.main else { return }
+        let missing = CGSSpaceQuery.missingSpaces(
+            windowSpaces: CGSSpaceQuery.spaceIDs(forWindow: panel.windowNumber),
+            displaySpaces: CGSSpaceQuery.spaceIDs(on: FullscreenDisplayDetection.displayUUID(for: screen))
+        )
+        guard !missing.isEmpty else { return }
+        CGSSpaceQuery.addWindow(panel.windowNumber, toSpaces: missing)
+        panel.orderFrontRegardless()
+    }
+
     func setPanelHiddenForFullscreen(_ hidden: Bool) {
         guard let panel else { return }
 
@@ -305,6 +334,10 @@ final class OverlayPanelController {
         panel.isFloatingPanel = true
         panel.becomesKeyOnlyIfNeeded = false
         panel.level = .statusBar
+        // AppKit's default order-in/out animation scaled the notch ~2% and
+        // nudged it off the top edge each time it came back from a
+        // fullscreen app's desktop: the notch visibly jumped.
+        panel.animationBehavior = .none
         panel.sharingType = .readOnly
         panel.backgroundColor = .clear
         panel.isOpaque = false
@@ -328,6 +361,10 @@ final class OverlayPanelController {
         let hostingView = NotchHostingView(rootView: IslandPanelView(model: model))
         hostingView.notchController = self
         panel.contentView = hostingView
+
+        if !HarnessHeadless.isActive {
+            NotchWindowLayer.attach(windowNumber: panel.windowNumber)
+        }
 
         computeNotchRect(screen: resolveTargetScreen())
         installKeyMonitorIfNeeded()
