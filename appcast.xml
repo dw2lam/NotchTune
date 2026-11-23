@@ -6,34 +6,34 @@
         <description>Signed NotchTune releases.</description>
         <language>en</language>
         <item>
-            <title>Version 2.3.2</title>
-            <sparkle:version>1320</sparkle:version>
-            <sparkle:shortVersionString>2.3.2</sparkle:shortVersionString>
+            <title>Version 2.3.3</title>
+            <sparkle:version>1323</sparkle:version>
+            <sparkle:shortVersionString>2.3.3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <pubDate>Mon, 23 Nov 2026 04:18:48 GMT</pubDate>
+            <pubDate>Mon, 23 Nov 2026 06:13:57 GMT</pubDate>
             <enclosure
-                url="https://github.com/dw2lam/NotchTune/releases/download/2.3.2/NotchTune.zip"
+                url="https://github.com/dw2lam/NotchTune/releases/download/2.3.3/NotchTune.zip"
                 type="application/octet-stream"
-                sparkle:edSignature="k2Cj8yaEfUq2HD327tVznK5KYOY4uv/3cQq2vM/dN1gDWrQsM0EaVTw3CfEgd2DDMoWlEgp/GZ099GrfCvoRAw==" length="11406736"
+                sparkle:edSignature="8v0oTL5OyvSkGo8TEHPaR1llepFUv2REqLsw3hRKTouvf1SuhdnTKwxSCbhs3MZyw+ZQUvWDpeIqGPy8ZRiwAA==" length="11406693"
             />
             <sparkle:deltas>
                 <enclosure
-                    url="https://github.com/dw2lam/NotchTune/releases/download/2.3.2/NotchTune-1320-from-1317.delta"
+                    url="https://github.com/dw2lam/NotchTune/releases/download/2.3.3/NotchTune-1323-from-1320.delta"
+                    sparkle:deltaFrom="1320"
+                    type="application/octet-stream"
+                    sparkle:edSignature="kTlltOFUs4g7osm5Nt1rNspciGVlYUBCyMXgA+sLyftwfqsQg9WY3JC99/QL1TAhmY1Z8UteGTVmlotgFXc8AA==" length="27314"
+                />
+                <enclosure
+                    url="https://github.com/dw2lam/NotchTune/releases/download/2.3.3/NotchTune-1323-from-1317.delta"
                     sparkle:deltaFrom="1317"
                     type="application/octet-stream"
-                    sparkle:edSignature="WsiUKNcer9OHBDwh0ts2CuhICP8r3DGqQLrfufv2dpHxrkBJXF9M+/OPwOyg8qxI5HXA2qoNHFbKwQNjwBzwDQ==" length="895598"
+                    sparkle:edSignature="PZ3Nnb7/JVdLacRTsxmnG7G/W/BfYj3DBmF/N88Mryrw4+LHN0hq1jzY3lQ05WlfL5U5T6vGJ0lvIPw5lI4LDw==" length="909322"
                 />
                 <enclosure
-                    url="https://github.com/dw2lam/NotchTune/releases/download/2.3.2/NotchTune-1320-from-1313.delta"
+                    url="https://github.com/dw2lam/NotchTune/releases/download/2.3.3/NotchTune-1323-from-1313.delta"
                     sparkle:deltaFrom="1313"
                     type="application/octet-stream"
-                    sparkle:edSignature="PYHW6jSMyykkxZRMPbG4/byo99gpUJvaWH8yBaRC0WZJCE7ZWGmEverZcvyFUXb0PEk8j3Q8Qp8zoWBsNp1aAA==" length="996342"
-                />
-                <enclosure
-                    url="https://github.com/dw2lam/NotchTune/releases/download/2.3.2/NotchTune-1320-from-1263.delta"
-                    sparkle:deltaFrom="1263"
-                    type="application/octet-stream"
-                    sparkle:edSignature="7uPDr4mzT+bd1raehwqcXuSAicWwfjqOUWgzblcymFFKY86gptAlmHpRGOOgUA1nheiVD8YbEXQN1I2cz0ntDg==" length="2872758"
+                    sparkle:edSignature="dD7BrEg54ClAdU0IoeyarX+TgGiMJajP44izZsFYWzmvh7SSaLcAuf5AnMlI+qwvWZ86i5iJIHEbUnXMeGaUAQ==" length="1008702"
                 />
             </sparkle:deltas>
         </item>
