@@ -216,6 +216,51 @@ struct AppModelNotificationCoalescingTests {
     }
 
     @Test
+    func heldApprovalOpensOnceTheUserSwitchesAway() async throws {
+        let inFront = FocusFlag(true)
+        let model = makeModel(frontmost: { $0.id == "s1" && inFront.value })
+        model.suppressFrontmostNotifications = true
+        start(model, id: "s1")
+        approve(model, id: "s1")
+        try await waitForSettle(model, opened: false)
+        #expect(model.notchStatus == .closed)
+
+        // Still in front: switching between other windows of it changes nothing.
+        model.focusedAppDidChange()
+        try await waitForSettle(model, opened: false)
+        #expect(model.notchStatus == .closed)
+
+        inFront.value = false
+        model.focusedAppDidChange()
+        try await waitForSettle(model, opened: true)
+        #expect(model.notchStatus == .opened)
+        #expect(model.notchOpenReason == .notification)
+    }
+
+    @Test
+    func heldApprovalAnsweredInTheAgentNeverOpens() async throws {
+        let inFront = FocusFlag(true)
+        let model = makeModel(frontmost: { $0.id == "s1" && inFront.value })
+        model.suppressFrontmostNotifications = true
+        start(model, id: "s1")
+        approve(model, id: "s1")
+        try await waitForSettle(model, opened: false)
+
+        // Answered in the agent's own window: the request resolves there.
+        model.applyTrackedEvent(
+            .actionableStateResolved(ActionableStateResolved(
+                sessionID: "s1", summary: "Editing", timestamp: now.addingTimeInterval(2)
+            )),
+            updateLastActionMessage: false,
+            ingress: .bridge
+        )
+        inFront.value = false
+        model.focusedAppDidChange()
+        try await waitForSettle(model, opened: false)
+        #expect(model.notchStatus == .closed)
+    }
+
+    @Test
     func frontmostCompletionOpensNormallyWhenSuppressionIsOff() async throws {
         let model = makeModel(frontmost: { $0.id == "s1" })
         model.suppressFrontmostNotifications = false
@@ -276,5 +321,15 @@ struct AppModelNotificationCoalescingTests {
         #expect(model.notchStatus == .opened)
         #expect(model.notchOpenReason == .notification)
         #expect(model.islandSurface == .sessionList(actionableSessionID: "s1"))
+    }
+}
+
+private final class FocusFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _value: Bool
+    init(_ value: Bool) { _value = value }
+    var value: Bool {
+        get { lock.withLock { _value } }
+        set { lock.withLock { _value = newValue } }
     }
 }

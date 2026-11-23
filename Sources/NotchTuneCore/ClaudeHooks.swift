@@ -1367,6 +1367,14 @@ public extension ClaudeHookPayload {
             return "Zellij"
         }
 
+        // Claude Code inside the Claude desktop app. Checked before
+        // TERM_PROGRAM for the same reason as Codex.app: a desktop app
+        // launched from a terminal inherits that terminal's TERM_PROGRAM.
+        if environment["CLAUDE_CODE_ENTRYPOINT"] == "claude-desktop"
+            || environment["__CFBundleIdentifier"]?.lowercased() == "com.anthropic.claudefordesktop" {
+            return "Claude.app"
+        }
+
         // TERM_PROGRAM is the only authoritative terminal signal. Each
         // terminal sets it explicitly when it execs the user's shell, so
         // unlike per-app env vars (GHOSTTY_RESOURCES_DIR,

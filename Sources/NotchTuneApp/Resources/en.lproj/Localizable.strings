@@ -55,7 +55,7 @@
 "settings.appearance.haptics.feel.knock" = "Knock";
 "settings.appearance.haptics.feel.swoosh" = "Swoosh";
 "settings.general.suppressFrontmostNotifications" = "Smart suppression";
-"settings.general.suppressFrontmostNotifications.note" = "Don't open the notch when the agent's terminal tab is already in focus. Finishes still show a quiet peek in the pill.";
+"settings.general.suppressFrontmostNotifications.note" = "Don't open the notch when the agent's terminal tab or app is already in focus. An approval opens it once you switch away; finishes still show a quiet peek in the pill.";
 "settings.general.showCodexUsage" = "Show Codex usage";
 "settings.general.completionReply" = "Reply from completion card";
 "settings.general.cliHooks" = "CLI Hooks";

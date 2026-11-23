@@ -79,6 +79,11 @@ struct TerminalJumpService {
             aliases: ["codex.app"]
         ),
         TerminalAppDescriptor(
+            displayName: "Claude.app",
+            bundleIdentifier: "com.anthropic.claudefordesktop",
+            aliases: ["claude.app", "claude", "claude desktop"]
+        ),
+        TerminalAppDescriptor(
             displayName: "Kaku",
             bundleIdentifier: "fun.tw93.kaku",
             aliases: ["kaku"]

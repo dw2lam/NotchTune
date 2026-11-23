@@ -264,6 +264,34 @@ struct ClaudeHooksTests {
     }
 
     @Test
+    func claudeInferTerminalAppRecognizesTheClaudeDesktopApp() {
+        for environment in [
+            ["CLAUDE_CODE_ENTRYPOINT": "claude-desktop"],
+            ["__CFBundleIdentifier": "com.anthropic.claudefordesktop"],
+            // Claude launched from a terminal inherits its TERM_PROGRAM.
+            ["CLAUDE_CODE_ENTRYPOINT": "claude-desktop", "TERM_PROGRAM": "ghostty"],
+        ] {
+            let payload = ClaudeHookPayload(
+                cwd: "/tmp/demo", hookEventName: .sessionStart, sessionID: "s1"
+            ).withRuntimeContext(
+                environment: environment,
+                currentTTYProvider: { nil },
+                terminalLocatorProvider: { _ in (sessionID: nil, tty: nil, title: nil) }
+            )
+            #expect(payload.terminalApp == "Claude.app", "\(environment)")
+        }
+
+        let cli = ClaudeHookPayload(
+            cwd: "/tmp/demo", hookEventName: .sessionStart, sessionID: "s1"
+        ).withRuntimeContext(
+            environment: ["CLAUDE_CODE_ENTRYPOINT": "cli", "TERM_PROGRAM": "ghostty", "__CFBundleIdentifier": "com.mitchellh.ghostty"],
+            currentTTYProvider: { nil },
+            terminalLocatorProvider: { _ in (sessionID: nil, tty: nil, title: nil) }
+        )
+        #expect(cli.terminalApp == "Ghostty")
+    }
+
+    @Test
     func claudeInferTerminalAppRecognizesWarpViaTermProgram() {
         let payload = ClaudeHookPayload(
             cwd: "/tmp/demo", hookEventName: .sessionStart, sessionID: "s1"

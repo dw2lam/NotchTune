@@ -19,6 +19,15 @@ struct AppNoticeTests {
         return model
     }
 
+    /// Waits for a 0.1 s notice timer to fire. A fixed sleep raced the timer
+    /// whenever the whole suite was running (the 0.1 s fired late).
+    private func waitUntil(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !condition(), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     private let denied = AppNotice(
         message: "Allow NotchTune to control Ghostty.",
         actionTitle: "Open Settings",
@@ -145,13 +154,13 @@ struct AppNoticeTests {
         model.post(AppNotice(message: "Couldn't jump."))
         #expect(model.islandSurface == .notice)
 
-        try await Task.sleep(for: .milliseconds(300))
+        try await waitUntil { model.notchStatus == .closed }
         #expect(model.notchStatus == .closed)
         #expect(model.notice == nil)
         // Still on the panel through the morph; gone once it has settled.
         #expect(model.overlay.presentedNotice != nil)
 
-        try await Task.sleep(for: .seconds(CloseMorph.settled + 0.1))
+        try await waitUntil { model.overlay.presentedNotice == nil }
         #expect(model.overlay.presentedNotice == nil)
     }
 
@@ -160,7 +169,7 @@ struct AppNoticeTests {
         let model = makeModel(noticeDuration: 0.1)
         model.post(denied)
 
-        try await Task.sleep(for: .milliseconds(300))
+        try await waitUntil { model.notchStatus == .closed }
         #expect(model.notchStatus == .closed)
         #expect(model.notice?.id == denied.id)
 
@@ -178,7 +187,7 @@ struct AppNoticeTests {
         model.notchOpen(reason: .click)
 
         model.post(AppNotice(message: "Couldn't jump."))
-        try await Task.sleep(for: .milliseconds(300))
+        try await waitUntil { model.notice == nil }
         #expect(model.notice == nil)
         #expect(model.notchStatus == .opened)
 

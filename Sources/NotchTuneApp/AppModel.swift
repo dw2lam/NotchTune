@@ -857,6 +857,12 @@ final class AppModel {
 
     @ObservationIgnored
     private var notificationPresentationTask: Task<Void, Never>?
+    /// Approvals and questions smart suppression held back because their
+    /// agent's window was in front, by session. One opens the notch once the
+    /// user switches away while it's still waiting.
+    private var focusHeldSurfaces: [String: IslandSurface] = [:]
+    private var focusHeldActivationObserver: NSObjectProtocol?
+    private var focusHeldRecheckTask: Task<Void, Never>?
 
     private static func appearanceDefaultsKey(_ profile: IslandAppearanceDisplayProfile, _ name: String) -> String {
         "appearance.island.v8.\(profile.rawValue).\(name)"
@@ -2898,9 +2904,55 @@ final class AppModel {
             case .present:
                 self.presentNotificationSurface(surface)
             case .suppress:
-                break
+                self.holdUntilFocusLeaves(surface, sessionID: sessionID)
             }
         }
+    }
+
+    private func holdUntilFocusLeaves(_ surface: IslandSurface, sessionID: String) {
+        focusHeldSurfaces[sessionID] = surface
+        guard focusHeldActivationObserver == nil else { return }
+        focusHeldActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.focusedAppDidChange() }
+        }
+    }
+
+    /// The user switched apps: an approval or question held back while its
+    /// agent's window was in front opens the notch now, if it's still
+    /// waiting and that window is no longer in front.
+    func focusedAppDidChange() {
+        guard !focusHeldSurfaces.isEmpty else { return }
+        focusHeldRecheckTask?.cancel()
+        focusHeldRecheckTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            for (sessionID, surface) in self.focusHeldSurfaces.sorted(by: { $0.key < $1.key }) {
+                guard let session = self.state.session(id: sessionID),
+                      surface.matchesCurrentState(of: session) else {
+                    // Answered (in the agent's own window, or here) or replaced.
+                    self.focusHeldSurfaces[sessionID] = nil
+                    continue
+                }
+                let stillInFront = await self.isOwningTerminalFocused(session)
+                guard !Task.isCancelled else { return }
+                guard !stillInFront else { continue }
+                self.focusHeldSurfaces[sessionID] = nil
+                if self.notificationSurfaceIsEligibleForPresentation(surface, ingress: .bridge) {
+                    self.presentNotificationSurface(surface)
+                    break
+                }
+            }
+            self.stopWatchingFocusIfIdle()
+        }
+    }
+
+    private func stopWatchingFocusIfIdle() {
+        guard focusHeldSurfaces.isEmpty, let observer = focusHeldActivationObserver else { return }
+        NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        focusHeldActivationObserver = nil
     }
 
     private func notificationSurfaceIsEligibleForPresentation(

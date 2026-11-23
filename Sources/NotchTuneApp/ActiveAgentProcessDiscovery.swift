@@ -510,6 +510,12 @@ struct ActiveAgentProcessDiscovery {
             return "Codex.app"
         }
 
+        // The Claude desktop app, not the claude-code binary it bundles
+        // (Application Support/Claude/claude-code/…/claude.app).
+        if lowered.contains("/claude.app/contents/macos/claude"), !lowered.contains("/claude-code/") {
+            return "Claude.app"
+        }
+
         if lowered.contains("/cmux.app/contents/macos/cmux") {
             return "cmux"
         }

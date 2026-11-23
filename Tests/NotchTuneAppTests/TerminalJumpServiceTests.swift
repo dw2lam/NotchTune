@@ -4,6 +4,14 @@ import NotchTuneCore
 import Foundation
 
 final class TerminalJumpServiceTests: XCTestCase {
+    func testClaudeDesktopAppMapsToItsBundleIdentifier() {
+        // Smart suppression's app-level check: the Claude desktop app in
+        // front means a Claude.app session's approval is already on screen.
+        for name in ["Claude.app", "claude", "Claude Desktop"] {
+            XCTAssertEqual(TerminalJumpService.bundleIdentifiers(forTerminalAppName: name), ["com.anthropic.claudefordesktop"], name)
+        }
+    }
+
     private final class OpenedArgumentsBox: @unchecked Sendable {
         var values: [[String]] = []
     }
