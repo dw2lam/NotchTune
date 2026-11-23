@@ -319,6 +319,17 @@ struct AppearanceSettingsPane: View {
                 centerLabelTile(.off, sample: "—")
             }
 
+            SettingsRowDivider()
+
+            SettingsToggleRow(
+                lang.t("settings.appearance.keepVisible.title"),
+                subtitle: lang.t("settings.appearance.keepVisible.note"),
+                isOn: Binding(
+                    get: { editingPreferences.keepVisibleWhenIdle },
+                    set: { value in model.updateAppearancePreferences(for: editingProfile) { $0.keepVisibleWhenIdle = value } }
+                )
+            )
+
             // External display only: Sync never copies it onto the notch, so
             // while synced it says which display it belongs to.
             if editingProfile == .topBar || model.appearanceSyncEnabled {

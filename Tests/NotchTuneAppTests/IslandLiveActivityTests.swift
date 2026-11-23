@@ -287,6 +287,26 @@ struct IslandLiveActivityModelTests {
     }
 
     @Test
+    func keepVisibleWhenIdleStopsTheIdleNotchTuckingAway() {
+        let model = AppModel()
+        let profile = model.activeAppearanceProfile
+        let original = model.appearancePreferences(for: profile).keepVisibleWhenIdle
+        defer { model.updateAppearancePreferences(for: profile) { $0.keepVisibleWhenIdle = original } }
+        model.notchStatus = .closed
+
+        model.updateAppearancePreferences(for: profile) { $0.keepVisibleWhenIdle = false }
+        #expect(model.shouldHideClosedNotch)
+        #expect(model.shouldCollapseClosedNotch)
+
+        model.updateAppearancePreferences(for: profile) { $0.keepVisibleWhenIdle = true }
+        #expect(!model.shouldHideClosedNotch)
+        #expect(!model.shouldCollapseClosedNotch)
+        // A fullscreen app still hides it.
+        model.isOverlayDisplayFullscreen = true
+        #expect(model.shouldCollapseClosedNotch)
+    }
+
+    @Test
     func theLastAgentFinishingStillShowsItsPeek() {
         // Nothing running, no music: the closed notch would normally tuck
         // away, which hid the "finished" peek of the agent that just ended.

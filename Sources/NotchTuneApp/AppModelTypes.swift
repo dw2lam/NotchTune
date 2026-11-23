@@ -142,6 +142,9 @@ struct IslandAppearancePreferences: Equatable, Sendable {
     var density: IslandDensity = .regular
     var liveActivity: IslandLiveActivityMode = .active
     var autoHideWhenInactive: Bool = false
+    /// Keep the closed notch out when nothing (agents, music, a peek) needs
+    /// it, instead of tucking it away behind the hardware notch.
+    var keepVisibleWhenIdle: Bool = false
     var usageDisplay: IslandUsageDisplay = .compact
     var sessionStateIndicator: IslandSessionStateIndicator = .animatedDot
     var sessionGroup: IslandSessionGroup = .none

@@ -801,6 +801,7 @@ final class AppModel {
         defaults.set(preferences.density.rawValue, forKey: Self.appearanceDefaultsKey(profile, "density"))
         defaults.set(preferences.liveActivity.rawValue, forKey: Self.appearanceDefaultsKey(profile, "liveActivity"))
         defaults.set(preferences.autoHideWhenInactive, forKey: Self.appearanceDefaultsKey(profile, "autoHideWhenInactive"))
+        defaults.set(preferences.keepVisibleWhenIdle, forKey: Self.appearanceDefaultsKey(profile, "keepVisibleWhenIdle"))
         defaults.set(preferences.usageDisplay.rawValue, forKey: Self.appearanceDefaultsKey(profile, "usageDisplay"))
         defaults.set(preferences.sessionStateIndicator.rawValue, forKey: Self.appearanceDefaultsKey(profile, "stateIndicator"))
         defaults.set(preferences.sessionGroup.rawValue, forKey: Self.appearanceDefaultsKey(profile, "sessionGroup"))
@@ -893,6 +894,7 @@ final class AppModel {
                     ?? ""
             ) ?? .active,
             autoHideWhenInactive: defaults.bool(forKey: appearanceDefaultsKey(profile, "autoHideWhenInactive")),
+            keepVisibleWhenIdle: defaults.bool(forKey: appearanceDefaultsKey(profile, "keepVisibleWhenIdle")),
             usageDisplay: IslandUsageDisplay(
                 rawValue: defaults.string(forKey: appearanceDefaultsKey(profile, "usageDisplay"))
                     ?? ""
@@ -1375,9 +1377,11 @@ final class AppModel {
     /// attention sessions, no active music playback (paused is fine), no
     /// transient track notification, and no finished peek (the last agent
     /// finishing leaves everything idle, which hid its own "finished").
-    /// Peek-on-hover still reveals the pill.
+    /// Peek-on-hover still reveals the pill. Off when the user keeps the
+    /// notch visible while idle.
     var shouldHideClosedNotch: Bool {
-        notchStatus != .opened
+        !appearancePreferences(for: activeAppearanceProfile).keepVisibleWhenIdle
+            && notchStatus != .opened
             && musicNotificationTrack == nil
             && !hasClosedMusicPresence
             && agentsAreIdle
