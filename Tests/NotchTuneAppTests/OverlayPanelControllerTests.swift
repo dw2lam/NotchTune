@@ -20,6 +20,19 @@ struct OverlayPanelControllerTests {
     }
 
     @Test
+    func thePrivateNotchLayerIsOffUnlessOptedIn() {
+        // Shown, it takes the trackpad's desktop swipe from the Dock (#10).
+        let key = NotchWindowLayer.defaultsKey
+        let saved = UserDefaults.standard.object(forKey: key)
+        defer { UserDefaults.standard.set(saved, forKey: key) }
+
+        UserDefaults.standard.removeObject(forKey: key)
+        #expect(NotchWindowLayer.isEnabled == false)
+        UserDefaults.standard.set(true, forKey: key)
+        #expect(NotchWindowLayer.isEnabled)
+    }
+
+    @Test
     func closedSurfaceRectCentersOnNotch() {
         let notchRect = NSRect(x: 200, y: 900, width: 200, height: 38)
         let closedWidth: CGFloat = 320

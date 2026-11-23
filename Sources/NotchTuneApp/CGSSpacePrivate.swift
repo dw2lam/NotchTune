@@ -116,6 +116,10 @@ extension CGSSpaceQuery {
 /// server drops it when the app quits). A window in it isn't on any desktop:
 /// swiping between desktops, Mission Control edits and fullscreen apps can't
 /// slide it, strand it on one desktop, or drop it from the others.
+///
+/// Off by default: while the layer is shown, the Dock never gets the
+/// trackpad's desktop-swipe gesture, so three- and four-finger swipes stop
+/// switching desktops (#10). Opt in with `overlay.desktopLayer.private`.
 enum NotchWindowLayer {
     /// Just above the desktops. Kept low on purpose: the notch hides while
     /// the screen is locked as well (`OverlayUICoordinator`), so agent
@@ -124,7 +128,7 @@ enum NotchWindowLayer {
     static let defaultsKey = "overlay.desktopLayer.private"
 
     static var isEnabled: Bool {
-        UserDefaults.standard.object(forKey: defaultsKey) as? Bool ?? true
+        UserDefaults.standard.object(forKey: defaultsKey) as? Bool ?? false
     }
 
     private static let space: UInt64? = {

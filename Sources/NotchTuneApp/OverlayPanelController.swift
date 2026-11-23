@@ -200,9 +200,10 @@ final class OverlayPanelController {
     /// open notch behind on the desktop the user swiped away from, and
     /// dropped it from desktops after a Mission Control edit without ever
     /// putting it back (re-showing or resetting `collectionBehavior` doesn't
-    /// undo that). So the panel lives in `NotchWindowLayer`, above every
-    /// desktop. With the layer off, it re-adds the panel to any desktops of
-    /// its display it was dropped from. Runs on every desktop switch; a
+    /// undo that). By default it re-adds the panel to any desktops of its
+    /// display it was dropped from. With the opt-in `NotchWindowLayer` on,
+    /// the panel lives above every desktop instead (off by default: it takes
+    /// the desktop-swipe gesture, #10). Runs on every desktop switch; a
     /// no-op when nothing changed or the panel is ordered out.
     func keepPanelOffDesktops() {
         guard let panel, panel.isVisible, !HarnessHeadless.isActive else { return }
