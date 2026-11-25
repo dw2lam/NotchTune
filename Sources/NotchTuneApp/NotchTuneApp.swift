@@ -32,6 +32,7 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
             model.myspaceStore.restorePendingReminders()
         }
         model.updateChecker.startIfNeeded()
+        CrashRelauncher.start()
         ProcessInfo.processInfo.disableAutomaticTermination(
             "NotchTune should remain active while monitoring local agent sessions."
         )
@@ -60,6 +61,9 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                 loadRuntimeState: harnessLaunchConfiguration.scenario == nil
             )
             harnessRuntimeMonitor.recordMilestone("modelStarted")
+            if CrashRelauncher.wasRelaunchedAfterCrash, harnessLaunchConfiguration.scenario == nil {
+                model.post(.reopenedAfterCrash)
+            }
 
             if harnessLaunchConfiguration.seedsSampleDoctor {
                 model.hooks.loadSampleDoctorReports()
@@ -236,6 +240,10 @@ final class NotchTuneAppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        CrashRelauncher.markCleanExit()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

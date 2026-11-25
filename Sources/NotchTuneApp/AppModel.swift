@@ -291,6 +291,8 @@ final class AppModel {
             }
         case .retryBridge:
             retryBridgeStart()
+        case .showCrashReport:
+            CrashRelauncher.revealCrashReport()
         }
     }
 
@@ -391,6 +393,13 @@ final class AppModel {
             guard hasFinishedInit, completionReplyEnabled != oldValue else { return }
             UserDefaults.standard.set(completionReplyEnabled, forKey: Self.completionReplyEnabledDefaultsKey)
             refreshOverlayPlacementIfVisible()
+        }
+    }
+    /// Reopen the app when it exits without quitting (`CrashRelauncher`).
+    var relaunchAfterCrash: Bool = CrashRelauncher.isEnabled {
+        didSet {
+            guard hasFinishedInit, relaunchAfterCrash != oldValue else { return }
+            CrashRelauncher.setEnabled(relaunchAfterCrash)
         }
     }
     var suppressFrontmostNotifications: Bool = true {

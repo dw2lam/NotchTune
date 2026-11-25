@@ -318,6 +318,17 @@ struct GeneralSettingsPane: View {
 
                 SettingsRowDivider()
 
+                SettingsToggleRow(
+                    lang.t("settings.general.relaunchAfterCrash"),
+                    subtitle: lang.t("settings.general.relaunchAfterCrash.note"),
+                    isOn: Binding(
+                        get: { model.relaunchAfterCrash },
+                        set: { model.relaunchAfterCrash = $0 }
+                    )
+                )
+
+                SettingsRowDivider()
+
                 SettingsPickerRow(
                     lang.t("settings.general.monitor"),
                     selection: Binding(

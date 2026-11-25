@@ -12,6 +12,8 @@ struct AppNotice: Equatable, Identifiable, Sendable {
         case openSetup
         /// Starts the local bridge again.
         case retryBridge
+        /// Selects NotchTune's newest crash report in Finder.
+        case showCrashReport
     }
 
     /// The anchors of `x-apple.systempreferences:com.apple.preference.security`.
@@ -52,6 +54,13 @@ struct AppNotice: Equatable, Identifiable, Sendable {
             action: .openPrivacyPane(.automation)
         )
     }
+
+    /// NotchTune crashed and `CrashRelauncher` reopened it.
+    static let reopenedAfterCrash = AppNotice(
+        message: "NotchTune quit unexpectedly and was reopened.",
+        actionTitle: "Show Report",
+        action: .showCrashReport
+    )
 
     /// The same message posted again shouldn't restart the banner.
     func isSameProblem(as other: AppNotice) -> Bool {

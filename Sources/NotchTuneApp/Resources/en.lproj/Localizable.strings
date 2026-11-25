@@ -16,6 +16,8 @@
 
 /* Settings - General */
 "settings.general.launchAtLogin" = "Launch at Login";
+"settings.general.relaunchAfterCrash" = "Reopen after a crash";
+"settings.general.relaunchAfterCrash.note" = "If NotchTune quits unexpectedly, it opens again in the background.";
 "settings.general.monitor" = "Monitor";
 "settings.general.automatic" = "Automatic";
 "settings.general.behavior" = "Behavior";
