@@ -52,8 +52,15 @@ enum FullscreenDisplayDetection {
             return nil
         }
 
-        let displayID = CGDirectDisplayID(number.uint32Value)
-        let uuid = CGDisplayCreateUUIDFromDisplayID(displayID).takeRetainedValue()
+        return displayUUID(displayID: CGDirectDisplayID(number.uint32Value))
+    }
+
+    /// Nil for a display that just went away (unplugged, or asleep) while its
+    /// NSScreen lingers: force-unwrapping it crashed on display changes.
+    nonisolated static func displayUUID(displayID: CGDirectDisplayID) -> String? {
+        guard let uuid = CGDisplayCreateUUIDFromDisplayID(displayID)?.takeRetainedValue() else {
+            return nil
+        }
         return CFUUIDCreateString(kCFAllocatorDefault, uuid) as String?
     }
 

@@ -20,6 +20,25 @@ struct OverlayPanelControllerTests {
     }
 
     @Test
+    func aDisplayThatIsGoneHasNoUUIDInsteadOfCrashing() {
+        // Crashed 2.3.3 on a display change (keepPanelOffDesktops).
+        #expect(FullscreenDisplayDetection.displayUUID(displayID: 0xDEAD_BEEF) == nil)
+        #expect(FullscreenDisplayDetection.displayUUID(displayID: CGMainDisplayID()) != nil)
+    }
+
+    @Test
+    func pillTextWidthsAreMeasuredOnceAndStayTheSame() {
+        let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
+        let direct = ceil(("Claude · refactor" as NSString).size(withAttributes: [.font: font]).width)
+        #expect(IslandLiveActivity.textWidth("Claude · refactor", font: font) == direct)
+        #expect(IslandLiveActivity.textWidth("Claude · refactor", font: font) == direct)
+        // Same text in another font is its own entry.
+        let other = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        let otherDirect = ceil(("Claude · refactor" as NSString).size(withAttributes: [.font: other]).width)
+        #expect(IslandLiveActivity.textWidth("Claude · refactor", font: other) == otherDirect)
+    }
+
+    @Test
     func thePrivateNotchLayerIsOffUnlessOptedIn() {
         // Shown, it takes the trackpad's desktop swipe from the Dock (#10).
         let key = NotchWindowLayer.defaultsKey

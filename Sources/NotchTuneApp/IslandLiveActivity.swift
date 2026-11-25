@@ -257,7 +257,10 @@ struct IslandLiveActivity: Equatable, Sendable {
 
     /// Left wing (glyph + two-line text) — grows with the text, clamped.
     func leftWingWidth(metrics: IslandChromeMetrics, maxWingWidth: CGFloat) -> CGFloat {
-        let titleWidth = Self.textWidth(title, font: metrics.notificationTitleNSFont.withWeight(.semibold))
+        // The semibold system font as such, not one derived through a weight
+        // trait on a descriptor: measuring that one crashed inside CoreText.
+        let titleFont = NSFont.monospacedSystemFont(ofSize: metrics.notificationTitleFontSize, weight: .semibold)
+        let titleWidth = Self.textWidth(title, font: titleFont)
         let subtitleWidth = subtitle.map { Self.textWidth($0, font: metrics.notificationArtistNSFont) } ?? 0
         let text = min(Self.maxTextWidth, max(titleWidth, subtitleWidth))
         let needed = ceil(
@@ -324,9 +327,23 @@ struct IslandLiveActivity: Equatable, Sendable {
         }
     }
 
+    /// Widths are asked for on every redraw of the pill, so they're cached:
+    /// each string is measured once (NSCache is thread-safe).
     static func textWidth(_ text: String, font: NSFont) -> CGFloat {
-        ceil((text as NSString).size(withAttributes: [.font: font]).width)
+        let key = "\(font.fontName)|\(font.pointSize)|\(text)" as NSString
+        if let cached = textWidthCache.object(forKey: key) {
+            return CGFloat(cached.doubleValue)
+        }
+        let width = ceil((text as NSString).size(withAttributes: [.font: font]).width)
+        textWidthCache.setObject(NSNumber(value: Double(width)), forKey: key)
+        return width
     }
+
+    nonisolated(unsafe) private static let textWidthCache: NSCache<NSString, NSNumber> = {
+        let cache = NSCache<NSString, NSNumber>()
+        cache.countLimit = 512
+        return cache
+    }()
 
     /// "0:42", "12:05", "1:03:10".
     static func elapsedText(since start: Date, now: Date) -> String {
@@ -338,14 +355,5 @@ struct IslandLiveActivity: Equatable, Sendable {
             return String(format: "%d:%02d:%02d", h, m, s)
         }
         return String(format: "%d:%02d", m, s)
-    }
-}
-
-private extension NSFont {
-    func withWeight(_ weight: NSFont.Weight) -> NSFont {
-        let descriptor = fontDescriptor.addingAttributes([
-            .traits: [NSFontDescriptor.TraitKey.weight: weight],
-        ])
-        return NSFont(descriptor: descriptor, size: pointSize) ?? self
     }
 }
